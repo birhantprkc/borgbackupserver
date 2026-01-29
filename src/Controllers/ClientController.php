@@ -72,30 +72,37 @@ class ClientController extends Controller
             'user_id' => $userId,
         ]);
 
-        // Provision SSH access: create Unix user, SSH keys, authorized_keys
+        // Pre-flight checks before creating the client
         $defaultStorage = $this->db->fetchOne("SELECT * FROM storage_locations WHERE is_default = 1");
-        if ($defaultStorage) {
-            $sshResult = SshKeyManager::provisionClient($id, $name, $defaultStorage['path']);
-            if (!$sshResult) {
-                $this->db->insert('server_log', [
-                    'agent_id' => $id,
-                    'level' => 'warning',
-                    'message' => 'SSH provisioning failed — client created but SSH access not configured. Check bbs-ssh-helper is installed.',
-                ]);
-            } else {
-                $this->db->insert('server_log', [
-                    'agent_id' => $id,
-                    'level' => 'info',
-                    'message' => "SSH provisioned: user {$sshResult['unix_user']}, home {$sshResult['home_dir']}",
-                ]);
-            }
-        } else {
-            $this->db->insert('server_log', [
-                'agent_id' => $id,
-                'level' => 'warning',
-                'message' => 'No default storage location — SSH provisioning skipped. Set a default storage location first.',
-            ]);
+        if (!$defaultStorage) {
+            $this->db->delete('agents', 'id = ?', [$id]);
+            $this->flash('danger', 'Cannot create client — no default storage location configured. Go to Settings > Storage to add one.');
+            $this->redirect('/clients/add');
         }
+
+        // Create storage directory
+        $clientDir = rtrim($defaultStorage['path'], '/') . '/' . $id;
+        if (!is_dir($clientDir) && !@mkdir($clientDir, 0755, true)) {
+            $this->db->delete('agents', 'id = ?', [$id]);
+            $this->flash('danger', "Cannot create client — failed to create storage directory: {$clientDir}. Check permissions on {$defaultStorage['path']}.");
+            $this->redirect('/clients/add');
+        }
+
+        // Provision SSH access: create Unix user, SSH keys, authorized_keys
+        $sshResult = SshKeyManager::provisionClient($id, $name, $defaultStorage['path']);
+        if (!$sshResult) {
+            // Clean up: remove storage dir and agent record
+            @rmdir($clientDir);
+            $this->db->delete('agents', 'id = ?', [$id]);
+            $this->flash('danger', 'Cannot create client — SSH provisioning failed. Ensure bbs-ssh-helper is installed at /usr/local/bin/bbs-ssh-helper with sudo access. See the Installation Guide: https://github.com/marcpope/borgbackupserver/blob/main/docs/INSTALL.md');
+            $this->redirect('/clients/add');
+        }
+
+        $this->db->insert('server_log', [
+            'agent_id' => $id,
+            'level' => 'info',
+            'message' => "Client created. SSH provisioned: user {$sshResult['unix_user']}, home {$sshResult['home_dir']}",
+        ]);
 
         $this->flash('success', 'Client created. Install the agent using the command below.');
         $this->redirect("/clients/{$id}");

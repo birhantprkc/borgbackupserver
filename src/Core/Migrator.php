@@ -6,6 +6,7 @@ class Migrator
 {
     private Database $db;
     private string $migrationsPath;
+    public array $errors = [];
 
     public function __construct()
     {
@@ -36,6 +37,7 @@ class Migrator
         );
 
         $ran = [];
+        $errors = [];
         foreach ($files as $file) {
             $filename = basename($file);
             if (in_array($filename, $executed)) {
@@ -43,11 +45,19 @@ class Migrator
             }
 
             $sql = file_get_contents($file);
-            $this->db->getPdo()->exec($sql);
-            $this->db->insert('migrations', ['filename' => $filename]);
-            $ran[] = $filename;
+            try {
+                $this->db->getPdo()->exec($sql);
+                $this->db->insert('migrations', ['filename' => $filename]);
+                $ran[] = $filename;
+            } catch (\PDOException $e) {
+                // Record the migration as executed so it doesn't block future runs
+                // Common case: column/table already exists from manual setup or schema.sql
+                $this->db->insert('migrations', ['filename' => $filename]);
+                $errors[] = $filename . ': ' . $e->getMessage();
+            }
         }
 
+        $this->errors = $errors;
         return $ran;
     }
 }
