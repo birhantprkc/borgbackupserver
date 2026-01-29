@@ -83,11 +83,20 @@ class QueueManager
                 $archiveName = BorgCommandBuilder::generateArchiveName($job['repo_name'] ?? 'backup');
                 $cmd = BorgCommandBuilder::buildCreateCommand($plan, $repo, $archiveName);
                 $env = BorgCommandBuilder::buildEnv($repo);
-                $taskPayload = BorgCommandBuilder::toTaskPayload('backup', $cmd, $env, [
+                // Build plugin payload if any plugins are configured
+                $pluginManager = new PluginManager();
+                $plugins = $pluginManager->buildPluginPayload($job['backup_plan_id'], $job['agent_id']);
+
+                $extra = [
                     'job_id' => $job['id'],
                     'archive_name' => $archiveName,
                     'directories' => $plan['directories'],
-                ]);
+                ];
+                if (!empty($plugins)) {
+                    $extra['plugins'] = $plugins;
+                }
+
+                $taskPayload = BorgCommandBuilder::toTaskPayload('backup', $cmd, $env, $extra);
             } elseif ($job['task_type'] === 'prune' || $job['task_type'] === 'compact') {
                 // Prune/compact run server-side — mark as sent, scheduler will execute them
                 $taskPayload = ['task' => $job['task_type'], 'server_side' => true, 'job_id' => $job['id']];

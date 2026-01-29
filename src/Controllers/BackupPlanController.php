@@ -3,6 +3,7 @@
 namespace BBS\Controllers;
 
 use BBS\Core\Controller;
+use BBS\Services\PluginManager;
 
 class BackupPlanController extends Controller
 {
@@ -77,6 +78,9 @@ class BackupPlanController extends Controller
             'next_run' => $nextRun,
         ]);
 
+        // Save plugin configurations
+        $this->savePluginConfigs($planId);
+
         $this->flash('success', "Backup plan \"{$name}\" created with schedule.");
         $this->redirect("/clients/{$agentId}?tab=schedules");
     }
@@ -108,6 +112,9 @@ class BackupPlanController extends Controller
         if (!empty($data)) {
             $this->db->update('backup_plans', $data, 'id = ?', [$id]);
         }
+
+        // Update plugin configurations
+        $this->savePluginConfigs($id);
 
         $this->flash('success', 'Backup plan updated.');
         $this->redirect("/clients/{$plan['agent_id']}?tab=schedules");
@@ -173,6 +180,20 @@ class BackupPlanController extends Controller
         if (!$this->isAdmin() && $plan['user_id'] != $_SESSION['user_id']) return null;
 
         return $plan;
+    }
+
+    private function savePluginConfigs(int $planId): void
+    {
+        $enabledPlugins = array_keys($_POST['plugin_enabled'] ?? []);
+        if (empty($enabledPlugins)) {
+            // Clear any existing plugin configs
+            $this->db->query("DELETE FROM backup_plan_plugins WHERE backup_plan_id = ?", [$planId]);
+            return;
+        }
+
+        $pluginConfigs = $_POST['plugin_config'] ?? [];
+        $pluginManager = new PluginManager();
+        $pluginManager->savePlanPlugins($planId, $enabledPlugins, $pluginConfigs);
     }
 
     private function calculateNextRun(string $frequency, string $times, ?int $dayOfWeek, ?int $dayOfMonth): ?string

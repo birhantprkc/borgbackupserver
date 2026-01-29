@@ -294,6 +294,151 @@ def execute_update_borg(config, task):
         logger.info(f"Updated borg version: {info.get('borg_version', 'unknown')}")
 
 
+def execute_plugins(plugins):
+    """Execute pre-backup plugins. Returns dict of results keyed by slug."""
+    results = {}
+    for plugin in plugins:
+        slug = plugin.get("slug", "")
+        cfg = plugin.get("config", {})
+        logger.info(f"Running pre-backup plugin: {slug}")
+        func_name = f"execute_plugin_{slug}"
+        func = globals().get(func_name)
+        if not func:
+            logger.warning(f"Plugin {slug} not implemented, skipping")
+            continue
+        result = func(cfg)
+        results[slug] = result
+        logger.info(f"Plugin {slug} completed")
+    return results
+
+
+def cleanup_plugins(plugins, plugin_results):
+    """Run post-backup cleanup for plugins."""
+    for plugin in plugins:
+        slug = plugin.get("slug", "")
+        cfg = plugin.get("config", {})
+        func = globals().get(f"cleanup_plugin_{slug}")
+        if func:
+            try:
+                func(cfg, plugin_results.get(slug, {}))
+            except Exception as e:
+                logger.warning(f"Plugin cleanup for {slug} failed: {e}")
+
+
+def execute_plugin_mysql_dump(config):
+    """Dump MySQL/MariaDB databases before backup."""
+    dump_dir = config.get("dump_dir", "/home/bbs/mysql")
+    os.makedirs(dump_dir, exist_ok=True)
+
+    host = config.get("host", "localhost")
+    port = str(config.get("port", 3306))
+    user = config.get("user")
+    password = config.get("password")
+    databases = config.get("databases", "*")
+    per_database = config.get("per_database", True)
+    compress = config.get("compress", True)
+    exclude = config.get("exclude_databases", ["information_schema", "performance_schema", "sys"])
+    extra_options = config.get("extra_options", "--single-transaction --quick --routines --triggers --events")
+
+    if not user or not password:
+        raise Exception("MySQL plugin requires user and password")
+
+    if isinstance(databases, str) and databases.strip() == "*":
+        # List all databases
+        list_cmd = [
+            "mysql",
+            f"--host={host}",
+            f"--port={port}",
+            f"--user={user}",
+            f"--password={password}",
+            "-e", "SHOW DATABASES;",
+            "-s", "--skip-column-names",
+        ]
+        result = subprocess.run(list_cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise Exception(f"Failed to list databases: {result.stderr.strip()}")
+        if isinstance(exclude, str):
+            exclude = [x.strip() for x in exclude.split(",")]
+        databases = [
+            db.strip() for db in result.stdout.strip().split("\n")
+            if db.strip() and db.strip() not in exclude
+        ]
+    elif isinstance(databases, str):
+        databases = [d.strip() for d in databases.split(",") if d.strip()]
+
+    base_cmd = ["mysqldump", f"--host={host}", f"--port={port}", f"--user={user}", f"--password={password}"]
+    if extra_options:
+        base_cmd.extend(extra_options.split())
+
+    dump_files = []
+
+    if per_database:
+        for db in databases:
+            filename = f"{db}.sql.gz" if compress else f"{db}.sql"
+            dump_path = os.path.join(dump_dir, filename)
+            logger.info(f"Dumping database {db} to {dump_path}")
+
+            cmd = base_cmd + [db]
+            if compress:
+                dump_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                with open(dump_path, "wb") as f:
+                    gzip_proc = subprocess.Popen(["gzip"], stdin=dump_proc.stdout, stdout=f, stderr=subprocess.PIPE)
+                dump_proc.stdout.close()
+                gzip_proc.wait()
+                dump_proc.wait()
+                if dump_proc.returncode != 0:
+                    stderr = dump_proc.stderr.read().decode() if dump_proc.stderr else ""
+                    raise Exception(f"mysqldump failed for {db}: {stderr}")
+            else:
+                with open(dump_path, "w") as f:
+                    r = subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE, text=True)
+                    if r.returncode != 0:
+                        raise Exception(f"mysqldump failed for {db}: {r.stderr}")
+
+            dump_files.append(dump_path)
+    else:
+        filename = "all_databases.sql.gz" if compress else "all_databases.sql"
+        dump_path = os.path.join(dump_dir, filename)
+        logger.info(f"Dumping all databases to {dump_path}")
+
+        cmd = base_cmd + ["--all-databases"]
+        if compress:
+            dump_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            with open(dump_path, "wb") as f:
+                gzip_proc = subprocess.Popen(["gzip"], stdin=dump_proc.stdout, stdout=f, stderr=subprocess.PIPE)
+            dump_proc.stdout.close()
+            gzip_proc.wait()
+            dump_proc.wait()
+            if dump_proc.returncode != 0:
+                stderr = dump_proc.stderr.read().decode() if dump_proc.stderr else ""
+                raise Exception(f"mysqldump failed: {stderr}")
+        else:
+            with open(dump_path, "w") as f:
+                r = subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE, text=True)
+                if r.returncode != 0:
+                    raise Exception(f"mysqldump failed: {r.stderr}")
+
+        dump_files.append(dump_path)
+
+    logger.info(f"MySQL dump complete: {len(dump_files)} file(s) in {dump_dir}")
+    return {"dump_files": dump_files, "dump_dir": dump_dir}
+
+
+def cleanup_plugin_mysql_dump(config, plugin_result):
+    """Delete dump files after backup if cleanup_after is enabled."""
+    if not config.get("cleanup_after", True):
+        return
+    dump_dir = plugin_result.get("dump_dir")
+    if not dump_dir or not os.path.exists(dump_dir):
+        return
+    import shutil
+    logger.info(f"Cleaning up MySQL dumps in {dump_dir}")
+    for f in os.listdir(dump_dir):
+        fpath = os.path.join(dump_dir, f)
+        if os.path.isfile(fpath) and (f.endswith(".sql") or f.endswith(".sql.gz")):
+            os.remove(fpath)
+
+
 def execute_task(config, task):
     """Execute a borg task and report progress/status."""
     job_id = task.get("job_id")
@@ -302,8 +447,24 @@ def execute_task(config, task):
     env_vars = task.get("env", {})
     archive_name = task.get("archive_name", "")
     directories = task.get("directories", "")
+    plugins = task.get("plugins", [])
 
     logger.info(f"Executing {task_type} job #{job_id}: {' '.join(command)}")
+
+    # Execute pre-backup plugins
+    plugin_results = {}
+    if task_type == "backup" and plugins:
+        try:
+            logger.info(f"Running {len(plugins)} pre-backup plugin(s)")
+            plugin_results = execute_plugins(plugins)
+        except Exception as e:
+            logger.error(f"Pre-backup plugin failed: {e}")
+            api_request(config, "/api/agent/status", method="POST", data={
+                "job_id": job_id,
+                "result": "failed",
+                "error_log": f"Pre-backup plugin failed: {e}",
+            })
+            return
 
     # Pre-count files for progress
     files_total = 0
@@ -468,6 +629,10 @@ def execute_task(config, task):
         status_data["error_log"] = error_output[:10000]  # Limit size
 
     status_response = api_request(config, "/api/agent/status", method="POST", data=status_data)
+
+    # Run post-backup plugin cleanup
+    if result == "completed" and task_type == "backup" and plugins and plugin_results:
+        cleanup_plugins(plugins, plugin_results)
 
     # Send file catalog after successful backup
     if result == "completed" and task_type == "backup" and catalog_entries and status_response:

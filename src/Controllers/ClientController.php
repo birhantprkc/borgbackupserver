@@ -200,6 +200,11 @@ class ClientController extends Controller
             ORDER BY completed_at DESC LIMIT 30
         ", [$id]);
 
+        // Plugins for schedules tab
+        $pluginManager = new \BBS\Services\PluginManager();
+        $agentPlugins = $pluginManager->getAgentPlugins($id);
+        $allPlugins = $pluginManager->getAllPlugins();
+
         $this->view('clients/detail', [
             'pageTitle' => 'Clients',
             'agent' => $agent,
@@ -218,6 +223,9 @@ class ClientController extends Controller
             'jobStats' => $jobStats,
             'recentErrors' => (int) ($recentErrors['cnt'] ?? 0),
             'durationChart' => array_reverse($durationChart),
+            'agentPlugins' => $agentPlugins,
+            'allPlugins' => $allPlugins,
+            'pluginManager' => $pluginManager,
         ]);
     }
 
