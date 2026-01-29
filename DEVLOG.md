@@ -1,6 +1,6 @@
 # Borg Backup Server - Development Log
 
-> **Start of session instructions:** Read this file and `PROJECT_PLAN.md` to restore context.
+> **Start of session instructions:** Read this file to restore context.
 
 ---
 
@@ -104,7 +104,6 @@ borgbackupserver/
 ├── composer.json                    # PSR-4 autoload, altorouter, phpdotenv
 ├── composer.lock
 ├── migrate.php                      # CLI migration runner
-├── PROJECT_PLAN.md                  # Full project plan with architecture, schema, phases
 ├── DEVLOG.md                        # This file
 ├── .gitignore                       # vendor/, config/.env, logs, .DS_Store
 ├── config/
@@ -760,7 +759,143 @@ borgbackupserver/
 - `src/Controllers/DashboardController.php` (storage locations data with disk usage)
 - `src/Views/dashboard/index.php` (Backup Storage card, Partitions card restored)
 
+### SSH Key Architecture (COMPLETED)
+
+**Problem:** Original design used HTTPS-only agent polling. Borg itself needs SSH access to push data to the repository. Agents need SSH keys provisioned automatically.
+
+**New service — `SshKeyManager.php`:**
+- `generateKeyPair()` — generates ed25519 SSH key pairs via `ssh-keygen`
+- `generateUnixUser()` — creates safe restricted Unix usernames (bbs-{agentname} prefix)
+- `provisionClient()` — auto-provisions SSH access: generates keypair, creates Unix user via bbs-ssh-helper, installs authorized_keys with `command="borg serve --restrict-to-path ... --append-only"` restriction
+- `deprovisionClient()` — removes Unix user and SSH access
+- `buildSshRepoPath()` — constructs `ssh://bbs-user@host/path` repository URIs
+- `buildLocalRepoPath()` — builds local filesystem paths for server-side prune/compact
+
+**SSH helper utility (`bin/bbs-ssh-helper`):**
+- Bash script installed to `/usr/local/bin/bbs-ssh-helper` with sudo permissions
+- `create-user` — creates restricted Unix user (bbs-* prefix), sets shell to /bin/bash, creates .ssh directory, installs authorized_keys with borg serve append-only restriction
+- `delete-user` — removes user and home directory
+- Designed to be called by PHP via `sudo` (www-data needs passwordless sudo for this one script)
+
+**New migration — `011_ssh_support.sql`:**
+- Added to `agents` table: `ssh_unix_user`, `ssh_public_key`, `ssh_private_key_encrypted` (encrypted with Encryption service)
+
+**Integration points:**
+- `ClientController::store()` — auto-provisions SSH on agent creation
+- `ClientController::delete()` — deprovisions SSH on agent deletion
+- `RepositoryController::store()` — uses SSH repo path for `borg init`
+- `AgentApiController::register()` — delivers encrypted private key to agent on first registration
+- `BorgCommandBuilder` — builds SSH repository paths, sets `BORG_RSH` with private key path
+- `agent/install.sh` — downloads SSH private key during setup, stores at `/etc/bbs-agent/id_ed25519`
+- `agent/bbs-agent.py` — writes SSH key to disk on registration, configures `BORG_RSH`
+
+**Server-side prune/compact:**
+- `scheduler.php` runs prune and compact jobs directly on the server (local filesystem access to repos)
+- Agents only do `borg create` over SSH; server handles retention enforcement
+- This prevents clients from ever deleting their own backups (append-only + server-side prune)
+
+**New files:**
+- `src/Services/SshKeyManager.php`
+- `bin/bbs-ssh-helper`
+- `migrations/011_ssh_support.sql`
+
+**Modified files:**
+- `src/Controllers/ClientController.php` (provision/deprovision)
+- `src/Controllers/RepositoryController.php` (SSH repo paths)
+- `src/Controllers/Api/AgentApiController.php` (private key delivery)
+- `src/Services/BorgCommandBuilder.php` (SSH paths, BORG_RSH)
+- `src/Services/QueueManager.php` (SSH-based payloads)
+- `scheduler.php` (server-side prune/compact)
+- `agent/bbs-agent.py` (SSH key setup)
+- `agent/install.sh` (SSH key download)
+- `docs/AGENT.md` (SSH architecture docs)
+- `docs/INSTALL.md` (bbs-ssh-helper setup instructions)
+
+### Plugin System (COMPLETED)
+
+**Architecture:** Pre-backup hooks that run on the agent before `borg create`. Plugins produce temporary data (e.g. database dumps) that gets included in the backup, then cleaned up afterward.
+
+**New migration — `012_plugin_system.sql`:**
+- `plugins` table: name, display_name, description, version, config_schema (JSON)
+- `agent_plugins` table: per-agent plugin enable/disable + configuration (JSON)
+- `backup_plan_plugins` table: per-plan plugin selection
+- Seeded with `mysql_dump` plugin
+
+**New service — `PluginManager.php`:**
+- `getAllPlugins()`, `getAgentPlugins()`, `getEnabledAgentPlugins()`
+- `setAgentPlugin()` — enable/disable with JSON config per agent
+- `getPlanPlugins()`, `savePlanPlugins()` — associate plugins with backup plans
+- `buildPluginPayload()` — builds plugin config payload for agent tasks
+- `getPluginSchema()` — returns config schema (fields, types, defaults) for UI rendering
+- `getPluginHelp()` — returns setup instructions per plugin
+
+**New controller — `PluginController.php`:**
+- `updateAgentPlugin()` — POST endpoint to enable/disable and configure plugins per agent
+- `updatePlanPlugins()` — POST endpoint to select plugins for a backup plan
+
+**Agent plugin execution (`bbs-agent.py`):**
+- `execute_plugins()` — runs all enabled plugins before borg create
+- `cleanup_plugins()` — runs cleanup after backup completes (success or failure)
+- `execute_plugin_mysql_dump()` — MySQL dump implementation:
+  - Connects via `mysqldump` (socket or TCP, optional credentials)
+  - Per-database dumps (discovers databases, skips system DBs)
+  - Optional gzip compression
+  - Dumps to configurable output directory (default `/tmp/bbs-mysql-dumps`)
+  - Output directory auto-added to borg backup paths
+- `cleanup_plugin_mysql_dump()` — removes dump directory after backup
+
+**UI — Plugins tab on client detail:**
+- Shows all available plugins with enable/disable toggle
+- Per-plugin configuration form rendered from JSON schema (text fields, checkboxes, selects)
+- Help text with setup instructions
+- Backup plan form includes plugin checkboxes to select which plugins run
+
+**New routes:**
+- `POST /plugins/agent/{agentId}/{pluginName}` → `PluginController@updateAgentPlugin`
+- `POST /plugins/plan/{planId}` → `PluginController@updatePlanPlugins`
+
+**New files:**
+- `migrations/012_plugin_system.sql`
+- `src/Services/PluginManager.php`
+- `src/Controllers/PluginController.php`
+
+**Modified files:**
+- `src/Core/App.php` (plugin routes)
+- `src/Controllers/BackupPlanController.php` (plugin selection on plan create/update)
+- `src/Services/QueueManager.php` (plugin payload in task)
+- `src/Views/clients/detail.php` (plugins tab UI)
+- `agent/bbs-agent.py` (plugin execution framework + mysql_dump plugin)
+
+### Setup Wizard (COMPLETED)
+
+**New class — `SetupWizard.php` (`src/Setup/`):**
+- Multi-step guided setup for fresh installations
+- Steps: database connection, admin user creation, SSH key setup, storage location, first repository
+- Detects whether setup has already been completed
+
+**New view — `setup/wizard.php`:**
+- Clean step-by-step UI outside the main app layout
+- Auto-redirects to login after completion
+
+### Landing Page — borgbackupserver.com (COMPLETED)
+
+**Single-file static website (`website/index.html`):**
+- Dark theme (#0d1117, GitHub dark style) with Inter font
+- Hero: title, tagline, early beta badge, "View on GitHub" CTA
+- Dashboard screenshot with caption
+- 15 feature cards in responsive CSS grid
+- Architecture diagram (styled monospace) showing agent ↔ server flow (HTTPS polling + SSH backup)
+- Tech stack pills (PHP 8.1+, MySQL, Bootstrap 5, Python 3 Agent, BorgBackup)
+- Getting started install snippet
+- Footer with MIT license and GitHub link
+- No JS frameworks, no external CSS — fully self-contained inline styles
+- Responsive (CSS grid/flexbox, clamp() font sizing)
+
+**Deployed** to `borgbackupserver.com` via SCP to `bbsweb@scooter.falconinternet.net`
+
+**New files:**
+- `website/index.html`
+
 ### What's Next
 
-- borgbackupserver.com website
 - Deploy to test Linux VM for end-to-end testing
