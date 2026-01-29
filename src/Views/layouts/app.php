@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($pageTitle ?? 'Dashboard') ?> - Borg Backup Server</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="/css/style.css" rel="stylesheet">
+</head>
+<body>
+    <div class="d-flex">
+        <!-- Sidebar -->
+        <nav id="sidebar" class="sidebar d-flex flex-column flex-shrink-0 text-white">
+            <a href="/" class="d-block p-3 text-center border-bottom">
+                <img src="/images/bbs-logo-small.png" alt="BBS" class="img-fluid" style="max-width: 60px;">
+            </a>
+            <ul class="nav nav-pills flex-column mb-auto text-center">
+                <li class="nav-item">
+                    <a href="/" class="nav-link sidebar-link <?= ($pageTitle ?? '') === 'Dashboard' ? 'active' : '' ?>">
+                        <i class="bi bi-speedometer2 d-block mb-1 fs-4"></i>
+                        <span class="small">Dashboard</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="/clients" class="nav-link sidebar-link <?= ($pageTitle ?? '') === 'Clients' ? 'active' : '' ?>">
+                        <i class="bi bi-display d-block mb-1 fs-4"></i>
+                        <span class="small">Clients</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="/queue" class="nav-link sidebar-link <?= ($pageTitle ?? '') === 'Queue' ? 'active' : '' ?>">
+                        <i class="bi bi-clock-history d-block mb-1 fs-4"></i>
+                        <span class="small">Queue</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="/log" class="nav-link sidebar-link <?= ($pageTitle ?? '') === 'Log' ? 'active' : '' ?>">
+                        <i class="bi bi-journal-text d-block mb-1 fs-4"></i>
+                        <span class="small">Log</span>
+                    </a>
+                </li>
+                <?php if (($_SESSION['user_role'] ?? '') === 'admin'): ?>
+                <li class="nav-item">
+                    <a href="/settings" class="nav-link sidebar-link <?= ($pageTitle ?? '') === 'Settings' ? 'active' : '' ?>">
+                        <i class="bi bi-gear d-block mb-1 fs-4"></i>
+                        <span class="small">Settings</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="/users" class="nav-link sidebar-link <?= ($pageTitle ?? '') === 'Users' ? 'active' : '' ?>">
+                        <i class="bi bi-people d-block mb-1 fs-4"></i>
+                        <span class="small">Users</span>
+                    </a>
+                </li>
+                <?php endif; ?>
+            </ul>
+            <div class="border-top p-2 text-center">
+                <a href="/logout" class="nav-link sidebar-link">
+                    <i class="bi bi-box-arrow-left d-block mb-1 fs-4"></i>
+                    <span class="small">Logout</span>
+                </a>
+            </div>
+        </nav>
+
+        <!-- Main content -->
+        <div class="flex-grow-1">
+            <!-- Top bar -->
+            <nav class="navbar navbar-expand navbar-light bg-white border-bottom px-4 topbar">
+                <div class="container-fluid">
+                    <span class="navbar-text fw-semibold"><?= htmlspecialchars($pageTitle ?? '') ?></span>
+                    <div class="d-flex align-items-center">
+                        <?php
+                        $errorCount = $errorCount ?? \BBS\Core\Database::getInstance()->count('server_log', "level = 'error' AND created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)");
+                        ?>
+                        <a href="/log?level=error" class="btn btn-link position-relative me-3 text-dark">
+                            <i class="bi bi-bell fs-5"></i>
+                            <?php if ($errorCount > 0): ?>
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                                <?= $errorCount ?>
+                            </span>
+                            <?php endif; ?>
+                        </a>
+                        <div class="dropdown">
+                            <a class="btn btn-link text-dark dropdown-toggle text-decoration-none" href="#" role="button" data-bs-toggle="dropdown">
+                                <i class="bi bi-person-circle me-1"></i>
+                                <?= htmlspecialchars($_SESSION['username'] ?? 'User') ?>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><span class="dropdown-item-text text-muted small"><?= ucfirst($_SESSION['user_role'] ?? 'user') ?></span></li>
+                                <li><a class="dropdown-item" href="/profile"><i class="bi bi-person me-1"></i> Profile</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="/logout"><i class="bi bi-box-arrow-right me-1"></i> Logout</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Flash messages -->
+            <?php $flash = $flash ?? $this->getFlash(); ?>
+            <?php if ($flash): ?>
+            <div class="alert alert-<?= $flash['type'] ?> alert-dismissible fade show m-4 mb-0" role="alert">
+                <?= htmlspecialchars($flash['message']) ?>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            <?php endif; ?>
+
+            <!-- Page content -->
+            <div class="p-4">
+                <?php require $viewPath . $template . '.php'; ?>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <?php if (isset($scripts)): ?>
+        <?php foreach ($scripts as $script): ?>
+        <script src="<?= $script ?>"></script>
+        <?php endforeach; ?>
+    <?php endif; ?>
+</body>
+</html>

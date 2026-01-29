@@ -1,0 +1,206 @@
+<?php
+
+namespace BBS\Services;
+
+use BBS\Core\Database;
+
+class QueueManager
+{
+    private Database $db;
+    private int $maxQueue;
+
+    public function __construct()
+    {
+        $this->db = Database::getInstance();
+        $setting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'max_queue'");
+        $this->maxQueue = (int) ($setting['value'] ?? 4);
+    }
+
+    /**
+     * Process the queue: assign queued jobs to agents (up to max_queue limit).
+     * Returns the jobs that were promoted to 'sent' status.
+     */
+    public function processQueue(): array
+    {
+        // Count currently active jobs (sent + running)
+        $activeCount = $this->db->count('backup_jobs', "status IN ('sent', 'running')");
+
+        $slotsAvailable = $this->maxQueue - $activeCount;
+        if ($slotsAvailable <= 0) {
+            return [];
+        }
+
+        // Get queued jobs ordered by queued_at (FIFO)
+        $queuedJobs = $this->db->fetchAll("
+            SELECT bj.*, bp.directories, bp.excludes, bp.advanced_options,
+                   bp.prune_minutes, bp.prune_hours, bp.prune_days,
+                   bp.prune_weeks, bp.prune_months, bp.prune_years,
+                   r.path as repo_path, r.encryption, r.passphrase_encrypted, r.name as repo_name
+            FROM backup_jobs bj
+            LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
+            LEFT JOIN repositories r ON r.id = bj.repository_id
+            WHERE bj.status = 'queued'
+            ORDER BY bj.queued_at ASC
+            LIMIT ?
+        ", [$slotsAvailable]);
+
+        $promoted = [];
+
+        foreach ($queuedJobs as $job) {
+            // Build the task payload
+            $repo = [
+                'path' => $job['repo_path'],
+                'encryption' => $job['encryption'],
+                'passphrase_encrypted' => $job['passphrase_encrypted'],
+            ];
+
+            $plan = [
+                'directories' => $job['directories'] ?? '',
+                'excludes' => $job['excludes'] ?? '',
+                'advanced_options' => $job['advanced_options'] ?? '',
+                'prune_minutes' => $job['prune_minutes'] ?? 0,
+                'prune_hours' => $job['prune_hours'] ?? 0,
+                'prune_days' => $job['prune_days'] ?? 7,
+                'prune_weeks' => $job['prune_weeks'] ?? 4,
+                'prune_months' => $job['prune_months'] ?? 6,
+                'prune_years' => $job['prune_years'] ?? 0,
+            ];
+
+            $taskPayload = null;
+
+            if ($job['task_type'] === 'backup') {
+                $archiveName = BorgCommandBuilder::generateArchiveName($job['repo_name'] ?? 'backup');
+                $cmd = BorgCommandBuilder::buildCreateCommand($plan, $repo, $archiveName);
+                $env = BorgCommandBuilder::buildEnv($repo);
+                $taskPayload = BorgCommandBuilder::toTaskPayload('backup', $cmd, $env, [
+                    'job_id' => $job['id'],
+                    'archive_name' => $archiveName,
+                    'directories' => $plan['directories'],
+                ]);
+            } elseif ($job['task_type'] === 'prune') {
+                $cmd = BorgCommandBuilder::buildPruneCommand($plan, $repo);
+                $env = BorgCommandBuilder::buildEnv($repo);
+                $taskPayload = BorgCommandBuilder::toTaskPayload('prune', $cmd, $env, [
+                    'job_id' => $job['id'],
+                ]);
+            } elseif ($job['task_type'] === 'restore') {
+                $taskPayload = $this->buildRestorePayload($job);
+            }
+
+            if ($taskPayload) {
+                // Store the payload so the agent API can serve it
+                $this->db->update('backup_jobs', [
+                    'status' => 'sent',
+                ], 'id = ?', [$job['id']]);
+
+                // Store task payload in a transient way (we'll use the job record)
+                // The agent API will build the payload on-the-fly from the job data
+
+                $this->db->insert('server_log', [
+                    'agent_id' => $job['agent_id'],
+                    'backup_job_id' => $job['id'],
+                    'level' => 'info',
+                    'message' => "Job #{$job['id']} ({$job['task_type']}) sent to agent queue",
+                ]);
+
+                $promoted[] = $job;
+            }
+        }
+
+        return $promoted;
+    }
+
+    /**
+     * Get pending tasks for a specific agent.
+     * Called by the Agent API when the agent polls for work.
+     */
+    public function getTasksForAgent(int $agentId): array
+    {
+        $jobs = $this->db->fetchAll("
+            SELECT bj.*, bp.directories, bp.excludes, bp.advanced_options,
+                   bp.prune_minutes, bp.prune_hours, bp.prune_days,
+                   bp.prune_weeks, bp.prune_months, bp.prune_years,
+                   r.path as repo_path, r.encryption, r.passphrase_encrypted, r.name as repo_name
+            FROM backup_jobs bj
+            LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
+            LEFT JOIN repositories r ON r.id = bj.repository_id
+            WHERE bj.agent_id = ?
+              AND bj.status = 'sent'
+            ORDER BY bj.queued_at ASC
+        ", [$agentId]);
+
+        $tasks = [];
+        foreach ($jobs as $job) {
+            $repo = [
+                'path' => $job['repo_path'],
+                'encryption' => $job['encryption'],
+                'passphrase_encrypted' => $job['passphrase_encrypted'],
+            ];
+
+            $plan = [
+                'directories' => $job['directories'] ?? '',
+                'excludes' => $job['excludes'] ?? '',
+                'advanced_options' => $job['advanced_options'] ?? '',
+                'prune_minutes' => $job['prune_minutes'] ?? 0,
+                'prune_hours' => $job['prune_hours'] ?? 0,
+                'prune_days' => $job['prune_days'] ?? 7,
+                'prune_weeks' => $job['prune_weeks'] ?? 4,
+                'prune_months' => $job['prune_months'] ?? 6,
+                'prune_years' => $job['prune_years'] ?? 0,
+            ];
+
+            if ($job['task_type'] === 'backup') {
+                $archiveName = BorgCommandBuilder::generateArchiveName($job['repo_name'] ?? 'backup');
+                $cmd = BorgCommandBuilder::buildCreateCommand($plan, $repo, $archiveName);
+                $env = BorgCommandBuilder::buildEnv($repo);
+                $tasks[] = BorgCommandBuilder::toTaskPayload('backup', $cmd, $env, [
+                    'job_id' => $job['id'],
+                    'archive_name' => $archiveName,
+                    'directories' => $plan['directories'],
+                ]);
+            } elseif ($job['task_type'] === 'prune') {
+                $cmd = BorgCommandBuilder::buildPruneCommand($plan, $repo);
+                $env = BorgCommandBuilder::buildEnv($repo);
+                $tasks[] = BorgCommandBuilder::toTaskPayload('prune', $cmd, $env, [
+                    'job_id' => $job['id'],
+                ]);
+            } elseif ($job['task_type'] === 'restore') {
+                $payload = $this->buildRestorePayload($job);
+                if ($payload) {
+                    $tasks[] = $payload;
+                }
+            }
+        }
+
+        return $tasks;
+    }
+
+    /**
+     * Build a restore task payload from a job record.
+     */
+    private function buildRestorePayload(array $job): ?array
+    {
+        $archiveId = $job['restore_archive_id'] ?? null;
+        if (!$archiveId) return null;
+
+        $archive = $this->db->fetchOne("
+            SELECT ar.archive_name, r.path as repo_path, r.passphrase_encrypted
+            FROM archives ar
+            JOIN repositories r ON r.id = ar.repository_id
+            WHERE ar.id = ?
+        ", [$archiveId]);
+
+        if (!$archive) return null;
+
+        $paths = json_decode($job['restore_paths'] ?? '[]', true) ?: [];
+        $destination = $job['restore_destination'] ?? null;
+
+        $repo = ['path' => $archive['repo_path'], 'passphrase_encrypted' => $archive['passphrase_encrypted']];
+        $cmd = BorgCommandBuilder::buildExtractCommand($repo, $archive['archive_name'], $paths, $destination);
+        $env = BorgCommandBuilder::buildEnv($repo);
+
+        return BorgCommandBuilder::toTaskPayload('restore', $cmd, $env, [
+            'job_id' => $job['id'],
+        ]);
+    }
+}

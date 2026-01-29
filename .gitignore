@@ -1,0 +1,7 @@
+/vendor/
+/config/.env
+/storage/logs/*.log
+.DS_Store
+*.swp
+__pycache__/
+*.pyc
