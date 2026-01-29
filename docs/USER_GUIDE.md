@@ -151,6 +151,132 @@ Admins can add, edit, and delete templates in **Settings > Backup Templates**.
 
 ---
 
+## Running a Backup
+
+### Manual Backup
+
+To trigger an immediate backup:
+
+1. Go to a client's **Schedules** tab
+2. Find the backup plan you want to run
+3. Click the **Run Now** button
+
+The job enters the queue and the agent picks it up on its next poll (default 30 seconds). You can watch progress on the **Queue** page or in the client's **Status** tab.
+
+### Scheduled Backups
+
+If the plan has a frequency other than "manual", the scheduler automatically queues backups at the configured times. The cron job (`/etc/cron.d/bbs` or equivalent) runs the scheduler every minute. No manual intervention is needed once the plan is created.
+
+### What Happens During a Backup
+
+1. The scheduler (or manual trigger) creates a job in the queue
+2. The agent polls the server, receives the task (including borg command, directories, excludes, options, and any plugin instructions)
+3. If plugins are configured (e.g. MySQL dump), those run first — if a plugin fails, the job fails and borg does not run
+4. The agent executes `borg create` with the configured paths and options
+5. If retention settings are defined, the agent runs `borg prune` to enforce them
+6. The agent reports success or failure back to the server
+7. If configured, plugin cleanup runs (e.g. deleting MySQL dump files)
+
+---
+
+## Plugins
+
+Plugins run pre-backup tasks on the client before borg executes. They are enabled per-client and configured per-backup-plan.
+
+### Enabling Plugins for a Client
+
+1. Go to a client's **Schedules** tab
+2. Click the **Plugins** button in the tab header
+3. In the modal, toggle on the plugins you want available for this client
+4. Click **Save**
+
+Once a plugin is enabled for a client, it appears in the plugin configuration section when creating or editing backup plans.
+
+### Configuring Plugins in a Backup Plan
+
+1. In the **Schedules** tab, create a new plan or edit an existing one
+2. Below the retention settings, expand the plugin accordion panel
+3. Check the **Enable** checkbox for the plugin
+4. Fill in the configuration fields
+5. Save the plan
+
+Plugin configuration is stored per-plan, so different plans on the same client can use different plugin settings (e.g. different databases or dump directories).
+
+### Plugin Execution Flow
+
+1. Agent receives backup task with plugin instructions
+2. Each plugin's pre-backup function runs in order
+3. If any plugin fails, the job fails immediately — borg does not run
+4. If all plugins succeed, borg runs normally
+5. After a successful backup, cleanup tasks run (e.g. deleting temporary dump files)
+
+---
+
+## MySQL Database Dump Plugin
+
+The MySQL plugin dumps databases to a local directory before the backup runs, so borg backs up the SQL files alongside everything else.
+
+### Prerequisites
+
+Create a dedicated MySQL user on the client with the minimum required privileges:
+
+```sql
+CREATE USER 'backup_user'@'localhost' IDENTIFIED BY 'strong_password';
+GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER ON *.* TO 'backup_user'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+The agent must have `mysqldump` available in its PATH.
+
+### Configuration Fields
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| **MySQL Host** | `localhost` | MySQL server hostname or IP |
+| **Port** | `3306` | MySQL server port |
+| **Username** | *(required)* | MySQL user for dumps |
+| **Password** | *(required)* | MySQL password (encrypted at rest on the server) |
+| **Databases** | `*` | `*` for all databases, or a comma-separated list (e.g. `myapp,wordpress`) |
+| **Dump Directory** | `/home/bbs/mysql` | Where dump files are written on the client |
+| **One file per database** | Yes | Creates separate `.sql` or `.sql.gz` files per database |
+| **Compress dumps (gzip)** | Yes | Gzip compress each dump file |
+| **Delete dumps after backup** | Yes | Remove dump files after borg finishes successfully |
+| **Exclude Databases** | `information_schema, performance_schema, sys` | Databases to skip when using `*` |
+| **Extra mysqldump Options** | `--single-transaction --quick --routines --triggers --events` | Additional flags passed to mysqldump |
+
+### Setup Walkthrough
+
+1. **Enable the plugin** — Go to the client's Schedules tab, click Plugins, toggle on "MySQL Database Dump"
+2. **Create a MySQL backup user** on the client using the SQL above
+3. **Create or edit a backup plan** — expand the MySQL plugin section and fill in credentials and settings
+4. **Include the dump directory** in the plan's backup directories (e.g. add `/home/bbs/mysql` to the directories list)
+5. **Run a test backup** — click Run Now and check the queue for success or failure
+6. **Verify** — restore a dump file from the archive to confirm it contains valid SQL
+
+### How It Works
+
+When the agent runs a backup with the MySQL plugin enabled:
+
+1. The dump directory is created if it doesn't exist
+2. If `databases` is `*`, the agent runs `SHOW DATABASES` and dumps each one (minus excluded databases)
+3. If specific databases are listed, only those are dumped
+4. Each database is dumped with `mysqldump` using the configured options
+5. If compression is enabled, dumps are piped through gzip (producing `.sql.gz` files)
+6. Borg runs and backs up the dump directory along with everything else
+7. If cleanup is enabled, all `.sql` and `.sql.gz` files in the dump directory are deleted after borg succeeds
+
+### Troubleshooting
+
+| Problem | Cause | Fix |
+|---------|-------|-----|
+| Job fails before borg runs | MySQL credentials are wrong or mysqldump is not installed | SSH into the client and test: `mysqldump -u backup_user -p --single-transaction mydb > /dev/null` |
+| Dumps are empty | User lacks SELECT privilege | Re-run the GRANT statement above |
+| "Access denied" in job error | Wrong password or user not created for localhost | Verify with `mysql -u backup_user -p -e "SHOW DATABASES"` |
+| Dump directory permission denied | Agent user can't write to the dump path | `mkdir -p /home/bbs/mysql && chown bbs-agent:bbs-agent /home/bbs/mysql` (adjust user as needed) |
+| Dumps not cleaned up | Backup failed or cleanup_after is off | Check the job status; enable "Delete dumps after backup" in plugin config |
+
+---
+
 ## Monitoring Backups
 
 ### Queue Page
