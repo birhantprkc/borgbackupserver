@@ -42,6 +42,7 @@ class QueueController extends Controller
 
         $job = $this->db->fetchOne("
             SELECT bj.*, a.name as agent_name, a.id as agent_id,
+                   a.status as agent_status, a.last_heartbeat,
                    r.name as repo_name, bp.name as plan_name,
                    bp.directories, bp.excludes, bp.advanced_options
             FROM backup_jobs bj
@@ -63,10 +64,24 @@ class QueueController extends Controller
             ORDER BY created_at ASC
         ", [$id]);
 
+        // Queue context: active count, max queue, position
+        $activeCount = $this->db->count('backup_jobs', "status IN ('sent', 'running')");
+        $maxQueue = (int) ($this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'max_queue'")['value'] ?? 4);
+        $queuePosition = null;
+        if ($job['status'] === 'queued') {
+            $pos = $this->db->fetchOne("SELECT COUNT(*) as cnt FROM backup_jobs WHERE status = 'queued' AND queued_at <= ?", [$job['queued_at']]);
+            $queuePosition = (int) $pos['cnt'];
+        }
+        $pollInterval = (int) ($this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'agent_poll_interval'")['value'] ?? 30);
+
         $this->view('queue/detail', [
             'pageTitle' => 'Job #' . $id,
             'job' => $job,
             'logs' => $logs,
+            'activeCount' => $activeCount,
+            'maxQueue' => $maxQueue,
+            'queuePosition' => $queuePosition,
+            'pollInterval' => $pollInterval,
         ]);
     }
 

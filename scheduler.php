@@ -3,9 +3,6 @@
 /**
  * Scheduler CLI - Run via cron every minute:
  *   * * * * * php /path/to/borgbackupserver/scheduler.php
- *
- * 1. Checks all enabled schedules for due jobs and creates them as 'queued'
- * 2. Processes the queue, promoting 'queued' jobs to 'sent' (up to max_queue)
  */
 
 require_once __DIR__ . '/vendor/autoload.php';
@@ -18,28 +15,9 @@ use BBS\Services\UpdateService;
 
 Config::load();
 
-// Step 1: Check schedules and create queued jobs
-$scheduler = new SchedulerService();
-$created = $scheduler->run();
-
-foreach ($created as $job) {
-    echo date('Y-m-d H:i:s') . " Queued: {$job['plan']} (job #{$job['job_id']}, agent #{$job['agent_id']})\n";
-}
-
-// Step 2: Process queue - promote queued jobs to sent
-$queueManager = new QueueManager();
-$promoted = $queueManager->processQueue();
-
-foreach ($promoted as $job) {
-    echo date('Y-m-d H:i:s') . " Sent: job #{$job['id']} ({$job['task_type']}) to agent #{$job['agent_id']}\n";
-}
-
-if (empty($created) && empty($promoted)) {
-    // Silent when nothing to do (cron-friendly)
-}
-
-// Step 3: Mark agents offline if no heartbeat in 3x poll interval
 $db = \BBS\Core\Database::getInstance();
+
+// Step 1: Mark agents offline if no heartbeat in 3x poll interval
 $pollInterval = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'agent_poll_interval'");
 $threshold = ((int)($pollInterval['value'] ?? 30)) * 3;
 
@@ -65,12 +43,12 @@ if ($stale->rowCount() > 0) {
     }
 }
 
-// Step 3b: Fail active jobs for agents that just went offline
+// Step 2: Fail jobs for agents that are offline (queued, sent, or running)
 $staleJobs = $db->fetchAll("
-    SELECT bj.id, bj.agent_id, bj.task_type, bj.backup_plan_id, a.name as agent_name
+    SELECT bj.id, bj.agent_id, bj.task_type, bj.backup_plan_id, bj.status, a.name as agent_name
     FROM backup_jobs bj
     JOIN agents a ON a.id = bj.agent_id
-    WHERE bj.status IN ('sent', 'running')
+    WHERE bj.status IN ('queued', 'sent', 'running')
       AND a.status = 'offline'
 ");
 
@@ -105,7 +83,23 @@ foreach ($staleJobs as $sj) {
     echo date('Y-m-d H:i:s') . " Failed: job #{$sj['id']} ({$sj['task_type']}) — agent \"{$sj['agent_name']}\" offline\n";
 }
 
-// Step 4: Check storage locations for low disk space
+// Step 3: Check schedules and create queued jobs
+$scheduler = new SchedulerService();
+$created = $scheduler->run();
+
+foreach ($created as $job) {
+    echo date('Y-m-d H:i:s') . " Queued: {$job['plan']} (job #{$job['job_id']}, agent #{$job['agent_id']})\n";
+}
+
+// Step 4: Process queue - promote queued jobs to sent
+$queueManager = new QueueManager();
+$promoted = $queueManager->processQueue();
+
+foreach ($promoted as $job) {
+    echo date('Y-m-d H:i:s') . " Sent: job #{$job['id']} ({$job['task_type']}) to agent #{$job['agent_id']}\n";
+}
+
+// Step 5: Check storage locations for low disk space
 $notificationService = $notificationService ?? new NotificationService();
 $thresholdSetting = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_alert_threshold'");
 $storageThreshold = (int) ($thresholdSetting['value'] ?? 90);
@@ -128,10 +122,10 @@ foreach ($storageLocations as $loc) {
     }
 }
 
-// Step 5: Cleanup old resolved notifications
+// Step 6: Cleanup old resolved notifications
 $notificationService->cleanup();
 
-// Step 6: Check for updates (hourly)
+// Step 7: Check for updates (hourly)
 $lastCheck = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'last_update_check'");
 $lastCheckTime = $lastCheck['value'] ?? null;
 if (!$lastCheckTime || strtotime($lastCheckTime) < time() - 3600) {

@@ -23,7 +23,7 @@
                 <a href="/notifications" class="btn btn-link position-relative me-3 text-dark">
                     <i class="bi bi-bell fs-5"></i>
                     <?php if ($notifCount > 0): ?>
-                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                    <span class="position-absolute badge rounded-pill bg-danger" style="top: 2px; right: -2px; font-size: 0.65em;">
                         <?= $notifCount ?>
                     </span>
                     <?php endif; ?>

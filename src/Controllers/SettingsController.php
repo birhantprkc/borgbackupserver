@@ -174,6 +174,8 @@ class SettingsController extends Controller
 
         if (isset($result['error'])) {
             $this->flash('danger', 'Update check failed: ' . $result['error']);
+        } elseif (!empty($result['message'])) {
+            $this->flash('info', $result['message']);
         } elseif ($result['update_available']) {
             $this->flash('success', 'Update available: v' . $result['version']);
         } else {

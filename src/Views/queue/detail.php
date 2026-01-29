@@ -64,21 +64,62 @@ $isActive = in_array($job['status'], ['queued', 'sent', 'running']);
             </div>
             <div class="text-white-50 small">Waiting for progress data from agent</div>
         <?php elseif ($job['status'] === 'sent'): ?>
-            <div class="text-white fw-semibold mb-1">Please Wait...</div>
+            <div class="text-white fw-semibold mb-1">Waiting for Agent</div>
             <div class="progress mb-1" style="height: 22px; background-color: rgba(255,255,255,0.15);">
                 <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"
                      style="width: 100%; background-color: #5b9bd5;">
+                    Sent to agent
                 </div>
             </div>
-            <div class="text-white-50 small">Task sent to agent, waiting for it to start</div>
+            <div class="text-white-50 small">
+                <?php if ($job['agent_status'] === 'online'): ?>
+                    <i class="bi bi-check-circle-fill text-success me-1"></i>
+                    Agent "<strong><?= htmlspecialchars($job['agent_name']) ?></strong>" is online — waiting for next poll (every <?= $pollInterval ?>s)
+                <?php elseif ($job['agent_status'] === 'offline'): ?>
+                    <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>
+                    Agent "<strong><?= htmlspecialchars($job['agent_name']) ?></strong>" is offline — job will be failed by scheduler if agent doesn't reconnect
+                <?php else: ?>
+                    <i class="bi bi-clock text-info me-1"></i>
+                    Agent "<strong><?= htmlspecialchars($job['agent_name']) ?></strong>" status: <?= $job['agent_status'] ?> — waiting for agent to pick up task
+                <?php endif; ?>
+                <?php if ($job['last_heartbeat']): ?>
+                    <br>Last heartbeat: <?= date('M j, g:i:s A', strtotime($job['last_heartbeat'])) ?>
+                <?php else: ?>
+                    <br>No heartbeat received yet — agent may not be installed
+                <?php endif; ?>
+            </div>
         <?php else: ?>
-            <div class="text-white fw-semibold mb-1">Please Wait...</div>
+            <?php
+            $queueFull = $activeCount >= $maxQueue;
+            $agentOffline = $job['agent_status'] === 'offline';
+            ?>
+            <div class="text-white fw-semibold mb-1">Queued<?= $queuePosition ? " — Position #{$queuePosition}" : '' ?></div>
             <div class="progress mb-1" style="height: 22px; background-color: rgba(255,255,255,0.15);">
                 <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"
-                     style="width: 100%; background-color: #5b9bd5;">
+                     style="width: 100%; background-color: #e67e22;">
+                    Waiting
                 </div>
             </div>
-            <div class="text-white-50 small">Waiting for Backup Slot</div>
+            <div class="text-white-50 small">
+                <?php if ($agentOffline && $queueFull): ?>
+                    <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>
+                    Agent "<strong><?= htmlspecialchars($job['agent_name']) ?></strong>" is offline AND queue is full (<?= $activeCount ?>/<?= $maxQueue ?> slots used)
+                <?php elseif ($agentOffline): ?>
+                    <i class="bi bi-wifi-off text-warning me-1"></i>
+                    Waiting for agent "<strong><?= htmlspecialchars($job['agent_name']) ?></strong>" to come online
+                    <?php if ($job['last_heartbeat']): ?>
+                        — last seen <?= date('M j, g:i:s A', strtotime($job['last_heartbeat'])) ?>
+                    <?php else: ?>
+                        — never connected
+                    <?php endif; ?>
+                <?php elseif ($queueFull): ?>
+                    <i class="bi bi-hourglass-split text-info me-1"></i>
+                    Queue full — <?= $activeCount ?>/<?= $maxQueue ?> concurrent job slots in use. This job will start when a slot opens.
+                <?php else: ?>
+                    <i class="bi bi-clock text-info me-1"></i>
+                    Waiting to be promoted to active — agent is <?= $job['agent_status'] ?>, <?= $activeCount ?>/<?= $maxQueue ?> slots used
+                <?php endif; ?>
+            </div>
         <?php endif; ?>
     </div>
 </div>

@@ -54,6 +54,19 @@ class UpdateService
         $json = @file_get_contents($url, false, $ctx);
 
         if ($json === false) {
+            // Check if it was a 404 (no releases yet) vs actual failure
+            $lastError = error_get_last()['message'] ?? '';
+            if (str_contains($lastError, '404')) {
+                $this->setSetting('last_update_check', date('Y-m-d H:i:s'));
+                return [
+                    'version' => $this->getCurrentVersion(),
+                    'current' => $this->getCurrentVersion(),
+                    'update_available' => false,
+                    'notes' => '',
+                    'url' => '',
+                    'message' => 'No releases published yet.',
+                ];
+            }
             return ['error' => 'Could not reach GitHub API'];
         }
 
@@ -183,7 +196,7 @@ class UpdateService
         if ($existing) {
             $this->db->update('settings', ['value' => $value], "`key` = ?", [$key]);
         } else {
-            $this->db->insert('settings', ['key' => $key, 'value' => $value]);
+            $this->db->query("INSERT INTO settings (`key`, `value`) VALUES (?, ?)", [$key, $value]);
         }
     }
 }
