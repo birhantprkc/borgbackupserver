@@ -21,7 +21,7 @@ A self-hosted web application for centrally managing [BorgBackup](https://borgba
 
 ## Screenshots
 
-*Coming soon*
+![Dashboard](docs/images/dashboard.png)
 
 ---
 

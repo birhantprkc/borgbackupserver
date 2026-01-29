@@ -9,6 +9,7 @@ class App
     public function __construct()
     {
         Config::load();
+        date_default_timezone_set('America/New_York');
         session_set_cookie_params([
             'lifetime' => 0,
             'path' => '/',
@@ -56,7 +57,9 @@ class App
         $this->router->map('GET', '/clients/[i:id]/repos', 'ClientController@repos');
         $this->router->map('GET', '/clients/[i:id]/schedules', 'ClientController@schedules');
         $this->router->map('GET', '/clients/[i:id]/restore', 'ClientController@restore');
+        $this->router->map('POST', '/clients/[i:id]/edit', 'ClientController@update');
         $this->router->map('POST', '/clients/[i:id]/delete', 'ClientController@delete');
+        $this->router->map('POST', '/clients/[i:id]/update-borg', 'ClientController@updateBorg');
 
         // Repositories
         $this->router->map('POST', '/repositories/create', 'RepositoryController@store');

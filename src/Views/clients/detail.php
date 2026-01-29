@@ -3,51 +3,121 @@ $tab = $_GET['tab'] ?? 'status';
 ?>
 
 <!-- Client Header -->
+<?php
+$statusClass = match($agent['status']) {
+    'online' => 'success',
+    'offline' => 'secondary',
+    'error' => 'danger',
+    default => 'warning',
+};
+$sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB'
+    : ($totalSize >= 1048576 ? round($totalSize / 1048576, 1) . ' MB' : '0');
+?>
 <div class="card border-0 shadow-sm mb-4">
-    <div class="card-body">
-        <div class="row align-items-center">
-            <div class="col-md-3">
-                <h4 class="mb-1">
-                    <i class="bi bi-display me-2"></i>
-                    <?= htmlspecialchars($agent['name']) ?>
-                </h4>
-                <span class="text-muted small">#<?= $agent['id'] ?></span>
-                <?php if ($agent['hostname']): ?>
-                    <span class="text-muted small"> &middot; <?= htmlspecialchars($agent['hostname']) ?></span>
-                <?php endif; ?>
-            </div>
-            <div class="col-md-9">
-                <div class="row text-center">
-                    <div class="col">
-                        <div class="text-muted small">Version</div>
-                        <strong><?= htmlspecialchars($agent['agent_version'] ?? '--') ?></strong>
-                    </div>
-                    <div class="col">
-                        <div class="text-muted small">OS</div>
-                        <strong><?= htmlspecialchars($agent['os_info'] ?? '--') ?></strong>
-                    </div>
-                    <div class="col">
-                        <div class="text-muted small">Method</div>
-                        <strong>HTTPS Agent</strong>
-                    </div>
-                    <div class="col">
-                        <div class="text-muted small">Status</div>
-                        <?php
-                        $statusClass = match($agent['status']) {
-                            'online' => 'success',
-                            'offline' => 'secondary',
-                            'error' => 'danger',
-                            default => 'warning',
-                        };
-                        ?>
-                        <span class="badge bg-<?= $statusClass ?>"><?= ucfirst($agent['status']) ?></span>
-                    </div>
-                    <div class="col">
-                        <div class="text-muted small">Last Seen</div>
-                        <strong><?= $agent['last_heartbeat'] ?? 'Never' ?></strong>
-                    </div>
+    <div class="card-body pb-2">
+        <div class="d-flex justify-content-between align-items-start mb-3">
+            <div>
+                <div class="d-flex align-items-center gap-2">
+                    <h3 class="mb-0">
+                        <i class="bi bi-display me-2 text-primary"></i><?= htmlspecialchars($agent['name']) ?>
+                    </h3>
+                    <span class="badge bg-<?= $statusClass ?> fs-6"><?= ucfirst($agent['status']) ?></span>
+                    <button class="btn btn-sm btn-outline-secondary border-0" data-bs-toggle="collapse" data-bs-target="#edit-client" title="Edit client">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                </div>
+                <div class="text-muted mt-1">
+                    <?php if ($agent['hostname']): ?>
+                        <i class="bi bi-hdd-network me-1"></i><?= htmlspecialchars($agent['hostname']) ?>
+                        <?php if ($agent['ip_address'] ?? null): ?>
+                            <span class="ms-2"><i class="bi bi-globe me-1"></i><?= htmlspecialchars($agent['ip_address']) ?></span>
+                        <?php endif; ?>
+                        <span class="ms-2">&middot;</span>
+                    <?php endif; ?>
+                    <?php if ($agent['os_info']): ?>
+                        <span class="ms-1"><i class="bi bi-cpu me-1"></i><?= htmlspecialchars($agent['os_info']) ?></span>
+                    <?php endif; ?>
+                    <?php if ($agent['agent_version']): ?>
+                        <span class="ms-2"><i class="bi bi-box me-1"></i>Agent v<?= htmlspecialchars($agent['agent_version']) ?></span>
+                    <?php endif; ?>
+                    <?php if ($agent['borg_version']): ?>
+                        <span class="ms-2"><i class="bi bi-archive me-1"></i>Borg <?= htmlspecialchars($agent['borg_version']) ?></span>
+                        <form method="POST" action="/clients/<?= $agent['id'] ?>/update-borg" class="d-inline ms-1">
+                            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                            <button type="submit" class="btn btn-sm btn-outline-info border-0 py-0 px-1" title="Update Borg on this client" onclick="return confirm('Queue a borg update on this client?')">
+                                <i class="bi bi-arrow-up-circle"></i>
+                            </button>
+                        </form>
+                    <?php endif; ?>
                 </div>
             </div>
+            <?php if ($agent['owner_name']): ?>
+            <div class="text-end text-muted small">
+                <i class="bi bi-person me-1"></i>Owner: <strong><?= htmlspecialchars($agent['owner_name']) ?></strong>
+            </div>
+            <?php endif; ?>
+        </div>
+
+        <!-- Stats row -->
+        <div class="row g-3 text-center border-top pt-3">
+            <div class="col">
+                <div class="fs-4 fw-bold text-primary"><?= count($repositories) ?></div>
+                <div class="text-muted small">Repositories</div>
+            </div>
+            <div class="col">
+                <div class="fs-4 fw-bold text-info"><?= $totalArchives ?></div>
+                <div class="text-muted small">Archives</div>
+            </div>
+            <div class="col">
+                <div class="fs-4 fw-bold text-success"><?= $sizeDisplay ?></div>
+                <div class="text-muted small">Total Size</div>
+            </div>
+            <div class="col">
+                <div class="fs-4 fw-bold text-warning"><?= count($plans) ?></div>
+                <div class="text-muted small">Backup Plans</div>
+            </div>
+            <div class="col">
+                <?php if ($lastJob): ?>
+                    <?php $ljClass = $lastJob['status'] === 'completed' ? 'success' : 'danger'; ?>
+                    <div class="fs-4 fw-bold text-<?= $ljClass ?>"><i class="bi bi-<?= $lastJob['status'] === 'completed' ? 'check-circle' : 'x-circle' ?>"></i></div>
+                    <div class="text-muted small"><?= date('M j g:ia', strtotime($lastJob['completed_at'])) ?></div>
+                <?php else: ?>
+                    <div class="fs-4 fw-bold text-muted">--</div>
+                    <div class="text-muted small">Last Backup</div>
+                <?php endif; ?>
+            </div>
+            <div class="col">
+                <?php
+                if ($agent['last_heartbeat']) {
+                    $diff = time() - strtotime($agent['last_heartbeat']);
+                    if ($diff < 60) $seenAgo = $diff . 's ago';
+                    elseif ($diff < 3600) $seenAgo = floor($diff / 60) . 'm ago';
+                    elseif ($diff < 86400) $seenAgo = floor($diff / 3600) . 'h ago';
+                    else $seenAgo = floor($diff / 86400) . 'd ago';
+                } else {
+                    $seenAgo = 'Never';
+                }
+                ?>
+                <div class="fs-6 fw-bold"><?= $seenAgo ?></div>
+                <div class="text-muted small">Last Seen</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Collapsible edit form -->
+    <div class="collapse" id="edit-client">
+        <div class="card-body border-top bg-light">
+            <form method="POST" action="/clients/<?= $agent['id'] ?>/edit" class="row g-3 align-items-end">
+                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold small">Client Name</label>
+                    <input type="text" class="form-control form-control-sm" name="name" value="<?= htmlspecialchars($agent['name']) ?>" required>
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#edit-client">Cancel</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>

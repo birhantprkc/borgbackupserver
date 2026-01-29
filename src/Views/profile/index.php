@@ -23,6 +23,34 @@
                     </div>
 
                     <div class="mb-3">
+                        <label class="form-label">Timezone</label>
+                        <select class="form-select" name="timezone">
+                            <?php
+                            $commonZones = [
+                                'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+                                'America/Anchorage', 'Pacific/Honolulu', 'America/Phoenix',
+                                'America/Toronto', 'America/Vancouver',
+                                'Europe/London', 'Europe/Berlin', 'Europe/Paris', 'Europe/Amsterdam',
+                                'Europe/Moscow', 'Asia/Tokyo', 'Asia/Shanghai', 'Asia/Kolkata',
+                                'Australia/Sydney', 'Pacific/Auckland', 'UTC',
+                            ];
+                            $allZones = timezone_identifiers_list();
+                            $userTz = $user['timezone'] ?? 'America/New_York';
+                            ?>
+                            <optgroup label="Common">
+                                <?php foreach ($commonZones as $tz): ?>
+                                <option value="<?= $tz ?>" <?= $userTz === $tz ? 'selected' : '' ?>><?= str_replace(['/', '_'], [' / ', ' '], $tz) ?></option>
+                                <?php endforeach; ?>
+                            </optgroup>
+                            <optgroup label="All Timezones">
+                                <?php foreach ($allZones as $tz): ?>
+                                <option value="<?= $tz ?>" <?= $userTz === $tz ? 'selected' : '' ?>><?= $tz ?></option>
+                                <?php endforeach; ?>
+                            </optgroup>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
                         <label class="form-label">Role</label>
                         <input type="text" class="form-control" value="<?= ucfirst($user['role']) ?>" disabled>
                     </div>
@@ -32,7 +60,7 @@
                         <input type="text" class="form-control" value="<?= date('M j, Y', strtotime($user['created_at'])) ?>" disabled>
                     </div>
 
-                    <button type="submit" class="btn btn-primary">Update Email</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
                 </form>
             </div>
         </div>

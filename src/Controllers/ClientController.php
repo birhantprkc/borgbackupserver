@@ -126,9 +126,25 @@ class ClientController extends Controller
             ORDER BY ar.created_at DESC
         ", [$id]);
 
+        // Summary stats for header
+        $totalSize = array_sum(array_column($repositories, 'size_bytes'));
+        $totalArchives = array_sum(array_column($repositories, 'archive_count'));
+        $lastJob = $this->db->fetchOne("
+            SELECT status, completed_at FROM backup_jobs
+            WHERE agent_id = ? AND status IN ('completed','failed')
+            ORDER BY completed_at DESC LIMIT 1
+        ", [$id]);
+
+        // Users list for owner assignment
+        $users = $this->isAdmin() ? $this->db->fetchAll("SELECT id, username FROM users ORDER BY username") : [];
+
         $this->view('clients/detail', [
             'pageTitle' => 'Clients',
             'agent' => $agent,
+            'totalSize' => $totalSize,
+            'totalArchives' => $totalArchives,
+            'lastJob' => $lastJob,
+            'users' => $users,
             'repositories' => $repositories,
             'plans' => $plans,
             'recentJobs' => $recentJobs,
@@ -474,6 +490,30 @@ class ClientController extends Controller
         rmdir($dir);
     }
 
+    public function update(int $id): void
+    {
+        $this->requireAuth();
+        $this->verifyCsrf();
+
+        $agent = $this->getAgent($id);
+        if (!$agent) {
+            $this->flash('danger', 'Client not found.');
+            $this->redirect('/clients');
+        }
+
+        $data = [];
+        if (isset($_POST['name']) && trim($_POST['name']) !== '') {
+            $data['name'] = trim($_POST['name']);
+        }
+
+        if (!empty($data)) {
+            $this->db->update('agents', $data, 'id = ?', [$id]);
+            $this->flash('success', 'Client updated.');
+        }
+
+        $this->redirect("/clients/{$id}");
+    }
+
     public function delete(int $id): void
     {
         $this->requireAdmin();
@@ -508,5 +548,34 @@ class ClientController extends Controller
         }
 
         return $agent;
+    }
+
+    public function updateBorg(int $id): void
+    {
+        $this->requireAuth();
+        $this->verifyCsrf();
+
+        $agent = $this->getAgent($id);
+        if (!$agent) {
+            http_response_code(404);
+            echo 'Not found';
+            return;
+        }
+
+        // Create an update_borg job
+        $this->db->insert('backup_jobs', [
+            'agent_id' => $id,
+            'task_type' => 'update_borg',
+            'status' => 'queued',
+        ]);
+
+        $this->db->insert('server_log', [
+            'agent_id' => $id,
+            'level' => 'info',
+            'message' => 'Borg update requested by ' . ($_SESSION['username'] ?? 'unknown'),
+        ]);
+
+        $this->flash('success', 'Borg update job queued for ' . $agent['name']);
+        $this->redirect("/clients/{$id}");
     }
 }

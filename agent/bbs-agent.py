@@ -172,6 +172,83 @@ def count_files(directories):
     return total
 
 
+def execute_update_borg(config, task):
+    """Update borg on this system using the OS package manager."""
+    job_id = task.get("job_id")
+    logger.info(f"Executing borg update job #{job_id}")
+
+    # Report running
+    api_request(config, "/api/agent/progress", method="POST", data={
+        "job_id": job_id, "files_total": 0, "files_processed": 0,
+    })
+
+    error_output = ""
+    result = "failed"
+
+    try:
+        # Detect package manager and build update command
+        if os.path.exists("/usr/bin/apt-get"):
+            cmd = ["apt-get", "install", "-y", "--only-upgrade", "borgbackup"]
+            pre_cmd = ["apt-get", "update", "-qq"]
+        elif os.path.exists("/usr/bin/dnf"):
+            cmd = ["dnf", "upgrade", "-y", "borgbackup"]
+            pre_cmd = None
+        elif os.path.exists("/usr/bin/yum"):
+            cmd = ["yum", "update", "-y", "borgbackup"]
+            pre_cmd = None
+        elif os.path.exists("/usr/bin/pacman"):
+            cmd = ["pacman", "-Sy", "--noconfirm", "borg"]
+            pre_cmd = None
+        elif os.path.exists("/usr/local/bin/brew") or os.path.exists("/opt/homebrew/bin/brew"):
+            cmd = ["brew", "upgrade", "borgbackup"]
+            pre_cmd = None
+        elif os.path.exists("/usr/bin/pip3"):
+            cmd = ["pip3", "install", "--upgrade", "borgbackup"]
+            pre_cmd = None
+        else:
+            error_output = "No supported package manager found"
+            api_request(config, "/api/agent/status", method="POST", data={
+                "job_id": job_id, "result": "failed",
+                "error_log": error_output,
+            })
+            return
+
+        # Run pre-command (e.g. apt update)
+        if pre_cmd:
+            logger.info(f"Running: {' '.join(pre_cmd)}")
+            subprocess.run(pre_cmd, capture_output=True, text=True, timeout=120)
+
+        # Run update
+        logger.info(f"Running: {' '.join(cmd)}")
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+
+        if proc.returncode == 0:
+            result = "completed"
+            logger.info(f"Borg update completed successfully")
+        else:
+            error_output = proc.stderr or proc.stdout or f"Exit code {proc.returncode}"
+            logger.error(f"Borg update failed: {error_output}")
+
+    except subprocess.TimeoutExpired:
+        error_output = "Update command timed out"
+        logger.error(error_output)
+    except Exception as e:
+        error_output = str(e)
+        logger.error(f"Borg update error: {e}")
+
+    # Report status
+    status_data = {"job_id": job_id, "result": result}
+    if error_output:
+        status_data["error_log"] = error_output[:10000]
+    api_request(config, "/api/agent/status", method="POST", data=status_data)
+
+    # Re-report system info so borg_version gets updated
+    if result == "completed":
+        info = get_system_info()
+        api_request(config, "/api/agent/info", method="POST", data=info)
+        logger.info(f"Updated borg version: {info.get('borg_version', 'unknown')}")
+
+
 def execute_task(config, task):
     """Execute a borg task and report progress/status."""
     job_id = task.get("job_id")
@@ -409,7 +486,10 @@ def main():
                 for task in result["tasks"]:
                     if not running:
                         break
-                    execute_task(config, task)
+                    if task.get("task") == "update_borg":
+                        execute_update_borg(config, task)
+                    else:
+                        execute_task(config, task)
             elif result is None:
                 # Connection error — server might be down
                 logger.warning("Failed to poll server, will retry")

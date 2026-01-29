@@ -9,12 +9,44 @@
     <link href="/css/style.css" rel="stylesheet">
 </head>
 <body>
+    <!-- Top bar -->
+    <nav class="navbar navbar-expand navbar-light topbar p-0">
+        <div class="container-fluid p-0">
+            <a href="/" class="navbar-brand d-flex align-items-center justify-content-center m-0 p-0" style="width: 90px;">
+                <img src="/images/bbs-logo-small.png" alt="BBS" style="height: 36px;">
+            </a>
+            <span class="navbar-text fw-semibold ms-3"><?= htmlspecialchars($pageTitle ?? '') ?></span>
+            <div class="d-flex align-items-center ms-auto me-3">
+                <?php
+                $errorCount = $errorCount ?? \BBS\Core\Database::getInstance()->count('server_log', "level = 'error' AND created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)");
+                ?>
+                <a href="/log?level=error" class="btn btn-link position-relative me-3 text-dark">
+                    <i class="bi bi-bell fs-5"></i>
+                    <?php if ($errorCount > 0): ?>
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                        <?= $errorCount ?>
+                    </span>
+                    <?php endif; ?>
+                </a>
+                <div class="dropdown">
+                    <a class="btn btn-link text-dark dropdown-toggle text-decoration-none" href="#" role="button" data-bs-toggle="dropdown">
+                        <i class="bi bi-person-circle me-1"></i>
+                        <?= htmlspecialchars($_SESSION['username'] ?? 'User') ?>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><span class="dropdown-item-text text-muted small"><?= ucfirst($_SESSION['user_role'] ?? 'user') ?></span></li>
+                        <li><a class="dropdown-item" href="/profile"><i class="bi bi-person me-1"></i> Profile</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="/logout"><i class="bi bi-box-arrow-right me-1"></i> Logout</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </nav>
+
     <div class="d-flex">
         <!-- Sidebar -->
         <nav id="sidebar" class="sidebar d-flex flex-column flex-shrink-0 text-white">
-            <a href="/" class="d-block p-3 text-center border-bottom">
-                <img src="/images/bbs-logo-small.png" alt="BBS" class="img-fluid" style="max-width: 60px;">
-            </a>
             <ul class="nav nav-pills flex-column mb-auto text-center">
                 <li class="nav-item">
                     <a href="/" class="nav-link sidebar-link <?= ($pageTitle ?? '') === 'Dashboard' ? 'active' : '' ?>">
@@ -65,37 +97,6 @@
 
         <!-- Main content -->
         <div class="flex-grow-1">
-            <!-- Top bar -->
-            <nav class="navbar navbar-expand navbar-light bg-white border-bottom px-4 topbar">
-                <div class="container-fluid">
-                    <span class="navbar-text fw-semibold"><?= htmlspecialchars($pageTitle ?? '') ?></span>
-                    <div class="d-flex align-items-center">
-                        <?php
-                        $errorCount = $errorCount ?? \BBS\Core\Database::getInstance()->count('server_log', "level = 'error' AND created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)");
-                        ?>
-                        <a href="/log?level=error" class="btn btn-link position-relative me-3 text-dark">
-                            <i class="bi bi-bell fs-5"></i>
-                            <?php if ($errorCount > 0): ?>
-                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-                                <?= $errorCount ?>
-                            </span>
-                            <?php endif; ?>
-                        </a>
-                        <div class="dropdown">
-                            <a class="btn btn-link text-dark dropdown-toggle text-decoration-none" href="#" role="button" data-bs-toggle="dropdown">
-                                <i class="bi bi-person-circle me-1"></i>
-                                <?= htmlspecialchars($_SESSION['username'] ?? 'User') ?>
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li><span class="dropdown-item-text text-muted small"><?= ucfirst($_SESSION['user_role'] ?? 'user') ?></span></li>
-                                <li><a class="dropdown-item" href="/profile"><i class="bi bi-person me-1"></i> Profile</a></li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="/logout"><i class="bi bi-box-arrow-right me-1"></i> Logout</a></li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-            </nav>
 
             <!-- Flash messages -->
             <?php $flash = $flash ?? $this->getFlash(); ?>

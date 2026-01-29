@@ -31,6 +31,15 @@ class ProfileController extends Controller
         $newPassword = $_POST['new_password'] ?? '';
         $confirmPassword = $_POST['confirm_password'] ?? '';
 
+        // Update timezone
+        $timezone = trim($_POST['timezone'] ?? '');
+        if ($timezone && in_array($timezone, timezone_identifiers_list()) && $timezone !== $user['timezone']) {
+            $this->db->update('users', ['timezone' => $timezone], 'id = ?', [$userId]);
+            $_SESSION['timezone'] = $timezone;
+            date_default_timezone_set($timezone);
+            $this->flash('success', 'Timezone updated.');
+        }
+
         // Update email
         if ($email && $email !== $user['email']) {
             $existing = $this->db->fetchOne("SELECT id FROM users WHERE email = ? AND id != ?", [$email, $userId]);

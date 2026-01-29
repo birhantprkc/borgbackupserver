@@ -85,6 +85,8 @@ class QueueManager
                 ]);
             } elseif ($job['task_type'] === 'restore') {
                 $taskPayload = $this->buildRestorePayload($job);
+            } elseif ($job['task_type'] === 'update_borg') {
+                $taskPayload = ['task' => 'update_borg', 'job_id' => $job['id']];
             }
 
             if ($taskPayload) {
@@ -169,6 +171,8 @@ class QueueManager
                 if ($payload) {
                     $tasks[] = $payload;
                 }
+            } elseif ($job['task_type'] === 'update_borg') {
+                $tasks[] = ['task' => 'update_borg', 'job_id' => $job['id']];
             }
         }
 

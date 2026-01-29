@@ -1,0 +1,1 @@
+ALTER TABLE users ADD COLUMN timezone VARCHAR(50) NOT NULL DEFAULT 'America/New_York' AFTER role;
