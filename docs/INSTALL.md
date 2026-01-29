@@ -100,10 +100,10 @@ The `APP_KEY` is used to encrypt repository passphrases at rest (AES-256-GCM). K
 
 ---
 
-## 5. Run Migrations
+## 5. Import Database Schema
 
 ```bash
-php migrate.php
+mysql -u root -p bbs < schema.sql
 ```
 
 This creates all database tables, seeds the default admin user, and populates backup templates.
@@ -268,10 +268,9 @@ php -S localhost:8080
 cd /var/www/bbs
 git pull
 composer install --no-dev
-php migrate.php
 ```
 
-Migrations are idempotent — re-running `migrate.php` only applies new migrations.
+Check the release notes for any schema changes that need to be applied.
 
 ---
 

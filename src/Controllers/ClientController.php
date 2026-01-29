@@ -188,24 +188,28 @@ class ClientController extends Controller
         $perPage = 100;
         $offset = ($page - 1) * $perPage;
 
-        $where = 'archive_id = ? AND agent_id = ?';
+        $where = 'fc.archive_id = ? AND fp.agent_id = ?';
         $params = [$archive_id, $id];
 
         if ($search !== '') {
-            $where .= ' AND (file_name LIKE ? OR file_path LIKE ?)';
+            $where .= ' AND (fp.file_name LIKE ? OR fp.path LIKE ?)';
             $params[] = "%{$search}%";
             $params[] = "%{$search}%";
         }
 
         $total = $this->db->fetchOne(
-            "SELECT COUNT(*) as cnt FROM file_catalog WHERE {$where}",
+            "SELECT COUNT(*) as cnt FROM file_catalog fc
+             JOIN file_paths fp ON fp.id = fc.file_path_id
+             WHERE {$where}",
             $params
         );
 
         $files = $this->db->fetchAll(
-            "SELECT id, file_path, file_name, file_size, status, mtime
-             FROM file_catalog WHERE {$where}
-             ORDER BY file_path
+            "SELECT fp.id, fp.path as file_path, fp.file_name, fc.file_size, fc.status, fc.mtime
+             FROM file_catalog fc
+             JOIN file_paths fp ON fp.id = fc.file_path_id
+             WHERE {$where}
+             ORDER BY fp.path
              LIMIT {$perPage} OFFSET {$offset}",
             $params
         );
@@ -243,13 +247,14 @@ class ClientController extends Controller
         // Get subdirectories: distinct next path segment for paths that have more segments
         $dirs = $this->db->fetchAll("
             SELECT
-                SUBSTRING_INDEX(SUBSTRING(file_path, ?), '/', 1) as name,
+                SUBSTRING_INDEX(SUBSTRING(fp.path, ?), '/', 1) as name,
                 COUNT(*) as file_count,
-                SUM(file_size) as total_size
-            FROM file_catalog
-            WHERE archive_id = ? AND agent_id = ?
-              AND file_path LIKE ?
-              AND LOCATE('/', SUBSTRING(file_path, ?)) > 0
+                SUM(fc.file_size) as total_size
+            FROM file_catalog fc
+            JOIN file_paths fp ON fp.id = fc.file_path_id
+            WHERE fc.archive_id = ? AND fp.agent_id = ?
+              AND fp.path LIKE ?
+              AND LOCATE('/', SUBSTRING(fp.path, ?)) > 0
             GROUP BY name
             ORDER BY name
         ", [$prefixLen + 1, $archive_id, $id, $likePath, $prefixLen + 1]);
@@ -267,12 +272,13 @@ class ClientController extends Controller
 
         // Get files directly at this level (no more / after prefix)
         $files = $this->db->fetchAll("
-            SELECT id, file_path, file_name, file_size, status
-            FROM file_catalog
-            WHERE archive_id = ? AND agent_id = ?
-              AND file_path LIKE ?
-              AND LOCATE('/', SUBSTRING(file_path, ?)) = 0
-            ORDER BY file_name
+            SELECT fp.id, fp.path as file_path, fp.file_name, fc.file_size, fc.status
+            FROM file_catalog fc
+            JOIN file_paths fp ON fp.id = fc.file_path_id
+            WHERE fc.archive_id = ? AND fp.agent_id = ?
+              AND fp.path LIKE ?
+              AND LOCATE('/', SUBSTRING(fp.path, ?)) = 0
+            ORDER BY fp.file_name
         ", [$archive_id, $id, $likePath, $prefixLen + 1]);
 
         $this->json([

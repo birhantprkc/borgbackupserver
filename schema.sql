@@ -1,0 +1,235 @@
+-- Borg Backup Server — Database Schema
+-- Run: mysql -u root -p bbs < schema.sql
+
+-- --------------------------------------------------------
+-- Users & Authentication
+-- --------------------------------------------------------
+
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    role ENUM('admin', 'user') NOT NULL DEFAULT 'user',
+    timezone VARCHAR(50) NOT NULL DEFAULT 'America/New_York',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE rate_limits (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    ip_address VARCHAR(45) NOT NULL,
+    endpoint VARCHAR(100) NOT NULL,
+    attempts INT NOT NULL DEFAULT 1,
+    window_start DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_ip_endpoint (ip_address, endpoint)
+);
+
+-- Default admin user (password: admin)
+INSERT INTO users (username, email, password_hash, role) VALUES
+('admin', 'admin@borgbackupserver.com', '$2y$12$OMFE1ma3aKDFjEYAP24eTuIznogvlOD2k3Emh0Hmvdckirgu73U2m', 'admin');
+
+-- --------------------------------------------------------
+-- Storage & Agents
+-- --------------------------------------------------------
+
+CREATE TABLE storage_locations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    label VARCHAR(100) NOT NULL,
+    path VARCHAR(500) NOT NULL,
+    max_size_gb INT DEFAULT NULL,
+    is_default TINYINT(1) NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE agents (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    hostname VARCHAR(255) DEFAULT NULL,
+    ip_address VARCHAR(45) DEFAULT NULL,
+    api_key VARCHAR(64) NOT NULL UNIQUE,
+    os_info VARCHAR(255) DEFAULT NULL,
+    borg_version VARCHAR(20) DEFAULT NULL,
+    agent_version VARCHAR(20) DEFAULT NULL,
+    status ENUM('setup', 'online', 'offline', 'error') NOT NULL DEFAULT 'setup',
+    last_heartbeat DATETIME DEFAULT NULL,
+    user_id INT DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- --------------------------------------------------------
+-- Repositories & Backup Plans
+-- --------------------------------------------------------
+
+CREATE TABLE repositories (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    agent_id INT NOT NULL,
+    storage_location_id INT DEFAULT NULL,
+    name VARCHAR(100) NOT NULL,
+    path VARCHAR(500) NOT NULL,
+    encryption VARCHAR(50) NOT NULL DEFAULT 'repokey-blake2',
+    passphrase_encrypted TEXT DEFAULT NULL,
+    size_bytes BIGINT NOT NULL DEFAULT 0,
+    archive_count INT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
+    FOREIGN KEY (storage_location_id) REFERENCES storage_locations(id) ON DELETE SET NULL
+);
+
+CREATE TABLE backup_plans (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    agent_id INT NOT NULL,
+    repository_id INT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    directories TEXT NOT NULL,
+    excludes TEXT DEFAULT NULL,
+    advanced_options TEXT DEFAULT NULL,
+    prune_minutes INT NOT NULL DEFAULT 0,
+    prune_hours INT NOT NULL DEFAULT 0,
+    prune_days INT NOT NULL DEFAULT 7,
+    prune_weeks INT NOT NULL DEFAULT 4,
+    prune_months INT NOT NULL DEFAULT 6,
+    prune_years INT NOT NULL DEFAULT 0,
+    enabled TINYINT(1) NOT NULL DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
+    FOREIGN KEY (repository_id) REFERENCES repositories(id) ON DELETE CASCADE
+);
+
+CREATE TABLE schedules (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    backup_plan_id INT NOT NULL,
+    frequency VARCHAR(30) NOT NULL DEFAULT 'daily',
+    times VARCHAR(255) DEFAULT NULL,
+    day_of_week TINYINT DEFAULT NULL,
+    day_of_month TINYINT DEFAULT NULL,
+    enabled TINYINT(1) NOT NULL DEFAULT 1,
+    next_run DATETIME DEFAULT NULL,
+    last_run DATETIME DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (backup_plan_id) REFERENCES backup_plans(id) ON DELETE CASCADE
+);
+
+-- --------------------------------------------------------
+-- Jobs & Archives
+-- --------------------------------------------------------
+
+CREATE TABLE backup_jobs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    backup_plan_id INT DEFAULT NULL,
+    agent_id INT NOT NULL,
+    repository_id INT DEFAULT NULL,
+    task_type ENUM('backup', 'prune', 'restore', 'check', 'compact', 'update_borg') NOT NULL DEFAULT 'backup',
+    status ENUM('queued', 'sent', 'running', 'completed', 'failed', 'cancelled') NOT NULL DEFAULT 'queued',
+    files_total INT DEFAULT NULL,
+    files_processed INT DEFAULT NULL,
+    bytes_total BIGINT DEFAULT NULL,
+    bytes_processed BIGINT DEFAULT NULL,
+    duration_seconds INT DEFAULT NULL,
+    error_log TEXT DEFAULT NULL,
+    restore_archive_id INT DEFAULT NULL,
+    restore_paths JSON DEFAULT NULL,
+    restore_destination VARCHAR(512) DEFAULT NULL,
+    queued_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    started_at DATETIME DEFAULT NULL,
+    completed_at DATETIME DEFAULT NULL,
+    FOREIGN KEY (backup_plan_id) REFERENCES backup_plans(id) ON DELETE SET NULL,
+    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
+);
+
+CREATE TABLE archives (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    repository_id INT NOT NULL,
+    backup_job_id INT DEFAULT NULL,
+    archive_name VARCHAR(255) NOT NULL,
+    file_count INT NOT NULL DEFAULT 0,
+    original_size BIGINT NOT NULL DEFAULT 0,
+    deduplicated_size BIGINT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (repository_id) REFERENCES repositories(id) ON DELETE CASCADE,
+    FOREIGN KEY (backup_job_id) REFERENCES backup_jobs(id) ON DELETE SET NULL
+);
+
+-- --------------------------------------------------------
+-- File Catalog (normalized — paths stored once per agent)
+-- --------------------------------------------------------
+
+CREATE TABLE file_paths (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    agent_id INT NOT NULL,
+    path TEXT NOT NULL,
+    file_name VARCHAR(255) NOT NULL,
+    INDEX idx_agent_name (agent_id, file_name),
+    UNIQUE KEY idx_agent_path (agent_id, path(512)),
+    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
+) ENGINE=InnoDB ROW_FORMAT=COMPRESSED;
+
+CREATE TABLE file_catalog (
+    archive_id INT NOT NULL,
+    file_path_id BIGINT UNSIGNED NOT NULL,
+    file_size BIGINT DEFAULT 0,
+    status ENUM('A','M','U','E') DEFAULT 'U',
+    mtime DATETIME NULL,
+    PRIMARY KEY (archive_id, file_path_id),
+    KEY idx_file_path (file_path_id),
+    FOREIGN KEY (archive_id) REFERENCES archives(id) ON DELETE CASCADE,
+    FOREIGN KEY (file_path_id) REFERENCES file_paths(id) ON DELETE CASCADE
+) ENGINE=InnoDB ROW_FORMAT=COMPRESSED;
+
+-- --------------------------------------------------------
+-- Logging & Settings
+-- --------------------------------------------------------
+
+CREATE TABLE server_log (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    agent_id INT DEFAULT NULL,
+    backup_job_id INT DEFAULT NULL,
+    level ENUM('info', 'warning', 'error') NOT NULL DEFAULT 'info',
+    message TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE SET NULL,
+    FOREIGN KEY (backup_job_id) REFERENCES backup_jobs(id) ON DELETE SET NULL,
+    INDEX idx_level (level),
+    INDEX idx_created (created_at)
+);
+
+CREATE TABLE settings (
+    `key` VARCHAR(100) PRIMARY KEY,
+    `value` TEXT DEFAULT NULL
+);
+
+INSERT INTO settings (`key`, `value`) VALUES
+    ('max_queue', '4'),
+    ('server_host', ''),
+    ('agent_poll_interval', '30'),
+    ('smtp_host', ''),
+    ('smtp_port', '587'),
+    ('smtp_user', ''),
+    ('smtp_pass', ''),
+    ('smtp_from', '');
+
+-- --------------------------------------------------------
+-- Backup Templates
+-- --------------------------------------------------------
+
+CREATE TABLE backup_templates (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    description VARCHAR(255) DEFAULT '',
+    directories TEXT NOT NULL,
+    excludes TEXT DEFAULT NULL,
+    advanced_options TEXT DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+INSERT INTO backup_templates (name, description, directories, excludes) VALUES
+('Web Server', 'Apache/Nginx web server with virtual hosts', '/var/www\n/etc/nginx\n/etc/apache2\n/etc/httpd\n/etc/letsencrypt\n/home', '*.tmp\n*.log\n*.cache\n/home/*/tmp\n/home/*/.cache'),
+('Database Server (MySQL)', 'MySQL/MariaDB database server', '/var/lib/mysql\n/etc/mysql\n/etc/my.cnf.d\n/root', '*.tmp\n*.pid\n*.sock'),
+('Database Server (PostgreSQL)', 'PostgreSQL database server', '/var/lib/postgresql\n/etc/postgresql\n/root', '*.tmp\n*.pid\n*.sock'),
+('Mail Server', 'Email server with mailboxes', '/var/mail\n/var/vmail\n/etc/postfix\n/etc/dovecot\n/etc/opendkim', '*.tmp\n*.log'),
+('Interworx Server', 'Interworx hosting control panel', '/home\n/var/lib/mysql\n/etc\n/var/www\n/usr/local/interworx', '*.tmp\n*.log\n*.cache\n/home/*/tmp\n/home/*/.cache\n/home/*/mail/.Trash'),
+('File Server', 'General purpose file/NAS server', '/home\n/srv\n/opt\n/var/shared', '*.tmp\n*.cache\nThumbs.db\n.DS_Store'),
+('Docker Host', 'Docker/container host', '/opt\n/srv\n/home\n/etc\n/var/lib/docker/volumes', '*.tmp\n*.log\n/var/lib/docker/overlay2'),
+('Minimal (System Config)', 'Essential system configuration only', '/etc\n/root\n/home\n/var/spool/cron', '*.tmp\n*.log\n*.cache');

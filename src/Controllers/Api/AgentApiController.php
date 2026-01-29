@@ -265,30 +265,62 @@ class AgentApiController extends Controller
             $this->json(['error' => 'Archive not found'], 404);
         }
 
-        // Bulk insert using a single prepared statement
-        $placeholders = [];
-        $values = [];
+        $agentId = $agent['id'];
+
+        // Step 1: Upsert unique paths into file_paths
+        $pathPlaceholders = [];
+        $pathValues = [];
+        $paths = [];
         foreach ($files as $file) {
             $path = $file['path'] ?? '';
-            if (empty($path)) continue;
-
-            $placeholders[] = '(?, ?, ?, ?, ?, ?, ?)';
-            $values[] = $archiveId;
-            $values[] = $agent['id'];
-            $values[] = $path;
-            $values[] = basename($path);
-            $values[] = (int) ($file['size'] ?? 0);
-            $values[] = $file['status'] ?? 'U';
-            $values[] = $file['mtime'] ?? null;
+            if (empty($path) || isset($paths[$path])) continue;
+            $paths[$path] = true;
+            $pathPlaceholders[] = '(?, ?, ?)';
+            $pathValues[] = $agentId;
+            $pathValues[] = $path;
+            $pathValues[] = basename($path);
         }
 
-        if (!empty($placeholders)) {
-            $sql = "INSERT INTO file_catalog (archive_id, agent_id, file_path, file_name, file_size, status, mtime) VALUES "
-                 . implode(', ', $placeholders);
-            $this->db->query($sql, $values);
+        if (!empty($pathPlaceholders)) {
+            $sql = "INSERT IGNORE INTO file_paths (agent_id, path, file_name) VALUES "
+                 . implode(', ', $pathPlaceholders);
+            $this->db->query($sql, $pathValues);
         }
 
-        $this->json(['status' => 'ok', 'inserted' => count($placeholders)]);
+        // Step 2: Fetch IDs for all paths in this batch
+        $pathKeys = array_keys($paths);
+        $inPlaceholders = implode(',', array_fill(0, count($pathKeys), '?'));
+        $rows = $this->db->fetchAll(
+            "SELECT id, path FROM file_paths WHERE agent_id = ? AND path IN ({$inPlaceholders})",
+            array_merge([$agentId], $pathKeys)
+        );
+        $pathIdMap = [];
+        foreach ($rows as $row) {
+            $pathIdMap[$row['path']] = $row['id'];
+        }
+
+        // Step 3: Insert into file_catalog junction table
+        $catalogPlaceholders = [];
+        $catalogValues = [];
+        foreach ($files as $file) {
+            $path = $file['path'] ?? '';
+            if (empty($path) || !isset($pathIdMap[$path])) continue;
+
+            $catalogPlaceholders[] = '(?, ?, ?, ?, ?)';
+            $catalogValues[] = $archiveId;
+            $catalogValues[] = $pathIdMap[$path];
+            $catalogValues[] = (int) ($file['size'] ?? 0);
+            $catalogValues[] = $file['status'] ?? 'U';
+            $catalogValues[] = $file['mtime'] ?? null;
+        }
+
+        if (!empty($catalogPlaceholders)) {
+            $sql = "INSERT INTO file_catalog (archive_id, file_path_id, file_size, status, mtime) VALUES "
+                 . implode(', ', $catalogPlaceholders);
+            $this->db->query($sql, $catalogValues);
+        }
+
+        $this->json(['status' => 'ok', 'inserted' => count($catalogPlaceholders)]);
     }
 
     /**

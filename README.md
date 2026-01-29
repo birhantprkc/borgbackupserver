@@ -35,7 +35,8 @@ cd borgbackupserver
 composer install
 cp config/.env.example config/.env
 # Edit config/.env with database credentials and generate APP_KEY
-php migrate.php
+mysql -u root -p -e "CREATE DATABASE bbs"
+mysql -u root -p bbs < schema.sql
 ```
 
 See [docs/INSTALL.md](docs/INSTALL.md) for full server setup (Apache/Nginx, SSL, cron).
