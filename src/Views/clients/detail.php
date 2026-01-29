@@ -494,7 +494,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     <tbody>
                         <?php foreach ($repositories as $repo): ?>
                         <tr>
-                            <td class="fw-semibold"><?= htmlspecialchars($repo['name']) ?> <small class="text-muted">(#<?= $repo['id'] ?>)</small></td>
+                            <td class="fw-semibold"><i class="bi bi-device-hdd me-1 text-muted"></i><?= htmlspecialchars($repo['name']) ?> <small class="text-muted">(#<?= $repo['id'] ?>)</small></td>
                             <td class="small"><?= htmlspecialchars($repo['storage_label'] ?? '--') ?></td>
                             <td><code class="small"><?= htmlspecialchars($repo['encryption'] ?? '--') ?></code></td>
                             <td>
@@ -505,10 +505,26 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                             </td>
                             <td><?= $repo['archive_count'] ?></td>
                             <td class="text-end">
-                                <form method="POST" action="/repositories/<?= $repo['id'] ?>/delete" class="d-inline" onsubmit="return confirm('Delete this repository?')">
-                                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete"><i class="bi bi-trash"></i></button>
-                                </form>
+                                <?php
+                                $repoPlanCount = 0;
+                                foreach ($plans as $p) { if (($p['repository_id'] ?? 0) == $repo['id']) $repoPlanCount++; }
+                                $repoActiveJobs = 0;
+                                foreach ($recentJobs as $j) { if (($j['repository_id'] ?? 0) == $repo['id'] && in_array($j['status'], ['queued', 'sent', 'running'])) $repoActiveJobs++; }
+                                $deleteBlocked = $repoPlanCount > 0 || $repoActiveJobs > 0;
+                                $blockReason = $repoPlanCount > 0
+                                    ? "Delete the {$repoPlanCount} backup plan(s) using this repo first"
+                                    : "Wait for {$repoActiveJobs} active job(s) to finish first";
+                                ?>
+                                <?php if ($deleteBlocked): ?>
+                                    <span data-bs-toggle="tooltip" title="<?= htmlspecialchars($blockReason) ?>">
+                                        <button type="button" class="btn btn-sm btn-outline-danger" disabled><i class="bi bi-trash"></i></button>
+                                    </span>
+                                <?php else: ?>
+                                    <form method="POST" action="/repositories/<?= $repo['id'] ?>/delete" class="d-inline" onsubmit="return confirm('PERMANENTLY delete repository &quot;<?= htmlspecialchars($repo['name']) ?>&quot;, all its archives, and the data on disk?\n\nThis action is NOT reversible.')">
+                                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete"><i class="bi bi-trash"></i></button>
+                                    </form>
+                                <?php endif; ?>
                             </td>
                         </tr>
                         <?php endforeach; ?>
@@ -595,6 +611,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     document.getElementById('encryptionSelect').addEventListener('change', function() {
         document.getElementById('passphraseRow').style.display = this.value === 'none' ? 'none' : 'flex';
     });
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootstrap.Tooltip(el));
     </script>
 
 <?php elseif ($tab === 'schedules'): ?>
@@ -628,7 +645,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     <tbody>
                         <?php foreach ($plans as $plan): ?>
                         <tr>
-                            <td class="fw-semibold"><?= htmlspecialchars($plan['name']) ?></td>
+                            <td class="fw-semibold"><i class="bi bi-calendar-event me-1 text-muted"></i><?= htmlspecialchars($plan['name']) ?></td>
                             <td>
                                 <?= ucfirst($plan['frequency'] ?? 'manual') ?>
                                 <?php if ($plan['times']): ?>

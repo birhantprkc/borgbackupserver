@@ -78,9 +78,9 @@
     </div>
 
     <?php if ($isAdmin): ?>
-    <!-- Server Stats + Partitions -->
+    <!-- Server Stats -->
     <div class="col-lg-3">
-        <div class="card border-0 shadow-sm mb-4">
+        <div class="card border-0 shadow-sm h-100">
             <div class="card-header bg-white fw-semibold">
                 <i class="bi bi-cpu me-1"></i> Server Stats
             </div>
@@ -112,103 +112,64 @@
                 </div>
             </div>
         </div>
-        <div class="card border-0 shadow-sm">
+    </div>
+
+    <!-- Storage -->
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm h-100">
             <div class="card-header bg-white fw-semibold">
-                <i class="bi bi-hdd me-1"></i> Partitions
+                <i class="bi bi-hdd-stack me-1"></i> Storage
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
-                    <table class="table table-sm mb-0 small">
+                    <table class="table table-sm align-middle mb-0 small">
                         <thead class="table-light">
                             <tr>
-                                <th>Mount</th>
-                                <th>Used</th>
+                                <th>Partition</th>
+                                <th style="min-width: 140px;">% Used</th>
+                                <th>Size</th>
                                 <th>Free</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php foreach ($partitions as $part): ?>
                             <tr>
-                                <td><code><?= htmlspecialchars($part['mount']) ?></code></td>
+                                <td><i class="bi bi-device-hdd text-muted me-1"></i> <?= htmlspecialchars($part['mount']) ?></td>
                                 <td>
-                                    <div class="progress" style="height: 14px; min-width: 50px;">
-                                        <div class="progress-bar <?= $part['percent'] > 90 ? 'bg-danger' : ($part['percent'] > 70 ? 'bg-warning' : 'bg-success') ?>"
-                                             style="width: <?= $part['percent'] ?>%">
-                                            <?= $part['percent'] ?>%
+                                    <div class="progress" style="height: 18px; background-color: #e9ecef;">
+                                        <div class="progress-bar progress-bar-striped <?= $part['percent'] > 90 ? 'bg-danger' : ($part['percent'] > 70 ? 'bg-warning' : '') ?>"
+                                             style="width: <?= $part['percent'] ?>%; background-color: <?= $part['percent'] <= 70 ? '#8faabe' : '' ?>;">
                                         </div>
                                     </div>
                                 </td>
+                                <td><?= $part['size'] ?></td>
                                 <td><?= $part['free'] ?></td>
                             </tr>
                             <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Backup Storage Locations -->
-    <div class="col-lg-4">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-white fw-semibold">
-                <i class="bi bi-hdd-stack me-1"></i> Backup Storage
-            </div>
-            <div class="card-body p-0">
-                <?php if (empty($storageLocations)): ?>
-                    <div class="p-4 text-muted text-center">No storage locations configured</div>
-                <?php else: ?>
-                <div class="table-responsive">
-                    <table class="table table-sm mb-0 small">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Location</th>
-                                <th>Usage</th>
-                                <th>Free</th>
-                                <th>Repos</th>
-                            </tr>
-                        </thead>
-                        <tbody>
                             <?php foreach ($storageLocations as $loc): ?>
                             <tr>
-                                <td>
-                                    <span class="fw-semibold"><?= htmlspecialchars($loc['label']) ?></span>
-                                    <br><code class="text-muted" style="font-size: 0.75em;"><?= htmlspecialchars($loc['path']) ?></code>
-                                </td>
-                                <td>
+                                <td style="border-bottom: none;" class="pb-0"><i class="bi bi-archive text-success me-1"></i> <span class="fw-semibold"><?= htmlspecialchars($loc['label']) ?></span></td>
+                                <td style="border-bottom: none;" class="pb-0">
                                     <?php if ($loc['disk_percent'] !== null): ?>
-                                    <div class="progress" style="height: 14px; min-width: 70px;">
-                                        <div class="progress-bar <?= $loc['disk_percent'] > 90 ? 'bg-danger' : ($loc['disk_percent'] > 70 ? 'bg-warning' : 'bg-success') ?>"
-                                             style="width: <?= $loc['disk_percent'] ?>%">
-                                            <?= $loc['disk_percent'] ?>%
+                                    <div class="progress" style="height: 18px; background-color: #e9ecef;">
+                                        <div class="progress-bar progress-bar-striped <?= $loc['disk_percent'] > 90 ? 'bg-danger' : ($loc['disk_percent'] > 70 ? 'bg-warning' : '') ?>"
+                                             style="width: <?= $loc['disk_percent'] ?>%; background-color: <?= $loc['disk_percent'] <= 70 ? '#8faabe' : '' ?>;">
                                         </div>
                                     </div>
-                                    <span class="text-muted" style="font-size: 0.75em;">
-                                        <?= \BBS\Services\ServerStats::formatBytes($loc['disk_total'] - $loc['disk_free']) ?> / <?= \BBS\Services\ServerStats::formatBytes($loc['disk_total']) ?>
-                                    </span>
                                     <?php else: ?>
                                     <span class="text-muted">N/A</span>
                                     <?php endif; ?>
                                 </td>
-                                <td>
-                                    <?php if ($loc['disk_free'] !== null): ?>
-                                        <?= \BBS\Services\ServerStats::formatBytes($loc['disk_free']) ?>
-                                    <?php else: ?>
-                                        <span class="text-muted">N/A</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <?= (int)$loc['repo_count'] ?>
-                                    <?php if ($loc['total_repo_bytes'] > 0): ?>
-                                    <br><span class="text-muted" style="font-size: 0.75em;"><?= \BBS\Services\ServerStats::formatBytes($loc['total_repo_bytes']) ?></span>
-                                    <?php endif; ?>
-                                </td>
+                                <td style="border-bottom: none;" class="pb-0"><?= $loc['disk_total'] !== null ? \BBS\Services\ServerStats::formatBytes($loc['disk_total']) : '--' ?></td>
+                                <td style="border-bottom: none;" class="pb-0"><?= $loc['disk_free'] !== null ? \BBS\Services\ServerStats::formatBytes($loc['disk_free']) : 'N/A' ?></td>
+                            </tr>
+                            <tr>
+                                <td colspan="4" class="pt-0 text-muted" style="font-size: 0.75em;"><?= htmlspecialchars($loc['path']) ?></td>
                             </tr>
                             <?php endforeach; ?>
                         </tbody>
                     </table>
                 </div>
-                <?php endif; ?>
             </div>
         </div>
     </div>

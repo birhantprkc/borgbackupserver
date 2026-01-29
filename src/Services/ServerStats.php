@@ -146,39 +146,6 @@ class ServerStats
             ];
         }
 
-        // Also check configured storage locations
-        $db = \BBS\Core\Database::getInstance();
-        $locations = $db->fetchAll("SELECT * FROM storage_locations");
-        foreach ($locations as $loc) {
-            if (!is_dir($loc['path'])) continue;
-
-            $total = disk_total_space($loc['path']);
-            $free = disk_free_space($loc['path']);
-            if ($total === false) continue;
-
-            $used = $total - $free;
-            $pct = round(($used / $total) * 100);
-
-            // Check if this mount is already in the list
-            $alreadyListed = false;
-            foreach ($partitions as $p) {
-                if ($p['mount'] === $loc['path']) {
-                    $alreadyListed = true;
-                    break;
-                }
-            }
-
-            if (!$alreadyListed) {
-                $partitions[] = [
-                    'mount' => $loc['path'] . ' (' . $loc['label'] . ')',
-                    'size' => self::formatBytes($total),
-                    'used' => self::formatBytes($used),
-                    'free' => self::formatBytes($free),
-                    'percent' => $pct,
-                ];
-            }
-        }
-
         return $partitions;
     }
 

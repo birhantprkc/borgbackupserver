@@ -3,6 +3,7 @@
 namespace BBS\Controllers;
 
 use BBS\Core\Controller;
+use BBS\Services\BorgCommandBuilder;
 use BBS\Services\Encryption;
 use BBS\Services\SshKeyManager;
 
@@ -85,9 +86,73 @@ class RepositoryController extends Controller
         }
 
         $agentId = $repo['agent_id'];
+
+        // Block if backup plans reference this repo
+        $planCount = $this->db->fetchOne(
+            "SELECT COUNT(*) as cnt FROM backup_plans WHERE repository_id = ?", [$id]
+        );
+        if ((int) ($planCount['cnt'] ?? 0) > 0) {
+            $this->flash('danger', 'Cannot delete repository — it has backup plans attached. Delete the plans first.');
+            $this->redirect("/clients/{$agentId}?tab=repos");
+        }
+
+        // Block if any jobs are currently in progress
+        $activeJobs = $this->db->fetchOne(
+            "SELECT COUNT(*) as cnt FROM backup_jobs WHERE repository_id = ? AND status IN ('queued', 'sent', 'running')", [$id]
+        );
+        if ((int) ($activeJobs['cnt'] ?? 0) > 0) {
+            $this->flash('danger', 'Cannot delete repository — it has active jobs. Wait for them to finish first.');
+            $this->redirect("/clients/{$agentId}?tab=repos");
+        }
+
+        // Delete borg repository from disk
+        $localPath = BorgCommandBuilder::getLocalRepoPath($repo);
+        $diskDeleted = false;
+        if (!empty($localPath) && is_dir($localPath)) {
+            // Safety: only delete paths within a known storage location
+            $loc = !empty($repo['storage_location_id'])
+                ? $this->db->fetchOne("SELECT path FROM storage_locations WHERE id = ?", [$repo['storage_location_id']])
+                : null;
+            $storagePath = $loc['path'] ?? '';
+
+            if (!empty($storagePath) && str_starts_with(realpath($localPath), realpath($storagePath))) {
+                $output = [];
+                $retval = 0;
+                exec('rm -rf ' . escapeshellarg($localPath) . ' 2>&1', $output, $retval);
+                $diskDeleted = ($retval === 0);
+                if (!$diskDeleted) {
+                    $this->db->insert('server_log', [
+                        'agent_id' => $agentId,
+                        'level' => 'warning',
+                        'message' => "Failed to delete repo directory on disk: {$localPath} — " . implode(' ', $output),
+                    ]);
+                }
+            } else {
+                $this->db->insert('server_log', [
+                    'agent_id' => $agentId,
+                    'level' => 'warning',
+                    'message' => "Skipped disk deletion for repo \"{$repo['name']}\" — path outside known storage location.",
+                ]);
+            }
+        }
+
         $this->db->delete('repositories', 'id = ?', [$id]);
-        $this->flash('success', "Repository \"{$repo['name']}\" deleted.");
-        $this->redirect("/clients/{$agentId}");
+
+        $msg = "Repository \"{$repo['name']}\" deleted.";
+        if ($diskDeleted) {
+            $msg .= " Data removed from disk.";
+        } elseif (!empty($localPath) && is_dir($localPath)) {
+            $msg .= " Warning: disk data at {$localPath} could not be removed — clean up manually.";
+        }
+
+        $this->db->insert('server_log', [
+            'agent_id' => $agentId,
+            'level' => 'info',
+            'message' => "Repository \"{$repo['name']}\" deleted" . ($diskDeleted ? " (disk data removed)" : ""),
+        ]);
+
+        $this->flash('success', $msg);
+        $this->redirect("/clients/{$agentId}?tab=repos");
     }
 
     private function generatePassphrase(): string
