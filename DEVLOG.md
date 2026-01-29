@@ -891,7 +891,7 @@ borgbackupserver/
 - No JS frameworks, no external CSS — fully self-contained inline styles
 - Responsive (CSS grid/flexbox, clamp() font sizing)
 
-**Deployed** to `borgbackupserver.com` via SCP to `bbsweb@scooter.falconinternet.net`
+**Deployed** borgbackupserver.com site to hosting company
 
 **New files:**
 - `website/index.html`
