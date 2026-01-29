@@ -1,6 +1,6 @@
 # Contributing to Borg Backup Server
 
-Thanks for your interest in contributing to BBS. Here's how to get involved.
+> **Note:** We are not accepting contributions at this time. The project is still in early development and not yet finalized. Feel free to open issues for bugs or feature requests, but please hold off on pull requests until we open things up. Watch the repo for updates.
 
 ---
 
