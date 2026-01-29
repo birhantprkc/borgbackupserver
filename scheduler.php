@@ -99,6 +99,98 @@ foreach ($promoted as $job) {
     echo date('Y-m-d H:i:s') . " Sent: job #{$job['id']} ({$job['task_type']}) to agent #{$job['agent_id']}\n";
 }
 
+// Step 4b: Execute server-side jobs (prune/compact) locally
+$serverJobs = $queueManager->getServerSideJobs();
+foreach ($serverJobs as $sj) {
+    $repo = [
+        'path' => $sj['repo_path'],
+        'encryption' => $sj['encryption'],
+        'passphrase_encrypted' => $sj['passphrase_encrypted'],
+        'storage_location_id' => $sj['storage_location_id'] ?? null,
+        'agent_id' => $sj['repo_agent_id'] ?? $sj['agent_id'],
+        'name' => $sj['repo_name'],
+    ];
+
+    // Use local path for server-side execution
+    $localPath = \BBS\Services\BorgCommandBuilder::getLocalRepoPath($repo);
+    $localRepo = array_merge($repo, ['path' => $localPath]);
+
+    $plan = [
+        'prune_minutes' => $sj['prune_minutes'] ?? 0,
+        'prune_hours' => $sj['prune_hours'] ?? 0,
+        'prune_days' => $sj['prune_days'] ?? 7,
+        'prune_weeks' => $sj['prune_weeks'] ?? 4,
+        'prune_months' => $sj['prune_months'] ?? 6,
+        'prune_years' => $sj['prune_years'] ?? 0,
+    ];
+
+    // Mark as running
+    $db->update('backup_jobs', [
+        'status' => 'running',
+        'started_at' => date('Y-m-d H:i:s'),
+    ], 'id = ?', [$sj['id']]);
+
+    echo date('Y-m-d H:i:s') . " Executing server-side: job #{$sj['id']} ({$sj['task_type']})\n";
+
+    // Build command
+    if ($sj['task_type'] === 'prune') {
+        $cmd = \BBS\Services\BorgCommandBuilder::buildPruneCommand($plan, $localRepo);
+    } else {
+        // compact
+        $cmd = ['borg', 'compact', $localPath];
+    }
+
+    // Build env (server-side, no BORG_RSH needed)
+    $env = \BBS\Services\BorgCommandBuilder::buildEnv($localRepo, false);
+
+    // Execute
+    $envStrings = [];
+    foreach ($env as $k => $v) {
+        $envStrings[$k] = $v;
+    }
+
+    $desc = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+    $proc = proc_open($cmd, $desc, $pipes, null, array_merge($_SERVER, $envStrings));
+
+    $result = 'failed';
+    $errorOutput = '';
+
+    if (is_resource($proc)) {
+        fclose($pipes[0]);
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($proc);
+
+        if ($exitCode <= 1) {
+            $result = 'completed';
+        } else {
+            $errorOutput = $stderr ?: "Exit code $exitCode";
+        }
+    } else {
+        $errorOutput = 'Failed to execute borg command';
+    }
+
+    $now = date('Y-m-d H:i:s');
+    $db->update('backup_jobs', [
+        'status' => $result,
+        'completed_at' => $now,
+        'duration_seconds' => max(0, strtotime($now) - strtotime($sj['started_at'] ?? $now)),
+        'error_log' => $errorOutput ?: null,
+    ], 'id = ?', [$sj['id']]);
+
+    $level = $result === 'completed' ? 'info' : 'error';
+    $db->insert('server_log', [
+        'agent_id' => $sj['agent_id'],
+        'backup_job_id' => $sj['id'],
+        'level' => $level,
+        'message' => "Server-side {$sj['task_type']} job #{$sj['id']} {$result}" . ($errorOutput ? ": $errorOutput" : ''),
+    ]);
+
+    echo date('Y-m-d H:i:s') . " Server-side {$sj['task_type']} job #{$sj['id']}: {$result}\n";
+}
+
 // Step 5: Check storage locations for low disk space
 $notificationService = $notificationService ?? new NotificationService();
 $thresholdSetting = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_alert_threshold'");

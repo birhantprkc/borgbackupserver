@@ -132,9 +132,12 @@ class BorgCommandBuilder
     }
 
     /**
-     * Build the environment variables needed for borg (passphrase).
+     * Build the environment variables needed for borg (passphrase, SSH).
+     *
+     * When $forAgent is true (default), includes BORG_RSH for SSH key-based access.
+     * When false (server-side execution), omits BORG_RSH since we access repos locally.
      */
-    public static function buildEnv(array $repo): array
+    public static function buildEnv(array $repo, bool $forAgent = true): array
     {
         $env = [
             // Agent runs on a different machine than where the repo was created
@@ -148,7 +151,49 @@ class BorgCommandBuilder
                 $env['BORG_PASSPHRASE'] = $repo['passphrase_encrypted'];
             }
         }
+
+        // For agent-side execution, set BORG_RSH to use the agent's SSH key
+        if ($forAgent && self::isSshRepo($repo['path'] ?? '')) {
+            $env['BORG_RSH'] = 'ssh -i /etc/bbs-agent/ssh_key -o StrictHostKeyChecking=accept-new -o BatchMode=yes';
+        }
+
         return $env;
+    }
+
+    /**
+     * Check if a repo path is an SSH path.
+     */
+    public static function isSshRepo(string $path): bool
+    {
+        return str_starts_with($path, 'ssh://');
+    }
+
+    /**
+     * Get the local path for a repo (for server-side operations like prune).
+     * Converts ssh://user@host/./reponame to the actual local path using storage location.
+     */
+    public static function getLocalRepoPath(array $repo): string
+    {
+        if (!self::isSshRepo($repo['path'])) {
+            return $repo['path'];
+        }
+
+        // For SSH repos, the local path is stored separately or derived from storage location
+        // The repo record has storage_location_id and agent_id, from which we reconstruct the local path
+        if (!empty($repo['local_path'])) {
+            return $repo['local_path'];
+        }
+
+        // Fallback: derive from storage location path + agent_id + repo name
+        $db = \BBS\Core\Database::getInstance();
+        if (!empty($repo['storage_location_id'])) {
+            $loc = $db->fetchOne("SELECT path FROM storage_locations WHERE id = ?", [$repo['storage_location_id']]);
+            if ($loc) {
+                return rtrim($loc['path'], '/') . '/' . $repo['agent_id'] . '/' . $repo['name'];
+            }
+        }
+
+        return $repo['path'];
     }
 
     /**

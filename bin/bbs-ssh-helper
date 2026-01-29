@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+#
+# BBS SSH Helper — runs as root via sudo to manage Unix users for borg SSH access.
+#
+# Usage:
+#   bbs-ssh-helper create-user <username> <home_dir> <public_key>
+#   bbs-ssh-helper delete-user <username>
+#
+# Install:
+#   cp bin/bbs-ssh-helper /usr/local/bin/bbs-ssh-helper
+#   chmod 755 /usr/local/bin/bbs-ssh-helper
+#   echo "www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper" > /etc/sudoers.d/bbs-ssh-helper
+#
+set -euo pipefail
+
+ACTION="${1:-}"
+
+case "$ACTION" in
+    create-user)
+        USERNAME="${2:-}"
+        HOME_DIR="${3:-}"
+        PUBLIC_KEY="${4:-}"
+
+        if [ -z "$USERNAME" ] || [ -z "$HOME_DIR" ] || [ -z "$PUBLIC_KEY" ]; then
+            echo "Usage: bbs-ssh-helper create-user <username> <home_dir> <public_key>"
+            exit 1
+        fi
+
+        # Validate username format (must start with bbs-)
+        if [[ ! "$USERNAME" =~ ^bbs-[a-z0-9_-]+$ ]]; then
+            echo "Error: username must match bbs-[a-z0-9_-]+"
+            exit 1
+        fi
+
+        # Create home directory if needed
+        mkdir -p "$HOME_DIR"
+
+        # Create user with no password, no login shell, home at storage path
+        if id "$USERNAME" &>/dev/null; then
+            echo "User $USERNAME already exists"
+        else
+            useradd --system --shell /bin/sh --home-dir "$HOME_DIR" --no-create-home "$USERNAME"
+            echo "Created user: $USERNAME"
+        fi
+
+        # Set ownership
+        chown "$USERNAME":"$USERNAME" "$HOME_DIR"
+        chmod 750 "$HOME_DIR"
+
+        # Configure SSH authorized_keys with borg serve restriction
+        SSH_DIR="$HOME_DIR/.ssh"
+        mkdir -p "$SSH_DIR"
+        chmod 700 "$SSH_DIR"
+
+        AUTHORIZED_KEYS="$SSH_DIR/authorized_keys"
+        RESTRICT_CMD="command=\"borg serve --append-only --restrict-to-path $HOME_DIR\",restrict"
+
+        echo "$RESTRICT_CMD $PUBLIC_KEY" > "$AUTHORIZED_KEYS"
+        chmod 600 "$AUTHORIZED_KEYS"
+        chown -R "$USERNAME":"$USERNAME" "$SSH_DIR"
+
+        echo "OK"
+        ;;
+
+    delete-user)
+        USERNAME="${2:-}"
+
+        if [ -z "$USERNAME" ]; then
+            echo "Usage: bbs-ssh-helper delete-user <username>"
+            exit 1
+        fi
+
+        # Safety: only delete bbs- prefixed users
+        if [[ ! "$USERNAME" =~ ^bbs-[a-z0-9_-]+$ ]]; then
+            echo "Error: will only delete users matching bbs-[a-z0-9_-]+"
+            exit 1
+        fi
+
+        if id "$USERNAME" &>/dev/null; then
+            userdel "$USERNAME" 2>/dev/null || true
+            echo "Deleted user: $USERNAME"
+        else
+            echo "User $USERNAME does not exist"
+        fi
+
+        echo "OK"
+        ;;
+
+    *)
+        echo "Usage: bbs-ssh-helper {create-user|delete-user} [args...]"
+        exit 1
+        ;;
+esac

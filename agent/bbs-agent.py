@@ -18,9 +18,10 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.0.0"
+AGENT_VERSION = "1.1.0"
 CONFIG_PATH = "/etc/bbs-agent/config.ini"
 LOG_PATH = "/var/log/bbs-agent.log"
+SSH_KEY_PATH = "/etc/bbs-agent/ssh_key"
 
 # Allow overrides for development
 if os.environ.get("BBS_AGENT_CONFIG"):
@@ -151,9 +152,53 @@ def register(config):
         # Update poll interval from server
         if "poll_interval" in result:
             config["poll_interval"] = result["poll_interval"]
+
+        # Download SSH key for borg SSH access
+        download_ssh_key(config)
+
         return True
     else:
         logger.error("Registration failed")
+        return False
+
+
+def download_ssh_key(config):
+    """Download SSH private key from the server if not already present."""
+    if os.path.exists(SSH_KEY_PATH):
+        logger.info(f"SSH key already present at {SSH_KEY_PATH}")
+        return True
+
+    logger.info("Downloading SSH key from server...")
+    result = api_request(config, "/api/agent/ssh-key")
+
+    if not result or result.get("status") != "ok":
+        logger.warning("No SSH key available from server (may not be provisioned yet)")
+        return False
+
+    private_key = result.get("ssh_private_key", "")
+    if not private_key:
+        logger.warning("Server returned empty SSH key")
+        return False
+
+    try:
+        key_dir = os.path.dirname(SSH_KEY_PATH)
+        os.makedirs(key_dir, exist_ok=True)
+        with open(SSH_KEY_PATH, "w") as f:
+            f.write(private_key)
+        os.chmod(SSH_KEY_PATH, 0o600)
+        logger.info(f"SSH key saved to {SSH_KEY_PATH}")
+
+        # Store SSH config
+        ssh_user = result.get("ssh_unix_user", "")
+        server_host = result.get("server_host", "")
+        if ssh_user:
+            config["ssh_unix_user"] = ssh_user
+            config["server_host"] = server_host
+            logger.info(f"SSH configured: {ssh_user}@{server_host}")
+
+        return True
+    except Exception as e:
+        logger.error(f"Failed to save SSH key: {e}")
         return False
 
 
@@ -281,6 +326,14 @@ def execute_task(config, task):
     # Build environment
     env = os.environ.copy()
     env.update(env_vars)
+
+    # Ensure BORG_RSH is set if SSH key exists and command targets an SSH repo
+    if os.path.exists(SSH_KEY_PATH) and "BORG_RSH" not in env:
+        # Check if any command arg looks like an SSH repo path
+        for arg in command:
+            if arg.startswith("ssh://"):
+                env["BORG_RSH"] = f"ssh -i {SSH_KEY_PATH} -o StrictHostKeyChecking=accept-new -o BatchMode=yes"
+                break
 
     # Execute borg command
     files_processed = 0

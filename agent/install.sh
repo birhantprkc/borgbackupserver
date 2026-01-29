@@ -127,6 +127,47 @@ EOF
     echo "Config written to $CONFIG_DIR/config.ini"
 }
 
+# Download SSH key for borg access
+install_ssh_key() {
+    echo "Downloading SSH key from server..."
+    local response
+    if command -v curl &>/dev/null; then
+        response=$(curl -s -H "Authorization: Bearer $API_KEY" "$SERVER_URL/api/agent/ssh-key")
+    elif command -v wget &>/dev/null; then
+        response=$(wget -q -O - --header="Authorization: Bearer $API_KEY" "$SERVER_URL/api/agent/ssh-key")
+    fi
+
+    if [ -z "$response" ]; then
+        echo "Warning: Could not download SSH key. Agent will retry on startup."
+        return
+    fi
+
+    # Extract SSH key from JSON response (simple parsing)
+    local ssh_key
+    ssh_key=$(echo "$response" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('ssh_private_key',''))" 2>/dev/null)
+    local ssh_user
+    ssh_user=$(echo "$response" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('ssh_unix_user',''))" 2>/dev/null)
+    local ssh_host
+    ssh_host=$(echo "$response" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('server_host',''))" 2>/dev/null)
+
+    if [ -n "$ssh_key" ] && [ "$ssh_key" != "" ]; then
+        echo "$ssh_key" > "$CONFIG_DIR/ssh_key"
+        chmod 600 "$CONFIG_DIR/ssh_key"
+        echo "SSH key installed to $CONFIG_DIR/ssh_key"
+
+        # Write SSH config to config.ini
+        if [ -n "$ssh_user" ]; then
+            echo "" >> "$CONFIG_DIR/config.ini"
+            echo "[ssh]" >> "$CONFIG_DIR/config.ini"
+            echo "unix_user = $ssh_user" >> "$CONFIG_DIR/config.ini"
+            echo "server_host = $ssh_host" >> "$CONFIG_DIR/config.ini"
+            echo "key_path = $CONFIG_DIR/ssh_key" >> "$CONFIG_DIR/config.ini"
+        fi
+    else
+        echo "Warning: No SSH key available yet. Will be configured when SSH is provisioned."
+    fi
+}
+
 # Install service
 install_service() {
     if [ "$OS" = "macos" ]; then
@@ -168,6 +209,7 @@ EOF
 detect_os
 install_borg
 install_agent
+install_ssh_key
 install_service
 
 echo ""

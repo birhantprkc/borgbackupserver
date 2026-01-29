@@ -18,6 +18,7 @@ class QueueManager
 
     /**
      * Process the queue: assign queued jobs to agents (up to max_queue limit).
+     * Prune/compact jobs are marked for server-side execution (not sent to agents).
      * Returns the jobs that were promoted to 'sent' status.
      */
     public function processQueue(): array
@@ -41,7 +42,8 @@ class QueueManager
             SELECT bj.*, bp.directories, bp.excludes, bp.advanced_options,
                    bp.prune_minutes, bp.prune_hours, bp.prune_days,
                    bp.prune_weeks, bp.prune_months, bp.prune_years,
-                   r.path as repo_path, r.encryption, r.passphrase_encrypted, r.name as repo_name
+                   r.path as repo_path, r.encryption, r.passphrase_encrypted, r.name as repo_name,
+                   r.storage_location_id, r.agent_id as repo_agent_id
             FROM backup_jobs bj
             LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
             LEFT JOIN repositories r ON r.id = bj.repository_id
@@ -58,6 +60,9 @@ class QueueManager
                 'path' => $job['repo_path'],
                 'encryption' => $job['encryption'],
                 'passphrase_encrypted' => $job['passphrase_encrypted'],
+                'storage_location_id' => $job['storage_location_id'] ?? null,
+                'agent_id' => $job['repo_agent_id'] ?? $job['agent_id'],
+                'name' => $job['repo_name'],
             ];
 
             $plan = [
@@ -83,12 +88,9 @@ class QueueManager
                     'archive_name' => $archiveName,
                     'directories' => $plan['directories'],
                 ]);
-            } elseif ($job['task_type'] === 'prune') {
-                $cmd = BorgCommandBuilder::buildPruneCommand($plan, $repo);
-                $env = BorgCommandBuilder::buildEnv($repo);
-                $taskPayload = BorgCommandBuilder::toTaskPayload('prune', $cmd, $env, [
-                    'job_id' => $job['id'],
-                ]);
+            } elseif ($job['task_type'] === 'prune' || $job['task_type'] === 'compact') {
+                // Prune/compact run server-side — mark as sent, scheduler will execute them
+                $taskPayload = ['task' => $job['task_type'], 'server_side' => true, 'job_id' => $job['id']];
             } elseif ($job['task_type'] === 'restore') {
                 $taskPayload = $this->buildRestorePayload($job);
             } elseif ($job['task_type'] === 'update_borg') {
@@ -101,14 +103,12 @@ class QueueManager
                     'status' => 'sent',
                 ], 'id = ?', [$job['id']]);
 
-                // Store task payload in a transient way (we'll use the job record)
-                // The agent API will build the payload on-the-fly from the job data
-
+                $destination = ($taskPayload['server_side'] ?? false) ? 'server' : 'agent';
                 $this->db->insert('server_log', [
                     'agent_id' => $job['agent_id'],
                     'backup_job_id' => $job['id'],
                     'level' => 'info',
-                    'message' => "Job #{$job['id']} ({$job['task_type']}) sent to agent queue",
+                    'message' => "Job #{$job['id']} ({$job['task_type']}) sent to {$destination} queue",
                 ]);
 
                 $promoted[] = $job;
@@ -121,6 +121,7 @@ class QueueManager
     /**
      * Get pending tasks for a specific agent.
      * Called by the Agent API when the agent polls for work.
+     * Excludes prune/compact tasks (those run server-side).
      */
     public function getTasksForAgent(int $agentId): array
     {
@@ -134,6 +135,7 @@ class QueueManager
             LEFT JOIN repositories r ON r.id = bj.repository_id
             WHERE bj.agent_id = ?
               AND bj.status = 'sent'
+              AND bj.task_type NOT IN ('prune', 'compact')
             ORDER BY bj.queued_at ASC
         ", [$agentId]);
 
@@ -166,12 +168,6 @@ class QueueManager
                     'archive_name' => $archiveName,
                     'directories' => $plan['directories'],
                 ]);
-            } elseif ($job['task_type'] === 'prune') {
-                $cmd = BorgCommandBuilder::buildPruneCommand($plan, $repo);
-                $env = BorgCommandBuilder::buildEnv($repo);
-                $tasks[] = BorgCommandBuilder::toTaskPayload('prune', $cmd, $env, [
-                    'job_id' => $job['id'],
-                ]);
             } elseif ($job['task_type'] === 'restore') {
                 $payload = $this->buildRestorePayload($job);
                 if ($payload) {
@@ -183,6 +179,27 @@ class QueueManager
         }
 
         return $tasks;
+    }
+
+    /**
+     * Get server-side jobs (prune/compact) that are in 'sent' status.
+     * Called by the scheduler to execute locally on the server.
+     */
+    public function getServerSideJobs(): array
+    {
+        return $this->db->fetchAll("
+            SELECT bj.*, bp.directories, bp.excludes, bp.advanced_options,
+                   bp.prune_minutes, bp.prune_hours, bp.prune_days,
+                   bp.prune_weeks, bp.prune_months, bp.prune_years,
+                   r.path as repo_path, r.encryption, r.passphrase_encrypted,
+                   r.name as repo_name, r.storage_location_id, r.agent_id as repo_agent_id
+            FROM backup_jobs bj
+            LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
+            LEFT JOIN repositories r ON r.id = bj.repository_id
+            WHERE bj.status = 'sent'
+              AND bj.task_type IN ('prune', 'compact')
+            ORDER BY bj.queued_at ASC
+        ");
     }
 
     /**

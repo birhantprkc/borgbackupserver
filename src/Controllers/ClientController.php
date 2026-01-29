@@ -3,6 +3,8 @@
 namespace BBS\Controllers;
 
 use BBS\Core\Controller;
+use BBS\Services\SshKeyManager;
+use BBS\Services\Encryption;
 
 class ClientController extends Controller
 {
@@ -69,6 +71,31 @@ class ClientController extends Controller
             'status' => 'setup',
             'user_id' => $userId,
         ]);
+
+        // Provision SSH access: create Unix user, SSH keys, authorized_keys
+        $defaultStorage = $this->db->fetchOne("SELECT * FROM storage_locations WHERE is_default = 1");
+        if ($defaultStorage) {
+            $sshResult = SshKeyManager::provisionClient($id, $name, $defaultStorage['path']);
+            if (!$sshResult) {
+                $this->db->insert('server_log', [
+                    'agent_id' => $id,
+                    'level' => 'warning',
+                    'message' => 'SSH provisioning failed — client created but SSH access not configured. Check bbs-ssh-helper is installed.',
+                ]);
+            } else {
+                $this->db->insert('server_log', [
+                    'agent_id' => $id,
+                    'level' => 'info',
+                    'message' => "SSH provisioned: user {$sshResult['unix_user']}, home {$sshResult['home_dir']}",
+                ]);
+            }
+        } else {
+            $this->db->insert('server_log', [
+                'agent_id' => $id,
+                'level' => 'warning',
+                'message' => 'No default storage location — SSH provisioning skipped. Set a default storage location first.',
+            ]);
+        }
 
         $this->flash('success', 'Client created. Install the agent using the command below.');
         $this->redirect("/clients/{$id}");
@@ -412,7 +439,8 @@ class ClientController extends Controller
         }
 
         $archive = $this->db->fetchOne("
-            SELECT ar.*, r.path as repo_path, r.passphrase_encrypted, r.encryption
+            SELECT ar.*, r.path as repo_path, r.passphrase_encrypted, r.encryption,
+                   r.storage_location_id, r.agent_id as repo_agent_id, r.name as repo_name
             FROM archives ar
             JOIN repositories r ON r.id = ar.repository_id
             WHERE ar.id = ? AND r.agent_id = ?
@@ -423,21 +451,25 @@ class ClientController extends Controller
             $this->redirect("/clients/{$id}?tab=restore");
         }
 
-        // Build environment
+        // Build environment — server-side execution uses local paths
         $repo = [
             'path' => $archive['repo_path'],
             'passphrase_encrypted' => $archive['passphrase_encrypted'],
             'encryption' => $archive['encryption'],
+            'storage_location_id' => $archive['storage_location_id'] ?? null,
+            'agent_id' => $archive['repo_agent_id'] ?? $id,
+            'name' => $archive['repo_name'] ?? '',
         ];
-        $env = \BBS\Services\BorgCommandBuilder::buildEnv($repo);
+        $localPath = \BBS\Services\BorgCommandBuilder::getLocalRepoPath($repo);
+        $env = \BBS\Services\BorgCommandBuilder::buildEnv($repo, false);
 
         // Create temp directory for extraction
         $tmpDir = sys_get_temp_dir() . '/bbs-download-' . bin2hex(random_bytes(8));
         mkdir($tmpDir, 0700, true);
 
         try {
-            // Build borg extract command
-            $cmd = ['borg', 'extract', '--destination', $tmpDir, $archive['repo_path'] . '::' . $archive['archive_name']];
+            // Build borg extract command (using local path for server-side extraction)
+            $cmd = ['borg', 'extract', '--destination', $tmpDir, $localPath . '::' . $archive['archive_name']];
 
             // Add selected paths (strip trailing / for borg)
             foreach ($selectedFiles as $path) {
@@ -568,6 +600,11 @@ class ClientController extends Controller
         if (!$agent) {
             $this->flash('danger', 'Client not found.');
             $this->redirect('/clients');
+        }
+
+        // Deprovision SSH user
+        if (!empty($agent['ssh_unix_user'])) {
+            SshKeyManager::deprovisionClient($agent['ssh_unix_user']);
         }
 
         $this->db->delete('agents', 'id = ?', [$id]);

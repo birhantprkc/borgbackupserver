@@ -384,6 +384,35 @@ class AgentApiController extends Controller
     }
 
     /**
+     * GET /api/agent/ssh-key
+     * Agent downloads its SSH private key for borg SSH access.
+     */
+    public function sshKey(): void
+    {
+        $agent = $this->authenticateAgent();
+
+        if (empty($agent['ssh_private_key_encrypted'])) {
+            $this->json(['error' => 'No SSH key provisioned for this agent'], 404);
+        }
+
+        try {
+            $privateKey = \BBS\Services\Encryption::decrypt($agent['ssh_private_key_encrypted']);
+        } catch (\Exception $e) {
+            $this->json(['error' => 'Failed to decrypt SSH key'], 500);
+        }
+
+        // Return the server_host setting so the agent knows which host to SSH to
+        $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
+
+        $this->json([
+            'status' => 'ok',
+            'ssh_private_key' => $privateKey,
+            'ssh_unix_user' => $agent['ssh_unix_user'],
+            'server_host' => $serverHost['value'] ?? '',
+        ]);
+    }
+
+    /**
      * Parse JSON request body.
      */
     private function getJsonInput(): array

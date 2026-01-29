@@ -4,6 +4,7 @@ namespace BBS\Controllers;
 
 use BBS\Core\Controller;
 use BBS\Services\Encryption;
+use BBS\Services\SshKeyManager;
 
 class RepositoryController extends Controller
 {
@@ -30,12 +31,21 @@ class RepositoryController extends Controller
             $this->redirect('/clients');
         }
 
-        // Build repo path from storage location
+        // Build repo path: SSH path for agents, local path stored in DB
         $path = '';
         if ($storageLocationId) {
             $loc = $this->db->fetchOne("SELECT * FROM storage_locations WHERE id = ?", [$storageLocationId]);
             if ($loc) {
-                $path = rtrim($loc['path'], '/') . '/' . $agentId . '/' . $name;
+                // If agent has SSH configured, use SSH repo path
+                $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
+                $host = $serverHost['value'] ?? '';
+
+                if (!empty($agent['ssh_unix_user']) && !empty($host)) {
+                    $path = SshKeyManager::buildSshRepoPath($agent['ssh_unix_user'], $host, $name);
+                } else {
+                    // Fallback to local path (legacy or unconfigured)
+                    $path = rtrim($loc['path'], '/') . '/' . $agentId . '/' . $name;
+                }
             }
         }
 
