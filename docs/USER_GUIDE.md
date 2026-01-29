@@ -4,11 +4,27 @@ This guide covers day-to-day usage of the BBS web interface for managing backups
 
 ---
 
+## First-Time Setup
+
+On a fresh install, opening the BBS URL will launch the **Setup Wizard** instead of the login page. The wizard guides you through:
+
+1. **System requirements check** — PHP version, extensions, writable directories
+2. **Database connection** — enter MySQL credentials; the wizard creates the database if needed
+3. **Admin account** — choose your own username, email, and password
+4. **Storage & server** — set the backup storage path and the server hostname agents will connect to
+5. **Install** — review settings and apply. The wizard creates tables, writes `config/.env`, and sets up everything in one click.
+
+After completing the wizard, click **Add Your First Client** to get started, or go to the dashboard.
+
+See [Installation Guide](INSTALL.md) for full server prerequisites (packages, web server, SSL, SSH helper, cron).
+
+---
+
 ## Logging In
 
 Navigate to your BBS server URL (e.g. `https://backups.example.com/login`).
 
-Default credentials: `admin` / `admin` — change your password immediately via **Profile** (top-right dropdown).
+If you used the setup wizard, log in with the credentials you created during setup. For manual installations, the default credentials are `admin` / `admin` — change your password immediately via **Profile** (top-right dropdown).
 
 ### User Roles
 

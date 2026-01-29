@@ -2,13 +2,15 @@
 
 > **Early Beta (v0.8)** — This software is under active development and likely contains bugs. It is not recommended for production workloads. Use at your own risk.
 
-A self-hosted web application for centrally managing [BorgBackup](https://borgbackup.readthedocs.io/) across multiple Linux and macOS endpoints. No SSH required — a lightweight HTTPS agent polls the server for tasks, executes borg locally, and reports back.
+A self-hosted web application for centrally managing [BorgBackup](https://borgbackup.readthedocs.io/) across multiple Linux and macOS endpoints. A lightweight agent polls the server for tasks over HTTPS and streams backup data over SSH. Includes a setup wizard for zero-config installation.
 
 ---
 
 ## Features
 
-- **Agent-based architecture** — no inbound ports, no SSH keys, works behind firewalls
+- **Agent-based architecture** — no inbound ports on endpoints, works behind firewalls
+- **SSH with append-only security** — agents back up over SSH but cannot delete existing archives
+- **Setup wizard** — browser-based installer configures database, admin account, and storage in minutes
 - **Real-time progress** — live progress bars during backups
 - **File-level restore** — browse archive contents in a collapsible tree, restore individual files or entire directories
 - **Download archives** — extract and download files as .tar.gz directly from the browser
@@ -35,13 +37,16 @@ A self-hosted web application for centrally managing [BorgBackup](https://borgba
 git clone https://github.com/marcpope/borgbackupserver.git
 cd borgbackupserver
 composer install
-cp config/.env.example config/.env
-# Edit config/.env with database credentials and generate APP_KEY
-mysql -u root -p -e "CREATE DATABASE bbs"
-mysql -u root -p bbs < schema.sql
+
+# Install the SSH helper for agent backups
+sudo cp bin/bbs-ssh-helper /usr/local/bin/bbs-ssh-helper
+sudo chmod 755 /usr/local/bin/bbs-ssh-helper
+sudo bash -c 'echo "www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper" > /etc/sudoers.d/bbs-ssh-helper'
 ```
 
-See [docs/INSTALL.md](docs/INSTALL.md) for full server setup (Apache/Nginx, SSL, cron).
+Configure your web server (Apache or Nginx) to point at the `public/` directory, then open the site in your browser. The **setup wizard** will walk you through database, admin account, and storage configuration.
+
+See [docs/INSTALL.md](docs/INSTALL.md) for full server setup (packages, web server, SSL, cron, wizard walkthrough).
 
 ### Agent
 
@@ -85,21 +90,28 @@ See [docs/AGENT.md](docs/AGENT.md) for manual install and configuration.
 
 ```
 Endpoint                                 BBS Server
-  [bbs-agent.py]                         [PHP + MySQL]
+  [bbs-agent.py]                         [PHP + MySQL + borg]
        |                                      |
-       |--- register (hostname, OS) --------> |
+       |--- register (hostname, OS) --------> |  HTTPS
+       |--- download SSH key ---------------> |  HTTPS
        |                                      |
-       |--- poll for tasks -----------------> |
+       |--- poll for tasks -----------------> |  HTTPS
        |<-- backup command + passphrase ----- |
        |                                      |
-       |  [runs borg create locally]          |
+       |  [borg create over SSH] -----------> |  SSH (borg serve --append-only)
        |                                      |
-       |--- progress (files, bytes) --------> |  (every 5s)
-       |--- status (completed/failed) ------> |
-       |--- file catalog (batch) -----------> |
+       |--- progress (files, bytes) --------> |  HTTPS (every 5s)
+       |--- status (completed/failed) ------> |  HTTPS
+       |--- file catalog (batch) -----------> |  HTTPS
+       |                                      |
+       |            [server runs borg prune]  |  local (server-side)
        |                                      |
        |--- poll for tasks -----------------> |  (next cycle)
 ```
+
+- **HTTPS** for control plane (task polling, progress, status)
+- **SSH** for data plane (borg backup/restore via `borg serve`)
+- **Append-only** — agents cannot delete existing archives; pruning runs server-side
 
 ---
 
