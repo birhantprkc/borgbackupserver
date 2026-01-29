@@ -11,7 +11,8 @@ This guide covers installing the BBS server on a fresh Linux system. The server 
 - **MySQL:** 8.0+ or MariaDB 10.6+
 - **Composer:** 2.x
 - **Web server:** Apache or Nginx (or PHP built-in for development)
-- **BorgBackup:** Installed on the server (for download/restore features)
+- **BorgBackup:** Installed on the server (for SSH-based backups, server-side prune, and download/restore)
+- **OpenSSH Server:** `sshd` running and accepting connections (agents connect via SSH for borg)
 - **Optional:** Memcached + php-memcached extension (for dashboard caching)
 
 ---
@@ -200,7 +201,34 @@ certbot certonly --standalone -d backups.example.com
 
 ---
 
-## 8. Set Up the Scheduler
+## 8. Set Up SSH Helper
+
+Agents back up over SSH using `borg serve`. BBS needs a helper script to create restricted Unix users when clients are added. Install it:
+
+```bash
+cp bin/bbs-ssh-helper /usr/local/bin/bbs-ssh-helper
+chmod 755 /usr/local/bin/bbs-ssh-helper
+```
+
+Allow the web server user to run it via sudo (no password):
+
+```bash
+echo "www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper" > /etc/sudoers.d/bbs-ssh-helper
+chmod 440 /etc/sudoers.d/bbs-ssh-helper
+```
+
+Ensure OpenSSH server is installed and running:
+
+```bash
+apt install -y openssh-server
+systemctl enable --now sshd
+```
+
+The helper script only manages users with the `bbs-` prefix and validates all inputs. See [Agent Deployment Guide — SSH Architecture](AGENT.md#ssh-architecture) for full details.
+
+---
+
+## 9. Set Up the Scheduler
 
 The scheduler checks for due backups and processes the job queue. Add a cron entry:
 
@@ -215,13 +243,15 @@ Add:
 ```
 
 This runs every minute and:
-1. Creates queued jobs for any schedules that are due
-2. Promotes queued jobs to sent (up to `max_queue` concurrently)
-3. Marks agents offline if their heartbeat is stale
+1. Marks agents offline if their heartbeat is stale
+2. Creates queued jobs for any schedules that are due
+3. Promotes queued jobs to sent (up to `max_queue` concurrently)
+4. Executes server-side prune/compact jobs locally (agents are append-only)
+5. Checks storage locations for low disk space
 
 ---
 
-## 9. File Permissions
+## 10. File Permissions
 
 ```bash
 chown -R www-data:www-data /var/www/bbs
@@ -237,12 +267,12 @@ The web server user (`www-data`) needs:
 
 ---
 
-## 10. Post-Install Checklist
+## 11. Post-Install Checklist
 
 1. Log in as `admin` / `admin`
 2. **Change the admin password** (top-right dropdown > Profile)
 3. Go to **Settings** and configure:
-   - **Server Host** — the hostname/IP agents will use to reach this server
+   - **Server Host** — the hostname/IP agents will use to reach this server (used for both HTTPS and SSH)
    - **Max Concurrent Jobs** — how many backups can run simultaneously (default 4)
    - **SMTP settings** — for failure notification emails (optional)
 4. Add a **Storage Location** (e.g. `/mnt/backups`)
@@ -282,6 +312,9 @@ Check the release notes for any schema changes that need to be applied.
 | Database connection failed | Verify DB_HOST, DB_NAME, DB_USER, DB_PASS in `.env` |
 | 404 on all routes | Enable Apache `mod_rewrite` or check Nginx `try_files` |
 | Scheduler not running | Check `crontab -l`, verify path to `scheduler.php` |
-| Agents can't connect | Ensure SSL is configured and port 443 is open |
-| Borg not found (download) | Install borg on the server: `apt install borgbackup` |
+| Agents can't connect (HTTPS) | Ensure SSL is configured and port 443 is open |
+| Agents can't connect (SSH) | Ensure `sshd` is running and port 22 is open |
+| SSH provisioning fails | Check `bbs-ssh-helper` is at `/usr/local/bin/`, sudoers is configured, web user matches |
+| Borg not found | Install borg on the server: `apt install borgbackup` |
+| Prune not running | Prune runs server-side in the scheduler — check cron and server borg install |
 | Memcached not working | App works without it (graceful fallback), install `php-memcached` to enable |
