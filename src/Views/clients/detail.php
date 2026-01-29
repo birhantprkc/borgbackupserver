@@ -58,48 +58,87 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
             <?php endif; ?>
         </div>
 
-        <!-- Stats row -->
-        <div class="row g-3 text-center border-top pt-3">
-            <div class="col">
-                <div class="fs-4 fw-bold text-primary"><?= count($repositories) ?></div>
-                <div class="text-muted small">Repositories</div>
+        <!-- Stats row — icon cards -->
+        <?php
+        if ($agent['last_heartbeat']) {
+            $diff = time() - strtotime($agent['last_heartbeat']);
+            if ($diff < 60) $seenAgo = $diff . 's ago';
+            elseif ($diff < 3600) $seenAgo = floor($diff / 60) . 'm ago';
+            elseif ($diff < 86400) $seenAgo = floor($diff / 3600) . 'h ago';
+            else $seenAgo = floor($diff / 86400) . 'd ago';
+        } else {
+            $seenAgo = 'Never';
+        }
+        $lastBackupLabel = $lastJob ? date('M j g:ia', strtotime($lastJob['completed_at'])) : '--';
+        $lastBackupIcon = $lastJob ? ($lastJob['status'] === 'completed' ? 'check-circle-fill' : 'x-circle-fill') : 'dash-circle';
+        $lastBackupColor = $lastJob ? ($lastJob['status'] === 'completed' ? 'success' : 'danger') : 'secondary';
+        ?>
+        <div class="row g-2 border-top pt-3">
+            <div class="col-6 col-sm-4 col-lg-2">
+                <div class="d-flex align-items-center p-2 rounded border bg-light">
+                    <div class="stat-icon-sm bg-primary bg-opacity-10 text-primary rounded-2 p-2 me-2">
+                        <i class="bi bi-archive"></i>
+                    </div>
+                    <div>
+                        <div class="fw-bold"><?= count($repositories) ?></div>
+                        <div class="text-muted" style="font-size: 0.7rem;">Repos</div>
+                    </div>
+                </div>
             </div>
-            <div class="col">
-                <div class="fs-4 fw-bold text-info"><?= $totalArchives ?></div>
-                <div class="text-muted small">Archives</div>
+            <div class="col-6 col-sm-4 col-lg-2">
+                <div class="d-flex align-items-center p-2 rounded border bg-light">
+                    <div class="stat-icon-sm bg-info bg-opacity-10 text-info rounded-2 p-2 me-2">
+                        <i class="bi bi-stack"></i>
+                    </div>
+                    <div>
+                        <div class="fw-bold"><?= $totalArchives ?></div>
+                        <div class="text-muted" style="font-size: 0.7rem;">Archives</div>
+                    </div>
+                </div>
             </div>
-            <div class="col">
-                <div class="fs-4 fw-bold text-success"><?= $sizeDisplay ?></div>
-                <div class="text-muted small">Total Size</div>
+            <div class="col-6 col-sm-4 col-lg-2">
+                <div class="d-flex align-items-center p-2 rounded border bg-light">
+                    <div class="stat-icon-sm bg-success bg-opacity-10 text-success rounded-2 p-2 me-2">
+                        <i class="bi bi-hdd"></i>
+                    </div>
+                    <div>
+                        <div class="fw-bold"><?= $sizeDisplay ?></div>
+                        <div class="text-muted" style="font-size: 0.7rem;">Size</div>
+                    </div>
+                </div>
             </div>
-            <div class="col">
-                <div class="fs-4 fw-bold text-warning"><?= count($plans) ?></div>
-                <div class="text-muted small">Backup Plans</div>
+            <div class="col-6 col-sm-4 col-lg-2">
+                <div class="d-flex align-items-center p-2 rounded border bg-light">
+                    <div class="stat-icon-sm bg-warning bg-opacity-10 text-warning rounded-2 p-2 me-2">
+                        <i class="bi bi-clipboard-check"></i>
+                    </div>
+                    <div>
+                        <div class="fw-bold"><?= count($plans) ?></div>
+                        <div class="text-muted" style="font-size: 0.7rem;">Plans</div>
+                    </div>
+                </div>
             </div>
-            <div class="col">
-                <?php if ($lastJob): ?>
-                    <?php $ljClass = $lastJob['status'] === 'completed' ? 'success' : 'danger'; ?>
-                    <div class="fs-4 fw-bold text-<?= $ljClass ?>"><i class="bi bi-<?= $lastJob['status'] === 'completed' ? 'check-circle' : 'x-circle' ?>"></i></div>
-                    <div class="text-muted small"><?= date('M j g:ia', strtotime($lastJob['completed_at'])) ?></div>
-                <?php else: ?>
-                    <div class="fs-4 fw-bold text-muted">--</div>
-                    <div class="text-muted small">Last Backup</div>
-                <?php endif; ?>
+            <div class="col-6 col-sm-4 col-lg-2">
+                <div class="d-flex align-items-center p-2 rounded border bg-light">
+                    <div class="stat-icon-sm bg-<?= $lastBackupColor ?> bg-opacity-10 text-<?= $lastBackupColor ?> rounded-2 p-2 me-2">
+                        <i class="bi bi-<?= $lastBackupIcon ?>"></i>
+                    </div>
+                    <div>
+                        <div class="fw-bold" style="font-size: 0.85rem;"><?= $lastBackupLabel ?></div>
+                        <div class="text-muted" style="font-size: 0.7rem;">Last Backup</div>
+                    </div>
+                </div>
             </div>
-            <div class="col">
-                <?php
-                if ($agent['last_heartbeat']) {
-                    $diff = time() - strtotime($agent['last_heartbeat']);
-                    if ($diff < 60) $seenAgo = $diff . 's ago';
-                    elseif ($diff < 3600) $seenAgo = floor($diff / 60) . 'm ago';
-                    elseif ($diff < 86400) $seenAgo = floor($diff / 3600) . 'h ago';
-                    else $seenAgo = floor($diff / 86400) . 'd ago';
-                } else {
-                    $seenAgo = 'Never';
-                }
-                ?>
-                <div class="fs-6 fw-bold"><?= $seenAgo ?></div>
-                <div class="text-muted small">Last Seen</div>
+            <div class="col-6 col-sm-4 col-lg-2">
+                <div class="d-flex align-items-center p-2 rounded border bg-light">
+                    <div class="stat-icon-sm bg-<?= $statusClass ?> bg-opacity-10 text-<?= $statusClass ?> rounded-2 p-2 me-2">
+                        <i class="bi bi-broadcast"></i>
+                    </div>
+                    <div>
+                        <div class="fw-bold"><?= $seenAgo ?></div>
+                        <div class="text-muted" style="font-size: 0.7rem;">Last Seen</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -123,7 +162,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
 </div>
 
 <!-- Sub-tabs -->
-<ul class="nav nav-tabs mb-4">
+<ul class="nav nav-pills client-tabs mb-0">
     <li class="nav-item">
         <a class="nav-link <?= $tab === 'status' ? 'active' : '' ?>" href="?tab=status">
             <i class="bi bi-activity me-1"></i> Status
@@ -157,141 +196,282 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     </li>
     <?php endif; ?>
 </ul>
-
+<div class="client-tab-content border rounded-bottom bg-white p-4 mb-4 shadow-sm">
 <!-- Tab Content -->
 <?php if ($tab === 'status'): ?>
-    <!-- Repositories Summary -->
-    <?php if (empty($repositories)): ?>
-    <div class="alert alert-info mb-4">No repositories yet. Go to the <a href="?tab=repos">Repos</a> tab to create one.</div>
-    <?php else: ?>
-    <div class="row g-4 mb-4">
-        <?php foreach ($repositories as $repo): ?>
+    <?php
+    // Compute status metrics
+    $avgDuration = (int) ($jobStats['avg_duration'] ?? 0);
+    $avgDurLabel = $avgDuration >= 60 ? floor($avgDuration / 60) . 'm ' . ($avgDuration % 60) . 's' : $avgDuration . 's';
+    $successRate = ($jobStats['total'] ?? 0) > 0
+        ? round(($jobStats['completed'] / $jobStats['total']) * 100)
+        : 0;
+    $nextRunLabel = '--';
+    $nextRunSub = 'No schedule';
+    if ($nextBackup && $nextBackup['next_run']) {
+        $nextDiff = strtotime($nextBackup['next_run']) - time();
+        if ($nextDiff < 0) $nextRunLabel = 'Overdue';
+        elseif ($nextDiff < 3600) $nextRunLabel = floor($nextDiff / 60) . 'm';
+        elseif ($nextDiff < 86400) $nextRunLabel = floor($nextDiff / 3600) . 'h ' . floor(($nextDiff % 3600) / 60) . 'm';
+        else $nextRunLabel = floor($nextDiff / 86400) . 'd ' . floor(($nextDiff % 86400) / 3600) . 'h';
+        $nextRunSub = htmlspecialchars($nextBackup['plan_name']);
+    }
+    $successColor = $successRate >= 90 ? 'success' : ($successRate >= 70 ? 'warning' : 'danger');
+    ?>
+
+    <!-- Row 1: Key Metrics -->
+    <div class="row g-3 mb-4">
         <div class="col-md-3">
-            <div class="card border-0 shadow-sm text-center p-3">
-                <div class="fs-4 fw-semibold"><?= htmlspecialchars($repo['name']) ?></div>
-                <div class="d-flex justify-content-around mt-2">
-                    <div>
-                        <div class="fw-bold text-primary">
-                            <?php
-                            $s = $repo['size_bytes'];
-                            echo $s >= 1073741824 ? round($s / 1073741824, 1) . 'G' : ($s >= 1048576 ? round($s / 1048576, 1) . 'M' : '0');
-                            ?>
-                        </div>
-                        <small class="text-muted">Size</small>
+            <div class="card border-0 shadow-sm h-100" style="background-color: rgba(13,110,253,0.05);">
+                <div class="card-body d-flex align-items-center position-relative">
+                    <?php if ($nextBackup && $nextBackup['plan_id']): ?>
+                    <form method="POST" action="/plans/<?= $nextBackup['plan_id'] ?>/trigger" class="position-absolute top-0 end-0 mt-2 me-2">
+                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                        <button type="submit" class="btn btn-sm btn-outline-success py-0 px-2" style="font-size: 0.75rem;" title="Run backup now">
+                            <i class="bi bi-play-fill"></i> Run Now
+                        </button>
+                    </form>
+                    <?php endif; ?>
+                    <div class="stat-icon bg-primary bg-opacity-10 text-primary rounded-3 p-3 me-3">
+                        <i class="bi bi-clock fs-3"></i>
                     </div>
                     <div>
-                        <div class="fw-bold text-info"><?= $repo['archive_count'] ?></div>
-                        <small class="text-muted">Archives</small>
+                        <div class="text-muted small">Next Backup</div>
+                        <div class="fs-4 fw-bold"><?= $nextRunLabel ?></div>
+                        <div class="text-muted small"><?= $nextRunSub ?></div>
                     </div>
                 </div>
             </div>
         </div>
-        <?php endforeach; ?>
-    </div>
-    <?php endif; ?>
-
-    <!-- Schedules Summary -->
-    <?php if (!empty($plans)): ?>
-    <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-white fw-semibold">
-            <i class="bi bi-calendar-event me-1"></i> Backup Plans
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100" style="background-color: rgba(13,202,240,0.05);">
+                <div class="card-body d-flex align-items-center">
+                    <div class="stat-icon bg-info bg-opacity-10 text-info rounded-3 p-3 me-3">
+                        <i class="bi bi-stopwatch fs-3"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small">Avg Duration</div>
+                        <div class="fs-4 fw-bold"><?= $avgDurLabel ?></div>
+                        <div class="text-muted small">last 30 jobs</div>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Plan</th>
-                            <th>Frequency</th>
-                            <th>Repository</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($plans as $plan): ?>
-                        <tr>
-                            <td class="fw-semibold"><?= htmlspecialchars($plan['name']) ?></td>
-                            <td>
-                                <?= ucfirst($plan['frequency'] ?? 'manual') ?>
-                                <?php if ($plan['times']): ?>
-                                    <small class="text-muted ms-1"><?= htmlspecialchars($plan['times']) ?></small>
-                                <?php endif; ?>
-                            </td>
-                            <td><?= htmlspecialchars($plan['repo_name'] ?? '--') ?></td>
-                            <td>
-                                <?php if ($plan['schedule_enabled'] ?? false): ?>
-                                <span class="badge bg-success">Active</span>
-                                <?php elseif (($plan['frequency'] ?? '') === 'manual'): ?>
-                                <span class="badge bg-info">Manual</span>
-                                <?php else: ?>
-                                <span class="badge bg-secondary">Paused</span>
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100" style="background-color: rgba(<?= $successColor === 'success' ? '25,135,84' : ($successColor === 'warning' ? '255,193,7' : '220,53,69') ?>,0.05);">
+                <div class="card-body d-flex align-items-center">
+                    <div class="stat-icon bg-<?= $successColor ?> bg-opacity-10 text-<?= $successColor ?> rounded-3 p-3 me-3">
+                        <i class="bi bi-check2-all fs-3"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small">Success Rate</div>
+                        <div class="fs-4 fw-bold"><?= $successRate ?>%</div>
+                        <div class="text-muted small"><?= $jobStats['completed'] ?? 0 ?>/<?= $jobStats['total'] ?? 0 ?> jobs</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <?php $errColor = $recentErrors > 0 ? 'danger' : 'success'; ?>
+            <div class="card border-0 shadow-sm h-100" style="background-color: rgba(<?= $errColor === 'danger' ? '220,53,69' : '25,135,84' ?>,0.05);">
+                <div class="card-body d-flex align-items-center">
+                    <div class="stat-icon bg-<?= $errColor ?> bg-opacity-10 text-<?= $errColor ?> rounded-3 p-3 me-3">
+                        <i class="bi bi-exclamation-triangle fs-3"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small">Errors (7d)</div>
+                        <div class="fs-4 fw-bold"><?= $recentErrors ?></div>
+                        <div class="text-muted small">failed jobs</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-    <?php endif; ?>
 
-    <!-- Recent Backups -->
+    <!-- Row 2: Charts -->
+    <div class="row g-4 mb-4">
+        <!-- Backup Duration Chart -->
+        <div class="col-lg-7">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white fw-semibold">
+                    <i class="bi bi-bar-chart me-1"></i> Backup Duration (Last 30)
+                </div>
+                <div class="card-body">
+                    <?php if (empty($durationChart)): ?>
+                        <div class="text-muted text-center py-5">No backup data yet</div>
+                    <?php else: ?>
+                        <div style="position: relative; height: 220px;">
+                            <canvas id="durationChart"></canvas>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        <!-- Storage by Repository -->
+        <div class="col-lg-5">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white fw-semibold">
+                    <i class="bi bi-pie-chart me-1"></i> Storage by Repository
+                </div>
+                <div class="card-body">
+                    <?php if (empty($repositories)): ?>
+                        <div class="text-muted text-center py-5">No repositories yet</div>
+                    <?php else: ?>
+                        <div style="position: relative; height: 180px;">
+                            <canvas id="storageChart"></canvas>
+                        </div>
+                        <div class="mt-3">
+                            <?php foreach ($repositories as $repo): ?>
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span><i class="bi bi-circle-fill me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> <?= htmlspecialchars($repo['name']) ?></span>
+                                <span class="fw-semibold">
+                                    <?php
+                                    $s = $repo['size_bytes'];
+                                    echo $s >= 1073741824 ? round($s / 1073741824, 1) . ' GB' : ($s >= 1048576 ? round($s / 1048576, 1) . ' MB' : '0');
+                                    ?>
+                                    <span class="text-muted">(<?= $repo['archive_count'] ?> archives)</span>
+                                </span>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 3: Recent Activity Timeline -->
     <div class="card border-0 shadow-sm">
         <div class="card-header bg-white fw-semibold">
-            <i class="bi bi-clock-history me-1"></i> Recent Backups
+            <i class="bi bi-clock-history me-1"></i> Recent Activity
         </div>
         <div class="card-body p-0">
             <?php if (empty($recentJobs)): ?>
-            <div class="p-4 text-muted text-center">No backup history yet.</div>
+            <div class="p-4 text-muted text-center">No activity yet.</div>
             <?php else: ?>
-            <div class="table-responsive">
-                <table class="table table-hover mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Date/Time</th>
-                            <th>Type</th>
-                            <th>Files</th>
-                            <th>Repo</th>
-                            <th>Plan</th>
-                            <th>Duration</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($recentJobs as $job): ?>
-                        <tr>
-                            <td class="small"><?= $job['started_at'] ?? $job['queued_at'] ?></td>
-                            <td><?= $job['task_type'] ?></td>
-                            <td><?= number_format($job['files_total'] ?? 0) ?></td>
-                            <td><?= htmlspecialchars($job['repo_name'] ?? '--') ?></td>
-                            <td><?= $job['backup_plan_id'] ?? '--' ?></td>
-                            <td>
-                                <?php
-                                $d = $job['duration_seconds'] ?? 0;
-                                echo $d >= 60 ? floor($d / 60) . 'm ' . ($d % 60) . 's' : $d . 's';
-                                ?>
-                            </td>
-                            <td>
-                                <?php
-                                $jc = match($job['status']) {
-                                    'completed' => 'success',
-                                    'failed' => 'danger',
-                                    'running' => 'info',
-                                    'queued','sent' => 'warning',
-                                    default => 'secondary',
-                                };
-                                ?>
-                                <span class="badge bg-<?= $jc ?>"><?= $job['status'] ?></span>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+            <div class="list-group list-group-flush">
+                <?php foreach (array_slice($recentJobs, 0, 10) as $job): ?>
+                <?php
+                $jIcon = match($job['status']) {
+                    'completed' => 'check-circle-fill text-success',
+                    'failed' => 'x-circle-fill text-danger',
+                    'running' => 'arrow-repeat text-info',
+                    'queued','sent' => 'hourglass-split text-warning',
+                    default => 'dash-circle text-secondary',
+                };
+                $d = $job['duration_seconds'] ?? 0;
+                $durStr = $d >= 60 ? floor($d / 60) . 'm ' . ($d % 60) . 's' : ($d > 0 ? $d . 's' : '--');
+                ?>
+                <div class="list-group-item d-flex align-items-center py-2 px-3">
+                    <i class="bi bi-<?= $jIcon ?> fs-5 me-3"></i>
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between">
+                            <span class="fw-semibold"><?= ucfirst($job['task_type']) ?></span>
+                            <small class="text-muted"><?= date('M j g:ia', strtotime($job['started_at'] ?? $job['queued_at'])) ?></small>
+                        </div>
+                        <div class="small text-muted">
+                            <?= htmlspecialchars($job['repo_name'] ?? '') ?>
+                            <?php if ($job['files_total']): ?>
+                                &middot; <?= number_format($job['files_total']) ?> files
+                            <?php endif; ?>
+                            &middot; <?= $durStr ?>
+                            <?php if ($job['status'] === 'failed' && $job['error_log']): ?>
+                                <span class="text-danger ms-1" title="<?= htmlspecialchars(substr($job['error_log'], 0, 200)) ?>">
+                                    &middot; <i class="bi bi-exclamation-triangle"></i> <?= htmlspecialchars(substr($job['error_log'], 0, 80)) ?>
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+                <?php endforeach; ?>
             </div>
             <?php endif; ?>
         </div>
     </div>
+
+    <?php if (!empty($durationChart)): ?>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script>
+    // Duration Chart
+    const durData = <?= json_encode($durationChart) ?>;
+    new Chart(document.getElementById('durationChart').getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: durData.map(d => d.label),
+            datasets: [{
+                label: 'Duration (seconds)',
+                data: durData.map(d => d.duration_seconds),
+                backgroundColor: durData.map(d => d.status === 'completed' ? 'rgba(25, 135, 84, 0.7)' : 'rgba(220, 53, 69, 0.7)'),
+                borderColor: durData.map(d => d.status === 'completed' ? 'rgb(25, 135, 84)' : 'rgb(220, 53, 69)'),
+                borderWidth: 1,
+                borderRadius: 3,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        font: { size: 10 },
+                        callback: function(v) {
+                            return v >= 60 ? Math.floor(v/60) + 'm' : v + 's';
+                        }
+                    },
+                    grid: { color: 'rgba(0,0,0,0.05)' },
+                },
+                x: {
+                    ticks: {
+                        font: { size: 9 },
+                        maxRotation: 45,
+                        callback: function(val, index) {
+                            return index % Math.ceil(durData.length / 10) === 0 ? this.getLabelForValue(val) : '';
+                        }
+                    },
+                    grid: { display: false },
+                }
+            }
+        }
+    });
+
+    <?php if (!empty($repositories)): ?>
+    // Storage Chart
+    const repoData = <?= json_encode(array_map(fn($r) => ['name' => $r['name'], 'size' => $r['size_bytes']], $repositories)) ?>;
+    const colors = ['#0d6efd', '#198754', '#ffc107', '#0dcaf0', '#6f42c1', '#fd7e14', '#d63384', '#20c997'];
+    new Chart(document.getElementById('storageChart').getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            labels: repoData.map(r => r.name),
+            datasets: [{
+                data: repoData.map(r => r.size),
+                backgroundColor: repoData.map((_, i) => colors[i % colors.length]),
+                borderWidth: 2,
+                borderColor: '#fff',
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(ctx) {
+                            const bytes = ctx.parsed;
+                            if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' GB';
+                            if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
+                            return bytes + ' B';
+                        }
+                    }
+                }
+            }
+        }
+    });
+    <?php endif; ?>
+    </script>
+    <?php endif; ?>
 
 <?php elseif ($tab === 'repos'): ?>
     <h5 class="mb-3">Repositories</h5>
@@ -487,54 +667,6 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                 </form>
                             </td>
                         </tr>
-                        <tr class="collapse" id="edit-plan-<?= $plan['id'] ?>">
-                            <td colspan="7" class="bg-light">
-                                <form method="POST" action="/plans/<?= $plan['id'] ?>/edit" class="p-2">
-                                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                    <div class="row g-3">
-                                        <div class="col-md-4">
-                                            <label class="form-label fw-semibold small">Plan Name</label>
-                                            <input type="text" class="form-control form-control-sm" name="name" value="<?= htmlspecialchars($plan['name']) ?>" required>
-                                        </div>
-                                        <div class="col-md-4">
-                                            <label class="form-label fw-semibold small">Repository</label>
-                                            <select class="form-select form-select-sm" name="repository_id">
-                                                <?php foreach ($repositories as $repo): ?>
-                                                <option value="<?= $repo['id'] ?>" <?= $repo['id'] == $plan['repository_id'] ? 'selected' : '' ?>><?= htmlspecialchars($repo['name']) ?></option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        </div>
-                                        <div class="col-md-4">
-                                            <label class="form-label fw-semibold small">Advanced Options</label>
-                                            <input type="text" class="form-control form-control-sm" name="advanced_options" value="<?= htmlspecialchars($plan['advanced_options'] ?? '') ?>" placeholder="--compression lz4 --noatime">
-                                        </div>
-                                        <div class="col-md-6">
-                                            <label class="form-label fw-semibold small">Directories</label>
-                                            <textarea class="form-control form-control-sm" name="directories" rows="3" required><?= htmlspecialchars($plan['directories']) ?></textarea>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <label class="form-label fw-semibold small">Excludes</label>
-                                            <textarea class="form-control form-control-sm" name="excludes" rows="3"><?= htmlspecialchars($plan['excludes'] ?? '') ?></textarea>
-                                        </div>
-                                        <div class="col-12">
-                                            <label class="form-label fw-semibold small">Retention</label>
-                                            <div class="row g-2">
-                                                <div class="col"><label class="form-label small text-muted">Min</label><input type="number" class="form-control form-control-sm" name="prune_minutes" value="<?= $plan['prune_minutes'] ?>" min="0"></div>
-                                                <div class="col"><label class="form-label small text-muted">Hr</label><input type="number" class="form-control form-control-sm" name="prune_hours" value="<?= $plan['prune_hours'] ?>" min="0"></div>
-                                                <div class="col"><label class="form-label small text-muted">Day</label><input type="number" class="form-control form-control-sm" name="prune_days" value="<?= $plan['prune_days'] ?>" min="0"></div>
-                                                <div class="col"><label class="form-label small text-muted">Wk</label><input type="number" class="form-control form-control-sm" name="prune_weeks" value="<?= $plan['prune_weeks'] ?>" min="0"></div>
-                                                <div class="col"><label class="form-label small text-muted">Mo</label><input type="number" class="form-control form-control-sm" name="prune_months" value="<?= $plan['prune_months'] ?>" min="0"></div>
-                                                <div class="col"><label class="form-label small text-muted">Yr</label><input type="number" class="form-control form-control-sm" name="prune_years" value="<?= $plan['prune_years'] ?>" min="0"></div>
-                                            </div>
-                                        </div>
-                                        <div class="col-12 text-end">
-                                            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#edit-plan-<?= $plan['id'] ?>">Cancel</button>
-                                            <button type="submit" class="btn btn-sm btn-primary">Save Changes</button>
-                                        </div>
-                                    </div>
-                                </form>
-                            </td>
-                        </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
@@ -543,7 +675,153 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     </div>
     <?php endif; ?>
 
+    <!-- Edit Plan Forms (full layout, one per plan) -->
+    <?php foreach ($plans as $plan): ?>
+    <?php
+    $editOpts = $plan['advanced_options'] ?? '';
+    $editHasCompression = str_contains($editOpts, '--compression');
+    $editCompType = 'lz4';
+    if (preg_match('/--compression\s+(\S+)/', $editOpts, $m)) $editCompType = $m[1];
+    ?>
+    <div class="collapse edit-plan-panel" id="edit-plan-<?= $plan['id'] ?>">
+        <div class="card border-0 shadow-sm mb-4 border-primary">
+            <div class="card-header bg-white fw-semibold d-flex justify-content-between">
+                <span><i class="bi bi-pencil me-1"></i> Edit: <?= htmlspecialchars($plan['name']) ?></span>
+                <button type="button" class="btn-close" data-bs-toggle="collapse" data-bs-target="#edit-plan-<?= $plan['id'] ?>"></button>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="/plans/<?= $plan['id'] ?>/edit" class="edit-plan-form">
+                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+
+                    <div class="row mb-3">
+                        <label class="col-md-3 col-form-label fw-semibold">Plan Name</label>
+                        <div class="col-md-6">
+                            <input type="text" class="form-control" name="name" value="<?= htmlspecialchars($plan['name']) ?>" required>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <label class="col-md-3 col-form-label fw-semibold">Repository</label>
+                        <div class="col-md-6">
+                            <select class="form-select" name="repository_id">
+                                <?php foreach ($repositories as $repo): ?>
+                                <option value="<?= $repo['id'] ?>" <?= $repo['id'] == $plan['repository_id'] ? 'selected' : '' ?>><?= htmlspecialchars($repo['name']) ?> (#<?= $repo['id'] ?>)</option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+
+                    <?php if (!empty($templates)): ?>
+                    <div class="row mb-3">
+                        <label class="col-md-3 col-form-label fw-semibold">Template</label>
+                        <div class="col-md-6">
+                            <select class="form-select edit-template-select">
+                                <option value="">None (keep current configuration)</option>
+                                <?php foreach ($templates as $tpl): ?>
+                                <option value="<?= $tpl['id'] ?>"><?= htmlspecialchars($tpl['name']) ?> — <?= htmlspecialchars($tpl['description'] ?? '') ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-3 form-text pt-2">Overwrites directories and excludes</div>
+                    </div>
+                    <?php endif; ?>
+
+                    <div class="row mb-3">
+                        <label class="col-md-3 col-form-label fw-semibold">Backup Directories</label>
+                        <div class="col-md-6">
+                            <textarea class="form-control edit-directories" name="directories" rows="3" required><?= htmlspecialchars($plan['directories']) ?></textarea>
+                        </div>
+                        <div class="col-md-3 form-text pt-2">One directory per line</div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <label class="col-md-3 col-form-label fw-semibold">Exclude Patterns</label>
+                        <div class="col-md-6">
+                            <textarea class="form-control edit-excludes" name="excludes" rows="3"><?= htmlspecialchars($plan['excludes'] ?? '') ?></textarea>
+                        </div>
+                        <div class="col-md-3 form-text pt-2">One pattern per line</div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <label class="col-md-3 col-form-label fw-semibold">Options</label>
+                        <div class="col-md-6">
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input edit-borg-opt" type="checkbox" id="editOptComp<?= $plan['id'] ?>" <?= $editHasCompression ? 'checked' : '' ?>>
+                                        <label class="form-check-label" for="editOptComp<?= $plan['id'] ?>">Compression</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input edit-borg-opt" type="checkbox" id="editOptCache<?= $plan['id'] ?>" <?= str_contains($editOpts, '--exclude-caches') ? 'checked' : '' ?>>
+                                        <label class="form-check-label" for="editOptCache<?= $plan['id'] ?>">Exclude caches</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input edit-borg-opt" type="checkbox" id="editOptOneFs<?= $plan['id'] ?>" <?= str_contains($editOpts, '--one-file-system') ? 'checked' : '' ?>>
+                                        <label class="form-check-label" for="editOptOneFs<?= $plan['id'] ?>">One file system</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input edit-borg-opt" type="checkbox" id="editOptNoatime<?= $plan['id'] ?>" <?= str_contains($editOpts, '--noatime') ? 'checked' : '' ?>>
+                                        <label class="form-check-label" for="editOptNoatime<?= $plan['id'] ?>">No atime</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input edit-borg-opt" type="checkbox" id="editOptNumId<?= $plan['id'] ?>" <?= str_contains($editOpts, '--numeric-ids') ? 'checked' : '' ?>>
+                                        <label class="form-check-label" for="editOptNumId<?= $plan['id'] ?>">Numeric owner IDs</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input edit-borg-opt" type="checkbox" id="editOptNoXattr<?= $plan['id'] ?>" <?= str_contains($editOpts, '--noxattrs') ? 'checked' : '' ?>>
+                                        <label class="form-check-label" for="editOptNoXattr<?= $plan['id'] ?>">Skip xattrs</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input edit-borg-opt" type="checkbox" id="editOptNoAcl<?= $plan['id'] ?>" <?= str_contains($editOpts, '--noacls') ? 'checked' : '' ?>>
+                                        <label class="form-check-label" for="editOptNoAcl<?= $plan['id'] ?>">Skip ACLs</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <label class="form-label small text-muted">Compression type</label>
+                                <select class="form-select form-select-sm edit-comp-type" style="max-width: 200px;">
+                                    <option value="lz4" <?= $editCompType === 'lz4' ? 'selected' : '' ?>>lz4 (fast)</option>
+                                    <option value="zstd" <?= $editCompType === 'zstd' ? 'selected' : '' ?>>zstd (balanced)</option>
+                                    <option value="zstd,3" <?= $editCompType === 'zstd,3' ? 'selected' : '' ?>>zstd,3 (better ratio)</option>
+                                    <option value="zlib" <?= $editCompType === 'zlib' ? 'selected' : '' ?>>zlib (compatible)</option>
+                                    <option value="none" <?= !$editHasCompression ? 'selected' : '' ?>>None</option>
+                                </select>
+                            </div>
+                            <input type="hidden" name="advanced_options" class="edit-adv-hidden">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <label class="col-md-3 col-form-label fw-semibold">Prune Retention</label>
+                        <div class="col-md-9">
+                            <div class="row g-2">
+                                <div class="col"><label class="form-label small text-muted">Minutes</label><input type="number" class="form-control" name="prune_minutes" value="<?= $plan['prune_minutes'] ?>" min="0"></div>
+                                <div class="col"><label class="form-label small text-muted">Hours</label><input type="number" class="form-control" name="prune_hours" value="<?= $plan['prune_hours'] ?>" min="0"></div>
+                                <div class="col"><label class="form-label small text-muted">Days</label><input type="number" class="form-control" name="prune_days" value="<?= $plan['prune_days'] ?>" min="0"></div>
+                                <div class="col"><label class="form-label small text-muted">Weeks</label><input type="number" class="form-control" name="prune_weeks" value="<?= $plan['prune_weeks'] ?>" min="0"></div>
+                                <div class="col"><label class="form-label small text-muted">Months</label><input type="number" class="form-control" name="prune_months" value="<?= $plan['prune_months'] ?>" min="0"></div>
+                                <div class="col"><label class="form-label small text-muted">Years</label><input type="number" class="form-control" name="prune_years" value="<?= $plan['prune_years'] ?>" min="0"></div>
+                            </div>
+                            <div class="form-text">How many archives to keep for each time period.</div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 offset-md-3">
+                            <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i> Save Changes</button>
+                            <button type="button" class="btn btn-outline-secondary ms-2" data-bs-toggle="collapse" data-bs-target="#edit-plan-<?= $plan['id'] ?>">Cancel</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <?php endforeach; ?>
+
     <!-- Create New Schedule -->
+    <div id="create-plan-section">
     <?php if (empty($repositories)): ?>
     <div class="alert alert-warning">You need to <a href="?tab=repos">create a repository</a> before adding a backup schedule.</div>
     <?php else: ?>
@@ -808,7 +1086,51 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         if (document.getElementById('optNoAcls').checked) opts.push('--noacls');
         document.getElementById('advancedOptionsHidden').value = opts.join(' ');
     });
+
+    // Edit plan forms: build advanced_options from checkboxes on submit
+    document.querySelectorAll('.edit-plan-form').forEach(form => {
+        form.addEventListener('submit', function() {
+            const opts = [];
+            const panel = form.closest('.edit-plan-panel');
+            const comp = panel.querySelector('.edit-comp-type').value;
+            const checks = panel.querySelectorAll('.edit-borg-opt');
+            // Compression is first checkbox
+            if (checks[0] && checks[0].checked && comp !== 'none') opts.push('--compression ' + comp);
+            if (checks[1] && checks[1].checked) opts.push('--exclude-caches');
+            if (checks[2] && checks[2].checked) opts.push('--one-file-system');
+            if (checks[3] && checks[3].checked) opts.push('--noatime');
+            if (checks[4] && checks[4].checked) opts.push('--numeric-ids');
+            if (checks[5] && checks[5].checked) opts.push('--noxattrs');
+            if (checks[6] && checks[6].checked) opts.push('--noacls');
+            panel.querySelector('.edit-adv-hidden').value = opts.join(' ');
+        });
+    });
+
+    // Edit form template selectors
+    document.querySelectorAll('.edit-template-select').forEach(sel => {
+        sel.addEventListener('change', function() {
+            if (!this.value) return;
+            const panel = this.closest('.edit-plan-panel');
+            fetch('/api/templates/' + this.value, { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(tpl => {
+                    panel.querySelector('.edit-directories').value = (tpl.directories || '').replace(/\\n/g, '\n');
+                    panel.querySelector('.edit-excludes').value = (tpl.excludes || '').replace(/\\n/g, '\n');
+                });
+        });
+    });
+
+    // Show/hide create section when edit panel is toggled
+    document.querySelectorAll('.edit-plan-panel').forEach(panel => {
+        panel.addEventListener('shown.bs.collapse', function() {
+            document.getElementById('create-plan-section').style.display = 'none';
+        });
+        panel.addEventListener('hidden.bs.collapse', function() {
+            document.getElementById('create-plan-section').style.display = '';
+        });
+    });
     </script>
+    </div><!-- /create-plan-section -->
     <?php endif; ?>
 
 <?php elseif ($tab === 'restore'): ?>
@@ -1273,3 +1595,4 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         </div>
     </div>
 <?php endif; ?>
+</div><!-- /client-tab-content -->

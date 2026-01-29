@@ -11,6 +11,7 @@
 .sidebar-link {
     color: rgba(255, 255, 255, 0.7) !important;
     padding: 10px 8px 6px !important;
+    margin-bottom: 12px;
     border-radius: 0 !important;
     transition: all 0.2s;
     line-height: 1;
@@ -86,4 +87,62 @@ body.bg-light {
 
 .card-header {
     border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+/* Client detail tabs */
+.client-tabs {
+    gap: 4px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.client-tabs .nav-link {
+    color: #495057;
+    background-color: #e9ecef;
+    border-radius: 6px 6px 0 0 !important;
+    padding: 8px 16px;
+    font-weight: 500;
+    font-size: 0.9rem;
+    border: 1px solid #dee2e6;
+    border-bottom: none;
+    margin-bottom: -1px;
+    white-space: nowrap;
+}
+
+.client-tabs .nav-link:hover {
+    background-color: #dee2e6;
+    color: #212529;
+}
+
+.client-tabs .nav-link.active {
+    background-color: #fff;
+    color: #2c3e50;
+    border-color: #dee2e6;
+    border-bottom-color: #fff;
+    position: relative;
+    z-index: 1;
+}
+
+.client-tabs .nav-link.text-danger {
+    color: #dc3545 !important;
+}
+
+.client-tabs .nav-link.text-danger.active {
+    color: #dc3545 !important;
+    background-color: #fff;
+}
+
+.client-tab-content {
+    border-radius: 0 0 8px 8px;
+}
+
+/* Header stat icon cards */
+.stat-icon-sm {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
 }

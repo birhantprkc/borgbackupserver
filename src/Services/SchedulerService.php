@@ -3,6 +3,7 @@
 namespace BBS\Services;
 
 use BBS\Core\Database;
+use BBS\Services\NotificationService;
 
 class SchedulerService
 {
@@ -19,9 +20,17 @@ class SchedulerService
      */
     public function run(): array
     {
+        // Skip if maintenance mode is active
+        $maintenance = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'maintenance_mode'");
+        if (($maintenance['value'] ?? '0') === '1') {
+            return [];
+        }
+
         $now = date('Y-m-d H:i:s');
 
         // Find schedules that are due
+        $notificationService = new NotificationService();
+
         $dueSchedules = $this->db->fetchAll("
             SELECT s.*, bp.agent_id, bp.repository_id, bp.name as plan_name
             FROM schedules s
@@ -73,11 +82,36 @@ class SchedulerService
                 'next_run' => $nextRun,
             ], 'id = ?', [$schedule['id']]);
 
+            // Resolve any missed_schedule notification for this plan
+            $notificationService->resolve('missed_schedule', $schedule['agent_id'], $schedule['backup_plan_id']);
+
             $created[] = [
                 'job_id' => $jobId,
                 'plan' => $schedule['plan_name'],
                 'agent_id' => $schedule['agent_id'],
             ];
+        }
+
+        // Check for overdue schedules where agent is offline (missed_schedule)
+        $overdueSchedules = $this->db->fetchAll("
+            SELECT s.*, bp.agent_id, bp.name as plan_name, a.name as agent_name
+            FROM schedules s
+            JOIN backup_plans bp ON bp.id = s.backup_plan_id
+            JOIN agents a ON a.id = bp.agent_id
+            WHERE s.enabled = 1
+              AND s.next_run IS NOT NULL
+              AND s.next_run <= ?
+              AND bp.enabled = 1
+              AND a.status = 'offline'
+        ", [$now]);
+
+        foreach ($overdueSchedules as $sched) {
+            $notificationService->notify(
+                'missed_schedule',
+                $sched['agent_id'],
+                $sched['backup_plan_id'],
+                "Missed schedule for plan \"{$sched['plan_name']}\" — client \"{$sched['agent_name']}\" is offline"
+            );
         }
 
         return $created;

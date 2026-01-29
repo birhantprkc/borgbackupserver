@@ -32,7 +32,7 @@ class SettingsController extends Controller
         $this->requireAdmin();
         $this->verifyCsrf();
 
-        $allowed = ['max_queue', 'server_host', 'agent_poll_interval', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_from'];
+        $allowed = ['max_queue', 'server_host', 'agent_poll_interval', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_from', 'notification_retention_days', 'storage_alert_threshold'];
 
         foreach ($allowed as $key) {
             if (isset($_POST[$key])) {
@@ -45,8 +45,21 @@ class SettingsController extends Controller
             }
         }
 
+        // Checkbox toggles: unchecked = not posted, so explicitly save '0'
+        $checkboxKeys = ['email_on_backup_failed', 'email_on_agent_offline', 'email_on_storage_low', 'email_on_missed_schedule'];
+        foreach ($checkboxKeys as $key) {
+            $value = isset($_POST[$key]) ? '1' : '0';
+            $existing = $this->db->fetchOne("SELECT `key` FROM settings WHERE `key` = ?", [$key]);
+            if ($existing) {
+                $this->db->update('settings', ['value' => $value], "`key` = ?", [$key]);
+            } else {
+                $this->db->insert('settings', ['key' => $key, 'value' => $value]);
+            }
+        }
+
         $this->flash('success', 'Settings updated.');
-        $this->redirect('/settings');
+        $tab = $_POST['_tab'] ?? 'general';
+        $this->redirect('/settings?tab=' . urlencode($tab));
     }
 
     public function addStorage(): void
@@ -61,7 +74,7 @@ class SettingsController extends Controller
 
         if (empty($label) || empty($path)) {
             $this->flash('danger', 'Label and path are required.');
-            $this->redirect('/settings');
+            $this->redirect('/settings?tab=storage');
         }
 
         if ($isDefault) {
@@ -76,7 +89,7 @@ class SettingsController extends Controller
         ]);
 
         $this->flash('success', "Storage location \"{$label}\" added.");
-        $this->redirect('/settings');
+        $this->redirect('/settings?tab=storage');
     }
 
     public function deleteStorage(int $id): void
@@ -86,7 +99,7 @@ class SettingsController extends Controller
 
         $this->db->delete('storage_locations', 'id = ?', [$id]);
         $this->flash('success', 'Storage location removed.');
-        $this->redirect('/settings');
+        $this->redirect('/settings?tab=storage');
     }
 
     public function addTemplate(): void
@@ -101,7 +114,7 @@ class SettingsController extends Controller
 
         if (empty($name) || empty($directories)) {
             $this->flash('danger', 'Template name and directories are required.');
-            $this->redirect('/settings#templates');
+            $this->redirect('/settings?tab=templates');
         }
 
         $this->db->insert('backup_templates', [
@@ -112,7 +125,7 @@ class SettingsController extends Controller
         ]);
 
         $this->flash('success', "Template \"{$name}\" created.");
-        $this->redirect('/settings#templates');
+        $this->redirect('/settings?tab=templates');
     }
 
     public function editTemplate(int $id): void
@@ -127,7 +140,7 @@ class SettingsController extends Controller
 
         if (empty($name) || empty($directories)) {
             $this->flash('danger', 'Template name and directories are required.');
-            $this->redirect('/settings#templates');
+            $this->redirect('/settings?tab=templates');
         }
 
         $this->db->update('backup_templates', [
@@ -138,7 +151,7 @@ class SettingsController extends Controller
         ], 'id = ?', [$id]);
 
         $this->flash('success', "Template \"{$name}\" updated.");
-        $this->redirect('/settings#templates');
+        $this->redirect('/settings?tab=templates');
     }
 
     public function deleteTemplate(int $id): void
@@ -148,7 +161,46 @@ class SettingsController extends Controller
 
         $this->db->delete('backup_templates', 'id = ?', [$id]);
         $this->flash('success', 'Template deleted.');
-        $this->redirect('/settings#templates');
+        $this->redirect('/settings?tab=templates');
+    }
+
+    public function checkUpdate(): void
+    {
+        $this->requireAdmin();
+        $this->verifyCsrf();
+
+        $service = new \BBS\Services\UpdateService();
+        $result = $service->checkForUpdate();
+
+        if (isset($result['error'])) {
+            $this->flash('danger', 'Update check failed: ' . $result['error']);
+        } elseif ($result['update_available']) {
+            $this->flash('success', 'Update available: v' . $result['version']);
+        } else {
+            $this->flash('success', 'You are running the latest version (v' . $result['current'] . ').');
+        }
+
+        $this->redirect('/settings?tab=updates');
+    }
+
+    public function upgrade(): void
+    {
+        $this->requireAdmin();
+        $this->verifyCsrf();
+
+        $service = new \BBS\Services\UpdateService();
+        $result = $service->performUpgrade();
+
+        // Store result in session so the view can display it
+        $_SESSION['upgrade_result'] = $result;
+
+        if ($result['success']) {
+            $this->flash('success', 'Upgrade completed successfully.');
+        } else {
+            $this->flash('danger', 'Upgrade failed. See log below.');
+        }
+
+        $this->redirect('/settings?tab=updates');
     }
 
     /**

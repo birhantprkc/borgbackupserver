@@ -18,16 +18,23 @@
             <span class="navbar-text fw-semibold ms-3"><?= htmlspecialchars($pageTitle ?? '') ?></span>
             <div class="d-flex align-items-center ms-auto me-3">
                 <?php
-                $errorCount = $errorCount ?? \BBS\Core\Database::getInstance()->count('server_log', "level = 'error' AND created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)");
+                $notifCount = $notifCount ?? (new \BBS\Services\NotificationService())->unreadCount();
                 ?>
-                <a href="/log?level=error" class="btn btn-link position-relative me-3 text-dark">
+                <a href="/notifications" class="btn btn-link position-relative me-3 text-dark">
                     <i class="bi bi-bell fs-5"></i>
-                    <?php if ($errorCount > 0): ?>
+                    <?php if ($notifCount > 0): ?>
                     <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-                        <?= $errorCount ?>
+                        <?= $notifCount ?>
                     </span>
                     <?php endif; ?>
                 </a>
+                <?php
+                $upgradeAvailable = (new \BBS\Services\UpdateService())->isUpdateAvailable();
+                if ($upgradeAvailable): ?>
+                <a href="/settings?tab=updates" class="badge bg-warning text-dark text-decoration-none me-3 py-2 px-2">
+                    <i class="bi bi-cloud-arrow-down me-1"></i> Upgrade Available
+                </a>
+                <?php endif; ?>
                 <div class="dropdown">
                     <a class="btn btn-link text-dark dropdown-toggle text-decoration-none" href="#" role="button" data-bs-toggle="dropdown">
                         <i class="bi bi-person-circle me-1"></i>
@@ -97,6 +104,16 @@
 
         <!-- Main content -->
         <div class="flex-grow-1">
+
+            <!-- Maintenance mode banner -->
+            <?php
+            $maintenanceMode = \BBS\Core\Database::getInstance()->fetchOne("SELECT `value` FROM settings WHERE `key` = 'maintenance_mode'");
+            if (($maintenanceMode['value'] ?? '0') === '1'): ?>
+            <div class="alert alert-warning d-flex align-items-center m-4 mb-0" role="alert">
+                <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
+                <strong>Maintenance mode active</strong> — new backups are paused while an upgrade is in progress.
+            </div>
+            <?php endif; ?>
 
             <!-- Flash messages -->
             <?php $flash = $flash ?? $this->getFlash(); ?>

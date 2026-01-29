@@ -1,5 +1,7 @@
 # Borg Backup Server
 
+> **Early Beta (v0.8)** — This software is under active development and likely contains bugs. It is not recommended for production workloads. Use at your own risk.
+
 A self-hosted web application for centrally managing [BorgBackup](https://borgbackup.readthedocs.io/) across multiple Linux and macOS endpoints. No SSH required — a lightweight HTTPS agent polls the server for tasks, executes borg locally, and reports back.
 
 ---

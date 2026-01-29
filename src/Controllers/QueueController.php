@@ -36,6 +36,40 @@ class QueueController extends Controller
         ]);
     }
 
+    public function detail(int $id): void
+    {
+        $this->requireAuth();
+
+        $job = $this->db->fetchOne("
+            SELECT bj.*, a.name as agent_name, a.id as agent_id,
+                   r.name as repo_name, bp.name as plan_name,
+                   bp.directories, bp.excludes, bp.advanced_options
+            FROM backup_jobs bj
+            JOIN agents a ON a.id = bj.agent_id
+            LEFT JOIN repositories r ON r.id = bj.repository_id
+            LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
+            WHERE bj.id = ?
+        ", [$id]);
+
+        if (!$job) {
+            $this->flash('danger', 'Job not found.');
+            $this->redirect('/queue');
+        }
+
+        // Get log entries for this job
+        $logs = $this->db->fetchAll("
+            SELECT * FROM server_log
+            WHERE backup_job_id = ?
+            ORDER BY created_at ASC
+        ", [$id]);
+
+        $this->view('queue/detail', [
+            'pageTitle' => 'Job #' . $id,
+            'job' => $job,
+            'logs' => $logs,
+        ]);
+    }
+
     public function cancel(int $id): void
     {
         $this->requireAuth();

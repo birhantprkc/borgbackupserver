@@ -20,7 +20,7 @@
                 </thead>
                 <tbody>
                     <?php foreach ($inProgress as $job): ?>
-                    <tr>
+                    <tr style="cursor: pointer;" onclick="window.location='/queue/<?= $job['id'] ?>'">
                         <td class="small"><?= $job['queued_at'] ?></td>
                         <td><?= htmlspecialchars($job['agent_name']) ?></td>
                         <td><?= $job['task_type'] ?></td>
@@ -48,7 +48,8 @@
                             ?>
                             <span class="badge bg-<?= $sc ?>"><?= $job['status'] ?></span>
                         </td>
-                        <td>
+                        <td class="text-nowrap" onclick="event.stopPropagation()">
+                            <a href="/queue/<?= $job['id'] ?>" class="btn btn-sm btn-outline-secondary" title="View Details"><i class="bi bi-eye"></i></a>
                             <?php if (in_array($job['status'], ['queued', 'sent'])): ?>
                             <form method="POST" action="/queue/<?= $job['id'] ?>/cancel" class="d-inline"
                                   onsubmit="return confirm('Cancel this job?')">
@@ -90,7 +91,7 @@
                 </thead>
                 <tbody>
                     <?php foreach ($completed as $job): ?>
-                    <tr>
+                    <tr style="cursor: pointer;" onclick="window.location='/queue/<?= $job['id'] ?>'">
                         <td class="small"><?= $job['completed_at'] ?></td>
                         <td><?= htmlspecialchars($job['agent_name']) ?></td>
                         <td><?= $job['task_type'] ?></td>
@@ -110,7 +111,8 @@
                                 <i class="bi bi-info-circle text-danger ms-1" data-bs-toggle="tooltip" title="<?= htmlspecialchars(substr($job['error_log'], 0, 200)) ?>"></i>
                             <?php endif; ?>
                         </td>
-                        <td>
+                        <td class="text-nowrap" onclick="event.stopPropagation()">
+                            <a href="/queue/<?= $job['id'] ?>" class="btn btn-sm btn-outline-secondary" title="View Details"><i class="bi bi-eye"></i></a>
                             <?php if ($job['status'] === 'failed'): ?>
                             <form method="POST" action="/queue/<?= $job['id'] ?>/retry" class="d-inline"
                                   onsubmit="return confirm('Retry this job?')">

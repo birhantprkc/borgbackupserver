@@ -117,7 +117,10 @@ borgbackupserver/
 │   ├── 004_restore_columns.sql      # restore_archive_id, restore_paths, restore_destination on backup_jobs
 │   ├── 005_rate_limiting.sql        # rate_limits table
 │   ├── 006_encrypt_passphrases.php  # Encrypt existing plaintext passphrases
-│   └── 007_backup_templates.sql     # backup_templates table + excludes column on backup_plans
+│   ├── 007_backup_templates.sql     # backup_templates table + excludes column on backup_plans
+│   ├── 008_user_timezone.sql        # timezone column on users
+│   ├── 009_update_borg_task.sql     # update_borg task type
+│   └── 010_notifications.sql        # notifications table + notification settings
 ├── public/
 │   ├── index.php                    # Front controller
 │   ├── .htaccess                    # Apache rewrite
@@ -135,6 +138,7 @@ borgbackupserver/
 │   │   ├── ClientController.php
 │   │   ├── DashboardController.php
 │   │   ├── LogController.php
+│   │   ├── NotificationController.php # Notification list, mark read
 │   │   ├── QueueController.php
 │   │   ├── RepositoryController.php
 │   │   ├── BackupPlanController.php  # Create/update/delete/trigger plans
@@ -150,6 +154,7 @@ borgbackupserver/
 │   │   ├── BorgCommandBuilder.php   # Builds borg CLI commands for all operations
 │   │   ├── SchedulerService.php     # Checks due schedules, creates queued jobs
 │   │   ├── QueueManager.php         # Enforces max_queue, promotes queued→sent, builds agent payloads
+│   │   ├── NotificationService.php   # Notify, resolve, dedup, email, cleanup
 │   │   ├── Cache.php                # Memcached singleton with graceful fallback
 │   │   ├── Mailer.php               # Raw socket SMTP with STARTTLS
 │   │   └── Encryption.php           # AES-256-GCM encrypt/decrypt
@@ -165,7 +170,8 @@ borgbackupserver/
 │       │   └── detail.php           # Tabbed detail (status/repos/schedules/restore/install/delete)
 │       ├── queue/index.php
 │       ├── log/index.php
-│       ├── settings/index.php
+│       ├── notifications/index.php   # Notification list with mark-read
+│       ├── settings/index.php       # Tabbed: General, Notifications, Storage, Templates
 │       ├── users/index.php
 │       └── profile/index.php
 ├── scheduler.php                    # CLI scheduler — run via cron every minute
@@ -557,7 +563,7 @@ borgbackupserver/
 - `src/Views/clients/detail.php` (table layouts, collapsible tree UI, download button)
 - `src/Core/App.php` (2 new routes)
 
-### Phase 9: Documentation (IN PROGRESS)
+### Phase 9: Documentation (COMPLETED)
 
 **New files in `docs/`:**
 - `INSTALL.md` — Server installation guide: system packages, database setup, env config, APP_KEY generation, migrations, web server (Apache/Nginx), SSL, cron scheduler, file permissions, post-install checklist, upgrading, troubleshooting
@@ -569,6 +575,190 @@ borgbackupserver/
 - `LICENSE` — MIT License with Beer-Ware Addendum (if this software saved your backups, buy the maintainer a beer)
 - `docs/CONTRIBUTING.md` — Development setup, project structure, conventions, migration guide, areas needing help
 - `README.md` — Project overview, features list, quick start, documentation links, architecture diagram, tech stack
+
+### Session 2 — 2026-01-29
+
+**Per-user timezone:**
+- Added `timezone` column to `users` table (default `America/New_York`)
+- Profile page has timezone dropdown (common zones + full list)
+- Stored in session at login, applied via `date_default_timezone_set()` on every authenticated request
+- App-wide fallback: `America/New_York`
+
+**Relative "Last Seen" timestamps:**
+- Client detail header shows "4m ago", "2h ago", "3d ago" instead of full datetime
+
+**Borg update feature:**
+- New `update_borg` task type added to `backup_jobs` enum
+- "Update Borg" button on client detail header (next to borg version display)
+- `ClientController::updateBorg()` queues the job
+- `QueueManager` sends simple `{ task: "update_borg" }` payload
+- Agent `execute_update_borg()` detects OS package manager (apt, dnf, yum, pacman, brew, pip3) and runs update
+- After successful update, agent re-reports system info so borg version refreshes
+
+**Client detail header redesign:**
+- Shows borg version and agent version in info line
+- Stats row: Repositories, Archives, Total Size, Backup Plans, Last Backup, Last Seen
+- Inline edit form (pencil button) for client name
+- `ClientController::update()` method + `POST /clients/{id}/edit` route
+
+**Dashboard improvements:**
+- Renamed "Agents" to "Clients" for consistency
+- All 4 stat cards are clickable links (Clients→/clients, Running→/queue, Queue→/queue, Errors→/log?level=error)
+
+**Layout overhaul:**
+- Moved logo from sidebar into full-width top navbar
+- Logo sits in 90px-wide area with light gray background (`#f5f5f5`), aligned with sidebar
+- Topbar: light blue-gray (`#dce6f0`), sticky, page title + bell + user dropdown
+- Sidebar: starts below topbar, sticky, tighter icon/text spacing
+
+**Normalized file catalog:**
+- New `file_paths` table: stores each unique path once per agent (ROW_FORMAT=COMPRESSED)
+- `file_catalog` refactored to junction table: composite PK `(archive_id, file_path_id)` + file_size, status, mtime
+- `AgentApiController::catalog()` does `INSERT IGNORE` into `file_paths`, fetches IDs, then inserts into junction
+- `ClientController` catalog/tree queries updated to JOIN through `file_paths`
+- Dramatically reduces storage for repeated backups (two integers vs full path strings per entry)
+
+**Clean schema.sql:**
+- Single-file database setup for new installs: `mysql -u root -p bbs < schema.sql`
+- Contains all tables, indexes, seed data (admin user, settings, templates)
+- README and INSTALL.md updated to reference `schema.sql`
+- Incremental migrations kept in `migrations/` for reference
+
+**GitHub repo:**
+- Dashboard screenshot added to README
+- All changes pushed to github.com/marcpope/borgbackupserver
+
+**New files:**
+- `migrations/008_user_timezone.sql`
+- `migrations/009_update_borg_task.sql`
+- `schema.sql`
+- `docs/images/dashboard.png`
+
+**Modified files:**
+- `src/Core/App.php` (timezone, update-borg route, edit route)
+- `src/Core/Controller.php` (per-user timezone in requireAuth)
+- `src/Controllers/AuthController.php` (timezone in session)
+- `src/Controllers/ClientController.php` (update, updateBorg, normalized catalog queries)
+- `src/Controllers/ProfileController.php` (timezone update)
+- `src/Controllers/Api/AgentApiController.php` (normalized catalog insert)
+- `src/Services/QueueManager.php` (update_borg task handling)
+- `src/Views/clients/detail.php` (header redesign, borg version, edit form, relative timestamps)
+- `src/Views/dashboard/index.php` (clickable stat cards, Clients rename)
+- `src/Views/layouts/app.php` (logo in topbar, layout restructure)
+- `src/Views/profile/index.php` (timezone dropdown)
+- `public/css/style.css` (topbar, sidebar, logo styling)
+- `migrations/003_file_catalog.sql` (normalized schema for fresh installs)
+- `README.md` (screenshot, schema.sql instructions)
+- `docs/INSTALL.md` (schema.sql instructions)
+- `agent/bbs-agent.py` (execute_update_borg, task routing)
+
+### Notification System (COMPLETED)
+
+**Concept:** Notifications are active system problems (not activity logs). They represent ongoing issues that get auto-resolved or manually acknowledged. The `server_log` table remains the audit trail.
+
+**New table — `notifications`:**
+- `type` ENUM: `backup_failed`, `agent_offline`, `storage_low`, `missed_schedule`
+- `agent_id`, `reference_id` (plan_id or storage_location_id depending on type)
+- `severity` ENUM: `warning`, `critical`
+- `occurrence_count` — deduplication: same type+agent+reference increments instead of creating duplicates
+- `first_occurred_at`, `last_occurred_at`, `read_at`, `resolved_at`
+- Index on `(resolved_at, read_at)` for unread/unresolved queries
+
+**Deduplication:** Grouping key is `type + agent_id + reference_id`. If a matching unresolved notification exists, increment count, update message, clear `read_at` (reappears as unread).
+
+**New service — `NotificationService.php`:**
+- `notify(type, agentId, referenceId, message, severity)` — upsert with deduplication
+- `resolve(type, agentId, referenceId)` — sets `resolved_at` on matching unresolved notification
+- `markRead(id)`, `markAllRead()` — mark notifications as read
+- `unreadCount()` — count of unread AND unresolved (drives bell icon badge)
+- `getAll(limit, offset)` — paginated, unresolved first, ordered by last_occurred_at DESC
+- `cleanup()` — purges resolved notifications older than `notification_retention_days` setting
+- `sendEmailIfEnabled()` — on first occurrence, checks `email_on_{type}` setting and emails all admins
+
+**New controller — `NotificationController.php`:**
+- `index()` — list all notifications with mark-read buttons
+- `markRead(id)` — POST, mark single notification read
+- `markAllRead()` — POST, mark all read
+
+**New view — `notifications/index.php`:**
+- "Mark All as Read" button at top
+- Table with: type icon, message (with occurrence count badge), client name, severity badge, last occurred time, status (New/Read/Resolved), mark-read button
+- Resolved notifications shown dimmed/struck-through
+- Type icons: backup_failed=x-circle (red), agent_offline=wifi-off (orange), storage_low=hdd (yellow), missed_schedule=clock-history (orange)
+
+**Trigger points (changes to existing files):**
+
+`AgentApiController.php`:
+- `authenticateAgent()` — resolves `agent_offline` on every heartbeat
+- `status()` — on failed backup: fires `backup_failed` notification; on completed backup: resolves `backup_failed`
+
+`SchedulerService.php`:
+- After queuing a job: resolves `missed_schedule` for that plan
+- New query detects overdue schedules where agent is offline: fires `missed_schedule`
+
+`scheduler.php`:
+- After marking agents offline: fires `agent_offline` for each newly offline agent
+- Fails active jobs (sent/running) for offline agents — frees queue slots, fires `backup_failed` if applicable
+- New storage check step: loops `storage_locations`, checks `disk_free_space()`/`disk_total_space()`, fires/resolves `storage_low`
+- Calls `NotificationService::cleanup()` to purge old notifications
+
+**Bell icon (`layouts/app.php`):**
+- Changed from `server_log` error count to `NotificationService::unreadCount()`
+- Links to `/notifications` instead of `/log?level=error`
+
+**Email notification preferences:**
+- 4 toggles in settings: `email_on_backup_failed`, `email_on_agent_offline`, `email_on_storage_low`, `email_on_missed_schedule`
+- Emails only fire on first occurrence (not on deduplication increments)
+- Sends to all admin users via existing Mailer service
+
+**Dashboard — Backup Storage card:**
+- Replaced Partition Usage with "Backup Storage" card showing configured storage locations
+- Each location shows: label, path, usage progress bar (color-coded), used/total, free space, repo count with total size
+- Data from `storage_locations` JOIN `repositories` + live `disk_total_space()`/`disk_free_space()` calls
+- Cached 30 seconds
+
+**Dashboard — Partitions restored:**
+- Added Partitions card back alongside Backup Storage (stacked in same column as Server Stats)
+- Shows all OS partitions (mount, usage bar, free space) so MySQL/system partition growth is visible
+
+**Settings page — tabbed layout:**
+- Reorganized into 4 tabs: General, Notifications, Storage, Templates
+- Tab selection via `?tab=` query parameter (bookmarkable, preserved on save)
+- General: server host, max concurrent jobs, agent poll interval
+- Notifications: retention days, storage threshold, SMTP config, email toggle checkboxes
+- Storage: storage locations table with add/delete
+- Templates: backup templates with add/inline-edit/delete
+
+**New settings:**
+- `notification_retention_days` (default 30)
+- `storage_alert_threshold` (default 90%)
+- `email_on_backup_failed` (default on)
+- `email_on_agent_offline` (default on)
+- `email_on_storage_low` (default on)
+- `email_on_missed_schedule` (default off)
+
+**New routes:**
+- `GET /notifications` → `NotificationController@index`
+- `POST /notifications/{id}/read` → `NotificationController@markRead`
+- `POST /notifications/read-all` → `NotificationController@markAllRead`
+
+**New files:**
+- `migrations/010_notifications.sql`
+- `src/Services/NotificationService.php`
+- `src/Controllers/NotificationController.php`
+- `src/Views/notifications/index.php`
+
+**Modified files:**
+- `schema.sql` (notifications table, new settings)
+- `src/Core/App.php` (3 notification routes)
+- `src/Views/layouts/app.php` (bell icon → NotificationService)
+- `src/Controllers/Api/AgentApiController.php` (notify/resolve in authenticateAgent + status)
+- `src/Services/SchedulerService.php` (resolve missed_schedule, detect overdue + offline)
+- `scheduler.php` (agent_offline notify, fail stale jobs, storage check, cleanup)
+- `src/Controllers/SettingsController.php` (new allowed keys, checkbox handling, tab redirects)
+- `src/Views/settings/index.php` (tabbed layout, notification/email fields)
+- `src/Controllers/DashboardController.php` (storage locations data with disk usage)
+- `src/Views/dashboard/index.php` (Backup Storage card, Partitions card restored)
 
 ### What's Next
 

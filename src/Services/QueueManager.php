@@ -22,6 +22,12 @@ class QueueManager
      */
     public function processQueue(): array
     {
+        // Skip if maintenance mode is active
+        $maintenance = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'maintenance_mode'");
+        if (($maintenance['value'] ?? '0') === '1') {
+            return [];
+        }
+
         // Count currently active jobs (sent + running)
         $activeCount = $this->db->count('backup_jobs', "status IN ('sent', 'running')");
 

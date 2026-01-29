@@ -6,6 +6,7 @@ use BBS\Core\Controller;
 use BBS\Services\QueueManager;
 use BBS\Services\BorgCommandBuilder;
 use BBS\Services\Mailer;
+use BBS\Services\NotificationService;
 
 class AgentApiController extends Controller
 {
@@ -41,6 +42,9 @@ class AgentApiController extends Controller
             'last_heartbeat' => date('Y-m-d H:i:s'),
             'status' => 'online',
         ], 'id = ?', [$agent['id']]);
+
+        // Auto-resolve agent_offline notification on heartbeat
+        (new NotificationService())->resolve('agent_offline', $agent['id'], null);
 
         return $agent;
     }
@@ -198,6 +202,25 @@ class AgentApiController extends Controller
             'level' => $level,
             'message' => $message,
         ]);
+
+        // Notification system: backup failed / resolved
+        $notificationService = new NotificationService();
+        if ($result === 'failed' && $job['task_type'] === 'backup') {
+            $planName = '';
+            if ($job['backup_plan_id']) {
+                $plan = $this->db->fetchOne("SELECT name FROM backup_plans WHERE id = ?", [$job['backup_plan_id']]);
+                $planName = $plan['name'] ?? '';
+            }
+            $notificationService->notify(
+                'backup_failed',
+                $agent['id'],
+                $job['backup_plan_id'] ? (int)$job['backup_plan_id'] : null,
+                "Backup failed for plan \"{$planName}\" on client \"{$agent['name']}\" — " . ($input['error_log'] ?? 'unknown error'),
+                'critical'
+            );
+        } elseif ($result === 'completed' && $job['task_type'] === 'backup' && $job['backup_plan_id']) {
+            $notificationService->resolve('backup_failed', $agent['id'], (int)$job['backup_plan_id']);
+        }
 
         // Email notification on failure
         if ($result === 'failed') {

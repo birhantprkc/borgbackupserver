@@ -138,6 +138,41 @@ class ClientController extends Controller
         // Users list for owner assignment
         $users = $this->isAdmin() ? $this->db->fetchAll("SELECT id, username FROM users ORDER BY username") : [];
 
+        // Status tab data
+        $nextBackup = $this->db->fetchOne("
+            SELECT s.next_run, bp.name as plan_name, bp.id as plan_id
+            FROM schedules s
+            JOIN backup_plans bp ON bp.id = s.backup_plan_id
+            WHERE bp.agent_id = ? AND s.enabled = 1 AND s.next_run IS NOT NULL
+            ORDER BY s.next_run ASC LIMIT 1
+        ", [$id]);
+
+        $jobStats = $this->db->fetchOne("
+            SELECT
+                COUNT(*) as total,
+                SUM(status = 'completed') as completed,
+                SUM(status = 'failed') as failed,
+                AVG(CASE WHEN status = 'completed' THEN duration_seconds END) as avg_duration
+            FROM (
+                SELECT status, duration_seconds FROM backup_jobs
+                WHERE agent_id = ? AND status IN ('completed','failed')
+                ORDER BY completed_at DESC LIMIT 30
+            ) recent
+        ", [$id]);
+
+        $recentErrors = $this->db->fetchOne(
+            "SELECT COUNT(*) as cnt FROM backup_jobs WHERE agent_id = ? AND status = 'failed' AND completed_at > DATE_SUB(NOW(), INTERVAL 7 DAY)",
+            [$id]
+        );
+
+        $durationChart = $this->db->fetchAll("
+            SELECT DATE_FORMAT(completed_at, '%b %d %H:%i') as label,
+                   duration_seconds, status, task_type
+            FROM backup_jobs
+            WHERE agent_id = ? AND status IN ('completed','failed') AND completed_at IS NOT NULL
+            ORDER BY completed_at DESC LIMIT 30
+        ", [$id]);
+
         $this->view('clients/detail', [
             'pageTitle' => 'Clients',
             'agent' => $agent,
@@ -152,6 +187,10 @@ class ClientController extends Controller
             'serverHost' => $serverHost['value'] ?? 'YOUR_SERVER_HOST',
             'archives' => $archives,
             'templates' => $templates,
+            'nextBackup' => $nextBackup,
+            'jobStats' => $jobStats,
+            'recentErrors' => (int) ($recentErrors['cnt'] ?? 0),
+            'durationChart' => array_reverse($durationChart),
         ]);
     }
 

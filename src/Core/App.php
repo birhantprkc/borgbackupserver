@@ -77,8 +77,14 @@ class App
 
         // Queue
         $this->router->map('GET', '/queue', 'QueueController@index');
+        $this->router->map('GET', '/queue/[i:id]', 'QueueController@detail');
         $this->router->map('POST', '/queue/[i:id]/cancel', 'QueueController@cancel');
         $this->router->map('POST', '/queue/[i:id]/retry', 'QueueController@retry');
+
+        // Notifications
+        $this->router->map('GET', '/notifications', 'NotificationController@index');
+        $this->router->map('POST', '/notifications/[i:id]/read', 'NotificationController@markRead');
+        $this->router->map('POST', '/notifications/read-all', 'NotificationController@markAllRead');
 
         // Log
         $this->router->map('GET', '/log', 'LogController@index');
@@ -91,6 +97,8 @@ class App
         $this->router->map('POST', '/settings/templates/add', 'SettingsController@addTemplate');
         $this->router->map('POST', '/settings/templates/[i:id]/edit', 'SettingsController@editTemplate');
         $this->router->map('POST', '/settings/templates/[i:id]/delete', 'SettingsController@deleteTemplate');
+        $this->router->map('POST', '/settings/check-update', 'SettingsController@checkUpdate');
+        $this->router->map('POST', '/settings/upgrade', 'SettingsController@upgrade');
         $this->router->map('GET', '/api/templates/[i:id]', 'SettingsController@templateJson');
 
         // Users (admin)
