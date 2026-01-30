@@ -263,7 +263,7 @@ tail -f /var/log/bbs-scheduler.log
 5. SSH into the remote server and paste the command:
 
 ```bash
-curl -s "https://backups.example.com/api/agent/download?file=install.sh" | sudo bash -s -- \
+curl -s https://backups.example.com/get-agent | sudo bash -s -- \
     --server https://backups.example.com --key YOUR_API_KEY
 ```
 

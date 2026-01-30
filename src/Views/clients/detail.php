@@ -1757,7 +1757,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         <div class="card-body">
             <p>Run this command on the endpoint to install the BBS agent:</p>
             <div class="bg-dark text-white p-3 rounded mb-3" style="font-family: monospace; font-size: 0.9rem; word-break: break-all;">
-                <?php $appUrl = rtrim(\BBS\Core\Config::get('APP_URL', 'https://' . $serverHost), '/'); ?>curl -s "<?= htmlspecialchars($appUrl) ?>/api/agent/download?file=install.sh" | sudo bash -s -- --server <?= htmlspecialchars($appUrl) ?> --key <?= htmlspecialchars($agent['api_key']) ?>
+                <?php $appUrl = rtrim(\BBS\Core\Config::get('APP_URL', 'https://' . $serverHost), '/'); ?>curl -s <?= htmlspecialchars($appUrl) ?>/get-agent | sudo bash -s -- --server <?= htmlspecialchars($appUrl) ?> --key <?= htmlspecialchars($agent['api_key']) ?>
             </div>
 
             <h6 class="mt-4">API Key</h6>

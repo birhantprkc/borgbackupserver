@@ -513,6 +513,15 @@ class AgentApiController extends Controller
     }
 
     /**
+     * Shorthand route: /get-agent → serves install.sh by default.
+     */
+    public function getAgent(): void
+    {
+        $_GET['file'] = $_GET['file'] ?? 'install.sh';
+        $this->downloadFile();
+    }
+
+    /**
      * Parse JSON request body.
      */
     private function getJsonInput(): array

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Borg Backup Server Agent Installer
-# Usage: curl -s https://your-server/api/agent/download?file=install.sh | sudo bash -s -- --server https://your-server --key API_KEY
+# Usage: curl -s https://your-server/get-agent | sudo bash -s -- --server https://your-server --key API_KEY
 #
 set -e
 
