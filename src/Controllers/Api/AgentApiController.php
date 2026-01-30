@@ -391,16 +391,28 @@ class AgentApiController extends Controller
             $this->db->query($sql, $catalogValues);
         }
 
-        // Log catalog receipt
-        $archive = $this->db->fetchOne("SELECT backup_job_id FROM archives WHERE id = ?", [$archiveId]);
-        $this->db->insert('server_log', [
-            'agent_id' => $agent['id'],
-            'backup_job_id' => $archive['backup_job_id'] ?? null,
-            'level' => 'info',
-            'message' => "File catalog received: " . count($catalogPlaceholders) . " entries indexed for archive #{$archiveId}",
-        ]);
+        $batchSize = count($catalogPlaceholders);
+        $isDone = !empty($input['done']);
 
-        $this->json(['status' => 'ok', 'inserted' => count($catalogPlaceholders)]);
+        $archiveRow = $this->db->fetchOne("SELECT backup_job_id FROM archives WHERE id = ?", [$archiveId]);
+        $logJobId = $archiveRow['backup_job_id'] ?? null;
+
+        if ($isDone) {
+            // Final batch — log a single summary
+            $totalIndexed = (int)$this->db->fetchOne(
+                "SELECT COUNT(*) as cnt FROM file_catalog WHERE archive_id = ?",
+                [$archiveId]
+            )['cnt'];
+
+            $this->db->insert('server_log', [
+                'agent_id' => $agent['id'],
+                'backup_job_id' => $logJobId,
+                'level' => 'info',
+                'message' => "File catalog indexed: {$totalIndexed} entries for archive #{$archiveId}",
+            ]);
+        }
+
+        $this->json(['status' => 'ok', 'inserted' => $batchSize]);
     }
 
     /**

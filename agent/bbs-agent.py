@@ -657,11 +657,12 @@ def upload_catalog(config, archive_id, entries):
 
     for i in range(0, total, batch_size):
         batch = entries[i : i + batch_size]
+        is_last = (i + batch_size) >= total
         result = api_request(
             config,
             "/api/agent/catalog",
             method="POST",
-            data={"archive_id": archive_id, "files": batch},
+            data={"archive_id": archive_id, "files": batch, "done": is_last},
         )
         if result and result.get("status") == "ok":
             uploaded += result.get("inserted", 0)
