@@ -221,6 +221,20 @@ foreach ($serverJobs as $sj) {
         'message' => "Server-side {$sj['task_type']} job #{$sj['id']} {$result}" . ($errorOutput ? ": $errorOutput" : ''),
     ]);
 
+    // Log borg prune/compact output for visibility
+    if ($result === 'completed' && !empty($stdout)) {
+        // Truncate to a reasonable size for the log
+        $trimmedOutput = mb_substr(trim($stdout), 0, 2000);
+        if ($trimmedOutput) {
+            $db->insert('server_log', [
+                'agent_id' => $sj['agent_id'],
+                'backup_job_id' => $sj['id'],
+                'level' => 'info',
+                'message' => ucfirst($sj['task_type']) . " output: " . $trimmedOutput,
+            ]);
+        }
+    }
+
     echo date('Y-m-d H:i:s') . " Server-side {$sj['task_type']} job #{$sj['id']}: {$result}\n";
 
     // After successful prune, sync archives table with actual repo contents
@@ -254,21 +268,34 @@ foreach ($serverJobs as $sj) {
                 );
 
                 $removed = 0;
+                $removedNames = [];
                 foreach ($dbArchives as $dbA) {
                     if (!in_array($dbA['archive_name'], $borgArchives, true)) {
                         $db->delete('archives', 'id = ?', [$dbA['id']]);
+                        $removedNames[] = $dbA['archive_name'];
                         $removed++;
                     }
                 }
 
                 if ($removed > 0) {
+                    $nameList = implode(', ', array_slice($removedNames, 0, 20));
+                    if (count($removedNames) > 20) {
+                        $nameList .= ' (and ' . (count($removedNames) - 20) . ' more)';
+                    }
                     $db->insert('server_log', [
                         'agent_id' => $sj['agent_id'],
                         'backup_job_id' => $sj['id'],
                         'level' => 'info',
-                        'message' => "Pruned {$removed} archive(s) from database — " . count($borgArchives) . " remaining in repo",
+                        'message' => "Removed {$removed} pruned recovery point(s) from database — " . count($borgArchives) . " remaining: {$nameList}",
                     ]);
                     echo date('Y-m-d H:i:s') . " Removed {$removed} pruned archive(s) from DB for repo #{$repoId}\n";
+                } else {
+                    $db->insert('server_log', [
+                        'agent_id' => $sj['agent_id'],
+                        'backup_job_id' => $sj['id'],
+                        'level' => 'info',
+                        'message' => "Prune completed — all " . count($borgArchives) . " recovery point(s) retained, none removed",
+                    ]);
                 }
             }
         }

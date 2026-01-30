@@ -57,7 +57,7 @@ class BorgCommandBuilder
      */
     public static function buildPruneCommand(array $plan, array $repo): array
     {
-        $cmd = ['borg', 'prune', '--log-json'];
+        $cmd = ['borg', 'prune', '--list', '--log-json'];
 
         if ($plan['prune_minutes'] > 0) $cmd[] = '--keep-minutely=' . $plan['prune_minutes'];
         if ($plan['prune_hours'] > 0)   $cmd[] = '--keep-hourly=' . $plan['prune_hours'];

@@ -29,6 +29,7 @@ function formatBytes($bytes) {
 }
 
 $isActive = in_array($job['status'], ['queued', 'sent', 'running']);
+$isServerSide = in_array($job['task_type'], ['prune', 'compact']);
 ?>
 
 <div class="d-flex align-items-center mb-4">
@@ -43,7 +44,25 @@ $isActive = in_array($job['status'], ['queued', 'sent', 'running']);
 <?php if ($isActive): ?>
 <div class="card border-0 shadow-sm mb-4" style="background-color: #2c3e50;">
     <div class="card-body py-3">
-        <?php if ($job['status'] === 'running' && $pct > 0): ?>
+        <?php if ($isServerSide && $job['status'] === 'running'): ?>
+            <div class="text-white fw-semibold mb-1"><i class="bi bi-hdd me-1"></i> <?= ucfirst($job['task_type']) ?> running on server...</div>
+            <div class="progress mb-1" style="height: 22px; background-color: rgba(255,255,255,0.15);">
+                <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"
+                     style="width: 100%; background-color: #5b9bd5;">
+                    Server-side <?= $job['task_type'] ?>
+                </div>
+            </div>
+            <div class="text-white-50 small">This task runs directly on the backup server — no agent involved</div>
+        <?php elseif ($isServerSide && $job['status'] === 'sent'): ?>
+            <div class="text-white fw-semibold mb-1"><i class="bi bi-hdd me-1"></i> Waiting for scheduler</div>
+            <div class="progress mb-1" style="height: 22px; background-color: rgba(255,255,255,0.15);">
+                <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"
+                     style="width: 100%; background-color: #e67e22;">
+                    Queued for server
+                </div>
+            </div>
+            <div class="text-white-50 small">This <?= $job['task_type'] ?> job runs server-side and will be picked up by the scheduler within 60 seconds</div>
+        <?php elseif ($job['status'] === 'running' && $pct > 0): ?>
             <div class="text-white fw-semibold mb-1">Backing up... <?= $pct ?>%</div>
             <div class="progress mb-1" style="height: 22px; background-color: rgba(255,255,255,0.15);">
                 <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"
@@ -88,6 +107,18 @@ $isActive = in_array($job['status'], ['queued', 'sent', 'running']);
                     <br>No heartbeat received yet — agent may not be installed
                 <?php endif; ?>
             </div>
+        <?php elseif ($isServerSide): ?>
+            <div class="text-white fw-semibold mb-1"><i class="bi bi-hdd me-1"></i> Queued for server<?= $queuePosition ? " — Position #{$queuePosition}" : '' ?></div>
+            <div class="progress mb-1" style="height: 22px; background-color: rgba(255,255,255,0.15);">
+                <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"
+                     style="width: 100%; background-color: #e67e22;">
+                    Waiting
+                </div>
+            </div>
+            <div class="text-white-50 small">
+                <i class="bi bi-clock text-info me-1"></i>
+                This <?= $job['task_type'] ?> job will run server-side when a queue slot opens
+            </div>
         <?php else: ?>
             <?php
             $queueFull = $activeCount >= $maxQueue;
@@ -121,6 +152,18 @@ $isActive = in_array($job['status'], ['queued', 'sent', 'running']);
                 <?php endif; ?>
             </div>
         <?php endif; ?>
+    </div>
+</div>
+<?php elseif ($job['status'] === 'completed' && $isServerSide): ?>
+<div class="card border-0 shadow-sm mb-4" style="background-color: #d4edda;">
+    <div class="card-body py-3">
+        <div class="fw-semibold text-success mb-1"><i class="bi bi-hdd me-1"></i> <?= ucfirst($job['task_type']) ?> Completed</div>
+        <div class="progress mb-1" style="height: 22px;">
+            <div class="progress-bar bg-success" role="progressbar" style="width: 100%;">
+                Server-side <?= $job['task_type'] ?> finished
+            </div>
+        </div>
+        <div class="text-muted small">Duration: <?= $durLabel ?> &middot; See activity log below for details</div>
     </div>
 </div>
 <?php elseif ($job['status'] === 'completed' && ($job['files_total'] ?? 0) > 0): ?>
