@@ -372,11 +372,18 @@
                     <div class="text-muted small mb-3">Last checked: <?= htmlspecialchars($latest['checked_at']) ?></div>
                 <?php endif; ?>
 
-                <div class="d-flex gap-2">
+                <div class="d-flex gap-2 flex-wrap">
                     <form method="POST" action="/settings/check-update">
                         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                         <button type="submit" class="btn btn-outline-primary">
                             <i class="bi bi-arrow-clockwise me-1"></i> Check Now
+                        </button>
+                    </form>
+
+                    <form method="POST" action="/settings/sync" onsubmit="return confirm('This will pull the latest code, update dependencies, fix all file and storage permissions, update the SSH helper, and run database migrations.\n\nProceed?')">
+                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                        <button type="submit" class="btn btn-outline-secondary">
+                            <i class="bi bi-wrench me-1"></i> Pull &amp; Fix Permissions
                         </button>
                     </form>
 

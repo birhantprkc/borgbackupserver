@@ -102,6 +102,7 @@ class App
         $this->router->map('POST', '/settings/templates/[i:id]/delete', 'SettingsController@deleteTemplate');
         $this->router->map('POST', '/settings/check-update', 'SettingsController@checkUpdate');
         $this->router->map('POST', '/settings/upgrade', 'SettingsController@upgrade');
+        $this->router->map('POST', '/settings/sync', 'SettingsController@sync');
         $this->router->map('GET', '/api/templates/[i:id]', 'SettingsController@templateJson');
 
         // Users (admin)

@@ -205,6 +205,32 @@ class SettingsController extends Controller
         $this->redirect('/settings?tab=updates');
     }
 
+    public function sync(): void
+    {
+        $this->requireAdmin();
+        $this->verifyCsrf();
+
+        $projectRoot = dirname(__DIR__, 2);
+        $updateScript = $projectRoot . '/bin/bbs-update';
+
+        $lines = [];
+        $code = 0;
+        exec("sudo " . escapeshellarg($updateScript) . " " . escapeshellarg($projectRoot) . " 2>&1", $lines, $code);
+
+        $_SESSION['upgrade_result'] = [
+            'success' => $code === 0,
+            'log' => $lines,
+        ];
+
+        if ($code === 0) {
+            $this->flash('success', 'Sync completed — code updated and permissions fixed.');
+        } else {
+            $this->flash('danger', 'Sync failed. See log below.');
+        }
+
+        $this->redirect('/settings?tab=updates');
+    }
+
     /**
      * GET /api/templates/{id} — returns template data as JSON for form pre-fill.
      */
