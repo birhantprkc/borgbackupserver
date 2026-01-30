@@ -47,16 +47,16 @@ chmod 755 /usr/local/bin/bbs-ssh-helper
 # 5. Fix runtime directories
 echo "[5/7] Fixing runtime permissions..."
 
-# Per-user borg base dirs (prevent /tmp/.config conflicts)
-mkdir -p /tmp/bbs-borg-www-data
-chown www-data:www-data /tmp/bbs-borg-www-data
+# Borg cache dirs under /var/bbs/cache (avoid /tmp size limits)
+mkdir -p /var/bbs/cache/www-data
+chown www-data:www-data /var/bbs/cache/www-data
 
 # Fix permissions for each bbs-* user's borg dir and home
 for user in $(getent passwd | grep '^bbs-' | cut -d: -f1); do
     home=$(getent passwd "$user" | cut -d: -f6)
 
     # Per-user borg cache dir
-    borgdir="/tmp/bbs-borg-$user"
+    borgdir="/var/bbs/cache/$user"
     mkdir -p "$borgdir"
     chown "$user":"$user" "$borgdir"
 

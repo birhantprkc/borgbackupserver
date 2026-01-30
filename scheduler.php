@@ -149,11 +149,14 @@ foreach ($serverJobs as $sj) {
     // Run as the repo's unix user to preserve file ownership
     $runAsUser = $sj['ssh_unix_user'] ?? null;
     if ($runAsUser) {
-        // Use the unix user's actual home directory for borg config/cache
-        $pwEntry = posix_getpwnam($runAsUser);
-        $userHome = $pwEntry ? $pwEntry['dir'] : "/tmp/bbs-borg-{$runAsUser}";
-        $env['BORG_BASE_DIR'] = $userHome;
-        $env['HOME'] = $userHome;
+        // Dedicated cache dir — separate from storage and /tmp
+        $userCache = "/var/bbs/cache/{$runAsUser}";
+        if (!is_dir($userCache)) {
+            mkdir($userCache, 0700, true);
+            chown($userCache, $runAsUser);
+        }
+        $env['BORG_BASE_DIR'] = $userCache;
+        $env['HOME'] = $userCache;
 
         // Prepend env vars into the command so they survive sudo's env reset
         $envPrefix = [];
