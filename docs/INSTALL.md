@@ -173,10 +173,40 @@ systemctl restart nginx php8.3-fpm
 
 ```bash
 apt install -y certbot
+
+# For Apache:
+apt install -y python3-certbot-apache
+certbot --apache -d backups.example.com
+
+# For Nginx:
+apt install -y python3-certbot-nginx
+certbot --nginx -d backups.example.com
+
+# Or standalone (stop your web server first):
 certbot certonly --standalone -d backups.example.com
 ```
 
 **SSL is required.** Agents communicate over HTTPS and send API keys in headers.
+
+**Auto-renewal:** Certbot installs a systemd timer (or cron job) automatically. Verify it's active:
+
+```bash
+systemctl status certbot.timer
+```
+
+To test renewal without actually renewing:
+
+```bash
+certbot renew --dry-run
+```
+
+Certificates renew automatically when they're within 30 days of expiry. If you used `--standalone`, add a renewal hook to restart your web server:
+
+```bash
+echo 'deploy-hook = systemctl reload apache2' >> /etc/letsencrypt/renewal/backups.example.com.conf
+# or for nginx:
+# echo 'deploy-hook = systemctl reload nginx' >> /etc/letsencrypt/renewal/backups.example.com.conf
+```
 
 ---
 
