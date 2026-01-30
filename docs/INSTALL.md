@@ -23,11 +23,8 @@ This guide covers installing the BBS server on a fresh Linux system. The server 
 
 ```bash
 apt update
-apt install -y php8.3 php8.3-mysql php8.3-mbstring php8.3-xml php8.3-curl \
-    mysql-server borgbackup openssh-server composer git
-
-# Optional: Memcached
-apt install -y memcached php8.3-memcached
+apt install -y php php-mysql php-mbstring php-xml php-curl \
+    mysql-server borgbackup composer git memcached php-memcached
 ```
 
 ### RHEL / Rocky / AlmaLinux
