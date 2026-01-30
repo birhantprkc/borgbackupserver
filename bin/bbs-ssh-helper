@@ -10,7 +10,7 @@
 # Install:
 #   cp bin/bbs-ssh-helper /usr/local/bin/bbs-ssh-helper
 #   chmod 755 /usr/local/bin/bbs-ssh-helper
-#   echo "www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper" > /etc/sudoers.d/bbs-ssh-helper
+#   echo "www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper, /var/www/bbs/bin/bbs-update" > /etc/sudoers.d/bbs-ssh-helper
 #
 set -euo pipefail
 

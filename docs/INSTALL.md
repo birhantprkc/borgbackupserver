@@ -84,7 +84,7 @@ chmod 755 /usr/local/bin/bbs-ssh-helper
 Allow Apache to run it without a password:
 
 ```bash
-echo "www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper" > /etc/sudoers.d/bbs-ssh-helper
+echo "www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper, /var/www/bbs/bin/bbs-update" > /etc/sudoers.d/bbs-ssh-helper
 chmod 440 /etc/sudoers.d/bbs-ssh-helper
 ```
 

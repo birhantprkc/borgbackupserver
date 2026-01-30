@@ -119,58 +119,28 @@ class UpdateService
 
         // Enable maintenance mode
         $this->setSetting('maintenance_mode', '1');
-        $log[] = '[1/5] Maintenance mode enabled — new backups paused';
+        $log[] = 'Maintenance mode enabled — new backups paused';
 
         try {
-            // Git fetch
-            $tag = 'v' . $latest;
-            $output = '';
+            // Run bbs-update via sudo (handles git pull, composer, permissions, SSH helper, migrations)
+            $updateScript = $this->projectRoot . '/bin/bbs-update';
+            $lines = [];
             $code = 0;
 
-            exec("cd " . escapeshellarg($this->projectRoot) . " && git fetch origin 2>&1", $lines, $code);
-            $output = implode("\n", $lines);
-            $log[] = "[2/5] git fetch origin" . ($code === 0 ? ' — OK' : " — FAILED (exit {$code})");
-            if ($output) $log[] = $output;
-
-            if ($code !== 0) {
-                $this->setSetting('maintenance_mode', '0');
-                return ['success' => false, 'log' => $log];
+            exec("sudo " . escapeshellarg($updateScript) . " " . escapeshellarg($this->projectRoot) . " 2>&1", $lines, $code);
+            foreach ($lines as $line) {
+                $log[] = $line;
             }
 
-            // Git checkout tag
-            $lines = [];
-            exec("cd " . escapeshellarg($this->projectRoot) . " && git checkout " . escapeshellarg($tag) . " 2>&1", $lines, $code);
-            $output = implode("\n", $lines);
-            $log[] = "[3/5] git checkout {$tag}" . ($code === 0 ? ' — OK' : " — FAILED (exit {$code})");
-            if ($output) $log[] = $output;
-
             if ($code !== 0) {
+                $log[] = '';
+                $log[] = "Update script exited with code {$code}.";
                 $this->setSetting('maintenance_mode', '0');
                 return ['success' => false, 'log' => $log];
-            }
-
-            // Composer install
-            $lines = [];
-            exec("cd " . escapeshellarg($this->projectRoot) . " && composer install --no-dev --no-interaction 2>&1", $lines, $code);
-            $output = implode("\n", $lines);
-            $log[] = "[4/5] composer install --no-dev" . ($code === 0 ? ' — OK' : " — WARNING (exit {$code})");
-            if ($output) $log[] = $output;
-
-            // Run migrations
-            try {
-                $migrator = new Migrator();
-                $ran = $migrator->run();
-                if (empty($ran)) {
-                    $log[] = '[5/5] Migrations — no pending migrations';
-                } else {
-                    $log[] = '[5/5] Migrations — applied: ' . implode(', ', $ran);
-                }
-            } catch (\Exception $e) {
-                $log[] = '[5/5] Migrations — ERROR: ' . $e->getMessage();
             }
 
             $log[] = '';
-            $log[] = 'Upgrade to v' . $latest . ' complete.';
+            $log[] = 'Upgrade complete.';
 
         } finally {
             // Always disable maintenance mode
