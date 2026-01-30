@@ -23,28 +23,86 @@ echo "=== BBS Update ==="
 echo ""
 
 # 1. Pull latest code
-echo "[1/5] Pulling latest code..."
+echo "[1/7] Pulling latest code..."
 git -C "$BBS_DIR" pull
 
 # 2. Install/update PHP dependencies
-echo "[2/5] Installing PHP dependencies..."
+echo "[2/7] Installing PHP dependencies..."
 if command -v composer &>/dev/null; then
     composer install --no-dev --working-dir="$BBS_DIR" --quiet
 else
     echo "  Warning: composer not found, skipping"
 fi
 
-# 3. Fix file ownership
-echo "[3/5] Setting file permissions..."
+# 3. Fix web file ownership
+echo "[3/7] Setting web file permissions..."
 chown -R www-data:www-data "$BBS_DIR"
+chmod 755 "$BBS_DIR/config"
 
 # 4. Update SSH helper
-echo "[4/5] Updating SSH helper..."
+echo "[4/7] Updating SSH helper..."
 cp "$BBS_DIR/bin/bbs-ssh-helper" /usr/local/bin/bbs-ssh-helper
 chmod 755 /usr/local/bin/bbs-ssh-helper
 
-# 5. Run database migrations
-echo "[5/5] Running database migrations..."
+# 5. Fix runtime directories
+echo "[5/7] Fixing runtime permissions..."
+
+# Per-user borg base dirs (prevent /tmp/.config conflicts)
+mkdir -p /tmp/bbs-borg-www-data
+chown www-data:www-data /tmp/bbs-borg-www-data
+
+# Fix permissions for each bbs-* user's borg dir and home
+for user in $(getent passwd | grep '^bbs-' | cut -d: -f1); do
+    home=$(getent passwd "$user" | cut -d: -f6)
+
+    # Per-user borg cache dir
+    borgdir="/tmp/bbs-borg-$user"
+    mkdir -p "$borgdir"
+    chown "$user":"$user" "$borgdir"
+
+    # Home dir: 750 for sshd compatibility, owned by user with www-data group
+    if [ -d "$home" ]; then
+        chown "$user":www-data "$home"
+        chmod 750 "$home"
+
+        # .ssh dir strict ownership
+        if [ -d "$home/.ssh" ]; then
+            chown -R "$user":"$user" "$home/.ssh"
+            chmod 700 "$home/.ssh"
+            [ -f "$home/.ssh/authorized_keys" ] && chmod 600 "$home/.ssh/authorized_keys"
+        fi
+
+        # Repo directories: owned by user, group www-data, 770
+        for repo in "$home"/*/; do
+            [ -d "$repo" ] || continue
+            # Skip .ssh
+            [ "$(basename "$repo")" = ".ssh" ] && continue
+            chown -R "$user":www-data "$repo"
+            chmod 770 "$repo"
+        done
+    fi
+done
+
+# 6. Fix sudoers (ensure bbs-update is allowed)
+echo "[6/7] Verifying sudoers..."
+SUDOERS_FILE="/etc/sudoers.d/bbs-ssh-helper"
+EXPECTED="www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper, $BBS_DIR/bin/bbs-update"
+if [ -f "$SUDOERS_FILE" ]; then
+    if ! grep -q "bbs-update" "$SUDOERS_FILE"; then
+        echo "$EXPECTED" > "$SUDOERS_FILE"
+        chmod 440 "$SUDOERS_FILE"
+        echo "  Updated sudoers to include bbs-update"
+    else
+        echo "  OK"
+    fi
+else
+    echo "$EXPECTED" > "$SUDOERS_FILE"
+    chmod 440 "$SUDOERS_FILE"
+    echo "  Created sudoers file"
+fi
+
+# 7. Run database migrations
+echo "[7/7] Running database migrations..."
 sudo -u www-data php "$BBS_DIR/migrate.php" 2>&1 || echo "  Warning: migration runner returned an error (migrations may run on next page load)"
 
 echo ""
