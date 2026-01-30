@@ -81,8 +81,8 @@ class DashboardController extends Controller
             JOIN agents a ON a.id = bj.agent_id
             LEFT JOIN repositories r ON r.id = bj.repository_id
             LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
-            WHERE bj.status IN ('running', 'sent') {$jobScope}
-            ORDER BY bj.started_at DESC
+            WHERE bj.status IN ('queued', 'running', 'sent') {$jobScope}
+            ORDER BY bj.queued_at ASC
         ", $jobParams);
 
         $recentLogs = $this->db->fetchAll("

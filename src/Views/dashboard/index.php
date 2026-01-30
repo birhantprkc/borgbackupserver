@@ -181,7 +181,7 @@
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-white fw-semibold">
-                <i class="bi bi-play-circle me-1"></i> Active Backup Jobs
+                <i class="bi bi-play-circle me-1"></i> Active &amp; Queued Jobs
             </div>
             <div class="card-body p-0" id="active-jobs">
                 <?php if (empty($activeJobs)): ?>
@@ -216,7 +216,9 @@
                                 <td><?= htmlspecialchars($job['plan_name'] ?? '--') ?></td>
                                 <td><?= htmlspecialchars($job['repo_name'] ?? '--') ?></td>
                                 <td style="min-width: 140px;">
-                                    <?php if (($job['files_total'] ?? 0) > 0): ?>
+                                    <?php if ($job['status'] === 'queued'): ?>
+                                        <span class="text-muted">Waiting</span>
+                                    <?php elseif (($job['files_total'] ?? 0) > 0): ?>
                                         <?php $pct = round(($job['files_processed'] / $job['files_total']) * 100); ?>
                                         <div class="progress" style="height: 20px;">
                                             <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width: <?= $pct ?>%">
@@ -230,7 +232,15 @@
                                     <?php endif; ?>
                                 </td>
                                 <td class="text-nowrap"><?= $elapsed ?: '--' ?></td>
-                                <td><span class="badge bg-info"><?= $job['status'] ?></span></td>
+                                <?php
+                                $jobBadge = match($job['status']) {
+                                    'running' => 'info',
+                                    'sent' => 'primary',
+                                    'queued' => 'warning',
+                                    default => 'secondary',
+                                };
+                                ?>
+                                <td><span class="badge bg-<?= $jobBadge ?>"><?= $job['status'] ?></span></td>
                             </tr>
                             <?php endforeach; ?>
                         </tbody>
