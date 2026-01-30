@@ -124,6 +124,7 @@ Create `/etc/apache2/sites-available/bbs.conf`:
 
 ```bash
 a2ensite bbs
+a2enmod ssl
 systemctl restart apache2
 ```
 
