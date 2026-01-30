@@ -255,7 +255,7 @@
             <div class="card-header bg-white fw-semibold">
                 <i class="bi bi-calendar-event me-1"></i> Upcoming Backups
             </div>
-            <div class="card-body p-0">
+            <div class="card-body p-0" id="upcoming-backups">
                 <?php if (empty($upcomingSchedules)): ?>
                     <div class="p-4 text-muted text-center">No scheduled backups</div>
                 <?php else: ?>
@@ -319,7 +319,7 @@
             <div class="card-header bg-white fw-semibold">
                 <i class="bi bi-check-circle me-1"></i> Recently Completed
             </div>
-            <div class="card-body p-0">
+            <div class="card-body p-0" id="recent-jobs">
                 <?php if (empty($recentJobs)): ?>
                     <div class="p-4 text-muted text-center">No completed jobs yet</div>
                 <?php else: ?>
@@ -376,7 +376,7 @@
                 <span><i class="bi bi-journal-text me-1"></i> Server Log</span>
                 <a href="/log" class="text-decoration-none small">View all</a>
             </div>
-            <div class="card-body p-0">
+            <div class="card-body p-0" id="server-log">
                 <?php if (empty($recentLogs)): ?>
                     <div class="p-4 text-muted text-center">No log entries</div>
                 <?php else: ?>
@@ -462,11 +462,102 @@ new Chart(ctx, {
     }
 });
 
-// Auto-refresh stat cards every 8 seconds
+// Helper: escape HTML
+function esc(str) { const d = document.createElement('div'); d.textContent = str ?? ''; return d.innerHTML; }
+
+// Helper: format elapsed seconds
+function fmtDur(s) {
+    s = parseInt(s) || 0;
+    if (s >= 3600) return Math.floor(s/3600) + 'h ' + Math.floor((s%3600)/60) + 'm';
+    if (s >= 60) return Math.floor(s/60) + 'm ' + (s%60) + 's';
+    return s > 0 ? s + 's' : '--';
+}
+
+// Helper: format time diff for countdowns
+function fmtCountdown(diffSec) {
+    if (diffSec < 0) return { text: 'Overdue', cls: 'text-danger fw-semibold' };
+    if (diffSec < 3600) return { text: Math.floor(diffSec/60) + 'm', cls: 'text-warning fw-semibold' };
+    if (diffSec < 86400) return { text: Math.floor(diffSec/3600) + 'h ' + Math.floor((diffSec%3600)/60) + 'm', cls: '' };
+    return { text: Math.floor(diffSec/86400) + 'd ' + Math.floor((diffSec%86400)/3600) + 'h', cls: 'text-muted' };
+}
+
+// Helper: format date like "Jan 30, 4:15 PM"
+function fmtDate(str) {
+    if (!str) return '--';
+    const d = new Date(str.replace(' ', 'T') + 'Z');
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' +
+           d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+function renderActiveJobs(jobs) {
+    const el = document.getElementById('active-jobs');
+    if (!jobs || !jobs.length) { el.innerHTML = '<div class="p-4 text-muted text-center">No active jobs</div>'; return; }
+    const now = Math.floor(Date.now() / 1000);
+    let html = '<div class="table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>Client</th><th>Task</th><th>Plan</th><th>Repo</th><th>Progress</th><th>Duration</th><th>Status</th></tr></thead><tbody>';
+    jobs.forEach(j => {
+        let elapsed = '--';
+        if (j.started_at) { const e = now - Math.floor(new Date((j.started_at).replace(' ','T')+'Z').getTime()/1000); elapsed = fmtDur(e); }
+        let progress = '';
+        if (j.status === 'queued') { progress = '<span class="text-muted">Waiting</span>'; }
+        else if ((j.files_total || 0) > 0) {
+            const pct = Math.round((j.files_processed / j.files_total) * 100);
+            progress = '<div class="progress" style="height:20px"><div class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width:'+pct+'%">'+pct+'% ('+Number(j.files_processed).toLocaleString()+'/'+Number(j.files_total).toLocaleString()+')</div></div>';
+        } else { progress = '<div class="progress" style="height:20px"><div class="progress-bar progress-bar-striped progress-bar-animated bg-info" style="width:100%">Preparing...</div></div>'; }
+        const badge = { running: 'info', sent: 'primary', queued: 'warning' }[j.status] || 'secondary';
+        html += '<tr style="cursor:pointer" onclick="window.location=\'/queue/'+j.id+'\'"><td>'+esc(j.agent_name)+'</td><td>'+esc(j.task_type?.[0]?.toUpperCase()+j.task_type?.slice(1))+'</td><td>'+esc(j.plan_name||'--')+'</td><td>'+esc(j.repo_name||'--')+'</td><td style="min-width:140px">'+progress+'</td><td class="text-nowrap">'+elapsed+'</td><td><span class="badge bg-'+badge+'">'+esc(j.status)+'</span></td></tr>';
+    });
+    html += '</tbody></table></div>';
+    el.innerHTML = html;
+}
+
+function renderUpcoming(schedules, csrfToken) {
+    const el = document.getElementById('upcoming-backups');
+    if (!schedules || !schedules.length) { el.innerHTML = '<div class="p-4 text-muted text-center">No scheduled backups</div>'; return; }
+    const now = Math.floor(Date.now() / 1000);
+    let html = '<div class="table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>Client</th><th>Plan</th><th>Frequency</th><th>Next Run</th><th>Countdown</th><th></th></tr></thead><tbody>';
+    schedules.forEach(s => {
+        const nextTs = Math.floor(new Date((s.next_run).replace(' ','T')+'Z').getTime()/1000);
+        const cd = fmtCountdown(nextTs - now);
+        html += '<tr style="cursor:pointer" onclick="window.location=\'/clients/'+s.agent_id+'?tab=schedules\'"><td>'+esc(s.agent_name)+'</td><td>'+esc(s.plan_name)+'</td><td>'+esc(s.frequency?.[0]?.toUpperCase()+s.frequency?.slice(1))+'</td><td class="small text-nowrap">'+fmtDate(s.next_run)+'</td><td class="'+cd.cls+'">'+cd.text+'</td>';
+        html += '<td class="text-nowrap" onclick="event.stopPropagation()"><form method="POST" action="/plans/'+s.plan_id+'/trigger" class="d-inline" onsubmit="return confirm(\'Run this backup now?\')"><input type="hidden" name="csrf_token" value="'+csrfToken+'"><button type="submit" class="btn btn-sm btn-outline-success py-0 px-2" title="Run now"><i class="bi bi-play-fill"></i></button></form></td>';
+        html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+    el.innerHTML = html;
+}
+
+function renderRecentJobs(jobs) {
+    const el = document.getElementById('recent-jobs');
+    if (!jobs || !jobs.length) { el.innerHTML = '<div class="p-4 text-muted text-center">No completed jobs yet</div>'; return; }
+    let html = '<div class="table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>Client</th><th>Task</th><th>Plan</th><th>Repo</th><th>Completed</th><th>Duration</th><th>Status</th></tr></thead><tbody>';
+    jobs.forEach(j => {
+        const badge = { completed: 'success', failed: 'danger', cancelled: 'secondary' }[j.status] || 'warning';
+        html += '<tr style="cursor:pointer" onclick="window.location=\'/queue/'+j.id+'\'"><td>'+esc(j.agent_name)+'</td><td>'+esc(j.task_type?.[0]?.toUpperCase()+j.task_type?.slice(1))+'</td><td>'+esc(j.plan_name||'--')+'</td><td>'+esc(j.repo_name||'--')+'</td><td class="small text-nowrap">'+fmtDate(j.completed_at)+'</td><td class="text-nowrap">'+fmtDur(j.duration_seconds)+'</td><td><span class="badge bg-'+badge+'">'+esc(j.status)+'</span></td></tr>';
+    });
+    html += '</tbody></table></div>';
+    el.innerHTML = html;
+}
+
+function renderLogs(logs) {
+    const el = document.getElementById('server-log');
+    if (!logs || !logs.length) { el.innerHTML = '<div class="p-4 text-muted text-center">No log entries</div>'; return; }
+    let html = '<div class="table-responsive"><table class="table table-hover mb-0 small"><thead class="table-light"><tr><th>Time</th><th>Client</th><th>Level</th><th>Message</th></tr></thead><tbody>';
+    logs.forEach(l => {
+        const badge = { error: 'danger', warning: 'warning' }[l.level] || 'info';
+        html += '<tr><td class="text-nowrap">'+fmtDate(l.created_at)+'</td><td>'+esc(l.agent_name||'--')+'</td><td><span class="badge bg-'+badge+'">'+esc(l.level)+'</span></td><td>'+esc(l.message)+'</td></tr>';
+    });
+    html += '</tbody></table></div>';
+    el.innerHTML = html;
+}
+
+const csrfToken = '<?= $this->csrfToken() ?>';
+
+// Auto-refresh every 8 seconds
 setInterval(function() {
     fetch('/dashboard/json', { credentials: 'same-origin' })
         .then(r => r.json())
         .then(data => {
+            // Stat cards
             document.getElementById('stat-agents').textContent = data.agentCount;
             document.getElementById('stat-online').textContent = data.onlineCount;
             document.getElementById('stat-running').textContent = data.runningJobs;
@@ -474,21 +565,24 @@ setInterval(function() {
             document.getElementById('stat-errors').textContent = data.errorCount;
 
             <?php if ($isAdmin): ?>
-            // Update CPU
             if (data.cpuLoad) {
                 document.getElementById('cpu-text').textContent = data.cpuLoad.percent + '%';
                 const cpuBar = document.getElementById('cpu-bar');
                 cpuBar.style.width = data.cpuLoad.percent + '%';
                 cpuBar.textContent = data.cpuLoad['1min'] + ' / ' + data.cpuLoad.cores + ' cores';
             }
-
-            // Update Memory
             if (data.memory) {
                 document.getElementById('mem-text').textContent = data.memory.percent + '%';
                 const memBar = document.getElementById('mem-bar');
                 memBar.style.width = data.memory.percent + '%';
             }
             <?php endif; ?>
+
+            // Tables
+            renderActiveJobs(data.activeJobs);
+            renderUpcoming(data.upcomingSchedules, csrfToken);
+            renderRecentJobs(data.recentJobs);
+            renderLogs(data.recentLogs);
         })
         .catch(() => {});
 }, 8000);
