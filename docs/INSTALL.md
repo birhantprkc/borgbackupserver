@@ -1,5 +1,25 @@
 # Borg Backup Server — Installation Guide
 
+## Quick Install (Recommended)
+
+Run the automated installer on a fresh Ubuntu 22.04+ server:
+
+```bash
+curl -sO https://raw.githubusercontent.com/marcpope/borgbackupserver/main/bin/bbs-install && sudo bash bbs-install --hostname backups.example.com
+```
+
+For LAN installs without SSL:
+
+```bash
+sudo bash bbs-install --hostname 192.168.1.100 --no-ssl
+```
+
+The script installs all dependencies, configures Apache, sets up the database, and opens the setup wizard in your browser.
+
+---
+
+## Manual Installation
+
 Complete step-by-step guide to install BBS on Ubuntu 22.04+ with Apache. Follow every step in order.
 
 ---

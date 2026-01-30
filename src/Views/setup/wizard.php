@@ -190,7 +190,17 @@
                                 <label class="form-label fw-semibold">Server Hostname / IP</label>
                                 <input type="text" class="form-control" name="server_host"
                                        value="<?= htmlspecialchars($_SESSION['setup']['server_host'] ?? ($_SERVER['HTTP_HOST'] ?? '')) ?>" required>
-                                <div class="form-text">The address agents will use to connect (HTTPS and SSH).</div>
+                                <div class="form-text">The address agents will use to connect (SSH and web UI).</div>
+                            </div>
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="enable_ssl" value="1" id="enableSsl"
+                                           <?= ($_SESSION['setup']['enable_ssl'] ?? true) ? 'checked' : '' ?>>
+                                    <label class="form-check-label fw-semibold" for="enableSsl">
+                                        Enable SSL (HTTPS)
+                                    </label>
+                                </div>
+                                <div class="form-text">Recommended for public servers. Uncheck for LAN/internal installs without a certificate.</div>
                             </div>
 
                             <div class="d-flex justify-content-between">

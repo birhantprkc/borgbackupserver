@@ -95,6 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $storageLabel = trim($_POST['storage_label'] ?? 'Default');
             $storagePath = trim($_POST['storage_path'] ?? '');
             $serverHost = trim($_POST['server_host'] ?? '');
+            $enableSsl = isset($_POST['enable_ssl']) ? true : false;
 
             if (empty($storagePath)) {
                 $error = 'Storage path is required.';
@@ -108,6 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['setup']['storage_label'] = $storageLabel;
             $_SESSION['setup']['storage_path'] = $storagePath;
             $_SESSION['setup']['server_host'] = $serverHost;
+            $_SESSION['setup']['enable_ssl'] = $enableSsl;
             $step = 5;
             break;
 
@@ -179,9 +181,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 // 8. Write config/.env
+                $protocol = !empty($setup['enable_ssl']) ? 'https' : 'http';
                 $envContent = <<<ENV
 APP_NAME="Borg Backup Server"
-APP_URL=https://{$setup['server_host']}
+APP_URL={$protocol}://{$setup['server_host']}
 APP_ENV=production
 APP_DEBUG=false
 

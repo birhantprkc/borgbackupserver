@@ -1,0 +1,332 @@
+#!/usr/bin/env bash
+#
+# BBS Install Script — takes a fresh Ubuntu 22.04+ server to "open the wizard."
+#
+# Usage:
+#   sudo bash bbs-install [--hostname backups.example.com] [--no-ssl]
+#
+set -euo pipefail
+
+# ─── Colors & helpers ────────────────────────────────────────────────────────
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
+ok()   { echo -e "  ${GREEN}✔${NC} $*"; }
+warn() { echo -e "  ${YELLOW}⚠${NC} $*"; }
+fail() { echo -e "  ${RED}✘${NC} $*"; }
+step() { echo -e "\n${CYAN}${BOLD}[$1] $2${NC}"; }
+die()  { fail "$*"; exit 1; }
+
+LOG_FILE="/var/log/bbs-install.log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+echo -e "${BOLD}═══════════════════════════════════════════════════${NC}"
+echo -e "${BOLD}  BBS Installer${NC}"
+echo -e "${BOLD}═══════════════════════════════════════════════════${NC}"
+
+# ─── Parse arguments ─────────────────────────────────────────────────────────
+HOSTNAME_ARG=""
+NO_SSL=false
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --hostname)  HOSTNAME_ARG="$2"; shift 2 ;;
+        --no-ssl)    NO_SSL=true; shift ;;
+        -h|--help)
+            echo "Usage: sudo bash bbs-install [--hostname backups.example.com] [--no-ssl]"
+            exit 0 ;;
+        *) die "Unknown argument: $1" ;;
+    esac
+done
+
+# ─── Pre-flight ──────────────────────────────────────────────────────────────
+step "0/10" "Pre-flight checks"
+
+# Must be root
+if [[ "$EUID" -ne 0 ]]; then
+    die "Must run as root (use sudo)"
+fi
+ok "Running as root"
+
+# Detect OS
+if [[ ! -f /etc/os-release ]]; then
+    die "Cannot detect OS — /etc/os-release not found"
+fi
+source /etc/os-release
+if [[ "$ID" != "ubuntu" ]]; then
+    die "Ubuntu required (detected: $ID)"
+fi
+MAJOR_VER="${VERSION_ID%%.*}"
+if [[ "$MAJOR_VER" -lt 22 ]]; then
+    die "Ubuntu 22.04+ required (detected: $VERSION_ID)"
+fi
+ok "Ubuntu $VERSION_ID detected"
+
+# Existing install check
+BBS_DIR="/var/www/bbs"
+if [[ -f "$BBS_DIR/config/.env" ]]; then
+    echo ""
+    warn "BBS is already installed ($BBS_DIR/config/.env exists)."
+    read -rp "  Run the updater instead? [Y/n] " yn
+    if [[ "${yn,,}" != "n" ]]; then
+        exec "$BBS_DIR/bin/bbs-update"
+    fi
+    die "Aborted."
+fi
+
+if [[ -d "$BBS_DIR" ]]; then
+    warn "Partial install detected ($BBS_DIR exists but no .env)."
+    read -rp "  Continue installation? [Y/n] " yn
+    if [[ "${yn,,}" == "n" ]]; then
+        die "Aborted."
+    fi
+fi
+
+# ─── Step 1: Gather info ────────────────────────────────────────────────────
+step "1/10" "Gather information"
+
+# Hostname
+if [[ -z "$HOSTNAME_ARG" ]]; then
+    read -rp "  Server hostname (e.g. backups.example.com or IP): " HOSTNAME_ARG
+fi
+if [[ -z "$HOSTNAME_ARG" ]]; then
+    die "Hostname is required"
+fi
+BBS_HOSTNAME="$HOSTNAME_ARG"
+ok "Hostname: $BBS_HOSTNAME"
+
+# DNS check (only with SSL)
+if [[ "$NO_SSL" == false ]]; then
+    if command -v dig &>/dev/null; then
+        DNS_IP=$(dig +short "$BBS_HOSTNAME" | tail -1)
+        PUBLIC_IP=$(curl -s --max-time 5 ifconfig.me || true)
+        if [[ -n "$DNS_IP" && -n "$PUBLIC_IP" && "$DNS_IP" != "$PUBLIC_IP" ]]; then
+            fail "DNS mismatch: $BBS_HOSTNAME resolves to $DNS_IP but this server's public IP is $PUBLIC_IP"
+            die "Fix DNS or use --no-ssl for LAN installs. Certbot will fail without correct DNS."
+        fi
+        if [[ -n "$DNS_IP" ]]; then
+            ok "DNS check passed ($DNS_IP)"
+        else
+            warn "Could not resolve $BBS_HOSTNAME — certbot may fail"
+        fi
+    else
+        warn "dig not available, skipping DNS check"
+    fi
+else
+    ok "SSL disabled — skipping DNS check"
+fi
+
+# MySQL credentials
+echo ""
+echo "  MySQL setup: BBS needs a database."
+read -rp "  Auto-generate a 'bbs' database user with random password? [Y/n] " auto_db
+if [[ "${auto_db,,}" != "n" ]]; then
+    DB_USER="bbs"
+    DB_PASS=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 24)
+    DB_NAME="bbs"
+    DB_AUTO=true
+    ok "Will create database 'bbs' with user 'bbs'"
+else
+    read -rp "  MySQL root password (or press Enter for none): " -s DB_ROOT_PASS
+    echo ""
+    DB_USER="bbs"
+    DB_PASS=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 24)
+    DB_NAME="bbs"
+    DB_AUTO=false
+    ok "Will use provided root credentials to create database"
+fi
+
+# ─── Step 2: Install system packages ────────────────────────────────────────
+step "2/10" "Install system packages"
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq
+
+PACKAGES=(
+    apache2 libapache2-mod-php
+    php php-mysql php-mbstring php-xml php-curl php-memcached
+    mysql-server borgbackup composer git openssh-server
+    memcached certbot python3-certbot-apache
+    dnsutils  # for dig
+)
+
+apt-get install -y -qq "${PACKAGES[@]}" > /dev/null 2>&1
+ok "System packages installed"
+
+# Enable Apache modules
+a2enmod rewrite ssl headers > /dev/null 2>&1
+ok "Apache modules enabled (rewrite, ssl, headers)"
+
+# ─── Step 3: Create database ────────────────────────────────────────────────
+step "3/10" "Create database"
+
+# Check if database already exists
+if mysql -e "USE $DB_NAME" 2>/dev/null; then
+    warn "Database '$DB_NAME' already exists — skipping creation"
+else
+    mysql -e "CREATE DATABASE \`$DB_NAME\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+    ok "Database '$DB_NAME' created"
+fi
+
+# Check if user already exists
+if mysql -e "SELECT User FROM mysql.user WHERE User='$DB_USER' AND Host='localhost'" 2>/dev/null | grep -q "$DB_USER"; then
+    warn "User '$DB_USER' already exists — updating password"
+    mysql -e "ALTER USER '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASS';"
+else
+    mysql -e "CREATE USER '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASS';"
+    ok "User '$DB_USER' created"
+fi
+
+mysql -e "GRANT ALL PRIVILEGES ON \`$DB_NAME\`.* TO '$DB_USER'@'localhost'; FLUSH PRIVILEGES;"
+ok "Privileges granted"
+
+# ─── Step 4: Download BBS ───────────────────────────────────────────────────
+step "4/10" "Download BBS"
+
+if [[ -d "$BBS_DIR/.git" ]]; then
+    warn "Repository already cloned — pulling latest"
+    git -C "$BBS_DIR" pull --quiet
+else
+    if [[ -d "$BBS_DIR" ]]; then
+        # Directory exists but not a git repo — remove and clone fresh
+        rm -rf "$BBS_DIR"
+    fi
+    git clone --quiet https://github.com/marcpope/borgbackupserver.git "$BBS_DIR"
+    ok "Cloned to $BBS_DIR"
+fi
+
+cd "$BBS_DIR"
+composer install --no-dev --optimize-autoloader --quiet 2>/dev/null
+ok "Composer dependencies installed"
+
+chown -R www-data:www-data "$BBS_DIR"
+ok "Ownership set to www-data"
+
+# ─── Step 5: Create system directories ───────────────────────────────────────
+step "5/10" "Create system directories"
+
+mkdir -p /var/bbs/cache
+chown www-data:www-data /var/bbs/cache
+chmod 755 /var/bbs /var/bbs/cache
+ok "Created /var/bbs/cache"
+
+# ─── Step 6: SSH helper & sudoers ───────────────────────────────────────────
+step "6/10" "Install SSH helper & sudoers"
+
+cp "$BBS_DIR/bin/bbs-ssh-helper" /usr/local/bin/bbs-ssh-helper
+chmod 755 /usr/local/bin/bbs-ssh-helper
+ok "SSH helper installed"
+
+echo "www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper, $BBS_DIR/bin/bbs-update" \
+    > /etc/sudoers.d/bbs-ssh-helper
+chmod 440 /etc/sudoers.d/bbs-ssh-helper
+ok "SSH helper sudoers configured"
+
+echo "www-data ALL=(bbs-*) NOPASSWD: /usr/bin/borg, /usr/bin/env" \
+    > /etc/sudoers.d/bbs-borg
+chmod 440 /etc/sudoers.d/bbs-borg
+ok "Borg sudoers configured"
+
+# ─── Step 7: Configure Apache ───────────────────────────────────────────────
+step "7/10" "Configure Apache"
+
+a2dissite 000-default > /dev/null 2>&1 || true
+
+if [[ "$NO_SSL" == true ]]; then
+    # HTTP-only vhost
+    cat > /etc/apache2/sites-available/bbs.conf <<VHOST
+<VirtualHost *:80>
+    ServerName $BBS_HOSTNAME
+    DocumentRoot $BBS_DIR/public
+
+    <Directory $BBS_DIR/public>
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    ErrorLog \${APACHE_LOG_DIR}/bbs-error.log
+    CustomLog \${APACHE_LOG_DIR}/bbs-access.log combined
+</VirtualHost>
+VHOST
+    ok "HTTP-only vhost created"
+else
+    # HTTP → HTTPS redirect + HTTPS vhost (certbot will fill in the cert paths)
+    cat > /etc/apache2/sites-available/bbs.conf <<VHOST
+<VirtualHost *:80>
+    ServerName $BBS_HOSTNAME
+    DocumentRoot $BBS_DIR/public
+
+    <Directory $BBS_DIR/public>
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    ErrorLog \${APACHE_LOG_DIR}/bbs-error.log
+    CustomLog \${APACHE_LOG_DIR}/bbs-access.log combined
+</VirtualHost>
+VHOST
+    ok "HTTP vhost created (certbot will add HTTPS)"
+fi
+
+a2ensite bbs > /dev/null 2>&1
+systemctl reload apache2
+ok "Apache reloaded"
+
+# ─── Step 8: SSL certificate ────────────────────────────────────────────────
+step "8/10" "SSL certificate"
+
+if [[ "$NO_SSL" == true ]]; then
+    ok "Skipped (--no-ssl)"
+    PROTO="http"
+else
+    PROTO="https"
+    if certbot --apache -d "$BBS_HOSTNAME" --non-interactive --agree-tos --email "admin@$BBS_HOSTNAME" 2>&1; then
+        ok "SSL certificate obtained"
+    else
+        fail "Certbot failed — ensure DNS for $BBS_HOSTNAME points to this server"
+        fail "You can re-run: certbot --apache -d $BBS_HOSTNAME"
+        warn "Continuing without SSL — the wizard will still be accessible via HTTP"
+        PROTO="http"
+    fi
+fi
+
+# ─── Step 9: Setup cron ─────────────────────────────────────────────────────
+step "9/10" "Setup cron"
+
+CRON_LINE="* * * * * php $BBS_DIR/scheduler.php >> /var/log/bbs-scheduler.log 2>&1"
+( crontab -u www-data -l 2>/dev/null; echo "$CRON_LINE" ) | sort -u | crontab -u www-data -
+ok "Scheduler cron installed"
+
+# ─── Step 10: Set timezone ──────────────────────────────────────────────────
+step "10/10" "Set server timezone to UTC"
+
+timedatectl set-timezone UTC
+ok "Timezone set to UTC"
+
+# ─── Summary ─────────────────────────────────────────────────────────────────
+echo ""
+echo -e "${BOLD}═══════════════════════════════════════════════════${NC}"
+echo -e "${BOLD}  BBS Installation Complete!${NC}"
+echo -e "${BOLD}═══════════════════════════════════════════════════${NC}"
+echo ""
+echo -e "  Open the setup wizard to finish configuration:"
+echo -e "  ${CYAN}${BOLD}${PROTO}://${BBS_HOSTNAME}${NC}"
+echo ""
+echo -e "  The wizard will guide you through:"
+echo -e "  ${GREEN}•${NC} Database connection (credentials below)"
+echo -e "  ${GREEN}•${NC} Admin account creation"
+echo -e "  ${GREEN}•${NC} Storage configuration"
+echo ""
+echo -e "  ${BOLD}Database Credentials (save these):${NC}"
+echo -e "  ─────────────────────────────────"
+echo -e "  Host:     localhost"
+echo -e "  Database: $DB_NAME"
+echo -e "  User:     $DB_USER"
+echo -e "  Password: $DB_PASS"
+echo ""
+echo -e "  ${BOLD}Useful commands:${NC}"
+echo -e "  ${GREEN}•${NC} Update:    sudo $BBS_DIR/bin/bbs-update"
+echo -e "  ${GREEN}•${NC} Logs:      tail -f /var/log/bbs-scheduler.log"
+if [[ "$NO_SSL" == false ]]; then
+echo -e "  ${GREEN}•${NC} SSL renew: certbot renew"
+fi
+echo ""
+echo -e "${BOLD}═══════════════════════════════════════════════════${NC}"
