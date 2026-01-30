@@ -87,13 +87,14 @@ case "$ACTION" in
 
     borg-extract)
         # Run borg extract as the repo-owning user
-        # Usage: bbs-ssh-helper borg-extract <username> <tmpdir> <repo::archive> [paths...]
+        # Usage: bbs-ssh-helper borg-extract <username> <tmpdir> <passphrase> <repo::archive> [paths...]
         USERNAME="${2:-}"
         TMPDIR="${3:-}"
-        shift 3
+        PASSPHRASE="${4:-}"
+        shift 4 2>/dev/null || true
 
         if [ -z "$USERNAME" ] || [ -z "$TMPDIR" ] || [ $# -eq 0 ]; then
-            echo "Usage: bbs-ssh-helper borg-extract <username> <tmpdir> <repo::archive> [paths...]"
+            echo "Usage: bbs-ssh-helper borg-extract <username> <tmpdir> <passphrase> <repo::archive> [paths...]"
             exit 1
         fi
 
@@ -114,13 +115,13 @@ case "$ACTION" in
         chmod 770 "$TMPDIR"
 
         # Run borg extract as the repo-owning user
-        # Pass BORG env vars from the caller's environment
+        cd "$TMPDIR"
         sudo -u "$USERNAME" \
-            BORG_PASSPHRASE="${BORG_PASSPHRASE:-}" \
-            BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK="${BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK:-yes}" \
+            BORG_PASSPHRASE="$PASSPHRASE" \
+            BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes \
             BORG_BASE_DIR=/tmp \
             HOME=/tmp \
-            borg extract --list "$@" 2>&1
+            borg extract "$@" 2>&1
 
         EXIT_CODE=$?
 

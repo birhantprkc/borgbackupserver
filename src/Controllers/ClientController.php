@@ -496,14 +496,12 @@ class ClientController extends Controller
             // (www-data can't read repo files owned by the bbs-* user)
             $sshUser = $agent['ssh_unix_user'] ?? '';
             if (!empty($sshUser)) {
-                $cmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-extract', $sshUser, $tmpDir];
+                // Pass passphrase as argument (sudo strips env vars)
+                $passphrase = $env['BORG_PASSPHRASE'] ?? '';
+                $cmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-extract', $sshUser, $tmpDir, $passphrase];
                 $cmd = array_merge($cmd, $borgArgs);
 
-                // Pass BORG_PASSPHRASE via environment
                 $envStrings = [];
-                foreach ($env as $k => $v) {
-                    $envStrings[$k] = $v;
-                }
             } else {
                 // Fallback: run directly as www-data (non-SSH repos)
                 $cmd = array_merge(['borg', 'extract'], $borgArgs);
