@@ -62,7 +62,7 @@ class QueueManager
                    bp.prune_minutes, bp.prune_hours, bp.prune_days,
                    bp.prune_weeks, bp.prune_months, bp.prune_years,
                    r.path as repo_path, r.encryption, r.passphrase_encrypted, r.name as repo_name,
-                   r.storage_location_id, r.agent_id as repo_agent_id
+                   r.agent_id as repo_agent_id
             FROM backup_jobs bj
             LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
             LEFT JOIN repositories r ON r.id = bj.repository_id
@@ -105,7 +105,6 @@ class QueueManager
                 'path' => $job['repo_path'],
                 'encryption' => $job['encryption'],
                 'passphrase_encrypted' => $job['passphrase_encrypted'],
-                'storage_location_id' => $job['storage_location_id'] ?? null,
                 'agent_id' => $job['repo_agent_id'] ?? $job['agent_id'],
                 'name' => $job['repo_name'],
             ];
@@ -264,7 +263,7 @@ class QueueManager
                    bp.prune_minutes, bp.prune_hours, bp.prune_days,
                    bp.prune_weeks, bp.prune_months, bp.prune_years,
                    r.path as repo_path, r.encryption, r.passphrase_encrypted,
-                   r.name as repo_name, r.storage_location_id, r.agent_id as repo_agent_id,
+                   r.name as repo_name, r.agent_id as repo_agent_id,
                    a.ssh_unix_user
             FROM backup_jobs bj
             LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
