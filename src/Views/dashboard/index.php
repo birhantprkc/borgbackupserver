@@ -266,25 +266,35 @@
                         <thead class="table-light">
                             <tr>
                                 <th>Client</th>
+                                <th>Task</th>
+                                <th>Plan</th>
+                                <th>Repo</th>
                                 <th>Completed</th>
-                                <th>Files</th>
                                 <th>Duration</th>
                                 <th>Status</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php foreach ($recentJobs as $job): ?>
-                            <tr>
+                            <?php
+                                $d = $job['duration_seconds'] ?? 0;
+                                $durStr = $d >= 3600 ? floor($d / 3600) . 'h ' . floor(($d % 3600) / 60) . 'm'
+                                    : ($d >= 60 ? floor($d / 60) . 'm ' . ($d % 60) . 's' : ($d > 0 ? $d . 's' : '--'));
+                                $sBadge = match($job['status']) {
+                                    'completed' => 'success',
+                                    'failed' => 'danger',
+                                    'cancelled' => 'secondary',
+                                    default => 'warning',
+                                };
+                            ?>
+                            <tr style="cursor: pointer;" onclick="window.location='/queue/<?= $job['id'] ?>'">
                                 <td><?= htmlspecialchars($job['agent_name']) ?></td>
-                                <td class="small"><?= \BBS\Core\TimeHelper::format($job['completed_at'], 'M j, Y g:i A') ?></td>
-                                <td><?= number_format($job['files_total'] ?? 0) ?></td>
-                                <td>
-                                    <?php
-                                    $d = $job['duration_seconds'] ?? 0;
-                                    echo $d >= 60 ? floor($d / 60) . 'm ' . ($d % 60) . 's' : $d . 's';
-                                    ?>
-                                </td>
-                                <td><span class="badge bg-success">complete</span></td>
+                                <td><?= ucfirst($job['task_type']) ?></td>
+                                <td><?= htmlspecialchars($job['plan_name'] ?? '--') ?></td>
+                                <td><?= htmlspecialchars($job['repo_name'] ?? '--') ?></td>
+                                <td class="small text-nowrap"><?= \BBS\Core\TimeHelper::format($job['completed_at'], 'M j, g:i A') ?></td>
+                                <td class="text-nowrap"><?= $durStr ?></td>
+                                <td><span class="badge bg-<?= $sBadge ?>"><?= $job['status'] ?></span></td>
                             </tr>
                             <?php endforeach; ?>
                         </tbody>
