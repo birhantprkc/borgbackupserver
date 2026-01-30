@@ -241,7 +241,12 @@ foreach ($serverJobs as $sj) {
     if ($result === 'completed' && $sj['task_type'] === 'prune') {
         $listCmd = \BBS\Services\BorgCommandBuilder::buildListCommand($localRepo);
         if ($runAsUser) {
-            array_unshift($listCmd, 'sudo', '-u', $runAsUser);
+            // Prepend env vars into the command so they survive sudo's env reset
+            $envPrefix = [];
+            foreach ($env as $k => $v) {
+                $envPrefix[] = $k . '=' . $v;
+            }
+            array_unshift($listCmd, 'sudo', '-u', $runAsUser, 'env', ...$envPrefix);
         }
         $listProc = proc_open($listCmd, $desc, $listPipes, null, array_merge($_SERVER, $envStrings));
 
