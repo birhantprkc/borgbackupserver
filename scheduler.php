@@ -324,26 +324,23 @@ if ((int) date('i') % 5 === 0) {
     }
 }
 
-// Step 6: Check storage locations for low disk space
+// Step 6: Check storage for low disk space
 $notificationService = $notificationService ?? new NotificationService();
 $thresholdSetting = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_alert_threshold'");
 $storageThreshold = (int) ($thresholdSetting['value'] ?? 90);
 
-$storageLocations = $db->fetchAll("SELECT * FROM storage_locations");
-foreach ($storageLocations as $loc) {
-    $path = $loc['path'];
-    if (!is_dir($path)) continue;
-
-    $total = @disk_total_space($path);
-    $free = @disk_free_space($path);
-    if ($total === false || $free === false || $total == 0) continue;
-
-    $usagePercent = round((($total - $free) / $total) * 100, 1);
-
-    if ($usagePercent >= $storageThreshold) {
-        $notificationService->notify('storage_low', null, $loc['id'], "Storage \"{$loc['label']}\" is at {$usagePercent}% capacity ({$path})", 'warning');
-    } else {
-        $notificationService->resolve('storage_low', null, $loc['id']);
+$storagePathSetting = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
+$storagePath = $storagePathSetting['value'] ?? '';
+if (!empty($storagePath) && is_dir($storagePath)) {
+    $total = @disk_total_space($storagePath);
+    $free = @disk_free_space($storagePath);
+    if ($total !== false && $free !== false && $total > 0) {
+        $usagePercent = round((($total - $free) / $total) * 100, 1);
+        if ($usagePercent >= $storageThreshold) {
+            $notificationService->notify('storage_low', null, null, "Storage is at {$usagePercent}% capacity ({$storagePath})", 'warning');
+        } else {
+            $notificationService->resolve('storage_low', null, null);
+        }
     }
 }
 

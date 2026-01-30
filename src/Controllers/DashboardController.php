@@ -167,35 +167,31 @@ class DashboardController extends Controller
             $result['memory'] = $cache->remember('server_mem', 10, fn() => ServerStats::getMemory());
             $result['partitions'] = $cache->remember('server_parts', 30, fn() => ServerStats::getPartitions());
 
-            // Storage locations with live disk usage + repo stats
-            $result['storageLocations'] = $cache->remember('storage_locs', 30, function() {
+            // Storage disk usage
+            $result['storage'] = $cache->remember('storage_info', 30, function() {
                 $db = \BBS\Core\Database::getInstance();
-                $locations = $db->fetchAll("
-                    SELECT sl.*,
-                           COUNT(r.id) as repo_count,
-                           COALESCE(SUM(r.size_bytes), 0) as total_repo_bytes
-                    FROM storage_locations sl
-                    LEFT JOIN repositories r ON r.storage_location_id = sl.id
-                    GROUP BY sl.id
-                    ORDER BY sl.id
-                ");
+                $setting = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
+                $path = $setting['value'] ?? '';
+                $repoStats = $db->fetchOne("SELECT COUNT(*) as repo_count, COALESCE(SUM(size_bytes), 0) as total_repo_bytes FROM repositories");
 
-                foreach ($locations as &$loc) {
-                    $loc['disk_total'] = null;
-                    $loc['disk_free'] = null;
-                    $loc['disk_percent'] = null;
-                    if (is_dir($loc['path'])) {
-                        $total = @disk_total_space($loc['path']);
-                        $free = @disk_free_space($loc['path']);
-                        if ($total !== false && $free !== false && $total > 0) {
-                            $loc['disk_total'] = $total;
-                            $loc['disk_free'] = $free;
-                            $loc['disk_percent'] = round((($total - $free) / $total) * 100, 1);
-                        }
+                $info = [
+                    'path' => $path,
+                    'repo_count' => (int) ($repoStats['repo_count'] ?? 0),
+                    'total_repo_bytes' => (int) ($repoStats['total_repo_bytes'] ?? 0),
+                    'disk_total' => null,
+                    'disk_free' => null,
+                    'disk_percent' => null,
+                ];
+                if (!empty($path) && is_dir($path)) {
+                    $total = @disk_total_space($path);
+                    $free = @disk_free_space($path);
+                    if ($total !== false && $free !== false && $total > 0) {
+                        $info['disk_total'] = $total;
+                        $info['disk_free'] = $free;
+                        $info['disk_percent'] = round((($total - $free) / $total) * 100, 1);
                     }
                 }
-                unset($loc);
-                return $locations;
+                return $info;
             });
         }
 

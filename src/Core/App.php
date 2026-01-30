@@ -99,8 +99,6 @@ class App
         // Settings
         $this->router->map('GET', '/settings', 'SettingsController@index');
         $this->router->map('POST', '/settings', 'SettingsController@update');
-        $this->router->map('POST', '/settings/storage/add', 'SettingsController@addStorage');
-        $this->router->map('POST', '/settings/storage/[i:id]/delete', 'SettingsController@deleteStorage');
         $this->router->map('POST', '/settings/templates/add', 'SettingsController@addTemplate');
         $this->router->map('POST', '/settings/templates/[i:id]/edit', 'SettingsController@editTemplate');
         $this->router->map('POST', '/settings/templates/[i:id]/delete', 'SettingsController@deleteTemplate');

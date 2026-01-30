@@ -73,23 +73,24 @@ class ClientController extends Controller
         ]);
 
         // Pre-flight checks before creating the client
-        $defaultStorage = $this->db->fetchOne("SELECT * FROM storage_locations WHERE is_default = 1");
-        if (!$defaultStorage) {
+        $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
+        $storagePath = $storageSetting['value'] ?? null;
+        if (!$storagePath) {
             $this->db->delete('agents', 'id = ?', [$id]);
-            $this->flash('danger', 'Cannot create client — no default storage location configured. Go to Settings > Storage to add one.');
+            $this->flash('danger', 'Cannot create client — no storage path configured. Go to Settings to set one.');
             $this->redirect('/clients/add');
         }
 
         // Create storage directory
-        $clientDir = rtrim($defaultStorage['path'], '/') . '/' . $id;
+        $clientDir = rtrim($storagePath, '/') . '/' . $id;
         if (!is_dir($clientDir) && !@mkdir($clientDir, 0755, true)) {
             $this->db->delete('agents', 'id = ?', [$id]);
-            $this->flash('danger', "Cannot create client — failed to create storage directory: {$clientDir}. Check permissions on {$defaultStorage['path']}.");
+            $this->flash('danger', "Cannot create client — failed to create storage directory: {$clientDir}. Check permissions on {$storagePath}.");
             $this->redirect('/clients/add');
         }
 
         // Provision SSH access: create Unix user, SSH keys, authorized_keys
-        $sshResult = SshKeyManager::provisionClient($id, $name, $defaultStorage['path']);
+        $sshResult = SshKeyManager::provisionClient($id, $name, $storagePath);
         if (!$sshResult) {
             // Clean up: remove storage dir and agent record
             @rmdir($clientDir);
@@ -119,9 +120,8 @@ class ClientController extends Controller
         }
 
         $repositories = $this->db->fetchAll("
-            SELECT r.*, sl.label as storage_label
+            SELECT r.*
             FROM repositories r
-            LEFT JOIN storage_locations sl ON sl.id = r.storage_location_id
             WHERE r.agent_id = ?
             ORDER BY r.id DESC
         ", [$id]);
@@ -143,8 +143,6 @@ class ClientController extends Controller
             ORDER BY bj.queued_at DESC
             LIMIT 20
         ", [$id]);
-
-        $storageLocations = $this->db->fetchAll("SELECT * FROM storage_locations ORDER BY id");
 
         $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
 
@@ -222,7 +220,6 @@ class ClientController extends Controller
             'repositories' => $repositories,
             'plans' => $plans,
             'recentJobs' => $recentJobs,
-            'storageLocations' => $storageLocations,
             'serverHost' => $serverHost['value'] ?? 'YOUR_SERVER_HOST',
             'archives' => $archives,
             'templates' => $templates,

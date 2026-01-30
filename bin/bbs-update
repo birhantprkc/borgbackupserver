@@ -115,8 +115,8 @@ fi
 echo "[7/8] Running database migrations..."
 sudo -u www-data php "$BBS_DIR/migrate.php" 2>&1 || echo "  Warning: migration runner returned an error (migrations may run on next page load)"
 
-# 8. Fix storage location permissions
-echo "[8/8] Fixing storage location permissions..."
+# 8. Fix storage path permissions
+echo "[8/8] Fixing storage path permissions..."
 ENV_FILE="$BBS_DIR/config/.env"
 if [ -f "$ENV_FILE" ]; then
     DB_HOST=$(grep '^DB_HOST=' "$ENV_FILE" | cut -d= -f2-)
@@ -125,24 +125,21 @@ if [ -f "$ENV_FILE" ]; then
     DB_PASS=$(grep '^DB_PASS=' "$ENV_FILE" | cut -d= -f2-)
 
     if [ -n "$DB_NAME" ] && [ -n "$DB_USER" ]; then
-        STORAGE_PATHS=$(mysql -h "${DB_HOST:-localhost}" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" \
-            -N -e "SELECT path FROM storage_locations" 2>/dev/null || true)
+        STORAGE_PATH=$(mysql -h "${DB_HOST:-localhost}" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" \
+            -N -e "SELECT \`value\` FROM settings WHERE \`key\` = 'storage_path'" 2>/dev/null || true)
 
-        if [ -n "$STORAGE_PATHS" ]; then
-            while IFS= read -r spath; do
-                [ -z "$spath" ] && continue
-                if [ ! -d "$spath" ]; then
-                    mkdir -p "$spath"
-                    echo "  Created $spath"
-                fi
-                # root-owned with www-data group so sshd StrictModes
-                # doesn't reject user homes underneath this path
-                chown root:www-data "$spath"
-                chmod 775 "$spath"
-                echo "  Fixed $spath"
-            done <<< "$STORAGE_PATHS"
+        if [ -n "$STORAGE_PATH" ]; then
+            if [ ! -d "$STORAGE_PATH" ]; then
+                mkdir -p "$STORAGE_PATH"
+                echo "  Created $STORAGE_PATH"
+            fi
+            # root-owned with www-data group so sshd StrictModes
+            # doesn't reject user homes underneath this path
+            chown root:www-data "$STORAGE_PATH"
+            chmod 775 "$STORAGE_PATH"
+            echo "  Fixed $STORAGE_PATH"
         else
-            echo "  No storage locations configured"
+            echo "  No storage path configured"
         fi
     else
         echo "  Warning: could not read DB credentials from .env"

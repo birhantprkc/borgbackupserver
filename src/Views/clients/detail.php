@@ -480,7 +480,6 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     <thead class="table-light">
                         <tr>
                             <th>Name</th>
-                            <th>Storage</th>
                             <th>Encryption</th>
                             <th>Size</th>
                             <th>Archives</th>
@@ -491,7 +490,6 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                         <?php foreach ($repositories as $repo): ?>
                         <tr>
                             <td class="fw-semibold"><i class="bi bi-device-hdd me-1 text-muted"></i><?= htmlspecialchars($repo['name']) ?> <small class="text-muted">(#<?= $repo['id'] ?>)</small></td>
-                            <td class="small"><?= htmlspecialchars($repo['storage_label'] ?? '--') ?></td>
                             <td><code class="small"><?= htmlspecialchars($repo['encryption'] ?? '--') ?></code></td>
                             <td>
                                 <?php
@@ -547,20 +545,6 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                         <input type="text" class="form-control" name="name" required maxlength="20" placeholder="RepoName">
                     </div>
                     <div class="col-md-3 form-text pt-2">Descriptive name for the repo. (Max 20 characters)</div>
-                </div>
-
-                <div class="row mb-3">
-                    <label class="col-md-3 col-form-label fw-semibold">Storage Location</label>
-                    <div class="col-md-6">
-                        <select class="form-select" name="storage_location_id">
-                            <option value="">-- Select --</option>
-                            <?php foreach ($storageLocations as $loc): ?>
-                            <option value="<?= $loc['id'] ?>" <?= $loc['is_default'] ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($loc['label']) ?> (<?= htmlspecialchars($loc['path']) ?>)
-                            </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
                 </div>
 
                 <div class="row mb-3">

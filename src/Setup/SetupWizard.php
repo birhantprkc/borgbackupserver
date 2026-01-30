@@ -92,7 +92,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         case 4:
             // Storage & server
-            $storageLabel = trim($_POST['storage_label'] ?? 'Default');
             $storagePath = trim($_POST['storage_path'] ?? '');
             $serverHost = trim($_POST['server_host'] ?? '');
             $enableSsl = isset($_POST['enable_ssl']) ? true : false;
@@ -106,7 +105,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 break;
             }
 
-            $_SESSION['setup']['storage_label'] = $storageLabel;
             $_SESSION['setup']['storage_path'] = $storagePath;
             $_SESSION['setup']['server_host'] = $serverHost;
             $_SESSION['setup']['enable_ssl'] = $enableSsl;
@@ -156,11 +154,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt = $pdo->prepare("INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, 'admin')");
                 $stmt->execute([$setup['admin_username'], $setup['admin_email'], $passwordHash]);
 
-                // 5. Create storage location
-                $stmt = $pdo->prepare("INSERT INTO storage_locations (label, path, is_default) VALUES (?, ?, 1)");
-                $stmt->execute([$setup['storage_label'], $setup['storage_path']]);
+                // 5. Set storage_path and server_host in settings
+                $stmt = $pdo->prepare("INSERT INTO settings (`key`, `value`) VALUES ('storage_path', ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)");
+                $stmt->execute([$setup['storage_path']]);
 
-                // 6. Set server_host in settings
                 $stmt = $pdo->prepare("UPDATE settings SET `value` = ? WHERE `key` = 'server_host'");
                 $stmt->execute([$setup['server_host']]);
 

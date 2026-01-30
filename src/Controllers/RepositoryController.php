@@ -18,7 +18,6 @@ class RepositoryController extends Controller
         $name = trim($_POST['name'] ?? '');
         $encryption = $_POST['encryption'] ?? 'repokey-blake2';
         $passphrase = $_POST['passphrase'] ?? '';
-        $storageLocationId = !empty($_POST['storage_location_id']) ? (int) $_POST['storage_location_id'] : null;
 
         if (empty($name) || empty($agentId)) {
             $this->flash('danger', 'Repository name and agent are required.');
@@ -32,22 +31,16 @@ class RepositoryController extends Controller
             $this->redirect('/clients');
         }
 
-        // Build repo path: SSH path for agents, local path stored in DB
-        $path = '';
-        if ($storageLocationId) {
-            $loc = $this->db->fetchOne("SELECT * FROM storage_locations WHERE id = ?", [$storageLocationId]);
-            if ($loc) {
-                // If agent has SSH configured, use SSH repo path
-                $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
-                $host = $serverHost['value'] ?? '';
+        // Build repo path using single storage_path setting
+        $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
+        $storagePath = $storageSetting['value'] ?? '';
+        $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
+        $host = $serverHost['value'] ?? '';
 
-                if (!empty($agent['ssh_unix_user']) && !empty($host)) {
-                    $path = SshKeyManager::buildSshRepoPath($agent['ssh_unix_user'], $host, $name);
-                } else {
-                    // Fallback to local path (legacy or unconfigured)
-                    $path = rtrim($loc['path'], '/') . '/' . $agentId . '/' . $name;
-                }
-            }
+        if (!empty($agent['ssh_unix_user']) && !empty($host)) {
+            $path = SshKeyManager::buildSshRepoPath($agent['ssh_unix_user'], $host, $name);
+        } else {
+            $path = rtrim($storagePath, '/') . '/' . $agentId . '/' . $name;
         }
 
         // Auto-generate passphrase if not provided and encryption is enabled
@@ -57,7 +50,6 @@ class RepositoryController extends Controller
 
         $repoId = $this->db->insert('repositories', [
             'agent_id' => $agentId,
-            'storage_location_id' => $storageLocationId,
             'name' => $name,
             'path' => $path,
             'encryption' => $encryption,
@@ -189,11 +181,9 @@ class RepositoryController extends Controller
         $localPath = BorgCommandBuilder::getLocalRepoPath($repo);
         $diskDeleted = false;
         if (!empty($localPath) && is_dir($localPath)) {
-            // Safety: only delete paths within a known storage location
-            $loc = !empty($repo['storage_location_id'])
-                ? $this->db->fetchOne("SELECT path FROM storage_locations WHERE id = ?", [$repo['storage_location_id']])
-                : null;
-            $storagePath = $loc['path'] ?? '';
+            // Safety: only delete paths within the configured storage path
+            $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
+            $storagePath = $storageSetting['value'] ?? '';
 
             if (!empty($storagePath) && str_starts_with(realpath($localPath), realpath($storagePath))) {
                 $output = [];

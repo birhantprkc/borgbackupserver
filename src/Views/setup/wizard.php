@@ -172,17 +172,12 @@
                         <form method="POST">
                             <input type="hidden" name="step" value="4">
 
-                            <h6 class="mt-3 mb-2">Storage Location</h6>
+                            <h6 class="mt-3 mb-2">Storage</h6>
                             <div class="mb-3">
-                                <label class="form-label fw-semibold">Label</label>
-                                <input type="text" class="form-control" name="storage_label"
-                                       value="<?= htmlspecialchars($_SESSION['setup']['storage_label'] ?? 'Default') ?>" required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">Path</label>
+                                <label class="form-label fw-semibold">Storage Path</label>
                                 <input type="text" class="form-control" name="storage_path"
-                                       value="<?= htmlspecialchars($_SESSION['setup']['storage_path'] ?? '/mnt/backups') ?>" required>
-                                <div class="form-text">Absolute path where borg repositories will be stored.</div>
+                                       value="<?= htmlspecialchars($_SESSION['setup']['storage_path'] ?? '/var/bbs/home') ?>" required>
+                                <div class="form-text">Absolute path where agent home directories and borg repositories will be stored.</div>
                             </div>
 
                             <h6 class="mt-4 mb-2">Server Connection</h6>
@@ -230,7 +225,7 @@
                                 <tr><td class="fw-semibold text-muted">Database User</td><td><?= htmlspecialchars($s['db_user'] ?? '') ?></td></tr>
                                 <tr><td class="fw-semibold text-muted">Admin Username</td><td><?= htmlspecialchars($s['admin_username'] ?? '') ?></td></tr>
                                 <tr><td class="fw-semibold text-muted">Admin Email</td><td><?= htmlspecialchars($s['admin_email'] ?? '') ?></td></tr>
-                                <tr><td class="fw-semibold text-muted">Storage Location</td><td><?= htmlspecialchars($s['storage_path'] ?? '') ?> (<?= htmlspecialchars($s['storage_label'] ?? '') ?>)</td></tr>
+                                <tr><td class="fw-semibold text-muted">Storage Path</td><td><?= htmlspecialchars($s['storage_path'] ?? '') ?></td></tr>
                                 <tr><td class="fw-semibold text-muted">Server Host</td><td><?= htmlspecialchars($s['server_host'] ?? '') ?></td></tr>
                                 <tr>
                                     <td class="fw-semibold text-muted">SSH Helper</td>

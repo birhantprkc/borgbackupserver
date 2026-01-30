@@ -13,11 +13,6 @@
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link <?= $activeTab === 'storage' ? 'active' : '' ?>" href="/settings?tab=storage">
-            <i class="bi bi-hdd me-1"></i> Storage
-        </a>
-    </li>
-    <li class="nav-item">
         <a class="nav-link <?= $activeTab === 'templates' ? 'active' : '' ?>" href="/settings?tab=templates">
             <i class="bi bi-clipboard-check me-1"></i> Templates
         </a>
@@ -58,6 +53,11 @@
                         <label class="form-label fw-semibold">Server Host / IP</label>
                         <input type="text" class="form-control" name="server_host" value="<?= htmlspecialchars($settings['server_host'] ?? '') ?>">
                         <div class="form-text">The address agents use to reach this server.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Storage Path</label>
+                        <input type="text" class="form-control" name="storage_path" value="<?= htmlspecialchars($settings['storage_path'] ?? '') ?>" readonly>
+                        <div class="form-text">Base directory for agent home directories and borg repositories. Set during installation.</div>
                     </div>
                     <div class="mb-3">
                         <div class="form-check">
@@ -180,77 +180,6 @@
 </form>
 <?php endif; ?>
 
-<!-- Storage Tab -->
-<?php if ($activeTab === 'storage'): ?>
-<div class="card border-0 shadow-sm">
-    <div class="card-header bg-white fw-semibold">
-        <i class="bi bi-hdd me-1"></i> Storage Locations
-    </div>
-    <div class="card-body">
-        <?php if (empty($storageLocations)): ?>
-            <p class="text-muted">No storage locations configured. Add one below.</p>
-        <?php else: ?>
-        <div class="table-responsive mb-3">
-            <table class="table table-hover">
-                <thead class="table-light">
-                    <tr>
-                        <th>Label</th>
-                        <th>Path</th>
-                        <th>Max Size (GB)</th>
-                        <th>Default</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($storageLocations as $loc): ?>
-                    <tr>
-                        <td><?= htmlspecialchars($loc['label']) ?></td>
-                        <td><code><?= htmlspecialchars($loc['path']) ?></code></td>
-                        <td><?= $loc['max_size_gb'] ? $loc['max_size_gb'] . ' GB' : 'Unlimited' ?></td>
-                        <td><?= $loc['is_default'] ? '<span class="badge bg-success">Default</span>' : '' ?></td>
-                        <td>
-                            <form method="POST" action="/settings/storage/<?= $loc['id'] ?>/delete" class="d-inline" onsubmit="return confirm('Remove this storage location?')">
-                                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
-                            </form>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-        <?php endif; ?>
-
-        <h6 class="mt-3">Add Storage Location</h6>
-        <form method="POST" action="/settings/storage/add">
-            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-            <div class="row g-3">
-                <div class="col-md-3">
-                    <label class="form-label fw-semibold">Label</label>
-                    <input type="text" class="form-control" name="label" required placeholder="e.g. Primary Storage">
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-semibold">Path</label>
-                    <input type="text" class="form-control" name="path" required placeholder="/mnt/backups">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label fw-semibold">Max Size (GB)</label>
-                    <input type="number" class="form-control" name="max_size_gb" placeholder="Unlimited">
-                </div>
-                <div class="col-md-1 d-flex align-items-end">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" name="is_default" id="isDefault">
-                        <label class="form-check-label" for="isDefault">Default</label>
-                    </div>
-                </div>
-                <div class="col-md-2 d-flex align-items-end">
-                    <button type="submit" class="btn btn-success w-100">Add</button>
-                </div>
-            </div>
-        </form>
-    </div>
-</div>
-<?php endif; ?>
 
 <!-- Templates Tab -->
 <?php if ($activeTab === 'templates'): ?>

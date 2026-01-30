@@ -146,27 +146,27 @@
                                 <td><?= $part['free'] ?></td>
                             </tr>
                             <?php endforeach; ?>
-                            <?php foreach ($storageLocations as $loc): ?>
+                            <?php if (!empty($storage)): ?>
                             <tr>
-                                <td style="border-bottom: none;" class="pb-0"><i class="bi bi-archive text-success me-1"></i> <span class="fw-semibold"><?= htmlspecialchars($loc['label']) ?></span></td>
+                                <td style="border-bottom: none;" class="pb-0"><i class="bi bi-archive text-success me-1"></i> <span class="fw-semibold">Storage</span></td>
                                 <td style="border-bottom: none;" class="pb-0">
-                                    <?php if ($loc['disk_percent'] !== null): ?>
+                                    <?php if ($storage['disk_percent'] !== null): ?>
                                     <div class="progress" style="height: 18px; background-color: #e9ecef;">
-                                        <div class="progress-bar progress-bar-striped <?= $loc['disk_percent'] > 90 ? 'bg-danger' : ($loc['disk_percent'] > 70 ? 'bg-warning' : '') ?>"
-                                             style="width: <?= $loc['disk_percent'] ?>%; background-color: <?= $loc['disk_percent'] <= 70 ? '#8faabe' : '' ?>;">
+                                        <div class="progress-bar progress-bar-striped <?= $storage['disk_percent'] > 90 ? 'bg-danger' : ($storage['disk_percent'] > 70 ? 'bg-warning' : '') ?>"
+                                             style="width: <?= $storage['disk_percent'] ?>%; background-color: <?= $storage['disk_percent'] <= 70 ? '#8faabe' : '' ?>;">
                                         </div>
                                     </div>
                                     <?php else: ?>
                                     <span class="text-muted">N/A</span>
                                     <?php endif; ?>
                                 </td>
-                                <td style="border-bottom: none;" class="pb-0"><?= $loc['disk_total'] !== null ? \BBS\Services\ServerStats::formatBytes($loc['disk_total']) : '--' ?></td>
-                                <td style="border-bottom: none;" class="pb-0"><?= $loc['disk_free'] !== null ? \BBS\Services\ServerStats::formatBytes($loc['disk_free']) : 'N/A' ?></td>
+                                <td style="border-bottom: none;" class="pb-0"><?= $storage['disk_total'] !== null ? \BBS\Services\ServerStats::formatBytes($storage['disk_total']) : '--' ?></td>
+                                <td style="border-bottom: none;" class="pb-0"><?= $storage['disk_free'] !== null ? \BBS\Services\ServerStats::formatBytes($storage['disk_free']) : 'N/A' ?></td>
                             </tr>
                             <tr>
-                                <td colspan="4" class="pt-0 text-muted" style="font-size: 0.75em;"><?= htmlspecialchars($loc['path']) ?></td>
+                                <td colspan="4" class="pt-0 text-muted" style="font-size: 0.75em;"><?= htmlspecialchars($storage['path']) ?></td>
                             </tr>
-                            <?php endforeach; ?>
+                            <?php endif; ?>
                         </tbody>
                     </table>
                 </div>

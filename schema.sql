@@ -33,15 +33,6 @@ INSERT INTO users (username, email, password_hash, role) VALUES
 -- Storage & Agents
 -- --------------------------------------------------------
 
-CREATE TABLE storage_locations (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    label VARCHAR(100) NOT NULL,
-    path VARCHAR(500) NOT NULL,
-    max_size_gb INT DEFAULT NULL,
-    is_default TINYINT(1) NOT NULL DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE TABLE agents (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -68,7 +59,6 @@ CREATE TABLE agents (
 CREATE TABLE repositories (
     id INT AUTO_INCREMENT PRIMARY KEY,
     agent_id INT NOT NULL,
-    storage_location_id INT DEFAULT NULL,
     name VARCHAR(100) NOT NULL,
     path VARCHAR(500) NOT NULL,
     encryption VARCHAR(50) NOT NULL DEFAULT 'repokey-blake2',
@@ -76,8 +66,7 @@ CREATE TABLE repositories (
     size_bytes BIGINT NOT NULL DEFAULT 0,
     archive_count INT NOT NULL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
-    FOREIGN KEY (storage_location_id) REFERENCES storage_locations(id) ON DELETE SET NULL
+    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
 );
 
 CREATE TABLE backup_plans (

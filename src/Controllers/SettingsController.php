@@ -16,13 +16,11 @@ class SettingsController extends Controller
             $settings[$row['key']] = $row['value'];
         }
 
-        $storageLocations = $this->db->fetchAll("SELECT * FROM storage_locations ORDER BY id");
         $templates = $this->db->fetchAll("SELECT * FROM backup_templates ORDER BY name");
 
         $this->view('settings/index', [
             'pageTitle' => 'Settings',
             'settings' => $settings,
-            'storageLocations' => $storageLocations,
             'templates' => $templates,
         ]);
     }
@@ -32,7 +30,7 @@ class SettingsController extends Controller
         $this->requireAdmin();
         $this->verifyCsrf();
 
-        $allowed = ['max_queue', 'server_host', 'agent_poll_interval', 'session_timeout_hours', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_from', 'notification_retention_days', 'storage_alert_threshold'];
+        $allowed = ['max_queue', 'server_host', 'agent_poll_interval', 'session_timeout_hours', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_from', 'notification_retention_days', 'storage_alert_threshold', 'storage_path'];
 
         foreach ($allowed as $key) {
             if (isset($_POST[$key])) {
@@ -73,60 +71,6 @@ class SettingsController extends Controller
         $this->flash('success', 'Settings updated.');
         $tab = $_POST['_tab'] ?? 'general';
         $this->redirect('/settings?tab=' . urlencode($tab));
-    }
-
-    public function addStorage(): void
-    {
-        $this->requireAdmin();
-        $this->verifyCsrf();
-
-        $label = trim($_POST['label'] ?? '');
-        $path = trim($_POST['path'] ?? '');
-        $maxSizeGb = !empty($_POST['max_size_gb']) ? (int) $_POST['max_size_gb'] : null;
-        $isDefault = isset($_POST['is_default']) ? 1 : 0;
-
-        if (empty($label) || empty($path)) {
-            $this->flash('danger', 'Label and path are required.');
-            $this->redirect('/settings?tab=storage');
-        }
-
-        if ($isDefault) {
-            $this->db->update('storage_locations', ['is_default' => 0], '1=1');
-        }
-
-        // Create directory if it doesn't exist and fix permissions
-        if (!is_dir($path)) {
-            if (!@mkdir($path, 0775, true)) {
-                $this->flash('danger', "Could not create directory: {$path}. Create it manually with: sudo mkdir -p {$path} && sudo chown root:www-data {$path} && sudo chmod 775 {$path}");
-                $this->redirect('/settings?tab=storage');
-                return;
-            }
-        }
-        // Best-effort ownership fix (may fail if not root, but bbs-update will catch it)
-        // root:www-data so sshd StrictModes doesn't reject user homes underneath
-        @chown($path, 'root');
-        @chgrp($path, 'www-data');
-        @chmod($path, 0775);
-
-        $this->db->insert('storage_locations', [
-            'label' => $label,
-            'path' => $path,
-            'max_size_gb' => $maxSizeGb,
-            'is_default' => $isDefault,
-        ]);
-
-        $this->flash('success', "Storage location \"{$label}\" added.");
-        $this->redirect('/settings?tab=storage');
-    }
-
-    public function deleteStorage(int $id): void
-    {
-        $this->requireAdmin();
-        $this->verifyCsrf();
-
-        $this->db->delete('storage_locations', 'id = ?', [$id]);
-        $this->flash('success', 'Storage location removed.');
-        $this->redirect('/settings?tab=storage');
     }
 
     public function addTemplate(): void
