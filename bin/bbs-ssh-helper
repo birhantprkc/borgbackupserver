@@ -188,7 +188,7 @@ case "$ACTION" in
         ;;
 
     *)
-        echo "Usage: bbs-ssh-helper {create-user|delete-user} [args...]"
+        echo "Usage: bbs-ssh-helper {create-user|create-repo-dir|borg-extract|fix-repo-perms|delete-user} [args...]"
         exit 1
         ;;
 esac

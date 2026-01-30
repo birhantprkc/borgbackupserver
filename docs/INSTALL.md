@@ -92,7 +92,7 @@ Verify it works:
 
 ```bash
 sudo -u www-data sudo /usr/local/bin/bbs-ssh-helper
-# Should print: Usage: bbs-ssh-helper {create-user|delete-user} [args...]
+# Should print: Usage: bbs-ssh-helper {create-user|create-repo-dir|borg-extract|fix-repo-perms|delete-user} [args...]
 ```
 
 ---
@@ -255,6 +255,8 @@ The agent supports Ubuntu, Debian, CentOS, RHEL, Rocky, AlmaLinux, Fedora, Arch,
 | **Borg not found** | Run `apt install borgbackup` (server needs borg for prune/restore/download) |
 | **SSL certificate expired** | Run `certbot renew`, check `systemctl status certbot.timer` |
 | **Permission denied errors** | Run `chown -R www-data:www-data /var/www/bbs` |
+| **Download/extract permission denied** | Borg config dir conflict — run `rm -rf /tmp/.config/borg` and ensure `/tmp/bbs-borg-*` dirs exist |
+| **SSH helper out of date** | Re-copy after upgrade: `cp bin/bbs-ssh-helper /usr/local/bin/bbs-ssh-helper` |
 
 ---
 
@@ -265,6 +267,7 @@ cd /var/www/bbs
 git pull
 composer install --no-dev
 chown -R www-data:www-data /var/www/bbs
+cp bin/bbs-ssh-helper /usr/local/bin/bbs-ssh-helper
 ```
 
 Database migrations run automatically on next page load.
