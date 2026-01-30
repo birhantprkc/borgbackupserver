@@ -68,10 +68,20 @@ class RepositoryController extends Controller
         $repo = $this->db->fetchOne("SELECT * FROM repositories WHERE id = ?", [$repoId]);
         $localPath = BorgCommandBuilder::getLocalRepoPath($repo);
 
-        // Create parent directory if needed
-        $parentDir = dirname($localPath);
-        if (!is_dir($parentDir)) {
-            mkdir($parentDir, 0755, true);
+        // Create repo directory via SSH helper (sets correct ownership for borg + sshd)
+        $helperCmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'create-repo-dir', $localPath];
+        exec(implode(' ', array_map('escapeshellarg', $helperCmd)) . ' 2>&1', $helperOutput, $helperRet);
+        if ($helperRet !== 0) {
+            $this->db->insert('server_log', [
+                'agent_id' => $agentId,
+                'level' => 'warning',
+                'message' => "create-repo-dir helper failed: " . implode(' ', $helperOutput),
+            ]);
+            // Fallback: create parent directory manually
+            $parentDir = dirname($localPath);
+            if (!is_dir($parentDir)) {
+                mkdir($parentDir, 0755, true);
+            }
         }
 
         // Build and run borg init using proc_open for clean env handling

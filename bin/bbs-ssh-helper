@@ -4,6 +4,7 @@
 #
 # Usage:
 #   bbs-ssh-helper create-user <username> <home_dir> <public_key>
+#   bbs-ssh-helper create-repo-dir <repo_dir>
 #   bbs-ssh-helper delete-user <username>
 #
 # Install:
@@ -45,7 +46,7 @@ case "$ACTION" in
 
         # Set ownership: user owns, www-data group for server-side borg operations (init, prune, compact)
         chown "$USERNAME":www-data "$HOME_DIR"
-        chmod 770 "$HOME_DIR"
+        chmod 750 "$HOME_DIR"
 
         # Configure SSH authorized_keys with borg serve restriction
         SSH_DIR="$HOME_DIR/.ssh"
@@ -59,6 +60,28 @@ case "$ACTION" in
         chmod 600 "$AUTHORIZED_KEYS"
         chown -R "$USERNAME":"$USERNAME" "$SSH_DIR"
 
+        echo "OK"
+        ;;
+
+    create-repo-dir)
+        REPO_DIR="${2:-}"
+
+        if [ -z "$REPO_DIR" ]; then
+            echo "Usage: bbs-ssh-helper create-repo-dir <repo_dir>"
+            exit 1
+        fi
+
+        # Safety: only create under /var/bbs
+        if [[ ! "$REPO_DIR" =~ ^/var/bbs/ ]]; then
+            echo "Error: repo dir must be under /var/bbs/"
+            exit 1
+        fi
+
+        mkdir -p "$REPO_DIR"
+        # Find the bbs-* user who owns the parent directory
+        PARENT_OWNER=$(stat -c '%U' "$(dirname "$REPO_DIR")")
+        chown "$PARENT_OWNER":www-data "$REPO_DIR"
+        chmod 770 "$REPO_DIR"
         echo "OK"
         ;;
 
