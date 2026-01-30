@@ -9,6 +9,11 @@ class App
     public function __construct()
     {
         Config::load();
+
+        // Set gc_maxlifetime to 30 days so Ubuntu's sessionclean cron
+        // doesn't delete session files before our app-level timeout
+        ini_set('session.gc_maxlifetime', 30 * 86400);
+
         session_set_cookie_params([
             'lifetime' => 30 * 86400,
             'path' => '/',
