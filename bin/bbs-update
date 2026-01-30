@@ -38,6 +38,7 @@ fi
 echo "[3/7] Setting web file permissions..."
 chown -R www-data:www-data "$BBS_DIR"
 chmod 755 "$BBS_DIR/config"
+[ -f "$BBS_DIR/config/.env" ] && chmod 600 "$BBS_DIR/config/.env"
 
 # 4. Update SSH helper
 echo "[4/7] Updating SSH helper..."
