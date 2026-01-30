@@ -135,8 +135,10 @@ if [ -f "$ENV_FILE" ]; then
                     mkdir -p "$spath"
                     echo "  Created $spath"
                 fi
-                chown www-data:www-data "$spath"
-                chmod 750 "$spath"
+                # root-owned with www-data group so sshd StrictModes
+                # doesn't reject user homes underneath this path
+                chown root:www-data "$spath"
+                chmod 775 "$spath"
                 echo "  Fixed $spath"
             done <<< "$STORAGE_PATHS"
         else
