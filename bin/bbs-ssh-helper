@@ -43,9 +43,9 @@ case "$ACTION" in
             echo "Created user: $USERNAME"
         fi
 
-        # Set ownership
-        chown "$USERNAME":"$USERNAME" "$HOME_DIR"
-        chmod 750 "$HOME_DIR"
+        # Set ownership: user owns, www-data group for server-side borg operations (init, prune, compact)
+        chown "$USERNAME":www-data "$HOME_DIR"
+        chmod 770 "$HOME_DIR"
 
         # Configure SSH authorized_keys with borg serve restriction
         SSH_DIR="$HOME_DIR/.ssh"

@@ -74,23 +74,33 @@ class RepositoryController extends Controller
             mkdir($parentDir, 0755, true);
         }
 
-        // Build and run borg init
-        $env = [];
+        // Build and run borg init using proc_open for clean env handling
+        $env = $_ENV;
         if ($encryption !== 'none' && !empty($passphrase)) {
             $env['BORG_PASSPHRASE'] = $passphrase;
         }
         $env['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes';
 
         $initCmd = ['borg', 'init', '--encryption=' . $encryption, $localPath];
-        $envStr = '';
-        foreach ($env as $k => $v) {
-            $envStr .= escapeshellarg($k) . '=' . escapeshellarg($v) . ' ';
-        }
-        $cmdStr = $envStr . implode(' ', array_map('escapeshellarg', $initCmd)) . ' 2>&1';
+
+        $proc = proc_open($initCmd, [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes, null, $env);
 
         $output = [];
-        $retval = 0;
-        exec($cmdStr, $output, $retval);
+        $retval = -1;
+        if (is_resource($proc)) {
+            fclose($pipes[0]);
+            $stdout = stream_get_contents($pipes[1]);
+            $stderr = stream_get_contents($pipes[2]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            $retval = proc_close($proc);
+            if (!empty($stdout)) $output[] = $stdout;
+            if (!empty($stderr)) $output[] = $stderr;
+        }
 
         if ($retval !== 0) {
             $errorMsg = implode("\n", $output);
