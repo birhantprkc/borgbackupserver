@@ -149,12 +149,9 @@ foreach ($serverJobs as $sj) {
     // Run as the repo's unix user to preserve file ownership
     $runAsUser = $sj['ssh_unix_user'] ?? null;
     if ($runAsUser) {
-        // Override borg base/home dirs for the target user
-        $userHome = "/tmp/bbs-borg-{$runAsUser}";
-        if (!is_dir($userHome)) {
-            mkdir($userHome, 0700, true);
-            chown($userHome, $runAsUser);
-        }
+        // Use the unix user's actual home directory for borg config/cache
+        $pwEntry = posix_getpwnam($runAsUser);
+        $userHome = $pwEntry ? $pwEntry['dir'] : "/tmp/bbs-borg-{$runAsUser}";
         $env['BORG_BASE_DIR'] = $userHome;
         $env['HOME'] = $userHome;
 
