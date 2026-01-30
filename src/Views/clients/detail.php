@@ -1755,17 +1755,17 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
 
     <div class="card border-0 shadow-sm">
         <div class="card-body">
-            <p>Run this command on the endpoint to install the BBS agent:</p>
             <?php $appUrl = rtrim(\BBS\Core\Config::get('APP_URL', 'https://' . $serverHost), '/'); ?>
             <?php $installCmd = 'curl -s ' . $appUrl . '/get-agent | sudo bash -s -- --server ' . $appUrl . ' --key ' . $agent['api_key']; ?>
-            <div class="bg-dark text-white p-3 rounded" style="font-family: monospace; font-size: 0.9rem; word-break: break-all;" id="installCmd">
-                <?= htmlspecialchars($installCmd) ?>
-            </div>
-            <div class="mb-3 mt-2">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <p class="mb-0">Run this command on the endpoint to install the BBS agent:</p>
                 <button class="btn btn-sm btn-outline-secondary" type="button"
                         onclick="navigator.clipboard.writeText(document.getElementById('installCmd').textContent.trim()); this.innerHTML='<i class=\'bi bi-check\'></i> Copied'; setTimeout(() => this.innerHTML='<i class=\'bi bi-clipboard\'></i> Copy', 2000)">
                     <i class="bi bi-clipboard"></i> Copy
                 </button>
+            </div>
+            <div class="bg-dark text-white p-3 rounded mb-3" style="font-family: monospace; font-size: 0.9rem; word-break: break-all;" id="installCmd">
+                <?= htmlspecialchars($installCmd) ?>
             </div>
 
             <h6 class="mt-4">API Key</h6>
