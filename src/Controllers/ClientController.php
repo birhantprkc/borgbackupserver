@@ -484,7 +484,8 @@ class ClientController extends Controller
 
         try {
             // Build borg extract command (using local path for server-side extraction)
-            $cmd = ['borg', 'extract', '--destination', $tmpDir, $localPath . '::' . $archive['archive_name']];
+            // Note: --destination is borg 2.x only; for borg 1.x we use cwd via proc_open
+            $cmd = ['borg', 'extract', $localPath . '::' . $archive['archive_name']];
 
             // Add selected paths (strip trailing / for borg)
             foreach ($selectedFiles as $path) {
@@ -509,7 +510,7 @@ class ClientController extends Controller
                 2 => ['pipe', 'w'],
             ];
 
-            $proc = proc_open($cmd, $desc, $pipes, null, $envStrings);
+            $proc = proc_open($cmd, $desc, $pipes, $tmpDir, $envStrings);
             if (!is_resource($proc)) {
                 throw new \RuntimeException('Failed to run borg extract');
             }

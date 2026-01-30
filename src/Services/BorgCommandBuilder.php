@@ -105,13 +105,14 @@ class BorgCommandBuilder
     /**
      * Build a borg extract (restore) command.
      */
-    public static function buildExtractCommand(array $repo, string $archiveName, array $paths = [], ?string $destination = null): array
+    /**
+     * Build a borg extract (restore) command.
+     * Note: borg 1.x has no --destination flag. Callers should set the working
+     * directory (cwd) to the desired extraction target instead.
+     */
+    public static function buildExtractCommand(array $repo, string $archiveName, array $paths = []): array
     {
         $cmd = ['borg', 'extract', '--log-json'];
-
-        if ($destination) {
-            $cmd[] = '--destination=' . $destination;
-        }
 
         $cmd[] = $repo['path'] . '::' . $archiveName;
 

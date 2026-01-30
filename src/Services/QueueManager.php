@@ -232,11 +232,14 @@ class QueueManager
         $destination = $job['restore_destination'] ?? null;
 
         $repo = ['path' => $archive['repo_path'], 'passphrase_encrypted' => $archive['passphrase_encrypted']];
-        $cmd = BorgCommandBuilder::buildExtractCommand($repo, $archive['archive_name'], $paths, $destination);
+        $cmd = BorgCommandBuilder::buildExtractCommand($repo, $archive['archive_name'], $paths);
         $env = BorgCommandBuilder::buildEnv($repo);
 
-        return BorgCommandBuilder::toTaskPayload('restore', $cmd, $env, [
-            'job_id' => $job['id'],
-        ]);
+        $extra = ['job_id' => $job['id']];
+        if ($destination) {
+            $extra['cwd'] = $destination;
+        }
+
+        return BorgCommandBuilder::toTaskPayload('restore', $cmd, $env, $extra);
     }
 }

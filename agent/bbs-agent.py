@@ -448,6 +448,7 @@ def execute_task(config, task):
     archive_name = task.get("archive_name", "")
     directories = task.get("directories", "")
     plugins = task.get("plugins", [])
+    cwd = task.get("cwd")  # Working directory for extract (restore) tasks
 
     logger.info(f"Executing {task_type} job #{job_id}: {' '.join(command)}")
 
@@ -504,12 +505,17 @@ def execute_task(config, task):
     last_progress_time = time.time()
     catalog_entries = []  # Collect file entries for catalog
 
+    # For restore tasks, create and use the target directory
+    if cwd:
+        os.makedirs(cwd, exist_ok=True)
+
     try:
         proc = subprocess.Popen(
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=env,
+            cwd=cwd,
         )
 
         # Read stderr for JSON log output (borg writes progress to stderr)
