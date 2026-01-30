@@ -143,17 +143,29 @@ foreach ($serverJobs as $sj) {
         $cmd = ['borg', 'compact', $localPath];
     }
 
-    // Log the borg command
-    $cmdStr = implode(' ', array_map('escapeshellarg', $cmd));
+    // Build env (server-side, no BORG_RSH needed)
+    $env = \BBS\Services\BorgCommandBuilder::buildEnv($localRepo, false);
+
+    // Run as the repo's unix user to preserve file ownership
+    $runAsUser = $sj['ssh_unix_user'] ?? null;
+    if ($runAsUser) {
+        // Prepend env vars into the command so they survive sudo's env reset
+        $envPrefix = [];
+        foreach ($env as $k => $v) {
+            $envPrefix[] = $k . '=' . $v;
+        }
+        array_unshift($cmd, 'sudo', '-u', $runAsUser, 'env', ...$envPrefix);
+    }
+
+    // Log the borg command (without env vars that may contain passphrases)
+    $logCmd = array_filter($cmd, fn($part) => !str_starts_with($part, 'BORG_PASSPHRASE='));
+    $cmdStr = implode(' ', array_map('escapeshellarg', array_values($logCmd)));
     $db->insert('server_log', [
         'agent_id' => $sj['agent_id'],
         'backup_job_id' => $sj['id'],
         'level' => 'info',
         'message' => ucfirst($sj['task_type']) . " command: {$cmdStr}",
     ]);
-
-    // Build env (server-side, no BORG_RSH needed)
-    $env = \BBS\Services\BorgCommandBuilder::buildEnv($localRepo, false);
 
     // Execute
     $envStrings = [];
@@ -205,6 +217,9 @@ foreach ($serverJobs as $sj) {
     // After successful prune, sync archives table with actual repo contents
     if ($result === 'completed' && $sj['task_type'] === 'prune') {
         $listCmd = \BBS\Services\BorgCommandBuilder::buildListCommand($localRepo);
+        if ($runAsUser) {
+            array_unshift($listCmd, 'sudo', '-u', $runAsUser);
+        }
         $listProc = proc_open($listCmd, $desc, $listPipes, null, array_merge($_SERVER, $envStrings));
 
         if (is_resource($listProc)) {

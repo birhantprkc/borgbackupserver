@@ -210,10 +210,12 @@ class QueueManager
                    bp.prune_minutes, bp.prune_hours, bp.prune_days,
                    bp.prune_weeks, bp.prune_months, bp.prune_years,
                    r.path as repo_path, r.encryption, r.passphrase_encrypted,
-                   r.name as repo_name, r.storage_location_id, r.agent_id as repo_agent_id
+                   r.name as repo_name, r.storage_location_id, r.agent_id as repo_agent_id,
+                   a.ssh_unix_user
             FROM backup_jobs bj
             LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
             LEFT JOIN repositories r ON r.id = bj.repository_id
+            LEFT JOIN agents a ON a.id = bj.agent_id
             WHERE bj.status = 'sent'
               AND bj.task_type IN ('prune', 'compact')
             ORDER BY bj.queued_at ASC
