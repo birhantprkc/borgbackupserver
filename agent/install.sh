@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Borg Backup Server Agent Installer
-# Usage: curl -s https://your-server/agent/install.sh | sudo bash -s -- --server https://your-server --key API_KEY
+# Usage: curl -s https://your-server/api/agent/download?file=install.sh | sudo bash -s -- --server https://your-server --key API_KEY
 #
 set -e
 
@@ -103,9 +103,9 @@ install_agent() {
 
     # Download agent script from server
     if command -v curl &>/dev/null; then
-        curl -s -o "$INSTALL_DIR/bbs-agent.py" "$SERVER_URL/agent/bbs-agent.py"
+        curl -s -o "$INSTALL_DIR/bbs-agent.py" "$SERVER_URL/api/agent/download?file=bbs-agent.py"
     elif command -v wget &>/dev/null; then
-        wget -q -O "$INSTALL_DIR/bbs-agent.py" "$SERVER_URL/agent/bbs-agent.py"
+        wget -q -O "$INSTALL_DIR/bbs-agent.py" "$SERVER_URL/api/agent/download?file=bbs-agent.py"
     else
         echo "Error: curl or wget required"
         exit 1
@@ -174,7 +174,7 @@ install_service() {
         echo "Installing launchd service..."
         if command -v curl &>/dev/null; then
             curl -s -o /Library/LaunchDaemons/com.borgbackupserver.agent.plist \
-                "$SERVER_URL/agent/com.borgbackupserver.agent.plist"
+                "$SERVER_URL/api/agent/download?file=com.borgbackupserver.agent.plist"
         fi
         launchctl load /Library/LaunchDaemons/com.borgbackupserver.agent.plist
         echo "Service installed and started (launchd)"

@@ -53,7 +53,7 @@ See [docs/INSTALL.md](docs/INSTALL.md) for full server setup (packages, web serv
 From the BBS web UI, create a client, then run the install command on your endpoint:
 
 ```bash
-curl -s https://your-server/agent/install.sh | sudo bash -s -- \
+curl -s "https://your-server/api/agent/download?file=install.sh" | sudo bash -s -- \
     --server https://your-server --key YOUR_API_KEY
 ```
 

@@ -53,7 +53,7 @@ The easiest method. From the BBS web UI:
 3. Run it on the endpoint:
 
 ```bash
-curl -s https://backups.example.com/agent/install.sh | sudo bash -s -- \
+curl -s "https://backups.example.com/api/agent/download?file=install.sh" | sudo bash -s -- \
     --server https://backups.example.com \
     --key YOUR_API_KEY_HERE
 ```
@@ -278,7 +278,7 @@ In the BBS web UI (**Clients > Add Client**):
 #### Step 2: Agent Installation on Remote Server
 
 ```bash
-curl -s https://bbs-server/agent/install.sh | sudo bash -s -- \
+curl -s "https://bbs-server/api/agent/download?file=install.sh" | sudo bash -s -- \
     --server https://bbs-server --key <API_KEY>
 ```
 

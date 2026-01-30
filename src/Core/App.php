@@ -123,6 +123,7 @@ class App
         $this->router->map('POST', '/api/agent/info', 'Api\\AgentApiController@info');
         $this->router->map('POST', '/api/agent/catalog', 'Api\\AgentApiController@catalog');
         $this->router->map('GET', '/api/agent/ssh-key', 'Api\\AgentApiController@sshKey');
+        $this->router->map('GET', '/api/agent/download', 'Api\\AgentApiController@downloadFile');
 
         // Catalog & Restore (client-facing)
         $this->router->map('GET', '/clients/[i:id]/catalog/[i:archive_id]', 'ClientController@catalog');

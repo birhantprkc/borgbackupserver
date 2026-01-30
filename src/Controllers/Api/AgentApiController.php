@@ -413,6 +413,37 @@ class AgentApiController extends Controller
     }
 
     /**
+     * Serve agent files (install.sh, bbs-agent.py, plist) from outside public/.
+     */
+    public function downloadFile(): void
+    {
+        $allowed = [
+            'install.sh' => 'agent/install.sh',
+            'bbs-agent.py' => 'agent/bbs-agent.py',
+            'com.borgbackupserver.agent.plist' => 'agent/com.borgbackupserver.agent.plist',
+        ];
+
+        $filename = $_GET['file'] ?? '';
+        if (!isset($allowed[$filename])) {
+            http_response_code(404);
+            echo "Not found";
+            exit;
+        }
+
+        $path = dirname(__DIR__, 3) . '/' . $allowed[$filename];
+        if (!file_exists($path)) {
+            http_response_code(404);
+            echo "Not found";
+            exit;
+        }
+
+        header('Content-Type: text/plain; charset=utf-8');
+        header('Content-Disposition: inline; filename="' . $filename . '"');
+        readfile($path);
+        exit;
+    }
+
+    /**
      * Parse JSON request body.
      */
     private function getJsonInput(): array
