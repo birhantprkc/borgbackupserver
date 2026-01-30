@@ -191,7 +191,23 @@ foreach ($serverJobs as $sj) {
     echo date('Y-m-d H:i:s') . " Server-side {$sj['task_type']} job #{$sj['id']}: {$result}\n";
 }
 
-// Step 5: Check storage locations for low disk space
+// Step 5: Update repository sizes from actual disk usage (every 5 minutes)
+if ((int) date('i') % 5 === 0) {
+    $repos = $db->fetchAll("SELECT id, path, storage_location_id, agent_id, name FROM repositories");
+    foreach ($repos as $repo) {
+        $localPath = \BBS\Services\BorgCommandBuilder::getLocalRepoPath($repo);
+        if (!empty($localPath) && is_dir($localPath)) {
+            $output = [];
+            exec('du -sb ' . escapeshellarg($localPath) . ' 2>/dev/null', $output);
+            if (!empty($output[0])) {
+                $sizeBytes = (int) explode("\t", $output[0])[0];
+                $db->update('repositories', ['size_bytes' => $sizeBytes], 'id = ?', [$repo['id']]);
+            }
+        }
+    }
+}
+
+// Step 6: Check storage locations for low disk space
 $notificationService = $notificationService ?? new NotificationService();
 $thresholdSetting = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_alert_threshold'");
 $storageThreshold = (int) ($thresholdSetting['value'] ?? 90);
