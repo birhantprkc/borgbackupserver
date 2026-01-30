@@ -9,7 +9,6 @@ class App
     public function __construct()
     {
         Config::load();
-        date_default_timezone_set('America/New_York');
         session_set_cookie_params([
             'lifetime' => 0,
             'path' => '/',

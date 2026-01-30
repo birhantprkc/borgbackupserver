@@ -17,6 +17,10 @@ class Config
         $dotenv = Dotenv::createImmutable(dirname(__DIR__, 2) . '/config');
         $dotenv->load();
         self::$loaded = true;
+
+        // Set timezone consistently for both web and CLI (scheduler)
+        $tz = $_ENV['APP_TIMEZONE'] ?? 'America/New_York';
+        date_default_timezone_set($tz);
     }
 
     public static function get(string $key, mixed $default = null): mixed
