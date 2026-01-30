@@ -256,7 +256,7 @@ foreach ($serverJobs as $sj) {
                 $removed = 0;
                 foreach ($dbArchives as $dbA) {
                     if (!in_array($dbA['archive_name'], $borgArchives, true)) {
-                        $db->execute("DELETE FROM archives WHERE id = ?", [$dbA['id']]);
+                        $db->delete('archives', 'id = ?', [$dbA['id']]);
                         $removed++;
                     }
                 }
