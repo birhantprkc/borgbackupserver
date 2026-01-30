@@ -249,11 +249,9 @@
                 <?php endif; ?>
             </div>
         </div>
-    </div>
 
-    <!-- Upcoming Backups -->
-    <div class="col-lg-6">
-        <div class="card border-0 shadow-sm mb-4">
+        <!-- Upcoming Backups -->
+        <div class="card border-0 shadow-sm mt-4">
             <div class="card-header bg-white fw-semibold">
                 <i class="bi bi-calendar-event me-1"></i> Upcoming Backups
             </div>
@@ -305,9 +303,7 @@
             </div>
         </div>
     </div>
-</div>
 
-<div class="row g-4">
     <!-- Recently Completed -->
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm">
