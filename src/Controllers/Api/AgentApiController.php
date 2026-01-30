@@ -140,6 +140,19 @@ class AgentApiController extends Controller
 
         if (empty($job['started_at'])) {
             $data['started_at'] = date('Y-m-d H:i:s');
+
+            // Log that the agent started working on this job
+            $planName = '';
+            if ($job['backup_plan_id']) {
+                $plan = $this->db->fetchOne("SELECT name FROM backup_plans WHERE id = ?", [$job['backup_plan_id']]);
+                $planName = $plan['name'] ?? '';
+            }
+            $this->db->insert('server_log', [
+                'agent_id' => $agent['id'],
+                'backup_job_id' => $jobId,
+                'level' => 'info',
+                'message' => "Agent started {$job['task_type']} job #{$jobId}" . ($planName ? " for plan \"{$planName}\"" : ''),
+            ]);
         }
 
         $this->db->update('backup_jobs', $data, 'id = ?', [$jobId]);
@@ -243,6 +256,16 @@ class AgentApiController extends Controller
                 'deduplicated_size' => (int) ($input['deduplicated_size'] ?? 0),
             ]);
 
+            // Log archive creation
+            $origSize = $this->formatBytesLog((int)($input['original_size'] ?? 0));
+            $dedupSize = $this->formatBytesLog((int)($input['deduplicated_size'] ?? 0));
+            $this->db->insert('server_log', [
+                'agent_id' => $agent['id'],
+                'backup_job_id' => $jobId,
+                'level' => 'info',
+                'message' => "Archive created: \"{$input['archive_name']}\" — {$origSize} original, {$dedupSize} deduplicated",
+            ]);
+
             // Update repo stats
             $this->db->query("
                 UPDATE repositories SET
@@ -250,6 +273,13 @@ class AgentApiController extends Controller
                     size_bytes = COALESCE((SELECT SUM(deduplicated_size) FROM archives WHERE repository_id = ?), 0)
                 WHERE id = ?
             ", [$job['repository_id'], $job['repository_id'], $job['repository_id']]);
+
+            $this->db->insert('server_log', [
+                'agent_id' => $agent['id'],
+                'backup_job_id' => $jobId,
+                'level' => 'info',
+                'message' => "Repository stats updated for job #{$jobId}",
+            ]);
         }
 
         // Return archive_id so agent can send catalog
@@ -342,6 +372,15 @@ class AgentApiController extends Controller
                  . implode(', ', $catalogPlaceholders);
             $this->db->query($sql, $catalogValues);
         }
+
+        // Log catalog receipt
+        $archive = $this->db->fetchOne("SELECT backup_job_id FROM archives WHERE id = ?", [$archiveId]);
+        $this->db->insert('server_log', [
+            'agent_id' => $agent['id'],
+            'backup_job_id' => $archive['backup_job_id'] ?? null,
+            'level' => 'info',
+            'message' => "File catalog received: " . count($catalogPlaceholders) . " entries indexed for archive #{$archiveId}",
+        ]);
 
         $this->json(['status' => 'ok', 'inserted' => count($catalogPlaceholders)]);
     }
@@ -451,5 +490,14 @@ class AgentApiController extends Controller
         $raw = file_get_contents('php://input');
         $data = json_decode($raw, true);
         return is_array($data) ? $data : [];
+    }
+
+    private function formatBytesLog(int $bytes): string
+    {
+        if ($bytes == 0) return '0 B';
+        $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        $i = 0;
+        while ($bytes >= 1024 && $i < count($units) - 1) { $bytes /= 1024; $i++; }
+        return round($bytes, $i > 0 ? 1 : 0) . ' ' . $units[$i];
     }
 }

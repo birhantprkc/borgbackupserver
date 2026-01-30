@@ -160,8 +160,9 @@ class BackupPlanController extends Controller
 
         $this->db->insert('server_log', [
             'agent_id' => $plan['agent_id'],
+            'backup_job_id' => $jobId,
             'level' => 'info',
-            'message' => "Manual backup triggered for plan \"{$plan['name']}\"",
+            'message' => "Manual backup triggered for plan \"{$plan['name']}\" (job #{$jobId})",
         ]);
 
         $this->redirect("/queue/{$jobId}");
