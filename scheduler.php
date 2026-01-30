@@ -149,6 +149,15 @@ foreach ($serverJobs as $sj) {
     // Run as the repo's unix user to preserve file ownership
     $runAsUser = $sj['ssh_unix_user'] ?? null;
     if ($runAsUser) {
+        // Override borg base/home dirs for the target user
+        $userHome = "/tmp/bbs-borg-{$runAsUser}";
+        if (!is_dir($userHome)) {
+            mkdir($userHome, 0700, true);
+            chown($userHome, $runAsUser);
+        }
+        $env['BORG_BASE_DIR'] = $userHome;
+        $env['HOME'] = $userHome;
+
         // Prepend env vars into the command so they survive sudo's env reset
         $envPrefix = [];
         foreach ($env as $k => $v) {
