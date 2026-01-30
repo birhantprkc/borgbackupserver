@@ -100,7 +100,7 @@ The helper script only manages users with the `bbs-` prefix and validates all in
 ### Option A: Apache
 
 ```bash
-apt install -y libapache2-mod-php8.3
+apt install -y libapache2-mod-php
 a2enmod rewrite
 ```
 
