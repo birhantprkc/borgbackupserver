@@ -201,6 +201,54 @@ foreach ($serverJobs as $sj) {
     ]);
 
     echo date('Y-m-d H:i:s') . " Server-side {$sj['task_type']} job #{$sj['id']}: {$result}\n";
+
+    // After successful prune, sync archives table with actual repo contents
+    if ($result === 'completed' && $sj['task_type'] === 'prune') {
+        $listCmd = \BBS\Services\BorgCommandBuilder::buildListCommand($localRepo);
+        $listProc = proc_open($listCmd, $desc, $listPipes, null, array_merge($_SERVER, $envStrings));
+
+        if (is_resource($listProc)) {
+            fclose($listPipes[0]);
+            $listOut = stream_get_contents($listPipes[1]);
+            fclose($listPipes[1]);
+            fclose($listPipes[2]);
+            $listExit = proc_close($listProc);
+
+            if ($listExit === 0 && $listOut) {
+                $listData = json_decode($listOut, true);
+                $borgArchives = [];
+                if (!empty($listData['archives'])) {
+                    foreach ($listData['archives'] as $a) {
+                        $borgArchives[] = $a['name'];
+                    }
+                }
+
+                // Get DB archives for this repo
+                $repoId = $sj['repository_id'];
+                $dbArchives = $db->fetchAll(
+                    "SELECT id, archive_name FROM archives WHERE repository_id = ?", [$repoId]
+                );
+
+                $removed = 0;
+                foreach ($dbArchives as $dbA) {
+                    if (!in_array($dbA['archive_name'], $borgArchives, true)) {
+                        $db->execute("DELETE FROM archives WHERE id = ?", [$dbA['id']]);
+                        $removed++;
+                    }
+                }
+
+                if ($removed > 0) {
+                    $db->insert('server_log', [
+                        'agent_id' => $sj['agent_id'],
+                        'backup_job_id' => $sj['id'],
+                        'level' => 'info',
+                        'message' => "Pruned {$removed} archive(s) from database — " . count($borgArchives) . " remaining in repo",
+                    ]);
+                    echo date('Y-m-d H:i:s') . " Removed {$removed} pruned archive(s) from DB for repo #{$repoId}\n";
+                }
+            }
+        }
+    }
 }
 
 // Step 5: Update repository sizes from actual disk usage (every 5 minutes)
