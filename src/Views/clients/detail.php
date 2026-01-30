@@ -1759,7 +1759,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
             <?php $appUrl = rtrim(\BBS\Core\Config::get('APP_URL', 'https://' . $serverHost), '/'); ?>
             <?php $installCmd = 'curl -s ' . $appUrl . '/get-agent | sudo bash -s -- --server ' . $appUrl . ' --key ' . $agent['api_key']; ?>
             <div class="position-relative">
-                <div class="bg-dark text-white p-3 pe-5 rounded mb-3" style="font-family: monospace; font-size: 0.9rem; word-break: break-all; margin-right: 0;" id="installCmd">
+                <div class="bg-dark text-white p-3 rounded mb-3" style="font-family: monospace; font-size: 0.9rem; word-break: break-all; padding-right: 6rem;" id="installCmd">
                     <?= htmlspecialchars($installCmd) ?>
                 </div>
                 <button class="btn btn-sm btn-outline-light position-absolute" style="top: 8px; right: 8px;" type="button"
