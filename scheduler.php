@@ -143,6 +143,15 @@ foreach ($serverJobs as $sj) {
         $cmd = ['borg', 'compact', $localPath];
     }
 
+    // Log the borg command
+    $cmdStr = implode(' ', array_map('escapeshellarg', $cmd));
+    $db->insert('server_log', [
+        'agent_id' => $sj['agent_id'],
+        'backup_job_id' => $sj['id'],
+        'level' => 'info',
+        'message' => ucfirst($sj['task_type']) . " command: {$cmdStr}",
+    ]);
+
     // Build env (server-side, no BORG_RSH needed)
     $env = \BBS\Services\BorgCommandBuilder::buildEnv($localRepo, false);
 

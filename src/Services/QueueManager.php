@@ -97,6 +97,15 @@ class QueueManager
                 }
 
                 $taskPayload = BorgCommandBuilder::toTaskPayload('backup', $cmd, $env, $extra);
+
+                // Log the borg command being sent to the agent
+                $cmdStr = implode(' ', array_map('escapeshellarg', $cmd));
+                $this->db->insert('server_log', [
+                    'agent_id' => $job['agent_id'],
+                    'backup_job_id' => $job['id'],
+                    'level' => 'info',
+                    'message' => "Backup command: {$cmdStr}",
+                ]);
             } elseif ($job['task_type'] === 'prune' || $job['task_type'] === 'compact') {
                 // Prune/compact run server-side — mark as sent, scheduler will execute them
                 $taskPayload = ['task' => $job['task_type'], 'server_side' => true, 'job_id' => $job['id']];
