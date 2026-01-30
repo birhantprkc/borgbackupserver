@@ -149,6 +149,19 @@ class BackupPlanController extends Controller
             $this->redirect('/clients');
         }
 
+        // Check if repo already has an active job (borg can't run concurrent ops)
+        $repoBusy = $this->db->fetchOne("
+            SELECT id FROM backup_jobs
+            WHERE repository_id = ?
+              AND status IN ('queued', 'sent', 'running')
+        ", [$plan['repository_id']]);
+
+        if ($repoBusy) {
+            $this->flash('warning', 'A job is already active for this repository. Wait for it to complete before triggering another backup.');
+            $this->redirect("/clients/{$plan['agent_id']}?tab=backups");
+            return;
+        }
+
         // Create a queued backup job
         $jobId = $this->db->insert('backup_jobs', [
             'backup_plan_id' => $id,
