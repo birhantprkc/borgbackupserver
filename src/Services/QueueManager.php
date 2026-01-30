@@ -69,6 +69,21 @@ class QueueManager
 
             // Skip if repo already has an active job (borg repo-level lock)
             if ($job['repository_id'] && in_array($job['repository_id'], $busyRepoIds)) {
+                // Backup jobs get skipped entirely — no point running the same backup twice
+                if ($job['task_type'] === 'backup') {
+                    $this->db->update('backup_jobs', [
+                        'status' => 'failed',
+                        'completed_at' => date('Y-m-d H:i:s'),
+                        'error_log' => 'Skipped — another job is already active for this repository',
+                    ], 'id = ?', [$job['id']]);
+                    $this->db->insert('server_log', [
+                        'agent_id' => $job['agent_id'],
+                        'backup_job_id' => $job['id'],
+                        'level' => 'info',
+                        'message' => "Backup job #{$job['id']} skipped — repository already has an active job",
+                    ]);
+                }
+                // Prune/compact/restore wait in queue for their turn
                 continue;
             }
             // Build the task payload
