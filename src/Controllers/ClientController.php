@@ -483,25 +483,37 @@ class ClientController extends Controller
         mkdir($tmpDir, 0700, true);
 
         try {
-            // Build borg extract command (using local path for server-side extraction)
-            // Note: --destination is borg 2.x only; for borg 1.x we use cwd via proc_open
-            $cmd = ['borg', 'extract', $localPath . '::' . $archive['archive_name']];
-
-            // Add selected paths (strip trailing / for borg)
+            // Build borg extract args: repo::archive + selected paths
+            $borgArgs = [$localPath . '::' . $archive['archive_name']];
             foreach ($selectedFiles as $path) {
                 $path = ltrim($path, '/');
                 if ($path !== '') {
-                    $cmd[] = rtrim($path, '/');
+                    $borgArgs[] = rtrim($path, '/');
                 }
             }
 
-            // Build env string for proc_open
-            $envStrings = [];
-            foreach ($_SERVER as $k => $v) {
-                if (is_string($v)) $envStrings[$k] = $v;
-            }
-            foreach ($env as $k => $v) {
-                $envStrings[$k] = $v;
+            // Use SSH helper to run borg extract as the repo-owning user
+            // (www-data can't read repo files owned by the bbs-* user)
+            $sshUser = $agent['ssh_unix_user'] ?? '';
+            if (!empty($sshUser)) {
+                $cmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-extract', $sshUser, $tmpDir];
+                $cmd = array_merge($cmd, $borgArgs);
+
+                // Pass BORG_PASSPHRASE via environment
+                $envStrings = [];
+                foreach ($env as $k => $v) {
+                    $envStrings[$k] = $v;
+                }
+            } else {
+                // Fallback: run directly as www-data (non-SSH repos)
+                $cmd = array_merge(['borg', 'extract'], $borgArgs);
+                $envStrings = [];
+                foreach ($_SERVER as $k => $v) {
+                    if (is_string($v)) $envStrings[$k] = $v;
+                }
+                foreach ($env as $k => $v) {
+                    $envStrings[$k] = $v;
+                }
             }
 
             $desc = [

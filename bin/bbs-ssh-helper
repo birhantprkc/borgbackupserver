@@ -85,6 +85,52 @@ case "$ACTION" in
         echo "OK"
         ;;
 
+    borg-extract)
+        # Run borg extract as the repo-owning user
+        # Usage: bbs-ssh-helper borg-extract <username> <tmpdir> <repo::archive> [paths...]
+        USERNAME="${2:-}"
+        TMPDIR="${3:-}"
+        shift 3
+
+        if [ -z "$USERNAME" ] || [ -z "$TMPDIR" ] || [ $# -eq 0 ]; then
+            echo "Usage: bbs-ssh-helper borg-extract <username> <tmpdir> <repo::archive> [paths...]"
+            exit 1
+        fi
+
+        if [[ ! "$USERNAME" =~ ^bbs-[a-z0-9_-]+$ ]]; then
+            echo "Error: username must match bbs-[a-z0-9_-]+"
+            exit 1
+        fi
+
+        # Safety: tmpdir must be under /tmp
+        if [[ ! "$TMPDIR" =~ ^/tmp/ ]]; then
+            echo "Error: tmpdir must be under /tmp/"
+            exit 1
+        fi
+
+        # Ensure tmpdir exists and is writable by the user
+        mkdir -p "$TMPDIR"
+        chown "$USERNAME":www-data "$TMPDIR"
+        chmod 770 "$TMPDIR"
+
+        # Run borg extract as the repo-owning user
+        # Pass BORG env vars from the caller's environment
+        sudo -u "$USERNAME" \
+            BORG_PASSPHRASE="${BORG_PASSPHRASE:-}" \
+            BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK="${BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK:-yes}" \
+            BORG_BASE_DIR=/tmp \
+            HOME=/tmp \
+            borg extract --list "$@" 2>&1
+
+        EXIT_CODE=$?
+
+        # Make extracted files readable by www-data for tar/streaming
+        chown -R "$USERNAME":www-data "$TMPDIR"
+        chmod -R g+rX "$TMPDIR"
+
+        exit $EXIT_CODE
+        ;;
+
     fix-repo-perms)
         REPO_DIR="${2:-}"
         USERNAME="${3:-}"
