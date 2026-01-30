@@ -33,20 +33,24 @@ A self-hosted web application for centrally managing [BorgBackup](https://borgba
 
 ### Server
 
-```bash
-git clone https://github.com/marcpope/borgbackupserver.git
-cd borgbackupserver
-composer install
+Start with a fresh **Ubuntu 22.04+** server with OpenSSH server installed. The server needs enough disk space for the MySQL database plus a directory or partition dedicated to backup repository data (this can be a separate mount like `/mnt/backups`).
 
-# Install the SSH helper for agent backups
-sudo cp bin/bbs-ssh-helper /usr/local/bin/bbs-ssh-helper
-sudo chmod 755 /usr/local/bin/bbs-ssh-helper
-sudo bash -c 'echo "www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper" > /etc/sudoers.d/bbs-ssh-helper'
+Run the automated installer:
+
+```bash
+curl -sO https://raw.githubusercontent.com/marcpope/borgbackupserver/main/bin/bbs-install
+sudo bash bbs-install --hostname backups.example.com
 ```
 
-Configure your web server (Apache or Nginx) to point at the `public/` directory, then open the site in your browser. The **setup wizard** will walk you through database, admin account, and storage configuration.
+For **LAN-only installations** without SSL (internal IP, `.local` hostname, or no public DNS):
 
-See [docs/INSTALL.md](docs/INSTALL.md) for full server setup (packages, web server, SSL, cron, wizard walkthrough).
+```bash
+sudo bash bbs-install --hostname 192.168.1.100 --no-ssl
+```
+
+The installer handles everything — packages, Apache, MySQL, SSL certificate, and cron. When it finishes, open the URL it prints and the **setup wizard** will walk you through database connection, admin account, and storage configuration.
+
+See [docs/INSTALL.md](docs/INSTALL.md) for manual setup or full details.
 
 ### Agent
 
