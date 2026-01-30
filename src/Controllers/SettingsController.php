@@ -63,7 +63,7 @@ class SettingsController extends Controller
             $host = trim($_POST['server_host']);
             $newAppUrl = "{$protocol}://{$host}";
             $envPath = dirname(__DIR__, 2) . '/config/.env';
-            if (file_exists($envPath)) {
+            if (file_exists($envPath) && is_writable($envPath)) {
                 $env = file_get_contents($envPath);
                 $env = preg_replace('/^APP_URL=.*$/m', 'APP_URL=' . $newAppUrl, $env);
                 file_put_contents($envPath, $env);
