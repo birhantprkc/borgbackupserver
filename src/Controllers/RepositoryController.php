@@ -80,6 +80,8 @@ class RepositoryController extends Controller
             $env['BORG_PASSPHRASE'] = $passphrase;
         }
         $env['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes';
+        $env['BORG_BASE_DIR'] = '/tmp';
+        $env['HOME'] = '/tmp';
 
         $initCmd = ['borg', 'init', '--encryption=' . $encryption, $localPath];
 
