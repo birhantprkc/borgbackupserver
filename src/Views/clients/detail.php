@@ -1767,15 +1767,6 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
             <div class="bg-dark text-white p-3 rounded mb-3" style="font-family: monospace; font-size: 0.9rem; word-break: break-all;" id="installCmd">
                 <?= htmlspecialchars($installCmd) ?>
             </div>
-
-            <h6 class="mt-4">API Key</h6>
-            <div class="input-group mb-3" style="max-width: 600px;">
-                <input type="text" class="form-control font-monospace" value="<?= htmlspecialchars($agent['api_key']) ?>" readonly id="apiKeyInput">
-                <button class="btn btn-outline-secondary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('apiKeyInput').value)">
-                    <i class="bi bi-clipboard"></i> Copy
-                </button>
-            </div>
-            <p class="text-muted small">This key authenticates the agent with this server. Keep it secure.</p>
         </div>
     </div>
 
