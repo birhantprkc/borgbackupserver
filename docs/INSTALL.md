@@ -263,14 +263,21 @@ The agent supports Ubuntu, Debian, CentOS, RHEL, Rocky, AlmaLinux, Fedora, Arch,
 ## Upgrading
 
 ```bash
+sudo /var/www/bbs/bin/bbs-update
+```
+
+This pulls the latest code, installs dependencies, fixes permissions, updates the SSH helper, and runs database migrations.
+
+If you prefer to update manually:
+
+```bash
 cd /var/www/bbs
 git pull
 composer install --no-dev
 chown -R www-data:www-data /var/www/bbs
 cp bin/bbs-ssh-helper /usr/local/bin/bbs-ssh-helper
+sudo -u www-data php migrate.php
 ```
-
-Database migrations run automatically on next page load.
 
 ---
 

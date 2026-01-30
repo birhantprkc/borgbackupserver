@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+#
+# BBS Update Script — pulls latest code and updates all components.
+#
+# Usage:
+#   sudo /var/www/bbs/bin/bbs-update
+#
+set -euo pipefail
+
+BBS_DIR="${1:-/var/www/bbs}"
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "Error: must run as root (use sudo)"
+    exit 1
+fi
+
+if [ ! -d "$BBS_DIR" ]; then
+    echo "Error: BBS directory not found at $BBS_DIR"
+    exit 1
+fi
+
+echo "=== BBS Update ==="
+echo ""
+
+# 1. Pull latest code
+echo "[1/5] Pulling latest code..."
+git -C "$BBS_DIR" pull
+
+# 2. Install/update PHP dependencies
+echo "[2/5] Installing PHP dependencies..."
+if command -v composer &>/dev/null; then
+    composer install --no-dev --working-dir="$BBS_DIR" --quiet
+else
+    echo "  Warning: composer not found, skipping"
+fi
+
+# 3. Fix file ownership
+echo "[3/5] Setting file permissions..."
+chown -R www-data:www-data "$BBS_DIR"
+
+# 4. Update SSH helper
+echo "[4/5] Updating SSH helper..."
+cp "$BBS_DIR/bin/bbs-ssh-helper" /usr/local/bin/bbs-ssh-helper
+chmod 755 /usr/local/bin/bbs-ssh-helper
+
+# 5. Run database migrations
+echo "[5/5] Running database migrations..."
+sudo -u www-data php "$BBS_DIR/migrate.php" 2>&1 || echo "  Warning: migration runner returned an error (migrations may run on next page load)"
+
+echo ""
+echo "=== Update complete ==="
