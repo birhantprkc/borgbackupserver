@@ -21,12 +21,15 @@ $db = \BBS\Core\Database::getInstance();
 $pollInterval = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'agent_poll_interval'");
 $threshold = ((int)($pollInterval['value'] ?? 30)) * 3;
 
+$now = date('Y-m-d H:i:s');
+$cutoff = date('Y-m-d H:i:s', time() - $threshold);
+
 $stale = $db->query(
     "UPDATE agents SET status = 'offline'
      WHERE status = 'online'
        AND last_heartbeat IS NOT NULL
-       AND last_heartbeat < DATE_SUB(NOW(), INTERVAL ? SECOND)",
-    [$threshold]
+       AND last_heartbeat < ?",
+    [$cutoff]
 );
 
 if ($stale->rowCount() > 0) {
@@ -35,8 +38,8 @@ if ($stale->rowCount() > 0) {
     // Notify for each agent that just went offline
     $notificationService = new NotificationService();
     $offlineAgents = $db->fetchAll(
-        "SELECT id, name FROM agents WHERE status = 'offline' AND last_heartbeat IS NOT NULL AND last_heartbeat < DATE_SUB(NOW(), INTERVAL ? SECOND)",
-        [$threshold]
+        "SELECT id, name FROM agents WHERE status = 'offline' AND last_heartbeat IS NOT NULL AND last_heartbeat < ?",
+        [$cutoff]
     );
     foreach ($offlineAgents as $offAgent) {
         $notificationService->notify('agent_offline', $offAgent['id'], null, "Client \"{$offAgent['name']}\" is offline (no heartbeat in {$threshold}s)", 'critical');
