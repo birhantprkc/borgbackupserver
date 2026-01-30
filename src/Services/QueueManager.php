@@ -44,10 +44,12 @@ class QueueManager
         );
         $busyRepoIds = array_column($busyRepos, 'repository_id');
 
-        // Get backup plans that already have an active job (skip duplicates of the same plan)
+        // Get backup plans that already have a sent/running job (skip duplicates of the same plan)
+        // Note: only check sent/running, not queued — we iterate queued jobs below and
+        // track newly promoted plans to catch duplicates within the same batch
         $busyPlans = $this->db->fetchAll(
             "SELECT DISTINCT backup_plan_id FROM backup_jobs
-             WHERE status IN ('queued', 'sent', 'running')
+             WHERE status IN ('sent', 'running')
                AND backup_plan_id IS NOT NULL
                AND task_type = 'backup'"
         );
@@ -175,9 +177,12 @@ class QueueManager
                 $promoted[] = $job;
                 $promotedCount++;
 
-                // Mark this repo as busy for remaining iterations
+                // Mark this repo and plan as busy for remaining iterations
                 if ($job['repository_id']) {
                     $busyRepoIds[] = $job['repository_id'];
+                }
+                if ($job['backup_plan_id'] && $job['task_type'] === 'backup') {
+                    $busyPlanIds[] = $job['backup_plan_id'];
                 }
             }
         }
