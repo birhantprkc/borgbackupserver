@@ -128,9 +128,10 @@ foreach ($serverJobs as $sj) {
     ];
 
     // Mark as running
+    $startedAt = date('Y-m-d H:i:s');
     $db->update('backup_jobs', [
         'status' => 'running',
-        'started_at' => date('Y-m-d H:i:s'),
+        'started_at' => $startedAt,
     ], 'id = ?', [$sj['id']]);
 
     echo date('Y-m-d H:i:s') . " Executing server-side: job #{$sj['id']} ({$sj['task_type']})\n";
@@ -209,7 +210,7 @@ foreach ($serverJobs as $sj) {
     $db->update('backup_jobs', [
         'status' => $result,
         'completed_at' => $now,
-        'duration_seconds' => max(0, strtotime($now) - strtotime($sj['started_at'] ?? $now)),
+        'duration_seconds' => max(0, strtotime($now) - strtotime($startedAt)),
         'error_log' => $errorOutput ?: null,
     ], 'id = ?', [$sj['id']]);
 
