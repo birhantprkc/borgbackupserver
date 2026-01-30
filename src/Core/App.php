@@ -10,7 +10,7 @@ class App
     {
         Config::load();
         session_set_cookie_params([
-            'lifetime' => 0,
+            'lifetime' => 30 * 86400,
             'path' => '/',
             'httponly' => true,
             'samesite' => 'Strict',

@@ -64,6 +64,11 @@
                         <input type="number" class="form-control" name="agent_poll_interval" value="<?= htmlspecialchars($settings['agent_poll_interval'] ?? '30') ?>" min="5" max="300">
                         <div class="form-text">How often agents check for new tasks.</div>
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Session Timeout (hours)</label>
+                        <input type="number" class="form-control" name="session_timeout_hours" value="<?= htmlspecialchars($settings['session_timeout_hours'] ?? '8') ?>" min="1" max="720">
+                        <div class="form-text">Log out after this many hours of inactivity.</div>
+                    </div>
                 </div>
             </div>
         </div>

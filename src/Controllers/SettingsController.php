@@ -32,7 +32,7 @@ class SettingsController extends Controller
         $this->requireAdmin();
         $this->verifyCsrf();
 
-        $allowed = ['max_queue', 'server_host', 'agent_poll_interval', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_from', 'notification_retention_days', 'storage_alert_threshold'];
+        $allowed = ['max_queue', 'server_host', 'agent_poll_interval', 'session_timeout_hours', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_from', 'notification_retention_days', 'storage_alert_threshold'];
 
         foreach ($allowed as $key) {
             if (isset($_POST[$key])) {

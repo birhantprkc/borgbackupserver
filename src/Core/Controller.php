@@ -45,8 +45,11 @@ class Controller
             $this->redirect('/login');
         }
 
-        // Session timeout (8 hours of inactivity)
-        $timeout = 8 * 3600;
+        // Session timeout (configurable, default 8 hours of inactivity)
+        $timeoutSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'session_timeout_hours'");
+        $timeoutHours = (int) ($timeoutSetting['value'] ?? 8);
+        if ($timeoutHours < 1) $timeoutHours = 1;
+        $timeout = $timeoutHours * 3600;
         if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) > $timeout) {
             session_destroy();
             session_start();
