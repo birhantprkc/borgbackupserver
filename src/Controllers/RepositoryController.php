@@ -64,8 +64,55 @@ class RepositoryController extends Controller
             'passphrase_encrypted' => $encryption !== 'none' ? Encryption::encrypt($passphrase) : null,
         ]);
 
-        $this->flash('success', "Repository \"{$name}\" created.");
-        $this->redirect("/clients/{$agentId}");
+        $repoId = $this->db->lastInsertId();
+
+        // Run borg init server-side (repos are local to server)
+        $repo = $this->db->fetchOne("SELECT * FROM repositories WHERE id = ?", [$repoId]);
+        $localPath = BorgCommandBuilder::getLocalRepoPath($repo);
+
+        // Create parent directory if needed
+        $parentDir = dirname($localPath);
+        if (!is_dir($parentDir)) {
+            mkdir($parentDir, 0755, true);
+        }
+
+        // Build and run borg init
+        $env = [];
+        if ($encryption !== 'none' && !empty($passphrase)) {
+            $env['BORG_PASSPHRASE'] = $passphrase;
+        }
+        $env['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes';
+
+        $initCmd = ['borg', 'init', '--encryption=' . $encryption, $localPath];
+        $envStr = '';
+        foreach ($env as $k => $v) {
+            $envStr .= escapeshellarg($k) . '=' . escapeshellarg($v) . ' ';
+        }
+        $cmdStr = $envStr . implode(' ', array_map('escapeshellarg', $initCmd)) . ' 2>&1';
+
+        $output = [];
+        $retval = 0;
+        exec($cmdStr, $output, $retval);
+
+        if ($retval !== 0) {
+            $errorMsg = implode("\n", $output);
+            $this->db->insert('server_log', [
+                'agent_id' => $agentId,
+                'level' => 'error',
+                'message' => "borg init failed for repo \"{$name}\": {$errorMsg}",
+            ]);
+            $this->flash('warning', "Repository \"{$name}\" created in database but borg init failed: {$errorMsg}");
+            $this->redirect("/clients/{$agentId}?tab=repos");
+        }
+
+        $this->db->insert('server_log', [
+            'agent_id' => $agentId,
+            'level' => 'info',
+            'message' => "Repository \"{$name}\" initialized ({$encryption}) at {$localPath}",
+        ]);
+
+        $this->flash('success', "Repository \"{$name}\" created and initialized.");
+        $this->redirect("/clients/{$agentId}?tab=repos");
     }
 
     public function delete(int $id): void
