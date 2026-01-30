@@ -1,22 +1,18 @@
 # Borg Backup Server — Installation Guide
 
-Complete step-by-step guide to install BBS on a fresh Linux server. Follow every step in order.
+Complete step-by-step guide to install BBS on Ubuntu 22.04+ with Apache. Follow every step in order.
 
 ---
 
 ## Requirements
 
-- **OS:** Ubuntu 22.04+ or Debian 12+ (RHEL 9+ / Rocky 9+ also supported — see notes)
-- **PHP:** 8.1 or newer
-- **MySQL:** 8.0+ or MariaDB 10.6+
+- **OS:** Ubuntu 22.04 or newer
 - **A domain name** pointed at your server (e.g., `backups.example.com`)
 - **Root access** to the server
 
 ---
 
 ## Step 1: Install System Packages
-
-### Ubuntu / Debian
 
 ```bash
 apt update
@@ -26,25 +22,12 @@ apt install -y apache2 libapache2-mod-php \
     memcached certbot python3-certbot-apache
 ```
 
-### RHEL 9 / Rocky 9 / AlmaLinux 9
-
-```bash
-dnf install -y epel-release
-dnf install -y httpd php php-mysqlnd php-mbstring php-xml php-json php-pecl-memcached \
-    mysql-server borgbackup openssh-server composer git \
-    memcached certbot python3-certbot-apache
-
-systemctl enable --now mysqld httpd sshd memcached
-```
-
-> **Note:** On RHEL/Rocky, the web server user is `apache` instead of `www-data`. Every command below that references `www-data` should use `apache` instead. This is called out at each step.
-
 ---
 
 ## Step 2: Create MySQL Database and User
 
 ```bash
-mysql -u root <<'SQL'
+sudo mysql -u root <<'SQL'
 CREATE DATABASE bbs CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER 'bbs'@'localhost' IDENTIFIED BY 'CHANGE_THIS_PASSWORD';
 GRANT ALL PRIVILEGES ON bbs.* TO 'bbs'@'localhost';
@@ -53,8 +36,6 @@ SQL
 ```
 
 Replace `CHANGE_THIS_PASSWORD` with a strong password. You'll enter this in the setup wizard later.
-
-> **MySQL 8 on Ubuntu:** If `mysql -u root` fails with access denied, try `sudo mysql -u root` — Ubuntu's default MySQL uses socket auth for root.
 
 ---
 
@@ -71,19 +52,8 @@ composer install --no-dev
 
 ## Step 4: Set File Permissions
 
-The web server user needs to own the application files:
-
 ```bash
-# Ubuntu/Debian:
 chown -R www-data:www-data /var/www/bbs
-
-# RHEL/Rocky/AlmaLinux:
-# chown -R apache:apache /var/www/bbs
-```
-
-The `config/` directory must be writable (the setup wizard creates `.env` here):
-
-```bash
 chmod 755 /var/www/bbs/config
 ```
 
@@ -95,12 +65,7 @@ Choose where borg repositories will be stored. This should be on a partition wit
 
 ```bash
 mkdir -p /var/bbs/home
-
-# Ubuntu/Debian:
 chown www-data:www-data /var/bbs/home
-
-# RHEL/Rocky/AlmaLinux:
-# chown apache:apache /var/bbs/home
 ```
 
 You'll enter this path in the setup wizard. Each client gets a subdirectory here automatically.
@@ -116,15 +81,10 @@ cp /var/www/bbs/bin/bbs-ssh-helper /usr/local/bin/bbs-ssh-helper
 chmod 755 /usr/local/bin/bbs-ssh-helper
 ```
 
-Allow the web server user to run it without a password:
+Allow Apache to run it without a password:
 
 ```bash
-# Ubuntu/Debian:
 echo "www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper" > /etc/sudoers.d/bbs-ssh-helper
-
-# RHEL/Rocky/AlmaLinux:
-# echo "apache ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper" > /etc/sudoers.d/bbs-ssh-helper
-
 chmod 440 /etc/sudoers.d/bbs-ssh-helper
 ```
 
@@ -137,35 +97,9 @@ sudo -u www-data sudo /usr/local/bin/bbs-ssh-helper
 
 ---
 
-## Step 7: Configure SSL Certificate
+## Step 7: Configure Apache
 
-**SSL is required.** Agents send API keys over HTTPS.
-
-Get a certificate from Let's Encrypt using the Apache plugin (recommended — handles renewal automatically with no downtime):
-
-```bash
-certbot --apache -d backups.example.com
-```
-
-This will:
-- Obtain the certificate
-- Configure Apache SSL automatically
-- Set up auto-renewal via systemd timer
-
-Verify auto-renewal is active:
-
-```bash
-systemctl status certbot.timer
-certbot renew --dry-run
-```
-
-> **Using Nginx instead?** Install `python3-certbot-nginx` and run `certbot --nginx -d backups.example.com`.
-
----
-
-## Step 8: Configure Apache
-
-Enable required Apache modules:
+Enable required modules:
 
 ```bash
 a2enmod rewrite ssl
@@ -195,58 +129,46 @@ Create `/etc/apache2/sites-available/bbs.conf`:
 </VirtualHost>
 ```
 
-Enable the site and restart:
+Enable the site and disable the default:
 
 ```bash
 a2dissite 000-default
 a2ensite bbs
+```
+
+> **Important:** `AllowOverride All` is required. The included `public/.htaccess` passes the `Authorization` header through to PHP. Without it, all agent API requests will fail with `401 Missing authorization token`.
+
+---
+
+## Step 8: Configure SSL Certificate
+
+**SSL is required.** Agents send API keys over HTTPS.
+
+Get a certificate from Let's Encrypt:
+
+```bash
+certbot --apache -d backups.example.com
+```
+
+This will:
+- Obtain the certificate
+- Configure Apache SSL automatically
+- Set up auto-renewal via systemd timer
+
+Restart Apache:
+
+```bash
 systemctl restart apache2
 ```
 
-> **Important:** `AllowOverride All` is required. The included `public/.htaccess` contains a rewrite rule that passes the `Authorization` header through to PHP. Without it, all agent API requests will fail with `401 Missing authorization token`.
-
-> **Note:** If certbot already created an SSL vhost for you in step 7, you can edit that file instead of creating a new one. Just make sure `DocumentRoot` points to `/var/www/bbs/public` and the `<Directory>` block has `AllowOverride All`.
-
-<details>
-<summary><strong>Nginx Configuration (click to expand)</strong></summary>
-
-```nginx
-server {
-    listen 80;
-    server_name backups.example.com;
-    return 301 https://$host$request_uri;
-}
-
-server {
-    listen 443 ssl;
-    server_name backups.example.com;
-    root /var/www/bbs/public;
-    index index.php;
-
-    ssl_certificate /etc/letsencrypt/live/backups.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/backups.example.com/privkey.pem;
-
-    location / {
-        try_files $uri $uri/ /index.php?$query_string;
-    }
-
-    location ~ \.php$ {
-        fastcgi_pass unix:/run/php/php8.1-fpm.sock;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-        include fastcgi_params;
-    }
-
-    location ~ /\. {
-        deny all;
-    }
-}
-```
+Verify auto-renewal is active:
 
 ```bash
-systemctl restart nginx php8.1-fpm
+systemctl status certbot.timer
+certbot renew --dry-run
 ```
 
-</details>
+> **Note:** If certbot modified your vhost files, verify that `DocumentRoot` still points to `/var/www/bbs/public` and `AllowOverride All` is still set. Run `cat /etc/apache2/sites-enabled/bbs*.conf` to check.
 
 ---
 
@@ -257,9 +179,9 @@ Open your browser and go to `https://backups.example.com`. Since no `.env` file 
 The wizard walks you through:
 
 1. **System Check** — verifies PHP version and required extensions
-2. **Database** — enter the MySQL host, database name, user, and password from Step 2
+2. **Database** — enter the MySQL host (`localhost`), database name (`bbs`), user (`bbs`), and password from Step 2
 3. **Admin Account** — create your login (username, email, password)
-4. **Storage & Server** — enter the storage path from Step 5 (e.g., `/var/bbs/home`), a label (e.g., "Primary"), and the server hostname (e.g., `backups.example.com`)
+4. **Storage & Server** — enter the storage path from Step 5 (`/var/bbs/home`), a label (e.g., "Primary"), and the server hostname (`backups.example.com`)
 5. **Review & Install** — generates the encryption key, creates tables, writes `.env`
 
 After completing the wizard, you'll be redirected to the login page.
@@ -279,11 +201,6 @@ Add this line:
 ```
 * * * * * php /var/www/bbs/scheduler.php >> /var/log/bbs-scheduler.log 2>&1
 ```
-
-> **RHEL/Rocky:** If crontab runs as root, add `-u www-data` or create `/etc/cron.d/bbs` instead:
-> ```
-> * * * * * www-data php /var/www/bbs/scheduler.php >> /var/log/bbs-scheduler.log 2>&1
-> ```
 
 Verify it's running after a minute:
 
@@ -318,6 +235,8 @@ systemctl status bbs-agent
 journalctl -u bbs-agent -f
 ```
 
+The agent supports Ubuntu, Debian, CentOS, RHEL, Rocky, AlmaLinux, Fedora, Arch, openSUSE, and macOS. It will auto-install borg on the remote server if not already present.
+
 ---
 
 ## Troubleshooting
@@ -325,17 +244,17 @@ journalctl -u bbs-agent -f
 | Problem | Solution |
 |---|---|
 | **Blank page** | Set `APP_DEBUG=true` in `config/.env`, check `tail /var/log/apache2/error.log` |
-| **Setup wizard won't start** | Ensure `config/.env` does NOT exist and `config/` is writable by the web user |
+| **Setup wizard won't start** | Ensure `config/.env` does NOT exist and `config/` is writable: `chown www-data:www-data /var/www/bbs/config` |
 | **Database connection failed** | Verify MySQL is running (`systemctl status mysql`), check credentials |
-| **404 on all routes** | Enable `mod_rewrite` (`a2enmod rewrite && systemctl restart apache2`) |
-| **Agent 401 "Missing authorization token"** | Ensure `AllowOverride All` is set in Apache config so `.htaccess` rules work |
-| **Agent won't connect (HTTPS)** | Check SSL cert is valid, port 443 is open in firewall |
+| **404 on all routes** | Run `a2enmod rewrite && systemctl restart apache2` |
+| **Agent 401 "Missing authorization token"** | Ensure `AllowOverride All` is set in your Apache vhost |
+| **Agent won't connect (HTTPS)** | Check SSL cert is valid (`certbot certificates`), port 443 is open |
 | **Agent won't connect (SSH)** | Check `sshd` is running, port 22 is open, SSH key was provisioned |
-| **SSH provisioning failed** | Check `bbs-ssh-helper` is at `/usr/local/bin/`, sudoers entry matches your web user |
-| **Scheduler not running** | Check `crontab -l`, verify path in cron entry, check log file |
-| **Borg not found** | Install on the server: `apt install borgbackup` (server needs borg for prune/restore) |
-| **SSL certificate expired** | Run `certbot renew` and check `systemctl status certbot.timer` |
-| **Permission denied errors** | Re-run `chown -R www-data:www-data /var/www/bbs` |
+| **SSH provisioning failed** | Verify: `ls /usr/local/bin/bbs-ssh-helper`, `cat /etc/sudoers.d/bbs-ssh-helper` |
+| **Scheduler not running** | Check `crontab -l`, verify path, check `tail /var/log/bbs-scheduler.log` |
+| **Borg not found** | Run `apt install borgbackup` (server needs borg for prune/restore/download) |
+| **SSL certificate expired** | Run `certbot renew`, check `systemctl status certbot.timer` |
+| **Permission denied errors** | Run `chown -R www-data:www-data /var/www/bbs` |
 
 ---
 
@@ -397,7 +316,7 @@ The `APP_KEY` encrypts repository passphrases at rest (AES-256-GCM). **Back it u
 
 ## Development Server
 
-For local development without Apache/Nginx:
+For local development without Apache:
 
 ```bash
 cd /var/www/bbs/public
