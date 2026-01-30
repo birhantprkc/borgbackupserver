@@ -501,7 +501,7 @@ class ClientController extends Controller
                 $cmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-extract', $sshUser, $tmpDir, $passphrase];
                 $cmd = array_merge($cmd, $borgArgs);
 
-                $envStrings = [];
+                $envStrings = null; // helper handles env; null inherits current env (for PATH)
             } else {
                 // Fallback: run directly as www-data (non-SSH repos)
                 $cmd = array_merge(['borg', 'extract'], $borgArgs);
@@ -533,7 +533,7 @@ class ClientController extends Controller
             $exitCode = proc_close($proc);
 
             if ($exitCode > 1) {
-                throw new \RuntimeException('borg extract failed: ' . $stderr);
+                throw new \RuntimeException('borg extract failed: ' . trim($stdout . "\n" . $stderr));
             }
 
             // Check if anything was extracted
