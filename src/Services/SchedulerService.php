@@ -173,18 +173,42 @@ class SchedulerService
         }
 
         if ($schedule['frequency'] === 'monthly') {
-            $dom = min($schedule['day_of_month'] ?? 1, 28);
+            $dayOfMonth = $schedule['day_of_month'] ?? '1';
             $firstTime = $timeList[0] ?? '01:00';
-            $parts = explode(':', $firstTime);
-            $next = new \DateTime('now', $scheduleTz);
-            $next->modify('first day of next month');
-            $next->setDate((int)$next->format('Y'), (int)$next->format('m'), $dom);
-            $next->setTime((int)($parts[0] ?? 0), (int)($parts[1] ?? 0));
-            if ($next <= $nowLocal) {
-                $next->modify('+1 month');
+            $timeParts = array_map('intval', explode(':', $firstTime));
+
+            if ($dayOfMonth === 'last') {
+                $next = new \DateTime('now', $scheduleTz);
+                $next->modify('last day of this month');
+                $next->setTime(...$timeParts);
+                if ($next <= $nowLocal) {
+                    $next->modify('last day of next month');
+                    $next->setTime(...$timeParts);
+                }
+                $next->setTimezone($utcTz);
+                return $next->format('Y-m-d H:i:s');
             }
-            $next->setTimezone($utcTz);
-            return $next->format('Y-m-d H:i:s');
+
+            $days = array_map('intval', explode(',', (string) $dayOfMonth));
+            $best = null;
+            foreach ($days as $dom) {
+                $dom = min($dom, 28);
+                $candidate = new \DateTime('now', $scheduleTz);
+                $candidate->setDate((int)$candidate->format('Y'), (int)$candidate->format('m'), $dom);
+                $candidate->setTime(...$timeParts);
+                if ($candidate <= $nowLocal) {
+                    $candidate->modify('+1 month');
+                    $candidate->setDate((int)$candidate->format('Y'), (int)$candidate->format('m'), $dom);
+                    $candidate->setTime(...$timeParts);
+                }
+                if ($best === null || $candidate < $best) {
+                    $best = $candidate;
+                }
+            }
+            if ($best) {
+                $best->setTimezone($utcTz);
+                return $best->format('Y-m-d H:i:s');
+            }
         }
 
         return null;

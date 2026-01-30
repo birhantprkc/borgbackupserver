@@ -21,7 +21,7 @@ class BackupPlanController extends Controller
         $frequency = $_POST['frequency'] ?? 'daily';
         $times = trim($_POST['times'] ?? '');
         $dayOfWeek = !empty($_POST['day_of_week']) ? (int) $_POST['day_of_week'] : null;
-        $dayOfMonth = !empty($_POST['day_of_month']) ? (int) $_POST['day_of_month'] : null;
+        $dayOfMonth = !empty($_POST['day_of_month']) ? $_POST['day_of_month'] : null;
 
         $pruneMinutes = (int) ($_POST['prune_minutes'] ?? 0);
         $pruneHours = (int) ($_POST['prune_hours'] ?? 0);
@@ -112,6 +112,24 @@ class BackupPlanController extends Controller
 
         if (!empty($data)) {
             $this->db->update('backup_plans', $data, 'id = ?', [$id]);
+        }
+
+        // Update schedule if frequency was submitted
+        if (isset($_POST['frequency'])) {
+            $frequency = $_POST['frequency'];
+            $times = trim($_POST['times'] ?? '');
+            $dayOfWeek = isset($_POST['day_of_week']) && $_POST['day_of_week'] !== '' ? (int) $_POST['day_of_week'] : null;
+            $dayOfMonth = isset($_POST['day_of_month']) && $_POST['day_of_month'] !== '' ? $_POST['day_of_month'] : null;
+            $nextRun = $this->calculateNextRun($frequency, $times, $dayOfWeek, $dayOfMonth);
+
+            $this->db->update('schedules', [
+                'frequency' => $frequency,
+                'times' => $times ?: null,
+                'day_of_week' => $dayOfWeek,
+                'day_of_month' => $dayOfMonth,
+                'enabled' => $frequency === 'manual' ? 0 : 1,
+                'next_run' => $nextRun,
+            ], 'backup_plan_id = ?', [$id]);
         }
 
         // Update plugin configurations
@@ -257,14 +275,41 @@ class BackupPlanController extends Controller
         }
 
         if ($frequency === 'monthly' && $dayOfMonth !== null) {
-            $next = new \DateTime('now', $userTz);
-            $next->setDate((int)$next->format('Y'), (int)$next->format('m'), min($dayOfMonth, 28));
-            $next->setTime(...array_map('intval', explode(':', $firstTime)));
-            if ($next <= $nowLocal) {
-                $next->modify('+1 month');
+            $timeParts = array_map('intval', explode(':', $firstTime));
+
+            // Parse day_of_month: could be "1", "1,15", or "last"
+            if ($dayOfMonth === 'last') {
+                $next = new \DateTime('now', $userTz);
+                $next->modify('last day of this month');
+                $next->setTime(...$timeParts);
+                if ($next <= $nowLocal) {
+                    $next->modify('last day of next month');
+                    $next->setTime(...$timeParts);
+                }
+                $next->setTimezone($utcTz);
+                return $next->format('Y-m-d H:i:s');
             }
-            $next->setTimezone($utcTz);
-            return $next->format('Y-m-d H:i:s');
+
+            $days = array_map('intval', explode(',', (string) $dayOfMonth));
+            $best = null;
+            foreach ($days as $dom) {
+                $dom = min($dom, 28);
+                $candidate = new \DateTime('now', $userTz);
+                $candidate->setDate((int)$candidate->format('Y'), (int)$candidate->format('m'), $dom);
+                $candidate->setTime(...$timeParts);
+                if ($candidate <= $nowLocal) {
+                    $candidate->modify('+1 month');
+                    $candidate->setDate((int)$candidate->format('Y'), (int)$candidate->format('m'), $dom);
+                    $candidate->setTime(...$timeParts);
+                }
+                if ($best === null || $candidate < $best) {
+                    $best = $candidate;
+                }
+            }
+            if ($best) {
+                $best->setTimezone($utcTz);
+                return $best->format('Y-m-d H:i:s');
+            }
         }
 
         // Fallback: 1 hour from now

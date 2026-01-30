@@ -95,7 +95,7 @@ CREATE TABLE schedules (
     frequency VARCHAR(30) NOT NULL DEFAULT 'daily',
     times VARCHAR(255) DEFAULT NULL,
     day_of_week TINYINT DEFAULT NULL,
-    day_of_month TINYINT DEFAULT NULL,
+    day_of_month VARCHAR(20) DEFAULT NULL,
     timezone VARCHAR(64) NOT NULL DEFAULT 'UTC',
     enabled TINYINT(1) NOT NULL DEFAULT 1,
     next_run DATETIME DEFAULT NULL,

@@ -607,76 +607,75 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
 
     <!-- Existing Plans -->
     <?php if (!empty($plans)): ?>
-    <div class="card border-0 shadow-sm mb-4">
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Plan</th>
-                            <th>Frequency</th>
-                            <th>Repository</th>
-                            <th>Directories</th>
-                            <th>Retention</th>
-                            <th>Status</th>
-                            <th class="text-end">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($plans as $plan): ?>
-                        <tr>
-                            <td class="fw-semibold"><i class="bi bi-calendar-event me-1 text-muted"></i><?= htmlspecialchars($plan['name']) ?></td>
-                            <td>
-                                <?= ucfirst($plan['frequency'] ?? 'manual') ?>
-                                <?php if ($plan['times']): ?>
-                                    <br><small class="text-muted"><?= htmlspecialchars($plan['times']) ?></small>
-                                <?php endif; ?>
-                            </td>
-                            <td><?= htmlspecialchars($plan['repo_name'] ?? '--') ?></td>
-                            <td><code class="small"><?= htmlspecialchars(str_replace("\n", ', ', $plan['directories'])) ?></code></td>
-                            <td class="small text-muted text-nowrap">
-                                <?php if ($plan['prune_hours']): ?><?= $plan['prune_hours'] ?>hr <?php endif; ?>
-                                <?php if ($plan['prune_days']): ?><?= $plan['prune_days'] ?>d <?php endif; ?>
-                                <?php if ($plan['prune_weeks']): ?><?= $plan['prune_weeks'] ?>w <?php endif; ?>
-                                <?php if ($plan['prune_months']): ?><?= $plan['prune_months'] ?>mo <?php endif; ?>
-                                <?php if ($plan['prune_years']): ?><?= $plan['prune_years'] ?>yr <?php endif; ?>
-                            </td>
-                            <td>
-                                <?php if ($plan['schedule_enabled'] ?? false): ?>
-                                <span class="badge bg-success">Active</span>
-                                <?php elseif (($plan['frequency'] ?? '') === 'manual'): ?>
-                                <span class="badge bg-info">Manual</span>
-                                <?php else: ?>
-                                <span class="badge bg-secondary">Paused</span>
-                                <?php endif; ?>
-                            </td>
-                            <td class="text-end text-nowrap">
-                                <form method="POST" action="/plans/<?= $plan['id'] ?>/trigger" class="d-inline">
-                                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                    <button type="submit" class="btn btn-sm btn-outline-success" title="Run Now"><i class="bi bi-play-fill"></i></button>
-                                </form>
-                                <?php if ($plan['schedule_id']): ?>
-                                <form method="POST" action="/schedules/<?= $plan['schedule_id'] ?>/toggle" class="d-inline">
-                                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                    <?php if ($plan['schedule_enabled'] ?? false): ?>
-                                    <button type="submit" class="btn btn-sm btn-outline-warning" title="Pause"><i class="bi bi-pause-fill"></i></button>
-                                    <?php else: ?>
-                                    <button type="submit" class="btn btn-sm btn-outline-secondary" title="Resume"><i class="bi bi-play-fill"></i></button>
-                                    <?php endif; ?>
-                                </form>
-                                <?php endif; ?>
-                                <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#edit-plan-<?= $plan['id'] ?>" title="Edit"><i class="bi bi-pencil"></i></button>
-                                <form method="POST" action="/plans/<?= $plan['id'] ?>/delete" class="d-inline" onsubmit="return confirm('Delete this backup plan and its schedule?')">
-                                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete"><i class="bi bi-trash"></i></button>
-                                </form>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+    <div class="row g-3 mb-4">
+        <?php foreach ($plans as $plan):
+            $freq = $plan['frequency'] ?? 'manual';
+            $isActive = $plan['schedule_enabled'] ?? false;
+            $isManual = $freq === 'manual';
+            // Build schedule summary
+            $schedSummary = ucfirst(str_replace(['10min','15min','30min'], ['Every 10 min','Every 15 min','Every 30 min'], $freq));
+            if ($plan['times'] && in_array($freq, ['daily','weekly','monthly'])) {
+                $schedSummary .= ' @ ' . htmlspecialchars($plan['times']);
+            }
+            if ($freq === 'weekly' && isset($plan['day_of_week'])) {
+                $dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+                $schedSummary = ($dayNames[$plan['day_of_week']] ?? '') . 's @ ' . htmlspecialchars($plan['times'] ?? '00:00');
+            }
+            if ($freq === 'monthly' && isset($plan['day_of_month'])) {
+                $dom = $plan['day_of_month'];
+                $domLabel = $dom === 'last' ? 'Last day' : $dom;
+                $schedSummary = 'Monthly on ' . $domLabel . ' @ ' . htmlspecialchars($plan['times'] ?? '00:00');
+            }
+            $statusColor = $isActive ? 'success' : ($isManual ? 'info' : 'secondary');
+            $statusLabel = $isActive ? 'Active' : ($isManual ? 'Manual' : 'Paused');
+        ?>
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body pb-2">
+                    <div class="d-flex align-items-start">
+                        <div class="me-3">
+                            <div class="rounded-3 d-flex align-items-center justify-content-center" style="width:48px;height:48px;background:<?= $isActive ? '#d1fae5' : ($isManual ? '#dbeafe' : '#f3f4f6') ?>;">
+                                <i class="bi bi-calendar-event fs-4" style="color:<?= $isActive ? '#059669' : ($isManual ? '#3b82f6' : '#6b7280') ?>;"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 min-width-0">
+                            <h6 class="mb-1 fw-bold"><?= htmlspecialchars($plan['name']) ?></h6>
+                            <div class="small text-muted mb-1">
+                                <i class="bi bi-clock me-1"></i><?= $schedSummary ?>
+                            </div>
+                            <div class="small text-muted">
+                                <i class="bi bi-archive me-1"></i><?= htmlspecialchars($plan['repo_name'] ?? '--') ?>
+                            </div>
+                        </div>
+                        <div class="ms-2">
+                            <span class="badge bg-<?= $statusColor ?>"><?= $statusLabel ?></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer bg-white border-top-0 pt-0 d-flex gap-1 justify-content-end">
+                    <form method="POST" action="/plans/<?= $plan['id'] ?>/trigger" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                        <button type="submit" class="btn btn-sm btn-outline-success" title="Run Now"><i class="bi bi-play-fill me-1"></i>Run</button>
+                    </form>
+                    <?php if ($plan['schedule_id']): ?>
+                    <form method="POST" action="/schedules/<?= $plan['schedule_id'] ?>/toggle" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                        <?php if ($isActive): ?>
+                        <button type="submit" class="btn btn-sm btn-outline-warning" title="Pause"><i class="bi bi-pause-fill me-1"></i>Pause</button>
+                        <?php else: ?>
+                        <button type="submit" class="btn btn-sm btn-outline-secondary" title="Resume"><i class="bi bi-play-fill me-1"></i>Resume</button>
+                        <?php endif; ?>
+                    </form>
+                    <?php endif; ?>
+                    <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#edit-plan-<?= $plan['id'] ?>" title="Edit"><i class="bi bi-pencil me-1"></i>Edit</button>
+                    <form method="POST" action="/plans/<?= $plan['id'] ?>/delete" class="d-inline" onsubmit="return confirm('Delete this backup plan and its schedule?')">
+                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete"><i class="bi bi-trash"></i></button>
+                    </form>
+                </div>
             </div>
         </div>
+        <?php endforeach; ?>
     </div>
     <?php endif; ?>
 
@@ -702,6 +701,116 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                         <label class="col-md-3 col-form-label fw-semibold">Plan Name</label>
                         <div class="col-md-6">
                             <input type="text" class="form-control" name="name" value="<?= htmlspecialchars($plan['name']) ?>" required>
+                        </div>
+                    </div>
+
+                    <?php
+                    $editFreq = $plan['frequency'] ?? 'daily';
+                    $editTimes = $plan['times'] ?? '';
+                    $editDow = $plan['day_of_week'] ?? 1;
+                    $editDom = $plan['day_of_month'] ?? '1';
+                    // Parse times to get selected hours and minute offset
+                    $editTimeList = array_filter(array_map('trim', explode(',', $editTimes)));
+                    $editMinuteOffset = 0;
+                    $editSelectedHours = [];
+                    foreach ($editTimeList as $t) {
+                        $tp = explode(':', $t);
+                        $editSelectedHours[] = (int)$tp[0];
+                        $editMinuteOffset = (int)($tp[1] ?? 0);
+                    }
+                    ?>
+                    <div class="row mb-3">
+                        <label class="col-md-3 col-form-label fw-semibold"><i class="bi bi-clock me-1"></i> Frequency</label>
+                        <div class="col-md-6">
+                            <select class="form-select schedule-frequency" name="frequency">
+                                <option value="manual" <?= $editFreq === 'manual' ? 'selected' : '' ?>>Manually (On Demand)</option>
+                                <option value="10min" <?= $editFreq === '10min' ? 'selected' : '' ?>>Every 10 Minutes</option>
+                                <option value="15min" <?= $editFreq === '15min' ? 'selected' : '' ?>>Every 15 Minutes</option>
+                                <option value="30min" <?= $editFreq === '30min' ? 'selected' : '' ?>>Every 30 Minutes</option>
+                                <option value="hourly" <?= $editFreq === 'hourly' ? 'selected' : '' ?>>Every Hour</option>
+                                <option value="daily" <?= $editFreq === 'daily' ? 'selected' : '' ?>>Every Day</option>
+                                <option value="weekly" <?= $editFreq === 'weekly' ? 'selected' : '' ?>>Weekly</option>
+                                <option value="monthly" <?= $editFreq === 'monthly' ? 'selected' : '' ?>>Monthly</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3 schedule-hourly-row <?= $editFreq !== 'hourly' ? 'd-none' : '' ?>">
+                        <label class="col-md-3 col-form-label fw-semibold"><i class="bi bi-clock-history me-1"></i> Minute Offset</label>
+                        <div class="col-md-6">
+                            <div class="input-group" style="max-width:260px">
+                                <span class="input-group-text">@</span>
+                                <input type="number" class="form-control schedule-minute-offset" min="0" max="59" value="<?= $editMinuteOffset ?>">
+                                <span class="input-group-text">min past the hour</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3 schedule-daily-row <?= $editFreq !== 'daily' ? 'd-none' : '' ?>">
+                        <label class="col-md-3 col-form-label fw-semibold"><i class="bi bi-grid-3x3 me-1"></i> Run Hours</label>
+                        <div class="col-md-9">
+                            <div class="mb-2">
+                                <span class="text-muted fw-semibold me-2" style="display:inline-block;width:30px;">AM</span>
+                                <div class="btn-group btn-group-sm">
+                                    <?php for ($h = 0; $h < 12; $h++): $label = $h === 0 ? '12' : str_pad($h, 2, '0', STR_PAD_LEFT); ?>
+                                    <button type="button" class="btn <?= in_array($h, $editSelectedHours) ? 'btn-primary active' : 'btn-outline-primary' ?> hour-btn" data-hour="<?= $h ?>"><?= $label ?></button>
+                                    <?php endfor; ?>
+                                </div>
+                            </div>
+                            <div class="mb-2">
+                                <span class="text-muted fw-semibold me-2" style="display:inline-block;width:30px;">PM</span>
+                                <div class="btn-group btn-group-sm">
+                                    <?php for ($h = 12; $h < 24; $h++): $label = $h === 12 ? '12' : str_pad($h - 12, 2, '0', STR_PAD_LEFT); ?>
+                                    <button type="button" class="btn <?= in_array($h, $editSelectedHours) ? 'btn-primary active' : 'btn-outline-primary' ?> hour-btn" data-hour="<?= $h ?>"><?= $label ?></button>
+                                    <?php endfor; ?>
+                                </div>
+                            </div>
+                            <div class="input-group mt-2" style="max-width:260px">
+                                <span class="input-group-text">@</span>
+                                <input type="number" class="form-control schedule-minute-offset" min="0" max="59" value="<?= $editMinuteOffset ?>">
+                                <span class="input-group-text">min past the hour</span>
+                            </div>
+                            <input type="hidden" name="times" class="schedule-times-hidden" value="<?= htmlspecialchars($editTimes) ?>">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3 schedule-weekly-row <?= $editFreq !== 'weekly' ? 'd-none' : '' ?>">
+                        <label class="col-md-3 col-form-label fw-semibold"><i class="bi bi-calendar-week me-1"></i> Day & Time</label>
+                        <div class="col-md-9">
+                            <div class="btn-group btn-group-sm mb-2 schedule-day-btns">
+                                <?php $dayLabels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; ?>
+                                <?php foreach ($dayLabels as $di => $dl): ?>
+                                <button type="button" class="btn <?= (int)$editDow === $di ? 'btn-primary active' : 'btn-outline-primary' ?> day-btn" data-day="<?= $di ?>"><?= $dl ?></button>
+                                <?php endforeach; ?>
+                            </div>
+                            <input type="hidden" name="day_of_week" class="schedule-dow-hidden" value="<?= (int)$editDow ?>">
+                            <div class="input-group" style="max-width:220px">
+                                <span class="input-group-text">@ time of day</span>
+                                <input type="time" class="form-control schedule-time-input" value="<?= htmlspecialchars($editTimes ?: '00:00') ?>">
+                            </div>
+                            <input type="hidden" name="times" class="schedule-weekly-times-hidden" value="<?= htmlspecialchars($editTimes) ?>">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3 schedule-monthly-row <?= $editFreq !== 'monthly' ? 'd-none' : '' ?>">
+                        <label class="col-md-3 col-form-label fw-semibold"><i class="bi bi-calendar-event me-1"></i> Day & Time</label>
+                        <div class="col-md-9">
+                            <div class="d-flex gap-2 align-items-center flex-wrap">
+                                <select class="form-select form-select-sm schedule-dom-select" name="day_of_month" style="max-width:180px">
+                                    <option value="1" <?= $editDom === '1' ? 'selected' : '' ?>>1st of Month</option>
+                                    <option value="7" <?= $editDom === '7' ? 'selected' : '' ?>>7th</option>
+                                    <option value="15" <?= $editDom === '15' ? 'selected' : '' ?>>15th</option>
+                                    <option value="21" <?= $editDom === '21' ? 'selected' : '' ?>>21st</option>
+                                    <option value="1,15" <?= $editDom === '1,15' ? 'selected' : '' ?>>1st & 15th</option>
+                                    <option value="8,23" <?= $editDom === '8,23' ? 'selected' : '' ?>>8th & 23rd</option>
+                                    <option value="last" <?= $editDom === 'last' ? 'selected' : '' ?>>Last Day of Month</option>
+                                </select>
+                                <div class="input-group" style="max-width:220px">
+                                    <span class="input-group-text">@ time of day</span>
+                                    <input type="time" class="form-control schedule-time-input" value="<?= htmlspecialchars($editTimes ?: '00:00') ?>">
+                                </div>
+                            </div>
+                            <input type="hidden" name="times" class="schedule-monthly-times-hidden" value="<?= htmlspecialchars($editTimes) ?>">
                         </div>
                     </div>
 
@@ -914,9 +1023,9 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 </div>
 
                 <div class="row mb-3">
-                    <label class="col-md-3 col-form-label fw-semibold">Frequency</label>
+                    <label class="col-md-3 col-form-label fw-semibold"><i class="bi bi-clock me-1"></i> Frequency</label>
                     <div class="col-md-6">
-                        <select class="form-select" name="frequency" id="frequencySelect">
+                        <select class="form-select schedule-frequency" name="frequency">
                             <option value="manual">Manually (On Demand)</option>
                             <option value="10min">Every 10 Minutes</option>
                             <option value="15min">Every 15 Minutes</option>
@@ -929,33 +1038,85 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     </div>
                 </div>
 
-                <div class="row mb-3" id="timesRow">
-                    <label class="col-md-3 col-form-label fw-semibold">Times</label>
+                <div class="row mb-3 schedule-hourly-row d-none">
+                    <label class="col-md-3 col-form-label fw-semibold"><i class="bi bi-clock-history me-1"></i> Minute Offset</label>
                     <div class="col-md-6">
-                        <input type="text" class="form-control" name="times" placeholder="01:00, 04:00, 16:00, 20:00" value="01:00">
-                    </div>
-                    <div class="col-md-3 form-text pt-2">Comma-separated, 24h format</div>
-                </div>
-
-                <div class="row mb-3 d-none" id="dayOfWeekRow">
-                    <label class="col-md-3 col-form-label fw-semibold">Day of Week</label>
-                    <div class="col-md-6">
-                        <select class="form-select" name="day_of_week">
-                            <option value="0">Sunday</option>
-                            <option value="1" selected>Monday</option>
-                            <option value="2">Tuesday</option>
-                            <option value="3">Wednesday</option>
-                            <option value="4">Thursday</option>
-                            <option value="5">Friday</option>
-                            <option value="6">Saturday</option>
-                        </select>
+                        <div class="input-group" style="max-width:260px">
+                            <span class="input-group-text">@</span>
+                            <input type="number" class="form-control schedule-minute-offset" min="0" max="59" value="0">
+                            <span class="input-group-text">min past the hour</span>
+                        </div>
                     </div>
                 </div>
 
-                <div class="row mb-3 d-none" id="dayOfMonthRow">
-                    <label class="col-md-3 col-form-label fw-semibold">Day of Month</label>
-                    <div class="col-md-6">
-                        <input type="number" class="form-control" name="day_of_month" min="1" max="28" value="1">
+                <div class="row mb-3 schedule-daily-row">
+                    <label class="col-md-3 col-form-label fw-semibold"><i class="bi bi-grid-3x3 me-1"></i> Run Hours</label>
+                    <div class="col-md-9">
+                        <div class="mb-2">
+                            <span class="text-muted fw-semibold me-2" style="display:inline-block;width:30px;">AM</span>
+                            <div class="btn-group btn-group-sm">
+                                <?php for ($h = 0; $h < 12; $h++): $label = $h === 0 ? '12' : str_pad($h, 2, '0', STR_PAD_LEFT); ?>
+                                <button type="button" class="btn <?= $h === 1 ? 'btn-primary active' : 'btn-outline-primary' ?> hour-btn" data-hour="<?= $h ?>"><?= $label ?></button>
+                                <?php endfor; ?>
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <span class="text-muted fw-semibold me-2" style="display:inline-block;width:30px;">PM</span>
+                            <div class="btn-group btn-group-sm">
+                                <?php for ($h = 12; $h < 24; $h++): $label = $h === 12 ? '12' : str_pad($h - 12, 2, '0', STR_PAD_LEFT); ?>
+                                <button type="button" class="btn btn-outline-primary hour-btn" data-hour="<?= $h ?>"><?= $label ?></button>
+                                <?php endfor; ?>
+                            </div>
+                        </div>
+                        <div class="input-group mt-2" style="max-width:260px">
+                            <span class="input-group-text">@</span>
+                            <input type="number" class="form-control schedule-minute-offset" min="0" max="59" value="0">
+                            <span class="input-group-text">min past the hour</span>
+                        </div>
+                        <input type="hidden" name="times" class="schedule-times-hidden" value="01:00">
+                    </div>
+                </div>
+
+                <div class="row mb-3 schedule-weekly-row d-none">
+                    <label class="col-md-3 col-form-label fw-semibold"><i class="bi bi-calendar-week me-1"></i> Day & Time</label>
+                    <div class="col-md-9">
+                        <div class="btn-group btn-group-sm mb-2 schedule-day-btns">
+                            <button type="button" class="btn btn-outline-primary day-btn" data-day="0">Sun</button>
+                            <button type="button" class="btn btn-primary active day-btn" data-day="1">Mon</button>
+                            <button type="button" class="btn btn-outline-primary day-btn" data-day="2">Tue</button>
+                            <button type="button" class="btn btn-outline-primary day-btn" data-day="3">Wed</button>
+                            <button type="button" class="btn btn-outline-primary day-btn" data-day="4">Thu</button>
+                            <button type="button" class="btn btn-outline-primary day-btn" data-day="5">Fri</button>
+                            <button type="button" class="btn btn-outline-primary day-btn" data-day="6">Sat</button>
+                        </div>
+                        <input type="hidden" name="day_of_week" class="schedule-dow-hidden" value="1">
+                        <div class="input-group" style="max-width:220px">
+                            <span class="input-group-text">@ time of day</span>
+                            <input type="time" class="form-control schedule-time-input" value="00:00">
+                        </div>
+                        <input type="hidden" name="times" class="schedule-weekly-times-hidden" value="00:00">
+                    </div>
+                </div>
+
+                <div class="row mb-3 schedule-monthly-row d-none">
+                    <label class="col-md-3 col-form-label fw-semibold"><i class="bi bi-calendar-event me-1"></i> Day & Time</label>
+                    <div class="col-md-9">
+                        <div class="d-flex gap-2 align-items-center flex-wrap">
+                            <select class="form-select form-select-sm schedule-dom-select" name="day_of_month" style="max-width:180px">
+                                <option value="1" selected>1st of Month</option>
+                                <option value="7">7th</option>
+                                <option value="15">15th</option>
+                                <option value="21">21st</option>
+                                <option value="1,15">1st & 15th</option>
+                                <option value="8,23">8th & 23rd</option>
+                                <option value="last">Last Day of Month</option>
+                            </select>
+                            <div class="input-group" style="max-width:220px">
+                                <span class="input-group-text">@ time of day</span>
+                                <input type="time" class="form-control schedule-time-input" value="00:00">
+                            </div>
+                        </div>
+                        <input type="hidden" name="times" class="schedule-monthly-times-hidden" value="00:00">
                     </div>
                 </div>
 
@@ -1178,11 +1339,143 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     </div>
 
     <script>
-    document.getElementById('frequencySelect').addEventListener('change', function() {
-        const freq = this.value;
-        document.getElementById('timesRow').classList.toggle('d-none', freq === 'manual' || freq.endsWith('min'));
-        document.getElementById('dayOfWeekRow').classList.toggle('d-none', freq !== 'weekly');
-        document.getElementById('dayOfMonthRow').classList.toggle('d-none', freq !== 'monthly');
+    // Schedule picker logic (works for both create and edit forms)
+    function initSchedulePicker(container) {
+        const freqSelect = container.querySelector('.schedule-frequency');
+        if (!freqSelect) return;
+
+        function updateVisibility() {
+            const freq = freqSelect.value;
+            container.querySelector('.schedule-hourly-row')?.classList.toggle('d-none', freq !== 'hourly');
+            container.querySelector('.schedule-daily-row')?.classList.toggle('d-none', freq !== 'daily');
+            container.querySelector('.schedule-weekly-row')?.classList.toggle('d-none', freq !== 'weekly');
+            container.querySelector('.schedule-monthly-row')?.classList.toggle('d-none', freq !== 'monthly');
+        }
+
+        freqSelect.addEventListener('change', updateVisibility);
+        updateVisibility();
+
+        // Hour toggle buttons (daily)
+        function syncDailyTimes() {
+            const dailyRow = container.querySelector('.schedule-daily-row');
+            if (!dailyRow) return;
+            const minute = String(dailyRow.querySelector('.schedule-minute-offset')?.value || 0).padStart(2, '0');
+            const hours = [...dailyRow.querySelectorAll('.hour-btn.active')]
+                .map(b => parseInt(b.dataset.hour))
+                .sort((a, b) => a - b)
+                .map(h => String(h).padStart(2, '0') + ':' + minute);
+            const hidden = dailyRow.querySelector('.schedule-times-hidden');
+            if (hidden) hidden.value = hours.join(', ');
+        }
+
+        container.querySelectorAll('.schedule-daily-row .hour-btn').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                this.classList.toggle('active');
+                this.classList.toggle('btn-primary');
+                this.classList.toggle('btn-outline-primary');
+                syncDailyTimes();
+            });
+        });
+
+        const dailyMinute = container.querySelector('.schedule-daily-row .schedule-minute-offset');
+        if (dailyMinute) dailyMinute.addEventListener('change', syncDailyTimes);
+
+        // Hourly: sync minute to times hidden (stored as "00:MM")
+        const hourlyRow = container.querySelector('.schedule-hourly-row');
+        if (hourlyRow) {
+            const hourlyMinute = hourlyRow.querySelector('.schedule-minute-offset');
+            // Hourly uses the form-level times hidden or we add one
+            let hourlyTimesHidden = container.querySelector('input[name="times"].schedule-hourly-times-hidden');
+            if (!hourlyTimesHidden) {
+                hourlyTimesHidden = document.createElement('input');
+                hourlyTimesHidden.type = 'hidden';
+                hourlyTimesHidden.name = 'times';
+                hourlyTimesHidden.className = 'schedule-hourly-times-hidden';
+                hourlyRow.appendChild(hourlyTimesHidden);
+            }
+            function syncHourly() {
+                hourlyTimesHidden.value = '00:' + String(hourlyMinute.value || 0).padStart(2, '0');
+            }
+            if (hourlyMinute) hourlyMinute.addEventListener('change', syncHourly);
+            syncHourly();
+        }
+
+        // Day-of-week toggle (single select)
+        container.querySelectorAll('.schedule-day-btns .day-btn').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                this.parentElement.querySelectorAll('.btn').forEach(b => {
+                    b.classList.remove('active', 'btn-primary');
+                    b.classList.add('btn-outline-primary');
+                });
+                this.classList.add('active', 'btn-primary');
+                this.classList.remove('btn-outline-primary');
+                const hidden = container.querySelector('.schedule-dow-hidden');
+                if (hidden) hidden.value = this.dataset.day;
+            });
+        });
+
+        // Weekly/monthly time input sync
+        container.querySelectorAll('.schedule-weekly-row .schedule-time-input').forEach(input => {
+            function sync() {
+                const hidden = container.querySelector('.schedule-weekly-times-hidden');
+                if (hidden) hidden.value = input.value;
+            }
+            input.addEventListener('change', sync);
+            sync();
+        });
+        container.querySelectorAll('.schedule-monthly-row .schedule-time-input').forEach(input => {
+            function sync() {
+                const hidden = container.querySelector('.schedule-monthly-times-hidden');
+                if (hidden) hidden.value = input.value;
+            }
+            input.addEventListener('change', sync);
+            sync();
+        });
+
+        // On form submit, ensure the correct "times" hidden is active
+        const form = container.closest('form') || container.querySelector('form');
+        if (form) {
+            form.addEventListener('submit', function() {
+                const freq = freqSelect.value;
+                // Disable all schedule times hiddens, then enable only the active one
+                container.querySelectorAll('.schedule-times-hidden, .schedule-weekly-times-hidden, .schedule-monthly-times-hidden, .schedule-hourly-times-hidden').forEach(h => h.disabled = true);
+                if (freq === 'daily') {
+                    syncDailyTimes();
+                    const h = container.querySelector('.schedule-times-hidden');
+                    if (h) h.disabled = false;
+                } else if (freq === 'weekly') {
+                    const h = container.querySelector('.schedule-weekly-times-hidden');
+                    if (h) h.disabled = false;
+                } else if (freq === 'monthly') {
+                    const h = container.querySelector('.schedule-monthly-times-hidden');
+                    if (h) h.disabled = false;
+                } else if (freq === 'hourly') {
+                    const h = container.querySelector('.schedule-hourly-times-hidden');
+                    if (h) h.disabled = false;
+                }
+                // Disable day_of_week/day_of_month when not relevant
+                const dowHidden = container.querySelector('.schedule-dow-hidden');
+                if (dowHidden) dowHidden.disabled = freq !== 'weekly';
+                const domSelect = container.querySelector('.schedule-dom-select');
+                if (domSelect) domSelect.disabled = freq !== 'monthly';
+            });
+        }
+    }
+
+    // Init all schedule pickers (create form + any visible edit forms)
+    document.querySelectorAll('form').forEach(form => {
+        if (form.querySelector('.schedule-frequency')) {
+            initSchedulePicker(form);
+        }
+    });
+    // Also init edit panels (they are inside collapse divs, not directly in a form with .schedule-frequency)
+    document.querySelectorAll('.edit-plan-panel').forEach(panel => {
+        const form = panel.querySelector('form');
+        if (form && form.querySelector('.schedule-frequency')) {
+            initSchedulePicker(form);
+        }
     });
 
     // Quick-pick directory buttons
