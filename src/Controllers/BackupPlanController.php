@@ -149,7 +149,7 @@ class BackupPlanController extends Controller
         }
 
         // Create a queued backup job
-        $this->db->insert('backup_jobs', [
+        $jobId = $this->db->insert('backup_jobs', [
             'backup_plan_id' => $id,
             'agent_id' => $plan['agent_id'],
             'repository_id' => $plan['repository_id'],
@@ -163,8 +163,7 @@ class BackupPlanController extends Controller
             'message' => "Manual backup triggered for plan \"{$plan['name']}\"",
         ]);
 
-        $this->flash('success', "Backup job queued for plan \"{$plan['name']}\".");
-        $this->redirect("/clients/{$plan['agent_id']}?tab=schedules");
+        $this->redirect("/queue/{$jobId}");
     }
 
     private function getPlan(int $id): ?array
