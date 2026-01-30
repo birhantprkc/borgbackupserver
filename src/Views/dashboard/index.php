@@ -198,7 +198,7 @@
                         </thead>
                         <tbody>
                             <?php foreach ($activeJobs as $job): ?>
-                            <tr>
+                            <tr style="cursor: pointer;" onclick="window.location='/queue/<?= $job['id'] ?>'">
                                 <td><?= htmlspecialchars($job['agent_name']) ?></td>
                                 <td>
                                     <?php if ($job['files_total'] > 0): ?>
