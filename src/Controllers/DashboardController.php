@@ -126,12 +126,16 @@ class DashboardController extends Controller
 
         // Fill in missing hours
         $chartData = [];
-        $now = new \DateTime();
+        $utcTz = new \DateTimeZone('UTC');
+        $userTz = new \DateTimeZone($_SESSION['timezone'] ?? 'UTC');
+        $now = new \DateTime('now', $utcTz);
         for ($i = 23; $i >= 0; $i--) {
             $hourDt = clone $now;
             $hourDt->modify("-{$i} hours");
-            $hourKey = $hourDt->format('Y-m-d H:00');
-            $label = $hourDt->format('ga');
+            $hourKey = $hourDt->format('Y-m-d H:00'); // UTC key to match DB
+            $localDt = clone $hourDt;
+            $localDt->setTimezone($userTz);
+            $label = $localDt->format('ga'); // User's timezone for display
             $count = 0;
             foreach ($backupsChart as $row) {
                 if ($row['hour'] === $hourKey) {
