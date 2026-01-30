@@ -37,7 +37,15 @@ class QueueManager
             return [];
         }
 
+        // Get repos that already have an active job (borg can't run concurrent ops on same repo)
+        $busyRepos = $this->db->fetchAll(
+            "SELECT DISTINCT repository_id FROM backup_jobs
+             WHERE status IN ('sent', 'running') AND repository_id IS NOT NULL"
+        );
+        $busyRepoIds = array_column($busyRepos, 'repository_id');
+
         // Get queued jobs ordered by queued_at (FIFO)
+        // No LIMIT — we may skip busy-repo jobs and need to see more candidates
         $queuedJobs = $this->db->fetchAll("
             SELECT bj.*, bp.directories, bp.excludes, bp.advanced_options,
                    bp.prune_minutes, bp.prune_hours, bp.prune_days,
@@ -49,12 +57,20 @@ class QueueManager
             LEFT JOIN repositories r ON r.id = bj.repository_id
             WHERE bj.status = 'queued'
             ORDER BY bj.queued_at ASC
-            LIMIT ?
-        ", [$slotsAvailable]);
+        ");
 
         $promoted = [];
+        $promotedCount = 0;
 
         foreach ($queuedJobs as $job) {
+            if ($promotedCount >= $slotsAvailable) {
+                break;
+            }
+
+            // Skip if repo already has an active job (borg repo-level lock)
+            if ($job['repository_id'] && in_array($job['repository_id'], $busyRepoIds)) {
+                continue;
+            }
             // Build the task payload
             $repo = [
                 'path' => $job['repo_path'],
@@ -130,6 +146,12 @@ class QueueManager
                 ]);
 
                 $promoted[] = $job;
+                $promotedCount++;
+
+                // Mark this repo as busy for remaining iterations
+                if ($job['repository_id']) {
+                    $busyRepoIds[] = $job['repository_id'];
+                }
             }
         }
 

@@ -54,7 +54,24 @@ class SchedulerService
             ", [$schedule['backup_plan_id']]);
 
             if ($existing) {
-                // Skip — already has a job in progress
+                // Skip — already has a job in progress for this plan
+                continue;
+            }
+
+            // Check if repo already has an active job (borg can't run concurrent ops)
+            $repoBusy = $this->db->fetchOne("
+                SELECT id FROM backup_jobs
+                WHERE repository_id = ?
+                  AND status IN ('queued', 'sent', 'running')
+            ", [$schedule['repository_id']]);
+
+            if ($repoBusy) {
+                // Repo busy — skip, will retry next scheduler cycle
+                $this->db->insert('server_log', [
+                    'agent_id' => $schedule['agent_id'],
+                    'level' => 'info',
+                    'message' => "Skipped schedule for plan \"{$schedule['plan_name']}\" — repository has an active job",
+                ]);
                 continue;
             }
 
