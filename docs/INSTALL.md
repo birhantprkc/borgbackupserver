@@ -87,9 +87,16 @@ chmod 755 /usr/local/bin/bbs-ssh-helper
 Allow the web server user to run it via sudo (no password):
 
 ```bash
+# Ubuntu/Debian (www-data):
 echo "www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper" > /etc/sudoers.d/bbs-ssh-helper
+
+# RHEL/Rocky/AlmaLinux (apache):
+# echo "apache ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper" > /etc/sudoers.d/bbs-ssh-helper
+
 chmod 440 /etc/sudoers.d/bbs-ssh-helper
 ```
+
+> **Note:** Use whichever user your web server / PHP-FPM runs as. On Ubuntu/Debian this is `www-data`, on RHEL/Rocky/AlmaLinux it's `apache`.
 
 The helper script only manages users with the `bbs-` prefix and validates all inputs. See [Agent Deployment Guide — SSH Architecture](AGENT.md#ssh-architecture) for full details.
 
@@ -127,6 +134,8 @@ a2ensite bbs
 a2enmod ssl
 systemctl restart apache2
 ```
+
+> **Important:** The included `public/.htaccess` contains a rewrite rule that passes the `Authorization` header through to PHP. Apache strips this header by default, which will cause all agent API requests to fail with `401 Missing authorization token`. Make sure `AllowOverride All` is set (as shown above) so the `.htaccess` rules take effect.
 
 ### Option B: Nginx
 
@@ -174,11 +183,12 @@ certbot certonly --standalone -d backups.example.com
 ## 6. File Permissions
 
 ```bash
+# Use apache:apache on RHEL/Rocky/AlmaLinux
 chown -R www-data:www-data /var/www/bbs
 chmod 755 /var/www/bbs/config
 ```
 
-The web server user (`www-data`) needs:
+The web server user (`www-data` on Ubuntu/Debian, `apache` on RHEL/Rocky) needs:
 - Read access to the application code
 - Write access to `config/` (the setup wizard creates `.env` here)
 - Execute access to `borg` binary (for download/restore and server-side prune)

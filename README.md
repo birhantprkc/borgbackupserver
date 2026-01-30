@@ -41,6 +41,7 @@ composer install
 # Install the SSH helper for agent backups
 sudo cp bin/bbs-ssh-helper /usr/local/bin/bbs-ssh-helper
 sudo chmod 755 /usr/local/bin/bbs-ssh-helper
+# Use "apache" instead of "www-data" on RHEL/Rocky/AlmaLinux
 sudo bash -c 'echo "www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper" > /etc/sudoers.d/bbs-ssh-helper'
 ```
 

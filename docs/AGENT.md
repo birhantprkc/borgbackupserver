@@ -358,6 +358,7 @@ For SSH to work, the BBS server needs:
    ```bash
    cp bin/bbs-ssh-helper /usr/local/bin/bbs-ssh-helper
    chmod 755 /usr/local/bin/bbs-ssh-helper
+   # Use "apache" instead of "www-data" on RHEL/Rocky/AlmaLinux
    echo "www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper" > /etc/sudoers.d/bbs-ssh-helper
    ```
 4. **Default storage location** — must be set in Settings before adding clients (used as the base path for SSH home directories)
