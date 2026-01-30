@@ -9,5 +9,7 @@ ON DUPLICATE KEY UPDATE `value` = VALUES(`value`);
 INSERT IGNORE INTO settings (`key`, `value`)
 SELECT 'storage_path', path FROM storage_locations ORDER BY id LIMIT 1;
 
--- Drop the storage_locations table
+-- Drop the foreign key and column from repositories, then drop the table
+ALTER TABLE repositories DROP FOREIGN KEY repositories_ibfk_2;
+ALTER TABLE repositories DROP COLUMN storage_location_id;
 DROP TABLE IF EXISTS storage_locations;
