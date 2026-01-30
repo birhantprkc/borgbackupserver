@@ -98,6 +98,20 @@ echo "www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper, /var/www/bbs/
 chmod 440 /etc/sudoers.d/bbs-ssh-helper
 ```
 
+Allow the scheduler to run borg prune/compact as client users:
+
+```bash
+echo "www-data ALL=(bbs-*) NOPASSWD: /usr/bin/borg, /usr/bin/env" > /etc/sudoers.d/bbs-borg
+chmod 440 /etc/sudoers.d/bbs-borg
+```
+
+Create the borg cache directory:
+
+```bash
+mkdir -p /var/bbs/cache
+chown www-data:www-data /var/bbs/cache
+```
+
 Verify it works:
 
 ```bash
@@ -265,7 +279,7 @@ The agent supports Ubuntu, Debian, CentOS, RHEL, Rocky, AlmaLinux, Fedora, Arch,
 | **Borg not found** | Run `apt install borgbackup` (server needs borg for prune/restore/download) |
 | **SSL certificate expired** | Run `certbot renew`, check `systemctl status certbot.timer` |
 | **Permission denied errors** | Run `chown -R www-data:www-data /var/www/bbs` |
-| **Download/extract permission denied** | Borg config dir conflict — run `rm -rf /tmp/.config/borg` and ensure `/tmp/bbs-borg-*` dirs exist |
+| **Download/extract permission denied** | Borg cache dir conflict — run `sudo /var/www/bbs/bin/bbs-update` to recreate `/var/bbs/cache/` dirs |
 | **SSH helper out of date** | Re-copy after upgrade: `cp bin/bbs-ssh-helper /usr/local/bin/bbs-ssh-helper` |
 
 ---

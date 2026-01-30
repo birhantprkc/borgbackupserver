@@ -208,6 +208,14 @@ ENV;
                     @mkdir($storagePath, 0750, true);
                 }
 
+                // 10. Create borg cache directory
+                if (!is_dir('/var/bbs/cache')) {
+                    @mkdir('/var/bbs/cache', 0755, true);
+                }
+                if (!is_dir('/var/bbs/cache/www-data')) {
+                    @mkdir('/var/bbs/cache/www-data', 0700, true);
+                }
+
                 // Clear setup session
                 unset($_SESSION['setup']);
 

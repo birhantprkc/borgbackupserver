@@ -114,8 +114,8 @@ case "$ACTION" in
         chown "$USERNAME":www-data "$TMPDIR"
         chmod 770 "$TMPDIR"
 
-        # Create per-user borg base dir to avoid conflicts in /tmp/.config
-        BORG_DIR="/tmp/bbs-borg-$USERNAME"
+        # Per-user borg cache dir (matches scheduler.php and bbs-update)
+        BORG_DIR="/var/bbs/cache/$USERNAME"
         mkdir -p "$BORG_DIR"
         chown "$USERNAME":"$USERNAME" "$BORG_DIR"
 
