@@ -163,7 +163,18 @@ $isActive = in_array($job['status'], ['queued', 'sent', 'running']);
                     <tbody>
                         <tr>
                             <td class="text-muted fw-semibold ps-3" style="width: 160px;">Client</td>
-                            <td><a href="/clients/<?= $job['agent_id'] ?>"><?= htmlspecialchars($job['agent_name']) ?></a></td>
+                            <td>
+                                <a href="/clients/<?= $job['agent_id'] ?>"><?= htmlspecialchars($job['agent_name']) ?></a>
+                                <?php
+                                $agentBadge = match($job['agent_status']) {
+                                    'online' => 'success',
+                                    'offline' => 'secondary',
+                                    'error' => 'danger',
+                                    default => 'warning',
+                                };
+                                ?>
+                                <span class="badge bg-<?= $agentBadge ?> ms-1"><?= ucfirst($job['agent_status']) ?></span>
+                            </td>
                         </tr>
                         <tr>
                             <td class="text-muted fw-semibold ps-3">Task Type</td>
