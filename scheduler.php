@@ -109,7 +109,6 @@ foreach ($serverJobs as $sj) {
         'path' => $sj['repo_path'],
         'encryption' => $sj['encryption'],
         'passphrase_encrypted' => $sj['passphrase_encrypted'],
-        'storage_location_id' => $sj['storage_location_id'] ?? null,
         'agent_id' => $sj['repo_agent_id'] ?? $sj['agent_id'],
         'name' => $sj['repo_name'],
     ];
@@ -310,7 +309,7 @@ foreach ($serverJobs as $sj) {
 
 // Step 5: Update repository sizes from actual disk usage (every 5 minutes)
 if ((int) date('i') % 5 === 0) {
-    $repos = $db->fetchAll("SELECT id, path, storage_location_id, agent_id, name FROM repositories");
+    $repos = $db->fetchAll("SELECT id, path, agent_id, name FROM repositories");
     foreach ($repos as $repo) {
         $localPath = \BBS\Services\BorgCommandBuilder::getLocalRepoPath($repo);
         if (!empty($localPath) && is_dir($localPath)) {

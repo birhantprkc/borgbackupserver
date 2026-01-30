@@ -465,7 +465,7 @@ class ClientController extends Controller
 
         $archive = $this->db->fetchOne("
             SELECT ar.*, r.path as repo_path, r.passphrase_encrypted, r.encryption,
-                   r.storage_location_id, r.agent_id as repo_agent_id, r.name as repo_name
+                   r.agent_id as repo_agent_id, r.name as repo_name
             FROM archives ar
             JOIN repositories r ON r.id = ar.repository_id
             WHERE ar.id = ? AND r.agent_id = ?
@@ -481,7 +481,6 @@ class ClientController extends Controller
             'path' => $archive['repo_path'],
             'passphrase_encrypted' => $archive['passphrase_encrypted'],
             'encryption' => $archive['encryption'],
-            'storage_location_id' => $archive['storage_location_id'] ?? null,
             'agent_id' => $archive['repo_agent_id'] ?? $id,
             'name' => $archive['repo_name'] ?? '',
         ];
