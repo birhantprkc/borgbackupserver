@@ -9,6 +9,14 @@
 
 <div class="card border-0 shadow-sm">
     <div class="card-body p-0">
+        <?php if (!empty($agents)): ?>
+        <div class="px-3 pt-3 pb-2">
+            <div class="input-group" style="max-width: 320px;">
+                <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                <input type="text" id="clientSearch" class="form-control border-start-0 ps-0" placeholder="Search clients...">
+            </div>
+        </div>
+        <?php endif; ?>
         <div class="table-responsive">
             <table class="table table-hover mb-0" id="clientsTable">
                 <thead class="table-light">
@@ -32,9 +40,9 @@
                     <?php foreach ($agents as $agent): ?>
                     <tr style="cursor:pointer" onclick="window.location='/clients/<?= $agent['id'] ?>'">
                         <td>
-                            <strong><?= htmlspecialchars($agent['name']) ?></strong>
+                            <i class="bi bi-pc-display me-2 text-muted"></i><strong><?= htmlspecialchars($agent['name']) ?></strong>
                             <?php if ($agent['hostname']): ?>
-                                <br><small class="text-muted"><?= htmlspecialchars($agent['hostname']) ?></small>
+                                <br><small class="text-muted ps-4 ms-1"><?= htmlspecialchars($agent['hostname']) ?></small>
                             <?php endif; ?>
                         </td>
                         <td><?= htmlspecialchars($agent['agent_version'] ?? '--') ?></td>
@@ -74,3 +82,16 @@
         </div>
     </div>
 </div>
+
+<?php if (!empty($agents)): ?>
+<script>
+document.getElementById('clientSearch').addEventListener('input', function() {
+    const filter = this.value.toLowerCase();
+    const rows = document.querySelectorAll('#clientsTable tbody tr');
+    rows.forEach(function(row) {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(filter) ? '' : 'none';
+    });
+});
+</script>
+<?php endif; ?>
