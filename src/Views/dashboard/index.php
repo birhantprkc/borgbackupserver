@@ -462,7 +462,7 @@ new Chart(ctx, {
     }
 });
 
-// Auto-refresh stat cards every 15 seconds
+// Auto-refresh stat cards every 8 seconds
 setInterval(function() {
     fetch('/dashboard/json', { credentials: 'same-origin' })
         .then(r => r.json())
@@ -491,5 +491,5 @@ setInterval(function() {
             <?php endif; ?>
         })
         .catch(() => {});
-}, 15000);
+}, 8000);
 </script>
