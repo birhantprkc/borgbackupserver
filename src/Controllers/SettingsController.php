@@ -57,6 +57,19 @@ class SettingsController extends Controller
             }
         }
 
+        // Update APP_URL in .env when server_host or SSL toggle changes
+        if (isset($_POST['server_host'])) {
+            $protocol = isset($_POST['enable_ssl']) ? 'https' : 'http';
+            $host = trim($_POST['server_host']);
+            $newAppUrl = "{$protocol}://{$host}";
+            $envPath = dirname(__DIR__, 2) . '/config/.env';
+            if (file_exists($envPath)) {
+                $env = file_get_contents($envPath);
+                $env = preg_replace('/^APP_URL=.*$/m', 'APP_URL=' . $newAppUrl, $env);
+                file_put_contents($envPath, $env);
+            }
+        }
+
         $this->flash('success', 'Settings updated.');
         $tab = $_POST['_tab'] ?? 'general';
         $this->redirect('/settings?tab=' . urlencode($tab));

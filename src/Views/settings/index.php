@@ -60,6 +60,16 @@
                         <div class="form-text">The address agents use to reach this server.</div>
                     </div>
                     <div class="mb-3">
+                        <div class="form-check">
+                            <?php $currentUrl = \BBS\Core\Config::get('APP_URL', 'https://'); $sslEnabled = str_starts_with($currentUrl, 'https://'); ?>
+                            <input class="form-check-input" type="checkbox" name="enable_ssl" value="1" id="enableSsl" <?= $sslEnabled ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-semibold" for="enableSsl">
+                                Enable SSL (HTTPS)
+                            </label>
+                        </div>
+                        <div class="form-text">Recommended for public servers. Uncheck for LAN/internal installs without a certificate.</div>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label fw-semibold">Agent Poll Interval (seconds)</label>
                         <input type="number" class="form-control" name="agent_poll_interval" value="<?= htmlspecialchars($settings['agent_poll_interval'] ?? '30') ?>" min="5" max="300">
                         <div class="form-text">How often agents check for new tasks.</div>
