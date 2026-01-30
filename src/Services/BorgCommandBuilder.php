@@ -160,8 +160,8 @@ class BorgCommandBuilder
             }
         } else {
             // Server-side: www-data can't write to /var/www/.config, redirect borg's config/cache
-            $env['BORG_BASE_DIR'] = '/tmp';
-            $env['HOME'] = '/tmp';
+            $env['BORG_BASE_DIR'] = '/tmp/bbs-borg-www-data';
+            $env['HOME'] = '/tmp/bbs-borg-www-data';
         }
 
         return $env;
