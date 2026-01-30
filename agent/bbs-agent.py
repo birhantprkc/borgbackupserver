@@ -116,10 +116,10 @@ def get_system_info():
     # Get borg version
     try:
         result = subprocess.run(
-            ["borg", "--version"], capture_output=True, text=True, timeout=10
+            ["borg", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10
         )
         if result.returncode == 0:
-            info["borg_version"] = result.stdout.strip().replace("borg ", "")
+            info["borg_version"] = result.stdout.decode("utf-8", errors="replace").strip().replace("borg ", "")
     except FileNotFoundError:
         logger.warning("borg not found in PATH")
         info["borg_version"] = "not installed"
@@ -261,17 +261,17 @@ def execute_update_borg(config, task):
         # Run pre-command (e.g. apt update)
         if pre_cmd:
             logger.info(f"Running: {' '.join(pre_cmd)}")
-            subprocess.run(pre_cmd, capture_output=True, text=True, timeout=120)
+            subprocess.run(pre_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120)
 
         # Run update
         logger.info(f"Running: {' '.join(cmd)}")
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=600)
 
         if proc.returncode == 0:
             result = "completed"
             logger.info(f"Borg update completed successfully")
         else:
-            error_output = proc.stderr or proc.stdout or f"Exit code {proc.returncode}"
+            error_output = proc.stderr.decode("utf-8", errors="replace") or proc.stdout.decode("utf-8", errors="replace") or f"Exit code {proc.returncode}"
             logger.error(f"Borg update failed: {error_output}")
 
     except subprocess.TimeoutExpired:
@@ -354,13 +354,13 @@ def execute_plugin_mysql_dump(config):
             "-e", "SHOW DATABASES;",
             "-s", "--skip-column-names",
         ]
-        result = subprocess.run(list_cmd, capture_output=True, text=True)
+        result = subprocess.run(list_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if result.returncode != 0:
-            raise Exception(f"Failed to list databases: {result.stderr.strip()}")
+            raise Exception(f"Failed to list databases: {result.stderr.decode('utf-8', errors='replace').strip()}")
         if isinstance(exclude, str):
             exclude = [x.strip() for x in exclude.split(",")]
         databases = [
-            db.strip() for db in result.stdout.strip().split("\n")
+            db.strip() for db in result.stdout.decode("utf-8", errors="replace").strip().split("\n")
             if db.strip() and db.strip() not in exclude
         ]
     elif isinstance(databases, str):
@@ -391,9 +391,9 @@ def execute_plugin_mysql_dump(config):
                     raise Exception(f"mysqldump failed for {db}: {stderr}")
             else:
                 with open(dump_path, "w") as f:
-                    r = subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE, text=True)
+                    r = subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE)
                     if r.returncode != 0:
-                        raise Exception(f"mysqldump failed for {db}: {r.stderr}")
+                        raise Exception(f"mysqldump failed for {db}: {r.stderr.decode('utf-8', errors='replace')}")
 
             dump_files.append(dump_path)
     else:
@@ -414,9 +414,9 @@ def execute_plugin_mysql_dump(config):
                 raise Exception(f"mysqldump failed: {stderr}")
         else:
             with open(dump_path, "w") as f:
-                r = subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE, text=True)
+                r = subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE)
                 if r.returncode != 0:
-                    raise Exception(f"mysqldump failed: {r.stderr}")
+                    raise Exception(f"mysqldump failed: {r.stderr.decode('utf-8', errors='replace')}")
 
         dump_files.append(dump_path)
 
@@ -510,11 +510,11 @@ def execute_task(config, task):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=env,
-            text=True,
         )
 
         # Read stderr for JSON log output (borg writes progress to stderr)
-        for line in proc.stderr:
+        for raw_line in proc.stderr:
+            line = raw_line.decode("utf-8", errors="replace")
             line = line.strip()
             if not line:
                 continue
@@ -567,7 +567,7 @@ def execute_task(config, task):
 
         # Wait for process to complete
         proc.wait(timeout=86400)  # 24h timeout
-        stdout_output = proc.stdout.read()
+        stdout_output = proc.stdout.read().decode("utf-8", errors="replace")
 
         # Parse borg info from stdout if available
         if stdout_output:
