@@ -67,7 +67,11 @@
                                 Enable SSL (HTTPS)
                             </label>
                         </div>
-                        <div class="form-text">Recommended for public servers. Uncheck for LAN/internal installs without a certificate.</div>
+                        <div class="form-text">Recommended for public servers. Uncheck for LAN/internal installs without a certificate.
+                            <?php if (!$sslEnabled): ?>
+                                To enable SSL, first obtain a certificate: <code>sudo certbot --apache -d <?= htmlspecialchars($settings['server_host'] ?? 'your-hostname') ?></code>
+                            <?php endif; ?>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Agent Poll Interval (seconds)</label>
