@@ -333,4 +333,15 @@ $isActive = in_array($job['status'], ['queued', 'sent', 'running']);
 // Auto-refresh for active jobs
 setTimeout(function() { location.reload(); }, 10000);
 </script>
+<?php elseif ($job['completed_at']): ?>
+<script>
+// Keep refreshing briefly after completion to catch late log entries (catalog, prune)
+(function() {
+    var completed = new Date("<?= $job['completed_at'] ?>Z").getTime();
+    var elapsed = Date.now() - completed;
+    if (elapsed < 120000) {
+        setTimeout(function() { location.reload(); }, 5000);
+    }
+})();
+</script>
 <?php endif; ?>
