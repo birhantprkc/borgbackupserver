@@ -54,7 +54,7 @@
                         <span class="badge bg-warning text-dark">Warning</span>
                     <?php endif; ?>
                 </td>
-                <td class="small"><?= htmlspecialchars($n['last_occurred_at']) ?></td>
+                <td class="small"><?= \BBS\Core\TimeHelper::format($n['last_occurred_at'], 'M j, g:i A') ?></td>
                 <td>
                     <?php if ($resolved): ?>
                         <span class="badge bg-success">Resolved</span>

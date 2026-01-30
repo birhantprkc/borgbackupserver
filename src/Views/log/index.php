@@ -26,7 +26,7 @@
                 <tbody>
                     <?php foreach ($logs as $log): ?>
                     <tr>
-                        <td class="text-nowrap"><?= $log['created_at'] ?></td>
+                        <td class="text-nowrap"><?= \BBS\Core\TimeHelper::format($log['created_at'], 'M j, g:i A') ?></td>
                         <td><?= htmlspecialchars($log['agent_name'] ?? '--') ?></td>
                         <td>
                             <?php

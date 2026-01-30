@@ -83,7 +83,7 @@ $isActive = in_array($job['status'], ['queued', 'sent', 'running']);
                     Agent "<strong><?= htmlspecialchars($job['agent_name']) ?></strong>" status: <?= $job['agent_status'] ?> — waiting for agent to pick up task
                 <?php endif; ?>
                 <?php if ($job['last_heartbeat']): ?>
-                    <br>Last heartbeat: <?= date('M j, g:i:s A', strtotime($job['last_heartbeat'])) ?>
+                    <br>Last heartbeat: <?= \BBS\Core\TimeHelper::format($job['last_heartbeat'], 'M j, g:i:s A') ?>
                 <?php else: ?>
                     <br>No heartbeat received yet — agent may not be installed
                 <?php endif; ?>
@@ -108,7 +108,7 @@ $isActive = in_array($job['status'], ['queued', 'sent', 'running']);
                     <i class="bi bi-wifi-off text-warning me-1"></i>
                     Waiting for agent "<strong><?= htmlspecialchars($job['agent_name']) ?></strong>" to come online
                     <?php if ($job['last_heartbeat']): ?>
-                        — last seen <?= date('M j, g:i:s A', strtotime($job['last_heartbeat'])) ?>
+                        — last seen <?= \BBS\Core\TimeHelper::format($job['last_heartbeat'], 'M j, g:i:s A') ?>
                     <?php else: ?>
                         — never connected
                     <?php endif; ?>
@@ -189,15 +189,15 @@ $isActive = in_array($job['status'], ['queued', 'sent', 'running']);
                         <?php endif; ?>
                         <tr>
                             <td class="text-muted fw-semibold ps-3">Queued At</td>
-                            <td><?= $job['queued_at'] ? date('M j, Y g:i:s A', strtotime($job['queued_at'])) : '--' ?></td>
+                            <td><?= $job['queued_at'] ? \BBS\Core\TimeHelper::format($job['queued_at'], 'M j, Y g:i:s A') : '--' ?></td>
                         </tr>
                         <tr>
                             <td class="text-muted fw-semibold ps-3">Started At</td>
-                            <td><?= $job['started_at'] ? date('M j, Y g:i:s A', strtotime($job['started_at'])) : '--' ?></td>
+                            <td><?= $job['started_at'] ? \BBS\Core\TimeHelper::format($job['started_at'], 'M j, Y g:i:s A') : '--' ?></td>
                         </tr>
                         <tr>
                             <td class="text-muted fw-semibold ps-3">Completed At</td>
-                            <td><?= $job['completed_at'] ? date('M j, Y g:i:s A', strtotime($job['completed_at'])) : '--' ?></td>
+                            <td><?= $job['completed_at'] ? \BBS\Core\TimeHelper::format($job['completed_at'], 'M j, Y g:i:s A') : '--' ?></td>
                         </tr>
                         <tr>
                             <td class="text-muted fw-semibold ps-3">Duration</td>
@@ -286,7 +286,7 @@ $isActive = in_array($job['status'], ['queued', 'sent', 'running']);
                 <div class="flex-grow-1">
                     <div class="d-flex justify-content-between">
                         <span class="small"><?= htmlspecialchars($log['message']) ?></span>
-                        <small class="text-muted ms-3 text-nowrap"><?= date('M j g:i:s A', strtotime($log['created_at'])) ?></small>
+                        <small class="text-muted ms-3 text-nowrap"><?= \BBS\Core\TimeHelper::format($log['created_at'], 'M j g:i:s A') ?></small>
                     </div>
                 </div>
             </div>

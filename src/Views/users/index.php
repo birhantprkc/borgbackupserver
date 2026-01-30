@@ -66,7 +66,7 @@
                             </span>
                         </td>
                         <td><?= $user['agent_count'] ?></td>
-                        <td class="small"><?= $user['created_at'] ?></td>
+                        <td class="small"><?= \BBS\Core\TimeHelper::format($user['created_at'], 'M j, Y') ?></td>
                         <td>
                             <?php if ($user['id'] != $_SESSION['user_id']): ?>
                             <form method="POST" action="/users/<?= $user['id'] ?>/delete" class="d-inline" onsubmit="return confirm('Delete this user?')">

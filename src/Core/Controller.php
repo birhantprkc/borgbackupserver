@@ -54,7 +54,6 @@ class Controller
             $this->redirect('/login');
         }
         $_SESSION['last_activity'] = time();
-        date_default_timezone_set($_SESSION['timezone'] ?? 'America/New_York');
     }
 
     protected function requireAdmin(): void

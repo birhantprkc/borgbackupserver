@@ -74,6 +74,7 @@ class BackupPlanController extends Controller
             'times' => $times ?: null,
             'day_of_week' => $dayOfWeek,
             'day_of_month' => $dayOfMonth,
+            'timezone' => $_SESSION['timezone'] ?? 'America/New_York',
             'enabled' => $frequency === 'manual' ? 0 : 1,
             'next_run' => $nextRun,
         ]);
@@ -201,9 +202,11 @@ class BackupPlanController extends Controller
             return null;
         }
 
-        $now = new \DateTime();
+        $userTz = new \DateTimeZone($_SESSION['timezone'] ?? 'America/New_York');
+        $utcTz = new \DateTimeZone('UTC');
+        $now = new \DateTime('now', $utcTz);
 
-        // For interval-based frequencies, next run is now + interval
+        // For interval-based frequencies, next run is now + interval (timezone irrelevant)
         $intervals = [
             '10min' => 'PT10M',
             '15min' => 'PT15M',
@@ -216,31 +219,37 @@ class BackupPlanController extends Controller
             return $now->format('Y-m-d H:i:s');
         }
 
-        // For daily/weekly/monthly, use the first time in the times list
+        // For daily/weekly/monthly, compute in user's timezone then convert to UTC
+        $nowLocal = clone $now;
+        $nowLocal->setTimezone($userTz);
+
         $timeList = array_filter(array_map('trim', explode(',', $times)));
         $firstTime = !empty($timeList) ? $timeList[0] : '01:00';
 
         if ($frequency === 'daily') {
-            $next = new \DateTime("today {$firstTime}");
-            if ($next <= $now) {
+            $next = new \DateTime("today {$firstTime}", $userTz);
+            if ($next <= $nowLocal) {
                 $next->modify('+1 day');
             }
+            $next->setTimezone($utcTz);
             return $next->format('Y-m-d H:i:s');
         }
 
         if ($frequency === 'weekly' && $dayOfWeek !== null) {
             $days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-            $next = new \DateTime("next {$days[$dayOfWeek]} {$firstTime}");
+            $next = new \DateTime("next {$days[$dayOfWeek]} {$firstTime}", $userTz);
+            $next->setTimezone($utcTz);
             return $next->format('Y-m-d H:i:s');
         }
 
         if ($frequency === 'monthly' && $dayOfMonth !== null) {
-            $next = new \DateTime();
+            $next = new \DateTime('now', $userTz);
             $next->setDate((int)$next->format('Y'), (int)$next->format('m'), min($dayOfMonth, 28));
             $next->setTime(...array_map('intval', explode(':', $firstTime)));
-            if ($next <= $now) {
+            if ($next <= $nowLocal) {
                 $next->modify('+1 month');
             }
+            $next->setTimezone($utcTz);
             return $next->format('Y-m-d H:i:s');
         }
 

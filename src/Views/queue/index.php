@@ -21,7 +21,7 @@
                 <tbody>
                     <?php foreach ($inProgress as $job): ?>
                     <tr style="cursor: pointer;" onclick="window.location='/queue/<?= $job['id'] ?>'">
-                        <td class="small"><?= $job['queued_at'] ?></td>
+                        <td class="small"><?= \BBS\Core\TimeHelper::format($job['queued_at'], 'M j, g:i A') ?></td>
                         <td><?= htmlspecialchars($job['agent_name']) ?></td>
                         <td><?= $job['task_type'] ?></td>
                         <td><?= number_format($job['files_total'] ?? 0) ?></td>
@@ -53,7 +53,7 @@
                             <?php if (in_array($job['status'], ['queued', 'sent'])): ?>
                             <form method="POST" action="/queue/<?= $job['id'] ?>/cancel" class="d-inline"
                                   onsubmit="return confirm('Cancel this job?')">
-                                <input type="hidden" name="csrf_token" value="<?= $csrfToken ?>">
+                                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                 <button class="btn btn-sm btn-outline-danger" title="Cancel">
                                     <i class="bi bi-x-circle"></i>
                                 </button>
@@ -92,7 +92,7 @@
                 <tbody>
                     <?php foreach ($completed as $job): ?>
                     <tr style="cursor: pointer;" onclick="window.location='/queue/<?= $job['id'] ?>'">
-                        <td class="small"><?= $job['completed_at'] ?></td>
+                        <td class="small"><?= \BBS\Core\TimeHelper::format($job['completed_at'], 'M j, g:i A') ?></td>
                         <td><?= htmlspecialchars($job['agent_name']) ?></td>
                         <td><?= $job['task_type'] ?></td>
                         <td><?= number_format($job['files_total'] ?? 0) ?></td>
@@ -116,7 +116,7 @@
                             <?php if ($job['status'] === 'failed'): ?>
                             <form method="POST" action="/queue/<?= $job['id'] ?>/retry" class="d-inline"
                                   onsubmit="return confirm('Retry this job?')">
-                                <input type="hidden" name="csrf_token" value="<?= $csrfToken ?>">
+                                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                 <button class="btn btn-sm btn-outline-warning" title="Retry">
                                     <i class="bi bi-arrow-repeat"></i>
                                 </button>

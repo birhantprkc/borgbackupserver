@@ -107,6 +107,7 @@ CREATE TABLE schedules (
     times VARCHAR(255) DEFAULT NULL,
     day_of_week TINYINT DEFAULT NULL,
     day_of_month TINYINT DEFAULT NULL,
+    timezone VARCHAR(64) NOT NULL DEFAULT 'UTC',
     enabled TINYINT(1) NOT NULL DEFAULT 1,
     next_run DATETIME DEFAULT NULL,
     last_run DATETIME DEFAULT NULL,

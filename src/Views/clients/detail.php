@@ -61,15 +61,11 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         <!-- Stats row — icon cards -->
         <?php
         if ($agent['last_heartbeat']) {
-            $diff = time() - strtotime($agent['last_heartbeat']);
-            if ($diff < 60) $seenAgo = $diff . 's ago';
-            elseif ($diff < 3600) $seenAgo = floor($diff / 60) . 'm ago';
-            elseif ($diff < 86400) $seenAgo = floor($diff / 3600) . 'h ago';
-            else $seenAgo = floor($diff / 86400) . 'd ago';
+            $seenAgo = \BBS\Core\TimeHelper::ago($agent['last_heartbeat']);
         } else {
             $seenAgo = 'Never';
         }
-        $lastBackupLabel = $lastJob ? date('M j g:ia', strtotime($lastJob['completed_at'])) : '--';
+        $lastBackupLabel = $lastJob ? \BBS\Core\TimeHelper::format($lastJob['completed_at'], 'M j g:ia') : '--';
         $lastBackupIcon = $lastJob ? ($lastJob['status'] === 'completed' ? 'check-circle-fill' : 'x-circle-fill') : 'dash-circle';
         $lastBackupColor = $lastJob ? ($lastJob['status'] === 'completed' ? 'success' : 'danger') : 'secondary';
         ?>
@@ -367,7 +363,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     <div class="flex-grow-1">
                         <div class="d-flex justify-content-between">
                             <span class="fw-semibold"><?= ucfirst($job['task_type']) ?></span>
-                            <small class="text-muted"><?= date('M j g:ia', strtotime($job['started_at'] ?? $job['queued_at'])) ?></small>
+                            <small class="text-muted"><?= \BBS\Core\TimeHelper::format($job['started_at'] ?? $job['queued_at'], 'M j g:ia') ?></small>
                         </div>
                         <div class="small text-muted">
                             <?= htmlspecialchars($job['repo_name'] ?? '') ?>
@@ -1347,7 +1343,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 <?php foreach ($archives as $ar): ?>
                     <option value="<?= $ar['id'] ?>">
                         <?= htmlspecialchars($ar['archive_name']) ?> — <?= $ar['repo_name'] ?>
-                        (<?= number_format($ar['file_count']) ?> files, <?= date('M j g:ia', strtotime($ar['created_at'])) ?>)
+                        (<?= number_format($ar['file_count']) ?> files, <?= \BBS\Core\TimeHelper::format($ar['created_at'], 'M j g:ia') ?>)
                     </option>
                 <?php endforeach; ?>
             </select>

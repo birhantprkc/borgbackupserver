@@ -9,7 +9,7 @@
             </div>
             <div class="card-body">
                 <form method="POST" action="/profile">
-                    <input type="hidden" name="csrf_token" value="<?= $csrfToken ?>">
+                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
 
                     <div class="mb-3">
                         <label class="form-label">Username</label>
@@ -57,7 +57,7 @@
 
                     <div class="mb-3">
                         <label class="form-label">Member Since</label>
-                        <input type="text" class="form-control" value="<?= date('M j, Y', strtotime($user['created_at'])) ?>" disabled>
+                        <input type="text" class="form-control" value="<?= \BBS\Core\TimeHelper::format($user['created_at'], 'M j, Y') ?>" disabled>
                     </div>
 
                     <button type="submit" class="btn btn-primary">Save Changes</button>
@@ -74,7 +74,7 @@
             </div>
             <div class="card-body">
                 <form method="POST" action="/profile">
-                    <input type="hidden" name="csrf_token" value="<?= $csrfToken ?>">
+                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
 
                     <div class="mb-3">
                         <label class="form-label">Current Password</label>

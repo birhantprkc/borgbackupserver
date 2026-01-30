@@ -266,7 +266,7 @@
                                 <i class="bi bi-pencil"></i>
                             </button>
                             <form method="POST" action="/settings/templates/<?= $tpl['id'] ?>/delete" class="d-inline" onsubmit="return confirm('Delete this template?')">
-                                <input type="hidden" name="csrf_token" value="<?= $csrfToken ?>">
+                                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                 <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
                             </form>
                         </td>
@@ -274,7 +274,7 @@
                     <tr class="collapse" id="edit-tpl-<?= $tpl['id'] ?>">
                         <td colspan="5">
                             <form method="POST" action="/settings/templates/<?= $tpl['id'] ?>/edit" class="p-2">
-                                <input type="hidden" name="csrf_token" value="<?= $csrfToken ?>">
+                                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                 <div class="row g-2">
                                     <div class="col-md-3">
                                         <input type="text" class="form-control form-control-sm" name="name" value="<?= htmlspecialchars($tpl['name']) ?>" required>
@@ -303,7 +303,7 @@
 
         <h6>Add Template</h6>
         <form method="POST" action="/settings/templates/add">
-            <input type="hidden" name="csrf_token" value="<?= $csrfToken ?>">
+            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
             <div class="row g-3">
                 <div class="col-md-3">
                     <label class="form-label fw-semibold">Name</label>
@@ -369,7 +369,7 @@
                 </div>
 
                 <?php if (!empty($latest['checked_at'])): ?>
-                    <div class="text-muted small mb-3">Last checked: <?= htmlspecialchars($latest['checked_at']) ?></div>
+                    <div class="text-muted small mb-3">Last checked: <?= \BBS\Core\TimeHelper::format($latest['checked_at'], 'M j, Y g:i A') ?></div>
                 <?php endif; ?>
 
                 <div class="d-flex gap-2 flex-wrap">

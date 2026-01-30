@@ -18,9 +18,8 @@ class Config
         $dotenv->load();
         self::$loaded = true;
 
-        // Set timezone consistently for both web and CLI (scheduler)
-        $tz = $_ENV['APP_TIMEZONE'] ?? 'America/New_York';
-        date_default_timezone_set($tz);
+        // Force UTC for all PHP date/time operations — display conversion happens via TimeHelper
+        date_default_timezone_set('UTC');
     }
 
     public static function get(string $key, mixed $default = null): mixed

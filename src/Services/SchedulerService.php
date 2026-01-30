@@ -119,7 +119,9 @@ class SchedulerService
 
     private function calculateNextRun(array $schedule): ?string
     {
-        $now = new \DateTime();
+        $scheduleTz = new \DateTimeZone($schedule['timezone'] ?? 'UTC');
+        $utcTz = new \DateTimeZone('UTC');
+        $now = new \DateTime('now', $utcTz);
 
         $intervals = [
             '10min' => 'PT10M',
@@ -128,6 +130,7 @@ class SchedulerService
             'hourly' => 'PT1H',
         ];
 
+        // Interval-based: timezone doesn't matter, just add interval to UTC now
         if (isset($intervals[$schedule['frequency']])) {
             $now->add(new \DateInterval($intervals[$schedule['frequency']]));
             return $now->format('Y-m-d H:i:s');
@@ -135,21 +138,25 @@ class SchedulerService
 
         $timeList = array_filter(array_map('trim', explode(',', $schedule['times'] ?? '')));
 
+        // For time-of-day schedules, compute in the schedule's local timezone then convert to UTC
+        $nowLocal = clone $now;
+        $nowLocal->setTimezone($scheduleTz);
+
         if ($schedule['frequency'] === 'daily' && !empty($timeList)) {
-            // Find the next time today, or first time tomorrow
-            $today = new \DateTime('today');
+            $today = new \DateTime('today', $scheduleTz);
             foreach ($timeList as $time) {
                 $candidate = clone $today;
                 $parts = explode(':', $time);
                 $candidate->setTime((int)($parts[0] ?? 0), (int)($parts[1] ?? 0));
-                if ($candidate > $now) {
+                if ($candidate > $nowLocal) {
+                    $candidate->setTimezone($utcTz);
                     return $candidate->format('Y-m-d H:i:s');
                 }
             }
-            // All times passed today, use first time tomorrow
-            $tomorrow = new \DateTime('tomorrow');
+            $tomorrow = new \DateTime('tomorrow', $scheduleTz);
             $parts = explode(':', $timeList[0]);
             $tomorrow->setTime((int)($parts[0] ?? 0), (int)($parts[1] ?? 0));
+            $tomorrow->setTimezone($utcTz);
             return $tomorrow->format('Y-m-d H:i:s');
         }
 
@@ -157,7 +164,8 @@ class SchedulerService
             $days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
             $dayName = $days[$schedule['day_of_week'] ?? 1] ?? 'Monday';
             $firstTime = $timeList[0] ?? '01:00';
-            $next = new \DateTime("next {$dayName} {$firstTime}");
+            $next = new \DateTime("next {$dayName} {$firstTime}", $scheduleTz);
+            $next->setTimezone($utcTz);
             return $next->format('Y-m-d H:i:s');
         }
 
@@ -165,13 +173,14 @@ class SchedulerService
             $dom = min($schedule['day_of_month'] ?? 1, 28);
             $firstTime = $timeList[0] ?? '01:00';
             $parts = explode(':', $firstTime);
-            $next = new \DateTime();
+            $next = new \DateTime('now', $scheduleTz);
             $next->modify('first day of next month');
             $next->setDate((int)$next->format('Y'), (int)$next->format('m'), $dom);
             $next->setTime((int)($parts[0] ?? 0), (int)($parts[1] ?? 0));
-            if ($next <= $now) {
+            if ($next <= $nowLocal) {
                 $next->modify('+1 month');
             }
+            $next->setTimezone($utcTz);
             return $next->format('Y-m-d H:i:s');
         }
 

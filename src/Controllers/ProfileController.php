@@ -36,7 +36,6 @@ class ProfileController extends Controller
         if ($timezone && in_array($timezone, timezone_identifiers_list()) && $timezone !== $user['timezone']) {
             $this->db->update('users', ['timezone' => $timezone], 'id = ?', [$userId]);
             $_SESSION['timezone'] = $timezone;
-            date_default_timezone_set($timezone);
             $this->flash('success', 'Timezone updated.');
         }
 

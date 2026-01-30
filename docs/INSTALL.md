@@ -10,6 +10,16 @@ Complete step-by-step guide to install BBS on Ubuntu 22.04+ with Apache. Follow 
 - **A domain name** pointed at your server (e.g., `backups.example.com`)
 - **Root access** to the server
 
+### Recommended: Set Server Timezone to UTC
+
+BBS stores all timestamps in UTC internally and converts to each user's timezone for display. Setting your server to UTC simplifies debugging and log correlation:
+
+```bash
+timedatectl set-timezone UTC
+```
+
+This is optional — the application handles timezone conversion regardless of the server's local time.
+
 ---
 
 ## Step 1: Install System Packages

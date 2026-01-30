@@ -27,10 +27,6 @@ class Database
                 PDO::ATTR_EMULATE_PREPARES => false,
             ]
         );
-
-        // Sync MySQL session timezone with PHP so CURRENT_TIMESTAMP/NOW() match the app
-        $offset = (new \DateTime())->format('P'); // e.g. "-05:00"
-        $this->pdo->exec("SET time_zone = '{$offset}'");
     }
 
     public static function getInstance(): self

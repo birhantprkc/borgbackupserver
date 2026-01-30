@@ -250,7 +250,7 @@
                             <?php foreach ($recentJobs as $job): ?>
                             <tr>
                                 <td><?= htmlspecialchars($job['agent_name']) ?></td>
-                                <td class="small"><?= $job['completed_at'] ?></td>
+                                <td class="small"><?= \BBS\Core\TimeHelper::format($job['completed_at'], 'M j, Y g:i A') ?></td>
                                 <td><?= number_format($job['files_total'] ?? 0) ?></td>
                                 <td>
                                     <?php
@@ -295,7 +295,7 @@
                         <tbody>
                             <?php foreach ($recentLogs as $log): ?>
                             <tr>
-                                <td class="text-nowrap"><?= $log['created_at'] ?></td>
+                                <td class="text-nowrap"><?= \BBS\Core\TimeHelper::format($log['created_at'], 'M j, g:i A') ?></td>
                                 <td><?= htmlspecialchars($log['agent_name'] ?? '--') ?></td>
                                 <td>
                                     <?php
