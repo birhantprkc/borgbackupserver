@@ -44,6 +44,15 @@ class QueueManager
         );
         $busyRepoIds = array_column($busyRepos, 'repository_id');
 
+        // Get backup plans that already have an active job (skip duplicates of the same plan)
+        $busyPlans = $this->db->fetchAll(
+            "SELECT DISTINCT backup_plan_id FROM backup_jobs
+             WHERE status IN ('queued', 'sent', 'running')
+               AND backup_plan_id IS NOT NULL
+               AND task_type = 'backup'"
+        );
+        $busyPlanIds = array_column($busyPlans, 'backup_plan_id');
+
         // Get queued jobs ordered by queued_at (FIFO)
         // No LIMIT — we may skip busy-repo jobs and need to see more candidates
         $queuedJobs = $this->db->fetchAll("
@@ -67,23 +76,26 @@ class QueueManager
                 break;
             }
 
-            // Skip if repo already has an active job (borg repo-level lock)
+            // Skip duplicate backup for the same plan (no point running the same backup twice)
+            if ($job['task_type'] === 'backup' && $job['backup_plan_id']
+                && in_array($job['backup_plan_id'], $busyPlanIds)) {
+                $this->db->update('backup_jobs', [
+                    'status' => 'failed',
+                    'completed_at' => date('Y-m-d H:i:s'),
+                    'error_log' => 'Skipped — a backup for this plan is already queued or running',
+                ], 'id = ?', [$job['id']]);
+                $this->db->insert('server_log', [
+                    'agent_id' => $job['agent_id'],
+                    'backup_job_id' => $job['id'],
+                    'level' => 'info',
+                    'message' => "Backup job #{$job['id']} skipped — plan already has an active backup",
+                ]);
+                continue;
+            }
+
+            // Hold if repo already has an active job (borg can't run concurrent ops)
+            // Different plans wait their turn; same-plan duplicates were already skipped above
             if ($job['repository_id'] && in_array($job['repository_id'], $busyRepoIds)) {
-                // Backup jobs get skipped entirely — no point running the same backup twice
-                if ($job['task_type'] === 'backup') {
-                    $this->db->update('backup_jobs', [
-                        'status' => 'failed',
-                        'completed_at' => date('Y-m-d H:i:s'),
-                        'error_log' => 'Skipped — another job is already active for this repository',
-                    ], 'id = ?', [$job['id']]);
-                    $this->db->insert('server_log', [
-                        'agent_id' => $job['agent_id'],
-                        'backup_job_id' => $job['id'],
-                        'level' => 'info',
-                        'message' => "Backup job #{$job['id']} skipped — repository already has an active job",
-                    ]);
-                }
-                // Prune/compact/restore wait in queue for their turn
                 continue;
             }
             // Build the task payload
