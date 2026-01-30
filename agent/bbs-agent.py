@@ -493,7 +493,7 @@ def execute_task(config, task):
         # Check if any command arg looks like an SSH repo path
         for arg in command:
             if arg.startswith("ssh://"):
-                env["BORG_RSH"] = f"ssh -i {SSH_KEY_PATH} -o StrictHostKeyChecking=accept-new -o BatchMode=yes"
+                env["BORG_RSH"] = f"ssh -i {SSH_KEY_PATH} -o StrictHostKeyChecking=no -o BatchMode=yes"
                 break
 
     # Execute borg command

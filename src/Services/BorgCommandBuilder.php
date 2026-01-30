@@ -155,7 +155,7 @@ class BorgCommandBuilder
         if ($forAgent) {
             // For agent-side execution, set BORG_RSH to use the agent's SSH key
             if (self::isSshRepo($repo['path'] ?? '')) {
-                $env['BORG_RSH'] = 'ssh -i /etc/bbs-agent/ssh_key -o StrictHostKeyChecking=accept-new -o BatchMode=yes';
+                $env['BORG_RSH'] = 'ssh -i /etc/bbs-agent/ssh_key -o StrictHostKeyChecking=no -o BatchMode=yes';
             }
         } else {
             // Server-side: www-data can't write to /var/www/.config, redirect borg's config/cache
