@@ -94,6 +94,19 @@ class SettingsController extends Controller
             $this->db->update('storage_locations', ['is_default' => 0], '1=1');
         }
 
+        // Create directory if it doesn't exist and fix permissions
+        if (!is_dir($path)) {
+            if (!@mkdir($path, 0750, true)) {
+                $this->flash('danger', "Could not create directory: {$path}. Create it manually and set ownership to www-data:www-data.");
+                $this->redirect('/settings?tab=storage');
+                return;
+            }
+        }
+        // Best-effort ownership fix (may fail if not root, but bbs-update will catch it)
+        @chown($path, 'www-data');
+        @chgrp($path, 'www-data');
+        @chmod($path, 0750);
+
         $this->db->insert('storage_locations', [
             'label' => $label,
             'path' => $path,

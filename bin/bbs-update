@@ -23,11 +23,11 @@ echo "=== BBS Update ==="
 echo ""
 
 # 1. Pull latest code
-echo "[1/7] Pulling latest code..."
+echo "[1/8] Pulling latest code..."
 git -C "$BBS_DIR" pull
 
 # 2. Install/update PHP dependencies
-echo "[2/7] Installing PHP dependencies..."
+echo "[2/8] Installing PHP dependencies..."
 if command -v composer &>/dev/null; then
     composer install --no-dev --working-dir="$BBS_DIR" --quiet
 else
@@ -35,18 +35,18 @@ else
 fi
 
 # 3. Fix web file ownership
-echo "[3/7] Setting web file permissions..."
+echo "[3/8] Setting web file permissions..."
 chown -R www-data:www-data "$BBS_DIR"
 chmod 755 "$BBS_DIR/config"
 [ -f "$BBS_DIR/config/.env" ] && chmod 600 "$BBS_DIR/config/.env"
 
 # 4. Update SSH helper
-echo "[4/7] Updating SSH helper..."
+echo "[4/8] Updating SSH helper..."
 cp "$BBS_DIR/bin/bbs-ssh-helper" /usr/local/bin/bbs-ssh-helper
 chmod 755 /usr/local/bin/bbs-ssh-helper
 
 # 5. Fix runtime directories
-echo "[5/7] Fixing runtime permissions..."
+echo "[5/8] Fixing runtime permissions..."
 
 # Borg cache dirs under /var/bbs/cache (avoid /tmp size limits)
 mkdir -p /var/bbs/cache/www-data
@@ -85,7 +85,7 @@ for user in $(getent passwd | grep '^bbs-' | cut -d: -f1); do
 done
 
 # 6. Fix sudoers (ensure bbs-update is allowed)
-echo "[6/7] Verifying sudoers..."
+echo "[6/8] Verifying sudoers..."
 SUDOERS_FILE="/etc/sudoers.d/bbs-ssh-helper"
 EXPECTED="www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper, $BBS_DIR/bin/bbs-update"
 if [ -f "$SUDOERS_FILE" ]; then
@@ -112,8 +112,42 @@ if [ ! -f "$BORG_SUDOERS" ] || ! grep -q "bbs-\*" "$BORG_SUDOERS"; then
 fi
 
 # 7. Run database migrations
-echo "[7/7] Running database migrations..."
+echo "[7/8] Running database migrations..."
 sudo -u www-data php "$BBS_DIR/migrate.php" 2>&1 || echo "  Warning: migration runner returned an error (migrations may run on next page load)"
+
+# 8. Fix storage location permissions
+echo "[8/8] Fixing storage location permissions..."
+ENV_FILE="$BBS_DIR/config/.env"
+if [ -f "$ENV_FILE" ]; then
+    DB_HOST=$(grep '^DB_HOST=' "$ENV_FILE" | cut -d= -f2-)
+    DB_NAME=$(grep '^DB_NAME=' "$ENV_FILE" | cut -d= -f2-)
+    DB_USER=$(grep '^DB_USER=' "$ENV_FILE" | cut -d= -f2-)
+    DB_PASS=$(grep '^DB_PASS=' "$ENV_FILE" | cut -d= -f2-)
+
+    if [ -n "$DB_NAME" ] && [ -n "$DB_USER" ]; then
+        STORAGE_PATHS=$(mysql -h "${DB_HOST:-localhost}" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" \
+            -N -e "SELECT path FROM storage_locations" 2>/dev/null || true)
+
+        if [ -n "$STORAGE_PATHS" ]; then
+            while IFS= read -r spath; do
+                [ -z "$spath" ] && continue
+                if [ ! -d "$spath" ]; then
+                    mkdir -p "$spath"
+                    echo "  Created $spath"
+                fi
+                chown www-data:www-data "$spath"
+                chmod 750 "$spath"
+                echo "  Fixed $spath"
+            done <<< "$STORAGE_PATHS"
+        else
+            echo "  No storage locations configured"
+        fi
+    else
+        echo "  Warning: could not read DB credentials from .env"
+    fi
+else
+    echo "  Warning: .env not found, skipping"
+fi
 
 echo ""
 echo "=== Update complete ==="
