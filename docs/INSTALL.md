@@ -144,7 +144,7 @@ a2ensite bbs
 
 **SSL is required.** Agents send API keys over HTTPS.
 
-Get a certificate from Let's Encrypt:
+Get a certificate from Let's Encrypt (the Apache plugin was installed in Step 1, but if you see "plugin does not appear to be installed", run `apt install -y python3-certbot-apache` first):
 
 ```bash
 certbot --apache -d backups.example.com
