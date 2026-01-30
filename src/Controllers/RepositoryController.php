@@ -55,7 +55,7 @@ class RepositoryController extends Controller
             $passphrase = $this->generatePassphrase();
         }
 
-        $this->db->insert('repositories', [
+        $repoId = $this->db->insert('repositories', [
             'agent_id' => $agentId,
             'storage_location_id' => $storageLocationId,
             'name' => $name,
@@ -63,8 +63,6 @@ class RepositoryController extends Controller
             'encryption' => $encryption,
             'passphrase_encrypted' => $encryption !== 'none' ? Encryption::encrypt($passphrase) : null,
         ]);
-
-        $repoId = $this->db->lastInsertId();
 
         // Run borg init server-side (repos are local to server)
         $repo = $this->db->fetchOne("SELECT * FROM repositories WHERE id = ?", [$repoId]);
