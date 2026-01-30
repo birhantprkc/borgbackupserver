@@ -172,7 +172,7 @@ CREATE TABLE file_catalog (
     archive_id INT NOT NULL,
     file_path_id BIGINT UNSIGNED NOT NULL,
     file_size BIGINT DEFAULT 0,
-    status ENUM('A','M','U','E') DEFAULT 'U',
+    status CHAR(1) DEFAULT 'U',
     mtime DATETIME NULL,
     PRIMARY KEY (archive_id, file_path_id),
     KEY idx_file_path (file_path_id),
