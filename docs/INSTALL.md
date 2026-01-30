@@ -1,70 +1,64 @@
 # Borg Backup Server — Installation Guide
 
-This guide covers installing the BBS server on a fresh Linux system. The server is a PHP web application backed by MySQL with a built-in setup wizard.
+Complete step-by-step guide to install BBS on a fresh Linux server. Follow every step in order.
 
 ---
 
 ## Requirements
 
-- **OS:** Ubuntu 22.04+ / Debian 12+ / RHEL 9+ / Rocky 9+ (any Linux with PHP 8.1+)
-- **PHP:** 8.1 or newer with extensions: pdo_mysql, mbstring, openssl, json
+- **OS:** Ubuntu 22.04+ or Debian 12+ (RHEL 9+ / Rocky 9+ also supported — see notes)
+- **PHP:** 8.1 or newer
 - **MySQL:** 8.0+ or MariaDB 10.6+
-- **Composer:** 2.x
-- **Web server:** Apache or Nginx (or PHP built-in for development)
-- **BorgBackup:** Installed on the server (for SSH-based backups, server-side prune, and download/restore)
-- **OpenSSH Server:** `sshd` running and accepting connections (agents connect via SSH for borg)
-- **Optional:** Memcached + php-memcached extension (for dashboard caching)
+- **A domain name** pointed at your server (e.g., `backups.example.com`)
+- **Root access** to the server
 
 ---
 
-## 1. Install System Packages
+## Step 1: Install System Packages
 
 ### Ubuntu / Debian
 
 ```bash
 apt update
-apt install -y php php-mysql php-mbstring php-xml php-curl \
-    mysql-server borgbackup composer git memcached php-memcached
+apt install -y apache2 libapache2-mod-php \
+    php php-mysql php-mbstring php-xml php-curl php-memcached \
+    mysql-server borgbackup composer git openssh-server \
+    memcached certbot python3-certbot-apache
 ```
 
-### RHEL / Rocky / AlmaLinux
+### RHEL 9 / Rocky 9 / AlmaLinux 9
 
 ```bash
 dnf install -y epel-release
-dnf install -y php php-mysqlnd php-mbstring php-xml php-json \
-    mysql-server borgbackup openssh-server composer git
+dnf install -y httpd php php-mysqlnd php-mbstring php-xml php-json php-pecl-memcached \
+    mysql-server borgbackup openssh-server composer git \
+    memcached certbot python3-certbot-apache
 
-systemctl enable --now mysqld sshd
+systemctl enable --now mysqld httpd sshd memcached
 ```
+
+> **Note:** On RHEL/Rocky, the web server user is `apache` instead of `www-data`. Every command below that references `www-data` should use `apache` instead. This is called out at each step.
 
 ---
 
-## 2. Create MySQL User
-
-The setup wizard will create the database and tables automatically. You only need a MySQL user with permission to create databases:
+## Step 2: Create MySQL Database and User
 
 ```bash
-mysql -u root -p <<'SQL'
-CREATE USER 'bbs'@'localhost' IDENTIFIED BY 'your_secure_password';
-GRANT ALL PRIVILEGES ON *.* TO 'bbs'@'localhost' WITH GRANT OPTION;
-FLUSH PRIVILEGES;
-SQL
-```
-
-If you prefer to limit privileges, create the database first and grant only on it:
-
-```bash
-mysql -u root -p <<'SQL'
+mysql -u root <<'SQL'
 CREATE DATABASE bbs CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'bbs'@'localhost' IDENTIFIED BY 'your_secure_password';
+CREATE USER 'bbs'@'localhost' IDENTIFIED BY 'CHANGE_THIS_PASSWORD';
 GRANT ALL PRIVILEGES ON bbs.* TO 'bbs'@'localhost';
 FLUSH PRIVILEGES;
 SQL
 ```
 
+Replace `CHANGE_THIS_PASSWORD` with a strong password. You'll enter this in the setup wizard later.
+
+> **MySQL 8 on Ubuntu:** If `mysql -u root` fails with access denied, try `sudo mysql -u root` — Ubuntu's default MySQL uses socket auth for root.
+
 ---
 
-## 3. Download BBS
+## Step 3: Download BBS
 
 ```bash
 cd /var/www
@@ -75,45 +69,117 @@ composer install --no-dev
 
 ---
 
-## 4. Set Up SSH Helper
+## Step 4: Set File Permissions
 
-Agents back up over SSH using `borg serve`. BBS needs a helper script to create restricted Unix users when clients are added:
+The web server user needs to own the application files:
 
 ```bash
-cp bin/bbs-ssh-helper /usr/local/bin/bbs-ssh-helper
+# Ubuntu/Debian:
+chown -R www-data:www-data /var/www/bbs
+
+# RHEL/Rocky/AlmaLinux:
+# chown -R apache:apache /var/www/bbs
+```
+
+The `config/` directory must be writable (the setup wizard creates `.env` here):
+
+```bash
+chmod 755 /var/www/bbs/config
+```
+
+---
+
+## Step 5: Create Backup Storage Directory
+
+Choose where borg repositories will be stored. This should be on a partition with plenty of space:
+
+```bash
+mkdir -p /var/bbs/home
+
+# Ubuntu/Debian:
+chown www-data:www-data /var/bbs/home
+
+# RHEL/Rocky/AlmaLinux:
+# chown apache:apache /var/bbs/home
+```
+
+You'll enter this path in the setup wizard. Each client gets a subdirectory here automatically.
+
+---
+
+## Step 6: Install the SSH Helper
+
+Agents back up over SSH using `borg serve`. BBS creates restricted Unix users for each client via a helper script:
+
+```bash
+cp /var/www/bbs/bin/bbs-ssh-helper /usr/local/bin/bbs-ssh-helper
 chmod 755 /usr/local/bin/bbs-ssh-helper
 ```
 
-Allow the web server user to run it via sudo (no password):
+Allow the web server user to run it without a password:
 
 ```bash
-# Ubuntu/Debian (www-data):
+# Ubuntu/Debian:
 echo "www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper" > /etc/sudoers.d/bbs-ssh-helper
 
-# RHEL/Rocky/AlmaLinux (apache):
+# RHEL/Rocky/AlmaLinux:
 # echo "apache ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper" > /etc/sudoers.d/bbs-ssh-helper
 
 chmod 440 /etc/sudoers.d/bbs-ssh-helper
 ```
 
-> **Note:** Use whichever user your web server / PHP-FPM runs as. On Ubuntu/Debian this is `www-data`, on RHEL/Rocky/AlmaLinux it's `apache`.
+Verify it works:
 
-The helper script only manages users with the `bbs-` prefix and validates all inputs. See [Agent Deployment Guide — SSH Architecture](AGENT.md#ssh-architecture) for full details.
+```bash
+sudo -u www-data sudo /usr/local/bin/bbs-ssh-helper
+# Should print: Usage: bbs-ssh-helper {create-user|delete-user} [args...]
+```
 
 ---
 
-## 5. Web Server Configuration
+## Step 7: Configure SSL Certificate
 
-### Option A: Apache
+**SSL is required.** Agents send API keys over HTTPS.
+
+Get a certificate from Let's Encrypt using the Apache plugin (recommended — handles renewal automatically with no downtime):
 
 ```bash
-apt install -y libapache2-mod-php
-a2enmod rewrite
+certbot --apache -d backups.example.com
+```
+
+This will:
+- Obtain the certificate
+- Configure Apache SSL automatically
+- Set up auto-renewal via systemd timer
+
+Verify auto-renewal is active:
+
+```bash
+systemctl status certbot.timer
+certbot renew --dry-run
+```
+
+> **Using Nginx instead?** Install `python3-certbot-nginx` and run `certbot --nginx -d backups.example.com`.
+
+---
+
+## Step 8: Configure Apache
+
+Enable required Apache modules:
+
+```bash
+a2enmod rewrite ssl
 ```
 
 Create `/etc/apache2/sites-available/bbs.conf`:
 
 ```apache
+<VirtualHost *:80>
+    ServerName backups.example.com
+    RewriteEngine On
+    RewriteRule ^(.*)$ https://%{HTTP_HOST}$1 [R=301,L]
+</VirtualHost>
+
 <VirtualHost *:443>
     ServerName backups.example.com
     DocumentRoot /var/www/bbs/public
@@ -129,17 +195,28 @@ Create `/etc/apache2/sites-available/bbs.conf`:
 </VirtualHost>
 ```
 
+Enable the site and restart:
+
 ```bash
+a2dissite 000-default
 a2ensite bbs
-a2enmod ssl
 systemctl restart apache2
 ```
 
-> **Important:** The included `public/.htaccess` contains a rewrite rule that passes the `Authorization` header through to PHP. Apache strips this header by default, which will cause all agent API requests to fail with `401 Missing authorization token`. Make sure `AllowOverride All` is set (as shown above) so the `.htaccess` rules take effect.
+> **Important:** `AllowOverride All` is required. The included `public/.htaccess` contains a rewrite rule that passes the `Authorization` header through to PHP. Without it, all agent API requests will fail with `401 Missing authorization token`.
 
-### Option B: Nginx
+> **Note:** If certbot already created an SSL vhost for you in step 7, you can edit that file instead of creating a new one. Just make sure `DocumentRoot` points to `/var/www/bbs/public` and the `<Directory>` block has `AllowOverride All`.
+
+<details>
+<summary><strong>Nginx Configuration (click to expand)</strong></summary>
 
 ```nginx
+server {
+    listen 80;
+    server_name backups.example.com;
+    return 301 https://$host$request_uri;
+}
+
 server {
     listen 443 ssl;
     server_name backups.example.com;
@@ -154,7 +231,7 @@ server {
     }
 
     location ~ \.php$ {
-        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        fastcgi_pass unix:/run/php/php8.1-fpm.sock;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         include fastcgi_params;
     }
@@ -166,162 +243,118 @@ server {
 ```
 
 ```bash
-systemctl restart nginx php8.3-fpm
+systemctl restart nginx php8.1-fpm
 ```
 
-### SSL Certificate
-
-```bash
-apt install -y certbot
-
-# For Apache:
-apt install -y python3-certbot-apache
-certbot --apache -d backups.example.com
-
-# For Nginx:
-apt install -y python3-certbot-nginx
-certbot --nginx -d backups.example.com
-
-# Or standalone (stop your web server first):
-certbot certonly --standalone -d backups.example.com
-```
-
-**SSL is required.** Agents communicate over HTTPS and send API keys in headers.
-
-**Auto-renewal:** Certbot installs a systemd timer (or cron job) automatically. Verify it's active:
-
-```bash
-systemctl status certbot.timer
-```
-
-To test renewal without actually renewing:
-
-```bash
-certbot renew --dry-run
-```
-
-Certificates renew automatically when they're within 30 days of expiry. If you used `--standalone`, add a renewal hook to restart your web server:
-
-```bash
-echo 'deploy-hook = systemctl reload apache2' >> /etc/letsencrypt/renewal/backups.example.com.conf
-# or for nginx:
-# echo 'deploy-hook = systemctl reload nginx' >> /etc/letsencrypt/renewal/backups.example.com.conf
-```
+</details>
 
 ---
 
-## 6. File Permissions
+## Step 9: Run the Setup Wizard
 
-```bash
-# Use apache:apache on RHEL/Rocky/AlmaLinux
-chown -R www-data:www-data /var/www/bbs
-chmod 755 /var/www/bbs/config
-```
+Open your browser and go to `https://backups.example.com`. Since no `.env` file exists yet, the setup wizard starts automatically.
 
-The web server user (`www-data` on Ubuntu/Debian, `apache` on RHEL/Rocky) needs:
-- Read access to the application code
-- Write access to `config/` (the setup wizard creates `.env` here)
-- Execute access to `borg` binary (for download/restore and server-side prune)
-- Sudo access to `bbs-ssh-helper` (configured in step 4)
+The wizard walks you through:
 
----
+1. **System Check** — verifies PHP version and required extensions
+2. **Database** — enter the MySQL host, database name, user, and password from Step 2
+3. **Admin Account** — create your login (username, email, password)
+4. **Storage & Server** — enter the storage path from Step 5 (e.g., `/var/bbs/home`), a label (e.g., "Primary"), and the server hostname (e.g., `backups.example.com`)
+5. **Review & Install** — generates the encryption key, creates tables, writes `.env`
 
-## 7. Run the Setup Wizard
-
-Open your browser and navigate to your BBS server URL (e.g., `https://backups.example.com`). Since no `config/.env` file exists yet, the setup wizard will start automatically.
-
-### Step 1: Welcome
-
-The wizard checks system requirements:
-- PHP version (8.1+)
-- Required PHP extensions (pdo_mysql, mbstring, openssl)
-- Config directory is writable
-
-All requirements must pass before you can continue.
-
-### Step 2: Database
-
-Enter your MySQL connection details:
-- **Database Host** — usually `localhost`
-- **Database Name** — the wizard creates it if it doesn't exist
-- **Database User** — the MySQL user from step 2
-- **Database Password**
-
-The wizard tests the connection before proceeding. If it fails, you'll see the MySQL error message inline.
-
-### Step 3: Admin Account
-
-Create your administrator login:
-- **Username** — your login name
-- **Email** — for password reset and notification delivery
-- **Password** — minimum 8 characters
-
-This replaces the default `admin`/`admin` account — you'll log in with the credentials you choose here.
-
-### Step 4: Storage & Server
-
-Configure where backups are stored and how agents connect:
-- **Storage Label** — a display name (e.g., "Primary Storage")
-- **Storage Path** — absolute filesystem path where borg repos will live (e.g., `/mnt/backups`). The wizard will attempt to create it if it doesn't exist.
-- **Server Hostname** — the address agents use for both HTTPS polling and SSH backup connections (e.g., `backups.example.com`). Pre-filled from your browser's current host.
-
-### Step 5: Review & Install
-
-Review all your settings. The summary also shows whether the SSH helper script is installed. Click **Install** to:
-1. Generate the `APP_KEY` encryption key
-2. Create the database tables and seed data
-3. Create your admin account
-4. Register the storage location
-5. Set the server hostname
-6. Write the `config/.env` file
-
-### Step 6: Complete
-
-You'll see a success page with two options:
-- **Add Your First Client** — goes directly to the client creation page to set up your first agent
-- **Go to Dashboard** — takes you to the main dashboard
+After completing the wizard, you'll be redirected to the login page.
 
 ---
 
-## 8. Set Up the Scheduler
+## Step 10: Set Up the Scheduler (Cron)
 
-The scheduler checks for due backups and processes the job queue. Add a cron entry:
+The scheduler checks for due backups, processes the job queue, runs server-side prune, and monitors agent health. It must run every minute:
 
 ```bash
 crontab -e
 ```
 
-Add:
+Add this line:
 
 ```
 * * * * * php /var/www/bbs/scheduler.php >> /var/log/bbs-scheduler.log 2>&1
 ```
 
-This runs every minute and:
-1. Marks agents offline if their heartbeat is stale
-2. Creates queued jobs for any schedules that are due
-3. Promotes queued jobs to sent (up to `max_queue` concurrently)
-4. Executes server-side prune/compact jobs locally (agents are append-only)
-5. Checks storage locations for low disk space
+> **RHEL/Rocky:** If crontab runs as root, add `-u www-data` or create `/etc/cron.d/bbs` instead:
+> ```
+> * * * * * www-data php /var/www/bbs/scheduler.php >> /var/log/bbs-scheduler.log 2>&1
+> ```
+
+Verify it's running after a minute:
+
+```bash
+tail -f /var/log/bbs-scheduler.log
+```
 
 ---
 
-## 9. Post-Install Checklist
+## Step 11: Add Your First Client
 
-After completing the setup wizard:
+1. Log in to the BBS web UI
+2. Go to **Clients** → **Add Client**
+3. Give it a name (e.g., `webserver-01`)
+4. Copy the install command from the **Install Agent** tab
+5. SSH into the remote server and paste the command:
 
-1. **Add your first client** — create it in the web UI, then run the agent install command on your endpoint (see [Agent Deployment Guide](AGENT.md))
-2. **Create a repository** on the client detail page (Repos tab)
-3. **Create a backup plan** with a schedule (Schedules tab)
-4. **Verify the scheduler** is running: `tail -f /var/log/bbs-scheduler.log`
-5. **Optional:** Configure SMTP for email alerts (Settings > Notifications)
-6. **Optional:** Adjust max concurrent jobs (Settings > General)
+```bash
+curl -s "https://backups.example.com/api/agent/download?file=install.sh" | sudo bash -s -- \
+    --server https://backups.example.com --key YOUR_API_KEY
+```
+
+6. The agent will register, download its SSH key, and start polling
+7. Back in BBS: go to the **Repos** tab and create a repository
+8. Go to the **Schedules** tab and create a backup plan
+
+Verify the agent is online:
+
+```bash
+# On the remote server:
+systemctl status bbs-agent
+journalctl -u bbs-agent -f
+```
+
+---
+
+## Troubleshooting
+
+| Problem | Solution |
+|---|---|
+| **Blank page** | Set `APP_DEBUG=true` in `config/.env`, check `tail /var/log/apache2/error.log` |
+| **Setup wizard won't start** | Ensure `config/.env` does NOT exist and `config/` is writable by the web user |
+| **Database connection failed** | Verify MySQL is running (`systemctl status mysql`), check credentials |
+| **404 on all routes** | Enable `mod_rewrite` (`a2enmod rewrite && systemctl restart apache2`) |
+| **Agent 401 "Missing authorization token"** | Ensure `AllowOverride All` is set in Apache config so `.htaccess` rules work |
+| **Agent won't connect (HTTPS)** | Check SSL cert is valid, port 443 is open in firewall |
+| **Agent won't connect (SSH)** | Check `sshd` is running, port 22 is open, SSH key was provisioned |
+| **SSH provisioning failed** | Check `bbs-ssh-helper` is at `/usr/local/bin/`, sudoers entry matches your web user |
+| **Scheduler not running** | Check `crontab -l`, verify path in cron entry, check log file |
+| **Borg not found** | Install on the server: `apt install borgbackup` (server needs borg for prune/restore) |
+| **SSL certificate expired** | Run `certbot renew` and check `systemctl status certbot.timer` |
+| **Permission denied errors** | Re-run `chown -R www-data:www-data /var/www/bbs` |
+
+---
+
+## Upgrading
+
+```bash
+cd /var/www/bbs
+git pull
+composer install --no-dev
+chown -R www-data:www-data /var/www/bbs
+```
+
+Database migrations run automatically on next page load.
 
 ---
 
 ## Manual Setup (Without Wizard)
 
-If you prefer to configure BBS manually without the wizard:
+If you prefer to skip the wizard and configure manually:
 
 ```bash
 cp config/.env.example config/.env
@@ -341,66 +374,32 @@ DB_USER=bbs
 DB_PASS=your_secure_password
 
 SESSION_LIFETIME=3600
-
-# Generate with: php -r "echo bin2hex(random_bytes(32));"
 APP_KEY=
 ```
 
-Generate the encryption key:
+Generate the encryption key and append it:
 
 ```bash
 php -r "echo 'APP_KEY=' . bin2hex(random_bytes(32)) . PHP_EOL;" >> config/.env
 ```
 
-Import the schema:
+Import the database schema:
 
 ```bash
-mysql -u root -p bbs < schema.sql
+mysql -u bbs -p bbs < schema.sql
 ```
 
-The `APP_KEY` is used to encrypt repository passphrases at rest (AES-256-GCM). Keep it safe — if lost, encrypted passphrases cannot be recovered.
+The `APP_KEY` encrypts repository passphrases at rest (AES-256-GCM). **Back it up.** If lost, encrypted passphrases cannot be recovered.
 
-**Default login:** `admin` / `admin` — change the password immediately after first login.
+**Default login:** `admin` / `admin` — change the password immediately.
 
 ---
 
 ## Development Server
 
-For local development, the built-in PHP server works:
+For local development without Apache/Nginx:
 
 ```bash
 cd /var/www/bbs/public
 php -S localhost:8080
 ```
-
----
-
-## Upgrading
-
-```bash
-cd /var/www/bbs
-git pull
-composer install --no-dev
-```
-
-Database migrations run automatically on next page load via the Migrator. Check the release notes for any breaking changes.
-
----
-
-## Troubleshooting
-
-| Problem | Solution |
-|---|---|
-| Blank page | Set `APP_DEBUG=true` in `.env`, check PHP error log |
-| Setup wizard won't start | Ensure `config/.env` does NOT exist and `config/` directory is writable by www-data |
-| Database connection failed in wizard | Verify the MySQL user exists and has permissions. Check the host, credentials, and that MySQL is running. |
-| "Config directory not writable" | Run `chown www-data:www-data /var/www/bbs/config && chmod 755 /var/www/bbs/config` |
-| Database connection failed | Verify DB_HOST, DB_NAME, DB_USER, DB_PASS in `.env` |
-| 404 on all routes | Enable Apache `mod_rewrite` or check Nginx `try_files` |
-| Scheduler not running | Check `crontab -l`, verify path to `scheduler.php` |
-| Agents can't connect (HTTPS) | Ensure SSL is configured and port 443 is open |
-| Agents can't connect (SSH) | Ensure `sshd` is running and port 22 is open |
-| SSH provisioning fails | Check `bbs-ssh-helper` is at `/usr/local/bin/`, sudoers is configured, web user matches |
-| Borg not found | Install borg on the server: `apt install borgbackup` |
-| Prune not running | Prune runs server-side in the scheduler — check cron and server borg install |
-| Memcached not working | App works without it (graceful fallback), install `php-memcached` to enable |
