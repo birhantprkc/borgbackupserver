@@ -303,7 +303,7 @@ footer a:hover { color: var(--text); }
       <div class="feature-card"><span class="icon">🔑</span><h3>Encrypted Passphrases</h3><p>Repository passphrases are encrypted at rest using application-level encryption.</p></div>
       <div class="feature-card"><span class="icon">📧</span><h3>Email Alerts</h3><p>Get notified on backup failures, missed schedules, and other critical events.</p></div>
       <div class="feature-card"><span class="icon">📈</span><h3>Dashboard</h3><p>At-a-glance overview of all machines, recent backups, failures, and storage usage.</p></div>
-      <div class="feature-card"><span class="icon">🔌</span><h3>Plugin System</h3><p>Extensible pre-backup hooks — includes a MySQL dump plugin out of the box.</p></div>
+      <div class="feature-card"><span class="icon">🔌</span><h3>Plugin System</h3><p>Pre- and post-backup plugins run tasks on the agent before or after each backup. MySQL database dump plugin included out of the box — add your own with a simple JSON config.</p></div>
     </div>
   </div>
 </section>
@@ -346,17 +346,31 @@ footer a:hover { color: var(--text); }
 <section>
   <div class="container">
     <h2 class="section-title">Getting Started</h2>
-    <p class="section-sub">Up and running in minutes.</p>
+    <p class="section-sub">Start with a fresh Ubuntu 22.04+ server with SSH access and enough disk space for your backup repositories.</p>
     <div class="code-block">
-<span class="comment"># Clone the repository</span>
-<span class="cmd">git clone https://github.com/marcpope/borgbackupserver.git</span>
-<span class="cmd">cd bbs</span>
+<span class="comment"># Run the automated installer on your server</span>
+<span class="cmd">curl -sO https://raw.githubusercontent.com/marcpope/borgbackupserver/main/bin/bbs-install</span>
+<span class="cmd">sudo bash bbs-install --hostname backups.example.com</span>
 
-<span class="comment"># Install PHP dependencies</span>
-<span class="cmd">composer install</span>
+<span class="comment"># For LAN-only installs without SSL</span>
+<span class="cmd">sudo bash bbs-install --hostname 192.168.1.100 --no-ssl</span>
 
-<span class="comment"># Open in your browser and follow the setup wizard</span>
-<span class="cmd">open http://your-server/bbs/public/setup.php</span></div>
+<span class="comment"># Open the URL it prints and follow the setup wizard</span></div>
+    <p style="text-align:center;color:var(--text-muted);margin-top:20px;font-size:0.9rem">The installer sets up Apache, MySQL, PHP, BorgBackup, SSL (via Let's Encrypt), cron, and all required permissions.<br>When it finishes, just open your browser and the setup wizard handles the rest.</p>
+    <p style="text-align:center;margin-top:16px"><a href="https://github.com/marcpope/borgbackupserver/blob/main/docs/INSTALL.md" style="color:var(--accent);font-size:0.9rem">Manual installation guide &rarr;</a></p>
+  </div>
+</section>
+
+<!-- Agent Install -->
+<section>
+  <div class="container">
+    <h2 class="section-title">Add Your Servers</h2>
+    <p class="section-sub">Create a client in the web UI, then run one command on each server you want to back up.</p>
+    <div class="code-block">
+<span class="comment"># Install the agent on any Linux or macOS endpoint</span>
+<span class="cmd">curl -s https://your-server/get-agent | sudo bash -s -- \</span>
+<span class="cmd">    --server https://your-server --key YOUR_API_KEY</span></div>
+    <p style="text-align:center;color:var(--text-muted);margin-top:20px;font-size:0.9rem">The agent installs BorgBackup, registers with your server, downloads SSH keys, and starts a background service.<br>Works behind firewalls and NAT &mdash; agents initiate all connections, no inbound ports required on endpoints.</p>
   </div>
 </section>
 
