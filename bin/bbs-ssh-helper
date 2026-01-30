@@ -85,6 +85,32 @@ case "$ACTION" in
         echo "OK"
         ;;
 
+    fix-repo-perms)
+        REPO_DIR="${2:-}"
+        USERNAME="${3:-}"
+
+        if [ -z "$REPO_DIR" ] || [ -z "$USERNAME" ]; then
+            echo "Usage: bbs-ssh-helper fix-repo-perms <repo_dir> <username>"
+            exit 1
+        fi
+
+        # Safety checks
+        if [[ ! "$REPO_DIR" =~ ^/var/bbs/ ]]; then
+            echo "Error: repo dir must be under /var/bbs/"
+            exit 1
+        fi
+        if [[ ! "$USERNAME" =~ ^bbs-[a-z0-9_-]+$ ]]; then
+            echo "Error: username must match bbs-[a-z0-9_-]+"
+            exit 1
+        fi
+
+        if [ -d "$REPO_DIR" ]; then
+            chown -R "$USERNAME":www-data "$REPO_DIR"
+            chmod 770 "$REPO_DIR"
+        fi
+        echo "OK"
+        ;;
+
     delete-user)
         USERNAME="${2:-}"
 

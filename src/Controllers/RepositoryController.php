@@ -125,6 +125,19 @@ class RepositoryController extends Controller
             $this->redirect("/clients/{$agentId}?tab=repos");
         }
 
+        // Fix ownership: borg init creates files as www-data, but the bbs-user needs to own them for SSH access
+        if (!empty($agent['ssh_unix_user'])) {
+            $fixCmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'fix-repo-perms', $localPath, $agent['ssh_unix_user']];
+            exec(implode(' ', array_map('escapeshellarg', $fixCmd)) . ' 2>&1', $fixOutput, $fixRet);
+            if ($fixRet !== 0) {
+                $this->db->insert('server_log', [
+                    'agent_id' => $agentId,
+                    'level' => 'warning',
+                    'message' => "fix-repo-perms failed: " . implode(' ', $fixOutput),
+                ]);
+            }
+        }
+
         $this->db->insert('server_log', [
             'agent_id' => $agentId,
             'level' => 'info',
