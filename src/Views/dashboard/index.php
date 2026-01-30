@@ -251,6 +251,63 @@
         </div>
     </div>
 
+    <!-- Upcoming Backups -->
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white fw-semibold">
+                <i class="bi bi-calendar-event me-1"></i> Upcoming Backups
+            </div>
+            <div class="card-body p-0">
+                <?php if (empty($upcomingSchedules)): ?>
+                    <div class="p-4 text-muted text-center">No scheduled backups</div>
+                <?php else: ?>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Client</th>
+                                <th>Plan</th>
+                                <th>Frequency</th>
+                                <th>Next Run</th>
+                                <th>Countdown</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($upcomingSchedules as $sched): ?>
+                            <?php
+                                $nextDiff = strtotime($sched['next_run']) - time();
+                                if ($nextDiff < 0) {
+                                    $countdown = 'Overdue';
+                                    $countdownClass = 'text-danger fw-semibold';
+                                } elseif ($nextDiff < 3600) {
+                                    $countdown = floor($nextDiff / 60) . 'm';
+                                    $countdownClass = 'text-warning fw-semibold';
+                                } elseif ($nextDiff < 86400) {
+                                    $countdown = floor($nextDiff / 3600) . 'h ' . floor(($nextDiff % 3600) / 60) . 'm';
+                                    $countdownClass = '';
+                                } else {
+                                    $countdown = floor($nextDiff / 86400) . 'd ' . floor(($nextDiff % 86400) / 3600) . 'h';
+                                    $countdownClass = 'text-muted';
+                                }
+                            ?>
+                            <tr style="cursor: pointer;" onclick="window.location='/clients/<?= $sched['agent_id'] ?>?tab=schedules'">
+                                <td><?= htmlspecialchars($sched['agent_name']) ?></td>
+                                <td><?= htmlspecialchars($sched['plan_name']) ?></td>
+                                <td><?= ucfirst($sched['frequency']) ?></td>
+                                <td class="small text-nowrap"><?= \BBS\Core\TimeHelper::format($sched['next_run'], 'M j, g:i A') ?></td>
+                                <td class="<?= $countdownClass ?>"><?= $countdown ?></td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
     <!-- Recently Completed -->
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm">

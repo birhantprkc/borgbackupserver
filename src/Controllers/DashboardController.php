@@ -88,6 +88,20 @@ class DashboardController extends Controller
             ORDER BY bj.queued_at ASC
         ", $jobParams);
 
+        $upcomingSchedules = $this->db->fetchAll("
+            SELECT s.next_run, s.frequency, s.timezone,
+                   bp.name as plan_name, a.name as agent_name, a.id as agent_id
+            FROM schedules s
+            JOIN backup_plans bp ON bp.id = s.backup_plan_id
+            JOIN agents a ON a.id = bp.agent_id
+            WHERE s.enabled = 1
+              AND s.next_run IS NOT NULL
+              AND bp.enabled = 1
+              {$jobScope}
+            ORDER BY s.next_run ASC
+            LIMIT 5
+        ", $jobParams);
+
         $recentLogs = $this->db->fetchAll("
             SELECT sl.*, a.name as agent_name
             FROM server_log sl
@@ -138,6 +152,7 @@ class DashboardController extends Controller
             'errorCount' => (int) $errorCount,
             'recentJobs' => $recentJobs,
             'activeJobs' => $activeJobs,
+            'upcomingSchedules' => $upcomingSchedules,
             'recentLogs' => $recentLogs,
             'chartData' => $chartData,
         ];
