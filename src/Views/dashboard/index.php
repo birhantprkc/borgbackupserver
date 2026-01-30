@@ -268,6 +268,7 @@
                                 <th>Frequency</th>
                                 <th>Next Run</th>
                                 <th>Countdown</th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -294,6 +295,14 @@
                                 <td><?= ucfirst($sched['frequency']) ?></td>
                                 <td class="small text-nowrap"><?= \BBS\Core\TimeHelper::format($sched['next_run'], 'M j, g:i A') ?></td>
                                 <td class="<?= $countdownClass ?>"><?= $countdown ?></td>
+                                <td class="text-nowrap" onclick="event.stopPropagation()">
+                                    <form method="POST" action="/plans/<?= $sched['plan_id'] ?>/trigger" class="d-inline" onsubmit="return confirm('Run this backup now?')">
+                                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                        <button type="submit" class="btn btn-sm btn-outline-success py-0 px-2" title="Run now">
+                                            <i class="bi bi-play-fill"></i>
+                                        </button>
+                                    </form>
+                                </td>
                             </tr>
                             <?php endforeach; ?>
                         </tbody>

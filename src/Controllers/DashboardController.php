@@ -90,7 +90,7 @@ class DashboardController extends Controller
 
         $upcomingSchedules = $this->db->fetchAll("
             SELECT s.next_run, s.frequency, s.timezone,
-                   bp.name as plan_name, a.name as agent_name, a.id as agent_id
+                   bp.id as plan_id, bp.name as plan_name, a.name as agent_name, a.id as agent_id
             FROM schedules s
             JOIN backup_plans bp ON bp.id = s.backup_plan_id
             JOIN agents a ON a.id = bp.agent_id
