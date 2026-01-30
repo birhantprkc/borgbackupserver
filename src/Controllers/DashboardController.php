@@ -75,9 +75,12 @@ class DashboardController extends Controller
         ", $jobParams);
 
         $activeJobs = $this->db->fetchAll("
-            SELECT bj.*, a.name as agent_name
+            SELECT bj.*, a.name as agent_name,
+                   r.name as repo_name, bp.name as plan_name
             FROM backup_jobs bj
             JOIN agents a ON a.id = bj.agent_id
+            LEFT JOIN repositories r ON r.id = bj.repository_id
+            LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
             WHERE bj.status IN ('running', 'sent') {$jobScope}
             ORDER BY bj.started_at DESC
         ", $jobParams);

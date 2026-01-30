@@ -192,16 +192,31 @@
                         <thead class="table-light">
                             <tr>
                                 <th>Client</th>
+                                <th>Task</th>
+                                <th>Plan</th>
+                                <th>Repo</th>
                                 <th>Progress</th>
+                                <th>Duration</th>
                                 <th>Status</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php foreach ($activeJobs as $job): ?>
+                            <?php
+                                $elapsed = '';
+                                if ($job['started_at']) {
+                                    $e = time() - strtotime($job['started_at']);
+                                    $elapsed = $e >= 3600 ? floor($e / 3600) . 'h ' . floor(($e % 3600) / 60) . 'm'
+                                        : ($e >= 60 ? floor($e / 60) . 'm ' . ($e % 60) . 's' : $e . 's');
+                                }
+                            ?>
                             <tr style="cursor: pointer;" onclick="window.location='/queue/<?= $job['id'] ?>'">
                                 <td><?= htmlspecialchars($job['agent_name']) ?></td>
-                                <td>
-                                    <?php if ($job['files_total'] > 0): ?>
+                                <td><?= ucfirst($job['task_type']) ?></td>
+                                <td><?= htmlspecialchars($job['plan_name'] ?? '--') ?></td>
+                                <td><?= htmlspecialchars($job['repo_name'] ?? '--') ?></td>
+                                <td style="min-width: 140px;">
+                                    <?php if (($job['files_total'] ?? 0) > 0): ?>
                                         <?php $pct = round(($job['files_processed'] / $job['files_total']) * 100); ?>
                                         <div class="progress" style="height: 20px;">
                                             <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width: <?= $pct ?>%">
@@ -214,6 +229,7 @@
                                         </div>
                                     <?php endif; ?>
                                 </td>
+                                <td class="text-nowrap"><?= $elapsed ?: '--' ?></td>
                                 <td><span class="badge bg-info"><?= $job['status'] ?></span></td>
                             </tr>
                             <?php endforeach; ?>
