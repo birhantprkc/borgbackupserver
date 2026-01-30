@@ -37,11 +37,11 @@ class AgentApiController extends Controller
             $this->json(['error' => 'Invalid API key'], 401);
         }
 
-        // Update heartbeat on every authenticated request
-        $this->db->update('agents', [
-            'last_heartbeat' => date('Y-m-d H:i:s'),
-            'status' => 'online',
-        ], 'id = ?', [$agent['id']]);
+        // Update heartbeat on every authenticated request (use UTC via NOW() to match scheduler)
+        $this->db->query(
+            "UPDATE agents SET last_heartbeat = NOW(), status = 'online' WHERE id = ?",
+            [$agent['id']]
+        );
 
         // Auto-resolve agent_offline notification on heartbeat
         (new NotificationService())->resolve('agent_offline', $agent['id'], null);
@@ -139,7 +139,7 @@ class AgentApiController extends Controller
         if (isset($input['bytes_processed'])) $data['bytes_processed'] = (int) $input['bytes_processed'];
 
         if (empty($job['started_at'])) {
-            $data['started_at'] = date('Y-m-d H:i:s');
+            $data['started_at'] = gmdate('Y-m-d H:i:s');
         }
 
         $this->db->update('backup_jobs', $data, 'id = ?', [$jobId]);
@@ -172,7 +172,7 @@ class AgentApiController extends Controller
             $this->json(['error' => 'Job not found'], 404);
         }
 
-        $now = date('Y-m-d H:i:s');
+        $now = gmdate('Y-m-d H:i:s');
         $startedAt = $job['started_at'] ?? $now;
         $duration = strtotime($now) - strtotime($startedAt);
 
