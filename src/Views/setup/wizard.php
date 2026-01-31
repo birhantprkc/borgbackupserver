@@ -100,7 +100,7 @@
                             <div class="mb-3">
                                 <label class="form-label fw-semibold">Database User</label>
                                 <input type="text" class="form-control" name="db_user"
-                                       value="<?= htmlspecialchars($_SESSION['setup']['db_user'] ?? 'root') ?>" required>
+                                       value="<?= htmlspecialchars($_SESSION['setup']['db_user'] ?? 'bbs') ?>" required>
                             </div>
                             <div class="mb-3">
                                 <label class="form-label fw-semibold">Database Password</label>
