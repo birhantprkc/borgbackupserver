@@ -7,6 +7,13 @@
  * without depending on App, Config, Database, or Controller classes.
  */
 
+// Match the App's session cookie params so session persists after wizard
+session_set_cookie_params([
+    'lifetime' => 30 * 86400,
+    'path' => '/',
+    'httponly' => true,
+    'samesite' => 'Strict',
+]);
 session_start();
 
 $basePath = dirname(__DIR__, 2);
