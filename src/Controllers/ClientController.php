@@ -172,7 +172,7 @@ class ClientController extends Controller
 
         // Status tab data
         $nextBackup = $this->db->fetchOne("
-            SELECT s.next_run, bp.name as plan_name, bp.id as plan_id
+            SELECT s.next_run, bp.name as plan_name, bp.id as plan_id, s.id as schedule_id
             FROM schedules s
             JOIN backup_plans bp ON bp.id = s.backup_plan_id
             WHERE bp.agent_id = ? AND s.enabled = 1 AND s.next_run IS NOT NULL

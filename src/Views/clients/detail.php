@@ -247,6 +247,15 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         : 0;
     $nextRunLabel = '--';
     $nextRunSub = 'No schedule';
+    // Count paused schedules
+    $pausedCount = 0;
+    $totalSchedules = 0;
+    foreach ($plans as $p) {
+        if ($p['schedule_id'] ?? null) {
+            $totalSchedules++;
+            if (!($p['schedule_enabled'] ?? false)) $pausedCount++;
+        }
+    }
     if ($nextBackup && $nextBackup['next_run']) {
         $nextDiff = strtotime($nextBackup['next_run']) - time();
         if ($nextDiff < 0) $nextRunLabel = 'Overdue';
@@ -254,6 +263,9 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         elseif ($nextDiff < 86400) $nextRunLabel = floor($nextDiff / 3600) . 'h ' . floor(($nextDiff % 3600) / 60) . 'm';
         else $nextRunLabel = floor($nextDiff / 86400) . 'd ' . floor(($nextDiff % 86400) / 3600) . 'h';
         $nextRunSub = htmlspecialchars($nextBackup['plan_name']);
+    } elseif ($pausedCount > 0) {
+        $nextRunLabel = 'No Jobs';
+        $nextRunSub = $pausedCount . ' Paused Schedule' . ($pausedCount > 1 ? 's' : '');
     }
     $successColor = $successRate >= 90 ? 'success' : ($successRate >= 70 ? 'warning' : 'danger');
     ?>
@@ -264,12 +276,34 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
             <div class="card border-0 shadow-sm h-100" style="background-color: rgba(13,110,253,0.05);">
                 <div class="card-body d-flex align-items-center position-relative">
                     <?php if ($nextBackup && $nextBackup['plan_id']): ?>
-                    <form method="POST" action="/plans/<?= $nextBackup['plan_id'] ?>/trigger" class="position-absolute top-0 end-0 mt-2 me-2">
-                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                        <button type="submit" class="btn btn-sm btn-outline-success py-0 px-2" style="font-size: 0.75rem;" title="Run backup now">
-                            <i class="bi bi-play-fill"></i> Run Now
+                    <div class="dropdown position-absolute top-0 end-0 mt-2 me-2">
+                        <button class="btn btn-sm btn-light border-0" type="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-three-dots-vertical"></i>
                         </button>
-                    </form>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <form method="POST" action="/plans/<?= $nextBackup['plan_id'] ?>/trigger">
+                                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                    <button type="submit" class="dropdown-item"><i class="bi bi-play-fill text-success me-2"></i>Run Now</button>
+                                </form>
+                            </li>
+                            <?php if ($nextBackup['schedule_id'] ?? null): ?>
+                            <li>
+                                <form method="POST" action="/schedules/<?= $nextBackup['schedule_id'] ?>/toggle">
+                                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                    <button type="submit" class="dropdown-item"><i class="bi bi-pause-fill text-warning me-2"></i>Pause</button>
+                                </form>
+                            </li>
+                            <?php endif; ?>
+                            <li><a class="dropdown-item" href="?tab=schedules"><i class="bi bi-pencil text-primary me-2"></i>Edit</a></li>
+                        </ul>
+                    </div>
+                    <?php elseif ($pausedCount > 0): ?>
+                    <div class="position-absolute top-0 end-0 mt-2 me-2">
+                        <a href="?tab=schedules" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size: 0.75rem;">
+                            <i class="bi bi-pencil me-1"></i>Manage
+                        </a>
+                    </div>
                     <?php endif; ?>
                     <div class="stat-icon bg-primary bg-opacity-10 text-primary rounded-3 p-3 me-3">
                         <i class="bi bi-clock fs-3"></i>
