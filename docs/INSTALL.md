@@ -29,6 +29,7 @@ Complete step-by-step guide to install BBS on Ubuntu 22.04+ with Apache. Follow 
 - **OS:** Ubuntu 22.04 or newer
 - **A domain name** pointed at your server (e.g., `backups.example.com`)
 - **Root access** to the server
+- **MySQL storage:** BBS catalogs every backed-up file into MySQL for fast browsing and restore without locking borg repositories. Large deployments need adequate MySQL disk space and memory — see [MySQL Storage Requirements](MySQL-Storage-Requirements.md) for sizing estimates.
 
 ### Recommended: Set Server Timezone to UTC
 
