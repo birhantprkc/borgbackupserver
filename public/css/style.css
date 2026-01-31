@@ -328,12 +328,16 @@ body.bg-light {
 
 /* Schedule cards */
 .schedule-card {
-    overflow: visible;
+    overflow: visible !important;
     transition: transform 0.15s;
 }
 
 .schedule-card:hover {
     transform: translateY(-1px);
+}
+
+.schedule-card .dropdown-menu {
+    z-index: 1050;
 }
 
 .schedule-icon-wrap {
