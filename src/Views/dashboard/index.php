@@ -482,7 +482,7 @@
                                 <td><?= htmlspecialchars($sched['agent_name']) ?></td>
                                 <td><?= htmlspecialchars($sched['plan_name']) ?></td>
                                 <td class="d-table-cell-md"><?= ucfirst($sched['frequency']) ?></td>
-                                <td class="small"><?= \BBS\Core\TimeHelper::format($sched['next_run'], 'M j, g:i A') ?></td>
+                                <td><?= \BBS\Core\TimeHelper::format($sched['next_run'], 'M j, g:i A') ?></td>
                                 <td class="d-table-cell-md <?= $countdownClass ?>"><?= $countdown ?></td>
                                 <td class="text-nowrap" onclick="event.stopPropagation()">
                                     <form method="POST" action="/plans/<?= $sched['plan_id'] ?>/trigger" class="d-inline" onsubmit="return confirm('Run this backup now?')">
@@ -543,7 +543,7 @@
                                 <td><?= ucfirst($job['task_type']) ?></td>
                                 <td class="d-table-cell-md"><?= htmlspecialchars($job['plan_name'] ?? '--') ?></td>
                                 <td class="d-table-cell-md"><?= htmlspecialchars($job['repo_name'] ?? '--') ?></td>
-                                <td class="small"><?= \BBS\Core\TimeHelper::format($job['completed_at'], 'M j, g:i A') ?></td>
+                                <td><?= \BBS\Core\TimeHelper::format($job['completed_at'], 'M j, g:i A') ?></td>
                                 <td class="d-table-cell-md text-nowrap"><?= $durStr ?></td>
                                 <td><span class="badge bg-<?= $sBadge ?>"><?= $job['status'] ?></span></td>
                             </tr>
@@ -582,7 +582,7 @@
                         <tbody>
                             <?php foreach ($recentLogs as $log): ?>
                             <tr>
-                                <td class="small text-nowrap"><?= \BBS\Core\TimeHelper::format($log['created_at'], 'M j, g:i A') ?></td>
+                                <td class="text-nowrap"><?= \BBS\Core\TimeHelper::format($log['created_at'], 'M j, g:i A') ?></td>
                                 <td class="d-table-cell-md text-nowrap"><?= htmlspecialchars($log['agent_name'] ?? '--') ?></td>
                                 <td>
                                     <?php
@@ -707,7 +707,7 @@ function renderUpcoming(schedules, csrfToken) {
     schedules.forEach(s => {
         const nextTs = Math.floor(new Date((s.next_run).replace(' ','T')+'Z').getTime()/1000);
         const cd = fmtCountdown(nextTs - now);
-        html += '<tr style="cursor:pointer" onclick="window.location=\'/clients/'+s.agent_id+'?tab=schedules\'"><td>'+esc(s.agent_name)+'</td><td>'+esc(s.plan_name)+'</td><td class="d-table-cell-md">'+esc(s.frequency?.[0]?.toUpperCase()+s.frequency?.slice(1))+'</td><td class="small">'+fmtDate(s.next_run)+'</td><td class="d-table-cell-md '+cd.cls+'">'+cd.text+'</td>';
+        html += '<tr style="cursor:pointer" onclick="window.location=\'/clients/'+s.agent_id+'?tab=schedules\'"><td>'+esc(s.agent_name)+'</td><td>'+esc(s.plan_name)+'</td><td class="d-table-cell-md">'+esc(s.frequency?.[0]?.toUpperCase()+s.frequency?.slice(1))+'</td><td>'+fmtDate(s.next_run)+'</td><td class="d-table-cell-md '+cd.cls+'">'+cd.text+'</td>';
         html += '<td class="text-nowrap" onclick="event.stopPropagation()"><form method="POST" action="/plans/'+s.plan_id+'/trigger" class="d-inline" onsubmit="return confirm(\'Run this backup now?\')"><input type="hidden" name="csrf_token" value="'+csrfToken+'"><button type="submit" class="btn btn-sm btn-outline-success py-0 px-2" title="Run now"><i class="bi bi-play-fill"></i></button></form></td>';
         html += '</tr>';
     });
@@ -721,7 +721,7 @@ function renderRecentJobs(jobs) {
     let html = '<div class="table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>Client</th><th>Task</th><th class="d-th-md">Plan</th><th class="d-th-md">Repo</th><th>Completed</th><th class="d-th-md">Duration</th><th>Status</th></tr></thead><tbody class="small">';
     jobs.forEach(j => {
         const badge = { completed: 'success', failed: 'danger', cancelled: 'secondary' }[j.status] || 'warning';
-        html += '<tr style="cursor:pointer" onclick="window.location=\'/queue/'+j.id+'\'"><td>'+esc(j.agent_name)+'</td><td>'+esc(j.task_type?.[0]?.toUpperCase()+j.task_type?.slice(1))+'</td><td class="d-table-cell-md">'+esc(j.plan_name||'--')+'</td><td class="d-table-cell-md">'+esc(j.repo_name||'--')+'</td><td class="small">'+fmtDate(j.completed_at)+'</td><td class="d-table-cell-md text-nowrap">'+fmtDur(j.duration_seconds)+'</td><td><span class="badge bg-'+badge+'">'+esc(j.status)+'</span></td></tr>';
+        html += '<tr style="cursor:pointer" onclick="window.location=\'/queue/'+j.id+'\'"><td>'+esc(j.agent_name)+'</td><td>'+esc(j.task_type?.[0]?.toUpperCase()+j.task_type?.slice(1))+'</td><td class="d-table-cell-md">'+esc(j.plan_name||'--')+'</td><td class="d-table-cell-md">'+esc(j.repo_name||'--')+'</td><td>'+fmtDate(j.completed_at)+'</td><td class="d-table-cell-md text-nowrap">'+fmtDur(j.duration_seconds)+'</td><td><span class="badge bg-'+badge+'">'+esc(j.status)+'</span></td></tr>';
     });
     html += '</tbody></table></div>';
     el.innerHTML = html;
@@ -733,7 +733,7 @@ function renderLogs(logs) {
     let html = '<div class="table-responsive"><table class="table table-hover mb-0 small"><thead class="table-light"><tr><th>Time</th><th class="d-th-md">Client</th><th>Level</th><th>Message</th></tr></thead><tbody>';
     logs.forEach(l => {
         const badge = { error: 'danger', warning: 'warning' }[l.level] || 'info';
-        html += '<tr><td class="small text-nowrap">'+fmtDate(l.created_at)+'</td><td class="d-table-cell-md text-nowrap">'+esc(l.agent_name||'--')+'</td><td><span class="badge bg-'+badge+'">'+esc(l.level)+'</span></td><td>'+esc(l.message)+'</td></tr>';
+        html += '<tr><td class="text-nowrap">'+fmtDate(l.created_at)+'</td><td class="d-table-cell-md text-nowrap">'+esc(l.agent_name||'--')+'</td><td><span class="badge bg-'+badge+'">'+esc(l.level)+'</span></td><td>'+esc(l.message)+'</td></tr>';
     });
     html += '</tbody></table></div>';
     el.innerHTML = html;
