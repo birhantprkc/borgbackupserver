@@ -338,6 +338,17 @@ body.bg-light {
 
 .schedule-card .dropdown-menu {
     z-index: 1050;
+    font-size: 0.8rem;
+    min-width: 140px;
+    padding: 0.25rem 0;
+}
+
+.schedule-card .dropdown-item {
+    padding: 0.3rem 0.75rem;
+}
+
+.schedule-card .dropdown-divider {
+    margin: 0.2rem 0;
 }
 
 .schedule-icon-wrap {

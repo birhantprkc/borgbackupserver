@@ -1087,7 +1087,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     <?php endforeach; ?>
 
     <!-- Create New Schedule -->
-    <div id="create-plan-section">
+    <div id="create-plan-section" class="mt-4">
     <?php if (empty($repositories)): ?>
     <div class="alert alert-warning">You need to <a href="?tab=repos">create a repository</a> before adding a backup schedule.</div>
     <?php else: ?>
