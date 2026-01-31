@@ -23,6 +23,8 @@ fi
 echo "=== BBS Update ==="
 echo ""
 
+git config --global --add safe.directory "$BBS_DIR" 2>/dev/null || true
+
 # 1. Pull / checkout code
 if [ -n "$GIT_TAG" ]; then
     echo "[1/8] Upgrading to release $GIT_TAG..."
