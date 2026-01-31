@@ -233,6 +233,29 @@ class ClientController extends Controller
         ]);
     }
 
+    public function detailJson(int $id): void
+    {
+        $this->requireAuth();
+
+        $agent = $this->getAgent($id);
+        if (!$agent) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Not found']);
+            return;
+        }
+
+        $seenAgo = $agent['last_heartbeat']
+            ? \BBS\Core\TimeHelper::ago($agent['last_heartbeat'])
+            : 'Never';
+
+        header('Content-Type: application/json');
+        echo json_encode([
+            'status' => $agent['status'],
+            'last_heartbeat' => $agent['last_heartbeat'],
+            'seen_ago' => $seenAgo,
+        ]);
+    }
+
     public function repos(int $id): void
     {
         $this->detail($id);

@@ -58,6 +58,7 @@ class App
         $this->router->map('GET', '/clients/add', 'ClientController@add');
         $this->router->map('POST', '/clients/add', 'ClientController@store');
         $this->router->map('GET', '/clients/[i:id]', 'ClientController@detail');
+        $this->router->map('GET', '/clients/[i:id]/json', 'ClientController@detailJson');
         $this->router->map('GET', '/clients/[i:id]/repos', 'ClientController@repos');
         $this->router->map('GET', '/clients/[i:id]/schedules', 'ClientController@schedules');
         $this->router->map('GET', '/clients/[i:id]/restore', 'ClientController@restore');

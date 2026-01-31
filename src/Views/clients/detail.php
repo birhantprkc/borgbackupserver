@@ -39,7 +39,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     <h3 class="mb-0">
                         <i class="bi bi-display me-2 text-primary"></i><?= htmlspecialchars($agent['name']) ?>
                     </h3>
-                    <span class="badge bg-<?= $statusClass ?> fs-6"><?= ucfirst($agent['status']) ?></span>
+                    <span class="badge bg-<?= $statusClass ?> fs-6" id="agent-status-badge"><?= ucfirst($agent['status']) ?></span>
                     <button class="btn btn-sm btn-outline-secondary border-0" data-bs-toggle="collapse" data-bs-target="#edit-client" title="Edit client">
                         <i class="bi bi-pencil"></i>
                     </button>
@@ -158,12 +158,12 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 </div>
             </div>
             <div class="col-6 col-sm-4 col-lg-2">
-                <div class="d-flex align-items-center p-2 rounded bg-light">
-                    <div class="stat-icon-sm bg-<?= $statusClass ?> bg-opacity-10 text-<?= $statusClass ?> rounded-2 p-2 me-2">
+                <div class="d-flex align-items-center p-2 rounded bg-light" id="agent-last-seen-card">
+                    <div class="stat-icon-sm bg-<?= $statusClass ?> bg-opacity-10 text-<?= $statusClass ?> rounded-2 p-2 me-2" id="agent-last-seen-icon">
                         <i class="bi bi-broadcast"></i>
                     </div>
                     <div>
-                        <div class="fw-bold"><?= $seenAgo ?></div>
+                        <div class="fw-bold" id="agent-last-seen"><?= $seenAgo ?></div>
                         <div class="text-muted" style="font-size: 0.7rem;">Last Seen</div>
                     </div>
                 </div>
@@ -1936,6 +1936,14 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         </div>
     </div>
 
+    <div id="agent-online-alert" class="alert alert-success d-flex align-items-center mt-3" style="display: none !important;">
+        <i class="bi bi-heart-pulse-fill fs-4 me-3 text-success"></i>
+        <div>
+            <strong>Agent is Online!</strong><br>
+            <span class="text-muted">Received heartbeat from agent. Your client is connected and ready.</span>
+        </div>
+    </div>
+
 <?php elseif ($tab === 'delete'): ?>
     <h5 class="mb-3">Delete Client : <?= htmlspecialchars($agent['name']) ?></h5>
 
@@ -1980,5 +1988,49 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
             belowHeader.forEach(el => el.style.display = '');
         });
     }
+})();
+
+// Auto-refresh agent status
+(function() {
+    const agentId = <?= (int) $agent['id'] ?>;
+    const initialStatus = '<?= $agent['status'] ?>';
+    let previousStatus = initialStatus;
+    const statusMap = { online: 'success', offline: 'secondary', error: 'danger', setup: 'warning' };
+
+    function pollStatus() {
+        fetch('/clients/' + agentId + '/json', { credentials: 'same-origin' })
+            .then(r => r.json())
+            .then(data => {
+                // Update badge
+                const badge = document.getElementById('agent-status-badge');
+                if (badge) {
+                    const cls = statusMap[data.status] || 'warning';
+                    badge.className = 'badge bg-' + cls + ' fs-6';
+                    badge.textContent = data.status.charAt(0).toUpperCase() + data.status.slice(1);
+                }
+
+                // Update last seen
+                const seen = document.getElementById('agent-last-seen');
+                if (seen) seen.textContent = data.seen_ago;
+
+                const icon = document.getElementById('agent-last-seen-icon');
+                if (icon) {
+                    const cls = statusMap[data.status] || 'warning';
+                    icon.className = 'stat-icon-sm bg-' + cls + ' bg-opacity-10 text-' + cls + ' rounded-2 p-2 me-2';
+                }
+
+                // Show heartbeat alert on install tab when agent comes online
+                const alert = document.getElementById('agent-online-alert');
+                if (alert && data.status === 'online' && previousStatus !== 'online') {
+                    alert.style.cssText = '';
+                    alert.classList.remove('d-none');
+                }
+
+                previousStatus = data.status;
+            })
+            .catch(() => {});
+    }
+
+    setInterval(pollStatus, 10000);
 })();
 </script>
