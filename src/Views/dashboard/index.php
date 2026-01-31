@@ -73,16 +73,56 @@
 
 <!-- Row 2: Chart (left 1/3) + Server Stats / Storage / MySQL (right 2/3) -->
 <div class="row g-4 mb-4">
-    <!-- Backups Chart — left column -->
+    <!-- Backups Chart + Storage Pool — left column -->
     <div class="<?= $isAdmin ? 'col-lg-4' : 'col-12' ?>">
-        <div class="card border-0 shadow-sm h-100">
+        <div class="card border-0 shadow-sm mb-4">
             <div class="card-header bg-white fw-semibold">
                 <i class="bi bi-bar-chart me-1"></i> Backups (24h)
             </div>
-            <div class="card-body">
-                <canvas id="backupsChart" height="220"></canvas>
+            <div class="card-body py-2">
+                <canvas id="backupsChart" height="160"></canvas>
             </div>
         </div>
+        <?php if ($isAdmin && !empty($storage) && $storage['disk_total'] !== null): ?>
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white fw-semibold">
+                <i class="bi bi-device-hdd me-1"></i> Storage Pool
+            </div>
+            <div class="card-body">
+                <?php
+                    $stUsed = $storage['disk_total'] - $storage['disk_free'];
+                    $stRepoPct = $storage['disk_total'] > 0 ? round($storage['total_repo_bytes'] / $storage['disk_total'] * 100, 1) : 0;
+                    $stOtherPct = $storage['disk_total'] > 0 ? round(($stUsed - $storage['total_repo_bytes']) / $storage['disk_total'] * 100, 1) : 0;
+                    if ($stOtherPct < 0) $stOtherPct = 0;
+                    $stFreePct = $storage['disk_total'] > 0 ? round($storage['disk_free'] / $storage['disk_total'] * 100, 1) : 0;
+                ?>
+                <div class="rounded overflow-hidden d-flex" style="height:28px;background:#e9ecef;font-size:.7rem;">
+                    <div style="width:<?= $stRepoPct ?>%;background:#48bb78;color:#fff;overflow:hidden;white-space:nowrap;padding:0 6px;line-height:28px;"
+                         title="Borg Repos: <?= \BBS\Services\ServerStats::formatBytes($storage['total_repo_bytes']) ?>">
+                        Repos <?= \BBS\Services\ServerStats::formatBytes($storage['total_repo_bytes']) ?>
+                    </div>
+                    <?php if ($stOtherPct > 0): ?>
+                    <div style="width:<?= $stOtherPct ?>%;background:#6c757d;color:#fff;overflow:hidden;white-space:nowrap;padding:0 6px;line-height:28px;"
+                         title="Other used: <?= \BBS\Services\ServerStats::formatBytes($stUsed - $storage['total_repo_bytes']) ?>">
+                        Other
+                    </div>
+                    <?php endif; ?>
+                    <div style="width:<?= $stFreePct ?>%;background:#e9ecef;color:#666;overflow:hidden;white-space:nowrap;padding:0 6px;line-height:28px;"
+                         title="Free: <?= \BBS\Services\ServerStats::formatBytes($storage['disk_free']) ?>">
+                        <?= \BBS\Services\ServerStats::formatBytes($storage['disk_free']) ?> free
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between mt-1" style="font-size:.6rem;color:#999;">
+                    <span>Total: <?= \BBS\Services\ServerStats::formatBytes($storage['disk_total']) ?></span>
+                    <span><?= $stFreePct ?>% free</span>
+                </div>
+                <div class="mt-2" style="font-size:.65rem;color:#888;line-height:1.4;">
+                    <strong>Borg Repos: <?= \BBS\Services\ServerStats::formatBytes($storage['total_repo_bytes']) ?> (<?= $stRepoPct ?>% of pool)</strong><br>
+                    <?= htmlspecialchars($storage['path']) ?> &mdash; <?= $storage['repo_count'] ?> repositories
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
     </div>
 
     <?php if ($isAdmin): ?>
@@ -140,7 +180,7 @@
             <div class="col-lg-7">
                 <div class="card border-0 shadow-sm h-100">
                     <div class="card-header bg-white fw-semibold">
-                        <i class="bi bi-hdd-stack me-1"></i> Storage
+                        <i class="bi bi-hdd-stack me-1"></i> Server Partitions
                     </div>
                     <div class="card-body p-0">
                         <div class="table-responsive">
@@ -168,27 +208,6 @@
                                         <td class="d-table-cell-md"><?= $part['free'] ?></td>
                                     </tr>
                                     <?php endforeach; ?>
-                                    <?php if (!empty($storage)): ?>
-                                    <tr>
-                                        <td style="border-bottom: none;" class="pb-0"><i class="bi bi-archive text-success me-1"></i> <span class="fw-semibold">Storage</span></td>
-                                        <td style="border-bottom: none;" class="pb-0">
-                                            <?php if ($storage['disk_percent'] !== null): ?>
-                                            <div class="progress" style="height: 18px; background-color: #e9ecef;">
-                                                <div class="progress-bar progress-bar-striped <?= $storage['disk_percent'] > 90 ? 'bg-danger' : ($storage['disk_percent'] > 70 ? 'bg-warning' : '') ?>"
-                                                     style="width: <?= $storage['disk_percent'] ?>%; background-color: <?= $storage['disk_percent'] <= 70 ? '#8faabe' : '' ?>;">
-                                                </div>
-                                            </div>
-                                            <?php else: ?>
-                                            <span class="text-muted">N/A</span>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td style="border-bottom: none;" class="pb-0 d-table-cell-md"><?= $storage['disk_total'] !== null ? \BBS\Services\ServerStats::formatBytes($storage['disk_total']) : '--' ?></td>
-                                        <td style="border-bottom: none;" class="pb-0 d-table-cell-md"><?= $storage['disk_free'] !== null ? \BBS\Services\ServerStats::formatBytes($storage['disk_free']) : 'N/A' ?></td>
-                                    </tr>
-                                    <tr>
-                                        <td colspan="4" class="pt-0 text-muted" style="font-size: 0.75em;"><?= htmlspecialchars($storage['path']) ?></td>
-                                    </tr>
-                                    <?php endif; ?>
                                 </tbody>
                             </table>
                         </div>
