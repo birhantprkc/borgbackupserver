@@ -188,8 +188,8 @@
 </div>
 
 <?php if ($isAdmin && (!empty($mysqlStorage) || !empty($mysqlStats))): ?>
-<div class="row g-4 mt-0">
-    <div class="col-lg-8">
+<div class="row g-4 mb-4">
+    <div class="col-12">
         <div class="card border-0 shadow-sm">
             <div class="card-body py-3">
                 <div class="row">
