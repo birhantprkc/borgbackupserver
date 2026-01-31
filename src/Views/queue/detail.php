@@ -40,6 +40,7 @@ $isServerSide = in_array($job['task_type'], ['prune', 'compact']);
     </h4>
 </div>
 
+<div id="progress-section">
 <!-- Progress Bar (for active jobs) -->
 <?php if ($isActive): ?>
 <div class="card border-0 shadow-sm mb-4" style="background-color: #2c3e50;">
@@ -193,6 +194,7 @@ $isServerSide = in_array($job['task_type'], ['prune', 'compact']);
     </div>
 </div>
 <?php endif; ?>
+</div><!-- /progress-section -->
 
 <!-- Job Details -->
 <div class="row g-4 mb-4">
@@ -308,7 +310,7 @@ $isServerSide = in_array($job['task_type'], ['prune', 'compact']);
 
 <!-- Error Log (if failed) -->
 <?php if ($job['status'] === 'failed' && $job['error_log']): ?>
-<div class="card border-0 shadow-sm mb-4 border-danger">
+<div id="error-section" class="card border-0 shadow-sm mb-4 border-danger">
     <div class="card-header bg-white fw-semibold text-danger">
         <i class="bi bi-exclamation-triangle me-1"></i> Error Log
     </div>
@@ -319,6 +321,7 @@ $isServerSide = in_array($job['task_type'], ['prune', 'compact']);
 <?php endif; ?>
 
 <!-- Server Log -->
+<div id="log-section" <?= empty($logs) ? 'style="display:none"' : '' ?>>
 <?php if (!empty($logs)): ?>
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-header bg-white fw-semibold">
@@ -349,9 +352,10 @@ $isServerSide = in_array($job['task_type'], ['prune', 'compact']);
     </div>
 </div>
 <?php endif; ?>
+</div><!-- /log-section -->
 
 <!-- Actions -->
-<div class="d-flex gap-2">
+<div id="actions-section" class="d-flex gap-2">
     <?php if (in_array($job['status'], ['queued', 'sent'])): ?>
     <form method="POST" action="/queue/<?= $job['id'] ?>/cancel" onsubmit="return confirm('Cancel this job?')">
         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
@@ -371,20 +375,187 @@ $isServerSide = in_array($job['task_type'], ['prune', 'compact']);
     <?php endif; ?>
 </div>
 
-<?php if ($isActive): ?>
 <script>
-// Auto-refresh for active jobs
-setTimeout(function() { location.reload(); }, 10000);
-</script>
-<?php elseif ($job['completed_at']): ?>
-<script>
-// Keep refreshing briefly after completion to catch late log entries (catalog, prune)
 (function() {
-    var completed = new Date("<?= $job['completed_at'] ?>Z").getTime();
-    var elapsed = Date.now() - completed;
-    if (elapsed < 120000) {
-        setTimeout(function() { location.reload(); }, 5000);
+    const jobId = <?= $job['id'] ?>;
+    const pollInterval = <?= $isActive ? 5000 : 5000 ?>;
+    const csrfToken = '<?= $this->csrfToken() ?>';
+    let isActive = <?= $isActive ? 'true' : 'false' ?>;
+    let completedAt = <?= $job['completed_at'] ? "new Date('" . $job['completed_at'] . "Z').getTime()" : 'null' ?>;
+    let lastLogCount = <?= count($logs) ?>;
+    let previousStatus = '<?= $job['status'] ?>';
+
+    function esc(s) { return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : ''; }
+
+    function fmtDate(d) {
+        if (!d) return '--';
+        const dt = new Date(d.replace(' ','T')+'Z');
+        return dt.toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'}) + ' ' +
+               dt.toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit',second:'2-digit'});
+    }
+
+    function fmtDur(s) {
+        if (!s || s <= 0) return '--';
+        if (s >= 3600) return Math.floor(s/3600) + 'h ' + Math.floor((s%3600)/60) + 'm';
+        if (s >= 60) return Math.floor(s/60) + 'm ' + (s%60) + 's';
+        return s + 's';
+    }
+
+    function fmtBytes(b) {
+        if (!b || b == 0) return '--';
+        const units = ['B','KB','MB','GB','TB'];
+        let i = 0, s = b;
+        while (s >= 1024 && i < units.length-1) { s /= 1024; i++; }
+        return (i > 0 ? s.toFixed(1) : s) + ' ' + units[i];
+    }
+
+    function updateProgressBar(job, data) {
+        const container = document.getElementById('progress-section');
+        if (!container) return;
+
+        const isServerSide = ['prune','compact'].includes(job.task_type);
+        const pct = (job.files_total > 0 && job.files_processed > 0) ? Math.round((job.files_processed / job.files_total) * 100) : 0;
+        const isJobActive = ['queued','sent','running'].includes(job.status);
+
+        if (job.status === 'completed') {
+            if (isServerSide) {
+                container.innerHTML = '<div class="card border-0 shadow-sm mb-4" style="background-color:#d4edda;"><div class="card-body py-3">' +
+                    '<div class="fw-semibold text-success mb-1"><i class="bi bi-hdd me-1"></i> ' + esc(job.task_type[0].toUpperCase()+job.task_type.slice(1)) + ' Completed</div>' +
+                    '<div class="progress mb-1" style="height:22px"><div class="progress-bar bg-success" style="width:100%">Server-side ' + esc(job.task_type) + ' finished</div></div>' +
+                    '<div class="text-muted small">Duration: ' + fmtDur(job.duration_seconds) + ' &middot; See activity log below for details</div></div></div>';
+            } else {
+                container.innerHTML = '<div class="card border-0 shadow-sm mb-4" style="background-color:#d4edda;"><div class="card-body py-3">' +
+                    '<div class="fw-semibold text-success mb-1">Completed</div>' +
+                    '<div class="progress mb-1" style="height:22px"><div class="progress-bar bg-success" style="width:100%">' + (job.files_total ? Number(job.files_total).toLocaleString() + ' files processed' : 'Done') + '</div></div>' +
+                    '<div class="text-muted small">' + fmtBytes(job.bytes_total) + ' total &middot; ' + fmtDur(job.duration_seconds) + '</div></div></div>';
+            }
+        } else if (job.status === 'failed') {
+            container.innerHTML = '<div class="card border-0 shadow-sm mb-4" style="background-color:#f8d7da;"><div class="card-body py-3">' +
+                '<div class="fw-semibold text-danger mb-1">Failed</div>' +
+                '<div class="progress mb-1" style="height:22px"><div class="progress-bar bg-danger" style="width:100%">Failed</div></div>' +
+                (job.error_log ? '<div class="text-danger small mt-1"><i class="bi bi-exclamation-triangle me-1"></i>' + esc(job.error_log.substring(0,200)) + '</div>' : '') +
+                '</div></div>';
+        } else if (isJobActive && job.status === 'running' && pct > 0) {
+            container.querySelector('.progress-bar')?.style && (function() {
+                const bar = container.querySelector('.progress-bar');
+                const label = container.querySelector('.fw-semibold');
+                const sub = container.querySelector('.text-white-50');
+                if (bar) { bar.style.width = pct + '%'; bar.textContent = Number(job.files_processed).toLocaleString() + ' / ' + Number(job.files_total).toLocaleString() + ' files'; }
+                if (label) label.textContent = 'Backing up... ' + pct + '%';
+                if (sub) sub.textContent = fmtBytes(job.bytes_processed) + ' of ' + fmtBytes(job.bytes_total) + ' processed';
+            })();
+        }
+
+        // Update status badge in header
+        const badge = document.querySelector('h4 .badge');
+        if (badge) {
+            const cls = {completed:'success',failed:'danger',cancelled:'danger',running:'info',sent:'primary',queued:'warning'}[job.status] || 'secondary';
+            badge.className = 'badge bg-' + cls + ' fs-6 ms-2';
+            badge.textContent = job.status[0].toUpperCase() + job.status.slice(1);
+        }
+    }
+
+    function updateDetails(job) {
+        // Update stats
+        const statsMap = {
+            'Files Total': job.files_total ? Number(job.files_total).toLocaleString() : '--',
+            'Files Processed': job.files_processed ? Number(job.files_processed).toLocaleString() : '--',
+            'Bytes Total': fmtBytes(job.bytes_total),
+            'Bytes Processed': fmtBytes(job.bytes_processed),
+        };
+        document.querySelectorAll('table.table-borderless td.text-muted').forEach(td => {
+            const key = td.textContent.trim();
+            if (statsMap[key] !== undefined) {
+                td.nextElementSibling.textContent = statsMap[key];
+            }
+            if (key === 'Started At' && job.started_at) td.nextElementSibling.textContent = fmtDate(job.started_at);
+            if (key === 'Completed At' && job.completed_at) td.nextElementSibling.textContent = fmtDate(job.completed_at);
+            if (key === 'Duration') td.nextElementSibling.textContent = fmtDur(job.duration_seconds);
+        });
+    }
+
+    function updateLogs(logs) {
+        if (logs.length <= lastLogCount) return;
+        lastLogCount = logs.length;
+        const logSection = document.getElementById('log-section');
+        if (!logSection) return;
+        logSection.style.display = '';
+
+        const list = logSection.querySelector('.list-group');
+        if (!list) return;
+        list.innerHTML = '';
+        logs.forEach(function(log) {
+            const iconMap = {error:'x-circle-fill text-danger',warning:'exclamation-triangle-fill text-warning',info:'info-circle-fill text-info'};
+            const icon = iconMap[log.level] || 'circle text-secondary';
+            const item = document.createElement('div');
+            item.className = 'list-group-item d-flex align-items-start py-2 px-3';
+            item.innerHTML = '<i class="bi bi-' + icon + ' me-2 mt-1"></i><div class="flex-grow-1"><div class="d-flex justify-content-between"><span class="small">' + esc(log.message) + '</span><small class="text-muted ms-3 text-nowrap">' + fmtDate(log.created_at) + '</small></div></div>';
+            list.appendChild(item);
+        });
+    }
+
+    function updateActions(job) {
+        const actions = document.getElementById('actions-section');
+        if (!actions) return;
+        let html = '';
+        if (job.status === 'queued' || job.status === 'sent') {
+            html += '<form method="POST" action="/queue/' + jobId + '/cancel" onsubmit="return confirm(\'Cancel this job?\')"><input type="hidden" name="csrf_token" value="' + csrfToken + '"><button class="btn btn-danger"><i class="bi bi-x-circle me-1"></i> Cancel Job</button></form>';
+        }
+        if (job.status === 'failed') {
+            html += '<form method="POST" action="/queue/' + jobId + '/retry" onsubmit="return confirm(\'Retry this job?\')"><input type="hidden" name="csrf_token" value="' + csrfToken + '"><button class="btn btn-warning"><i class="bi bi-arrow-repeat me-1"></i> Retry Job</button></form>';
+        }
+        if (['queued','sent','running'].includes(job.status)) {
+            html += '<div class="text-muted small align-self-center ms-2">Job Stalled? Cancel and retry, or check the agent status on the <a href="/clients/' + job.agent_id + '">client page</a>.</div>';
+        }
+        actions.innerHTML = html;
+    }
+
+    function poll() {
+        fetch('/queue/' + jobId + '/json', { credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                const job = data.job;
+                updateProgressBar(job, data);
+                updateDetails(job);
+                updateLogs(data.logs);
+                updateActions(job);
+
+                // Update error log section
+                if (job.status === 'failed' && job.error_log) {
+                    let errSection = document.getElementById('error-section');
+                    if (!errSection) {
+                        errSection = document.createElement('div');
+                        errSection.id = 'error-section';
+                        const logEl = document.getElementById('log-section');
+                        if (logEl) logEl.parentNode.insertBefore(errSection, logEl);
+                    }
+                    errSection.innerHTML = '<div class="card border-0 shadow-sm mb-4 border-danger"><div class="card-header bg-white fw-semibold text-danger"><i class="bi bi-exclamation-triangle me-1"></i> Error Log</div><div class="card-body"><pre class="mb-0 small text-danger" style="white-space:pre-wrap;">' + esc(job.error_log) + '</pre></div></div>';
+                }
+
+                // Decide whether to keep polling
+                const jobActive = ['queued','sent','running'].includes(job.status);
+                if (jobActive) {
+                    isActive = true;
+                    setTimeout(poll, 5000);
+                } else if (job.completed_at) {
+                    isActive = false;
+                    completedAt = new Date(job.completed_at.replace(' ','T')+'Z').getTime();
+                    if (Date.now() - completedAt < 120000) {
+                        setTimeout(poll, 5000);
+                    }
+                }
+            })
+            .catch(function() {
+                // On error, retry after longer delay
+                if (isActive) setTimeout(poll, 10000);
+            });
+    }
+
+    // Start polling
+    if (isActive) {
+        setTimeout(poll, 5000);
+    } else if (completedAt && (Date.now() - completedAt < 120000)) {
+        setTimeout(poll, 5000);
     }
 })();
 </script>
-<?php endif; ?>

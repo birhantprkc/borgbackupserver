@@ -85,6 +85,53 @@ class QueueController extends Controller
         ]);
     }
 
+    public function detailJson(int $id): void
+    {
+        $this->requireAuth();
+
+        $job = $this->db->fetchOne("
+            SELECT bj.*, a.name as agent_name, a.id as agent_id,
+                   a.status as agent_status, a.last_heartbeat,
+                   r.name as repo_name, bp.name as plan_name,
+                   bp.directories, bp.excludes, bp.advanced_options
+            FROM backup_jobs bj
+            JOIN agents a ON a.id = bj.agent_id
+            LEFT JOIN repositories r ON r.id = bj.repository_id
+            LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
+            WHERE bj.id = ?
+        ", [$id]);
+
+        if (!$job) {
+            http_response_code(404);
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'Not found']);
+            return;
+        }
+
+        $logs = $this->db->fetchAll("
+            SELECT * FROM server_log
+            WHERE backup_job_id = ?
+            ORDER BY created_at ASC
+        ", [$id]);
+
+        $activeCount = $this->db->count('backup_jobs', "status IN ('sent', 'running')");
+        $maxQueue = (int) ($this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'max_queue'")['value'] ?? 4);
+        $queuePosition = null;
+        if ($job['status'] === 'queued') {
+            $pos = $this->db->fetchOne("SELECT COUNT(*) as cnt FROM backup_jobs WHERE status = 'queued' AND queued_at <= ?", [$job['queued_at']]);
+            $queuePosition = (int) $pos['cnt'];
+        }
+
+        header('Content-Type: application/json');
+        echo json_encode([
+            'job' => $job,
+            'logs' => $logs,
+            'activeCount' => $activeCount,
+            'maxQueue' => $maxQueue,
+            'queuePosition' => $queuePosition,
+        ]);
+    }
+
     public function cancel(int $id): void
     {
         $this->requireAuth();

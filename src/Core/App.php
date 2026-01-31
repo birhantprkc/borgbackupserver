@@ -85,6 +85,7 @@ class App
         // Queue
         $this->router->map('GET', '/queue', 'QueueController@index');
         $this->router->map('GET', '/queue/[i:id]', 'QueueController@detail');
+        $this->router->map('GET', '/queue/[i:id]/json', 'QueueController@detailJson');
         $this->router->map('POST', '/queue/[i:id]/cancel', 'QueueController@cancel');
         $this->router->map('POST', '/queue/[i:id]/retry', 'QueueController@retry');
 
