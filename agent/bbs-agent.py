@@ -267,11 +267,16 @@ def execute_update_borg(config, task):
         logger.info(f"Running: {' '.join(cmd)}")
         proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=600)
 
+        stdout_text = proc.stdout.decode("utf-8", errors="replace").strip()
+        stderr_text = proc.stderr.decode("utf-8", errors="replace").strip()
+
         if proc.returncode == 0:
             result = "completed"
-            logger.info(f"Borg update completed successfully")
+            # Capture output so the server can show what happened
+            update_output = stdout_text or stderr_text or "Update completed (no output)"
+            logger.info(f"Borg update completed successfully: {update_output[:200]}")
         else:
-            error_output = proc.stderr.decode("utf-8", errors="replace") or proc.stdout.decode("utf-8", errors="replace") or f"Exit code {proc.returncode}"
+            error_output = stderr_text or stdout_text or f"Exit code {proc.returncode}"
             logger.error(f"Borg update failed: {error_output}")
 
     except subprocess.TimeoutExpired:
@@ -285,6 +290,8 @@ def execute_update_borg(config, task):
     status_data = {"job_id": job_id, "result": result}
     if error_output:
         status_data["error_log"] = error_output[:10000]
+    elif result == "completed":
+        status_data["output_log"] = update_output[:10000]
     api_request(config, "/api/agent/status", method="POST", data=status_data)
 
     # Re-report system info so borg_version gets updated

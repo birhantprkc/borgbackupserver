@@ -204,10 +204,11 @@ class AgentApiController extends Controller
         $this->db->update('backup_jobs', $data, 'id = ?', [$jobId]);
 
         // Log the result
+        $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
         $level = $result === 'completed' ? 'info' : 'error';
         $message = $result === 'completed'
-            ? "Backup completed: job #{$jobId}, {$data['files_total']} files, {$duration}s"
-            : "Backup failed: job #{$jobId} — " . ($input['error_log'] ?? 'unknown error');
+            ? "{$taskLabel} completed: job #{$jobId}" . (($data['files_total'] ?? 0) > 0 ? ", {$data['files_total']} files" : '') . ", {$duration}s"
+            : "{$taskLabel} failed: job #{$jobId} — " . ($input['error_log'] ?? 'unknown error');
 
         $this->db->insert('server_log', [
             'agent_id' => $agent['id'],
@@ -215,6 +216,16 @@ class AgentApiController extends Controller
             'level' => $level,
             'message' => $message,
         ]);
+
+        // Log output from tasks like update_borg
+        if (!empty($input['output_log'])) {
+            $this->db->insert('server_log', [
+                'agent_id' => $agent['id'],
+                'backup_job_id' => $jobId,
+                'level' => 'info',
+                'message' => "{$taskLabel} output: " . substr($input['output_log'], 0, 2000),
+            ]);
+        }
 
         // Notification system: backup failed / resolved
         $notificationService = new NotificationService();

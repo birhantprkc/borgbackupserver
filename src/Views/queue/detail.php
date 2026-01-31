@@ -63,8 +63,11 @@ $isServerSide = in_array($job['task_type'], ['prune', 'compact']);
                 </div>
             </div>
             <div class="text-white-50 small">This <?= $job['task_type'] ?> job runs server-side and will be picked up by the scheduler within 60 seconds</div>
+        <?php
+        $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
+        ?>
         <?php elseif ($job['status'] === 'running' && $pct > 0): ?>
-            <div class="text-white fw-semibold mb-1">Backing up... <?= $pct ?>%</div>
+            <div class="text-white fw-semibold mb-1"><?= $taskLabel ?>... <?= $pct ?>%</div>
             <div class="progress mb-1" style="height: 22px; background-color: rgba(255,255,255,0.15);">
                 <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"
                      style="width: <?= $pct ?>%; background-color: #5b9bd5;" aria-valuenow="<?= $pct ?>" aria-valuemin="0" aria-valuemax="100">
@@ -75,14 +78,14 @@ $isServerSide = in_array($job['task_type'], ['prune', 'compact']);
                 <?= formatBytes($job['bytes_processed']) ?> of <?= formatBytes($job['bytes_total']) ?> processed
             </div>
         <?php elseif ($job['status'] === 'running'): ?>
-            <div class="text-white fw-semibold mb-1">Backup in progress...</div>
+            <div class="text-white fw-semibold mb-1"><?= $taskLabel ?> in progress...</div>
             <div class="progress mb-1" style="height: 22px; background-color: rgba(255,255,255,0.15);">
                 <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"
                      style="width: 100%; background-color: #5b9bd5;">
                     Running
                 </div>
             </div>
-            <div class="text-white-50 small">Waiting for progress data from agent</div>
+            <div class="text-white-50 small">Waiting for progress data from agent...</div>
         <?php elseif ($job['status'] === 'sent'): ?>
             <div class="text-white fw-semibold mb-1">Waiting for Agent</div>
             <div class="progress mb-1" style="height: 22px; background-color: rgba(255,255,255,0.15);">
@@ -441,7 +444,8 @@ $isServerSide = in_array($job['task_type'], ['prune', 'compact']);
                 const label = container.querySelector('.fw-semibold');
                 const sub = container.querySelector('.text-white-50');
                 if (bar) { bar.style.width = pct + '%'; bar.textContent = Number(job.files_processed).toLocaleString() + ' / ' + Number(job.files_total).toLocaleString() + ' files'; }
-                if (label) label.textContent = 'Backing up... ' + pct + '%';
+                var taskLabel = (job.task_type || 'backup').replace('_',' ').replace(/^\w/, c => c.toUpperCase());
+                if (label) label.textContent = taskLabel + '... ' + pct + '%';
                 if (sub) sub.textContent = fmtBytes(job.bytes_processed) + ' of ' + fmtBytes(job.bytes_total) + ' processed';
             })();
         }
