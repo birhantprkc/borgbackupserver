@@ -17,11 +17,20 @@ class BorgCommandBuilder
         $cmd[] = '--progress';
 
         // Advanced options from the plan
+        // Borg flags like --pattern take a value that may start with + or -
+        // which confuses argparse. We join these as --flag=value to avoid ambiguity.
         if (!empty($plan['advanced_options'])) {
-            $opts = preg_split('/\s+/', trim($plan['advanced_options']));
-            foreach ($opts as $opt) {
-                if (!empty($opt)) {
-                    $cmd[] = $opt;
+            $tokens = preg_split('/\s+/', trim($plan['advanced_options']));
+            $flagsWithValues = ['--pattern', '--compression', '--exclude', '--exclude-from',
+                '--patterns-from', '--comment', '--chunker-params', '--remote-path'];
+            for ($i = 0; $i < count($tokens); $i++) {
+                $token = $tokens[$i];
+                if (empty($token)) continue;
+                if (in_array($token, $flagsWithValues) && isset($tokens[$i + 1])) {
+                    $cmd[] = $token . '=' . $tokens[$i + 1];
+                    $i++;
+                } else {
+                    $cmd[] = $token;
                 }
             }
         }
