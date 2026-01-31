@@ -705,7 +705,40 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         ?>
         <div class="col-md-6 col-lg-4">
             <div class="card border-0 shadow-sm h-100 schedule-card">
-                <div class="card-body p-3">
+                <div class="card-body p-3 position-relative">
+                    <div class="dropdown position-absolute" style="top:8px;right:8px;z-index:10;">
+                        <button class="btn btn-sm btn-light border-0" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-three-dots-vertical"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <form method="POST" action="/plans/<?= $plan['id'] ?>/trigger">
+                                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                    <button type="submit" class="dropdown-item"><i class="bi bi-play-fill text-success me-2"></i>Run Now</button>
+                                </form>
+                            </li>
+                            <?php if ($plan['schedule_id']): ?>
+                            <li>
+                                <form method="POST" action="/schedules/<?= $plan['schedule_id'] ?>/toggle">
+                                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                    <?php if ($isActive): ?>
+                                    <button type="submit" class="dropdown-item"><i class="bi bi-pause-fill text-warning me-2"></i>Pause</button>
+                                    <?php else: ?>
+                                    <button type="submit" class="dropdown-item"><i class="bi bi-play-fill text-secondary me-2"></i>Resume</button>
+                                    <?php endif; ?>
+                                </form>
+                            </li>
+                            <?php endif; ?>
+                            <li><button class="dropdown-item" type="button" data-bs-toggle="collapse" data-bs-target="#edit-plan-<?= $plan['id'] ?>"><i class="bi bi-pencil text-primary me-2"></i>Edit</button></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <form method="POST" action="/plans/<?= $plan['id'] ?>/delete" onsubmit="return confirm('Delete this backup plan and its schedule?')">
+                                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                    <button type="submit" class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Delete</button>
+                                </form>
+                            </li>
+                        </ul>
+                    </div>
                     <div class="d-flex align-items-center">
                         <div class="schedule-icon-wrap me-3 <?= $isActive ? 'schedule-active' : ($isManual ? 'schedule-manual' : 'schedule-paused') ?>">
                             <i class="bi bi-calendar-event"></i>
@@ -719,39 +752,6 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                             <div class="small text-muted">
                                 <i class="bi bi-archive me-1"></i><?= htmlspecialchars($plan['repo_name'] ?? '--') ?>
                             </div>
-                        </div>
-                        <div class="dropdown ms-2">
-                            <button class="btn btn-sm btn-light border-0" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="bi bi-three-dots-vertical"></i>
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li>
-                                    <form method="POST" action="/plans/<?= $plan['id'] ?>/trigger">
-                                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                        <button type="submit" class="dropdown-item"><i class="bi bi-play-fill text-success me-2"></i>Run Now</button>
-                                    </form>
-                                </li>
-                                <?php if ($plan['schedule_id']): ?>
-                                <li>
-                                    <form method="POST" action="/schedules/<?= $plan['schedule_id'] ?>/toggle">
-                                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                        <?php if ($isActive): ?>
-                                        <button type="submit" class="dropdown-item"><i class="bi bi-pause-fill text-warning me-2"></i>Pause</button>
-                                        <?php else: ?>
-                                        <button type="submit" class="dropdown-item"><i class="bi bi-play-fill text-secondary me-2"></i>Resume</button>
-                                        <?php endif; ?>
-                                    </form>
-                                </li>
-                                <?php endif; ?>
-                                <li><button class="dropdown-item" type="button" data-bs-toggle="collapse" data-bs-target="#edit-plan-<?= $plan['id'] ?>"><i class="bi bi-pencil text-primary me-2"></i>Edit</button></li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li>
-                                    <form method="POST" action="/plans/<?= $plan['id'] ?>/delete" onsubmit="return confirm('Delete this backup plan and its schedule?')">
-                                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                        <button type="submit" class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Delete</button>
-                                    </form>
-                                </li>
-                            </ul>
                         </div>
                     </div>
                 </div>
