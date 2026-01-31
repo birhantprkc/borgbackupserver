@@ -58,10 +58,16 @@ html, body {
 .topbar {
     height: 56px;
     background-color: #2c3e50;
-    position: sticky;
+    position: fixed;
     top: 0;
+    left: 0;
+    right: 0;
     z-index: 1030;
     padding-left: 0 !important;
+}
+
+.main-content {
+    margin-top: 56px;
 }
 
 .topbar .navbar-text {
@@ -409,6 +415,9 @@ body.bg-light {
 @media (max-width: 767.98px) {
     .topbar {
         height: 48px;
+    }
+    .main-content {
+        margin-top: 48px;
     }
     .topbar .navbar-brand {
         height: 48px;
