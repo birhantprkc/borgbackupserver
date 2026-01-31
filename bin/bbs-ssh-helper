@@ -178,8 +178,15 @@ case "$ACTION" in
         fi
 
         if id "$USERNAME" &>/dev/null; then
+            HOME_DIR=$(eval echo "~$USERNAME" 2>/dev/null)
             userdel "$USERNAME" 2>/dev/null || true
             echo "Deleted user: $USERNAME"
+
+            # Remove home/storage directory and all borg repos
+            if [ -n "$HOME_DIR" ] && [ -d "$HOME_DIR" ] && [[ "$HOME_DIR" == /var/bbs/home/* ]]; then
+                rm -rf "$HOME_DIR"
+                echo "Removed storage directory: $HOME_DIR"
+            fi
         else
             echo "User $USERNAME does not exist"
         fi
