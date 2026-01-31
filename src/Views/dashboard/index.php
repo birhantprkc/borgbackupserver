@@ -1,62 +1,62 @@
 <!-- Stat Cards -->
-<div class="row g-4 mb-4">
+<div class="row g-3 mb-4">
     <div class="col-xl-3 col-md-6">
         <a href="/clients" class="text-decoration-none">
-            <div class="card stat-card border-0 shadow-sm h-100">
-                <div class="card-body d-flex align-items-center">
-                    <div class="stat-icon bg-primary bg-opacity-10 text-primary rounded-3 p-3 me-3">
-                        <i class="bi bi-display fs-3"></i>
+            <div class="card stat-card border-0 shadow-sm">
+                <div class="card-body d-flex align-items-center justify-content-between py-2 px-3">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-display text-primary me-2 fs-5"></i>
+                        <div>
+                            <div class="fw-semibold small text-dark">Clients</div>
+                            <div class="text-muted" style="font-size:.7rem;"><span id="stat-online"><?= $onlineCount ?></span> online</div>
+                        </div>
                     </div>
-                    <div>
-                        <div class="text-muted small">Clients</div>
-                        <div class="fs-2 fw-bold text-dark" id="stat-agents"><?= $agentCount ?></div>
-                        <div class="text-muted small"><span id="stat-online"><?= $onlineCount ?></span> online</div>
-                    </div>
+                    <div class="fs-2 fw-bold text-primary" id="stat-agents"><?= $agentCount ?></div>
                 </div>
             </div>
         </a>
     </div>
     <div class="col-xl-3 col-md-6">
         <a href="/queue" class="text-decoration-none">
-            <div class="card stat-card border-0 shadow-sm h-100">
-                <div class="card-body d-flex align-items-center">
-                    <div class="stat-icon bg-success bg-opacity-10 text-success rounded-3 p-3 me-3">
-                        <i class="bi bi-arrow-repeat fs-3"></i>
+            <div class="card stat-card border-0 shadow-sm">
+                <div class="card-body d-flex align-items-center justify-content-between py-2 px-3">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-arrow-repeat text-success me-2 fs-5"></i>
+                        <div>
+                            <div class="fw-semibold small text-dark">Backups Running</div>
+                        </div>
                     </div>
-                    <div>
-                        <div class="text-muted small">Backups Running</div>
-                        <div class="fs-2 fw-bold text-dark" id="stat-running"><?= $runningJobs ?></div>
-                    </div>
+                    <div class="fs-2 fw-bold text-success" id="stat-running"><?= $runningJobs ?></div>
                 </div>
             </div>
         </a>
     </div>
     <div class="col-xl-3 col-md-6">
         <a href="/queue" class="text-decoration-none">
-            <div class="card stat-card border-0 shadow-sm h-100">
-                <div class="card-body d-flex align-items-center">
-                    <div class="stat-icon bg-warning bg-opacity-10 text-warning rounded-3 p-3 me-3">
-                        <i class="bi bi-hourglass-split fs-3"></i>
+            <div class="card stat-card border-0 shadow-sm">
+                <div class="card-body d-flex align-items-center justify-content-between py-2 px-3">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-hourglass-split text-warning me-2 fs-5"></i>
+                        <div>
+                            <div class="fw-semibold small text-dark">Queue Waiting</div>
+                        </div>
                     </div>
-                    <div>
-                        <div class="text-muted small">Queue Waiting</div>
-                        <div class="fs-2 fw-bold text-dark" id="stat-queued"><?= $queuedJobs ?></div>
-                    </div>
+                    <div class="fs-2 fw-bold text-warning" id="stat-queued"><?= $queuedJobs ?></div>
                 </div>
             </div>
         </a>
     </div>
     <div class="col-xl-3 col-md-6">
         <a href="/log?level=error" class="text-decoration-none">
-            <div class="card stat-card border-0 shadow-sm h-100">
-                <div class="card-body d-flex align-items-center">
-                    <div class="stat-icon bg-danger bg-opacity-10 text-danger rounded-3 p-3 me-3">
-                        <i class="bi bi-exclamation-circle fs-3"></i>
+            <div class="card stat-card border-0 shadow-sm">
+                <div class="card-body d-flex align-items-center justify-content-between py-2 px-3">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-exclamation-circle text-danger me-2 fs-5"></i>
+                        <div>
+                            <div class="fw-semibold small text-dark">Errors (24h)</div>
+                        </div>
                     </div>
-                    <div>
-                        <div class="text-muted small">Errors (24h)</div>
-                        <div class="fs-2 fw-bold text-dark" id="stat-errors"><?= $errorCount ?></div>
-                    </div>
+                    <div class="fs-2 fw-bold text-danger" id="stat-errors"><?= $errorCount ?></div>
                 </div>
             </div>
         </a>
