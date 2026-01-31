@@ -248,6 +248,8 @@ class QueueManager
                 }
             } elseif ($job['task_type'] === 'update_borg') {
                 $tasks[] = ['task' => 'update_borg', 'job_id' => $job['id']];
+            } elseif ($job['task_type'] === 'update_agent') {
+                $tasks[] = ['task' => 'update_agent', 'job_id' => $job['id']];
             }
         }
 
