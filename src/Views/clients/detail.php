@@ -1071,7 +1071,22 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                     <option value="none" <?= !$editHasCompression ? 'selected' : '' ?>>None</option>
                                 </select>
                             </div>
-                            <input type="hidden" name="advanced_options" class="edit-adv-hidden">
+                            <?php
+                            // Extract custom options (not managed by checkboxes)
+                            $managedFlags = ['--compression\s+\S+', '--exclude-caches', '--one-file-system', '--noatime', '--numeric-ids', '--noxattrs', '--noacls'];
+                            $customOpts = $editOpts;
+                            foreach ($managedFlags as $flag) {
+                                $customOpts = preg_replace('/' . $flag . '/', '', $customOpts);
+                            }
+                            $customOpts = trim(preg_replace('/\s+/', ' ', $customOpts));
+                            ?>
+                            <div class="mt-2">
+                                <label class="form-label small text-muted">Advanced Borg Options</label>
+                                <input type="text" class="form-control form-control-sm font-monospace edit-adv-field" name="advanced_options"
+                                       value="<?= htmlspecialchars($customOpts) ?>"
+                                       placeholder="e.g. --pattern +home/*/docs/** --pattern -home/**">
+                                <div class="form-text">Checkboxes above add/remove flags here. You can also type custom borg options.</div>
+                            </div>
                         </div>
                     </div>
 
@@ -1390,7 +1405,12 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                 <option value="none">None</option>
                             </select>
                         </div>
-                        <input type="hidden" name="advanced_options" id="advancedOptionsHidden">
+                        <div class="mt-2">
+                            <label class="form-label small text-muted">Advanced Borg Options</label>
+                            <input type="text" class="form-control form-control-sm font-monospace" name="advanced_options" id="advancedOptionsField"
+                                   placeholder="e.g. --pattern +home/*/docs/** --pattern -home/**">
+                            <div class="form-text">Checkboxes above add/remove flags here. You can also type custom borg options.</div>
+                        </div>
                     </div>
                 </div>
 
@@ -1674,39 +1694,80 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         });
     }
 
-    // Build advanced_options from checkboxes on submit
-    document.querySelector('form[action="/plans/create"]').addEventListener('submit', function() {
+    // Managed borg flags (checkbox-controlled)
+    const managedFlags = ['--compression\\s+\\S+', '--exclude-caches', '--one-file-system', '--noatime', '--numeric-ids', '--noxattrs', '--noacls'];
+    function stripManagedFlags(val) {
+        managedFlags.forEach(f => { val = val.replace(new RegExp(f, 'g'), ''); });
+        return val.replace(/\s+/g, ' ').trim();
+    }
+    function buildCheckboxOpts(compChecked, compType, cacheChecked, oneFsChecked, noatimeChecked, numIdChecked, noXattrChecked, noAclChecked) {
         const opts = [];
-        const comp = document.getElementById('compressionType').value;
-        if (document.getElementById('optCompression').checked && comp !== 'none') {
-            opts.push('--compression ' + comp);
-        }
-        if (document.getElementById('optExcludeCaches').checked) opts.push('--exclude-caches');
-        if (document.getElementById('optOneFs').checked) opts.push('--one-file-system');
-        if (document.getElementById('optNoatime').checked) opts.push('--noatime');
-        if (document.getElementById('optNumericIds').checked) opts.push('--numeric-ids');
-        if (document.getElementById('optNoXattrs').checked) opts.push('--noxattrs');
-        if (document.getElementById('optNoAcls').checked) opts.push('--noacls');
-        document.getElementById('advancedOptionsHidden').value = opts.join(' ');
-    });
+        if (compChecked && compType !== 'none') opts.push('--compression ' + compType);
+        if (cacheChecked) opts.push('--exclude-caches');
+        if (oneFsChecked) opts.push('--one-file-system');
+        if (noatimeChecked) opts.push('--noatime');
+        if (numIdChecked) opts.push('--numeric-ids');
+        if (noXattrChecked) opts.push('--noxattrs');
+        if (noAclChecked) opts.push('--noacls');
+        return opts.join(' ');
+    }
 
-    // Edit plan forms: build advanced_options from checkboxes on submit
+    // Create form: sync checkboxes into the visible field
+    const createForm = document.querySelector('form[action="/plans/create"]');
+    if (createForm) {
+        const advField = document.getElementById('advancedOptionsField');
+
+        function syncCreateField() {
+            const custom = stripManagedFlags(advField.value);
+            const checkbox = buildCheckboxOpts(
+                document.getElementById('optCompression').checked,
+                document.getElementById('compressionType').value,
+                document.getElementById('optExcludeCaches').checked,
+                document.getElementById('optOneFs').checked,
+                document.getElementById('optNoatime').checked,
+                document.getElementById('optNumericIds').checked,
+                document.getElementById('optNoXattrs').checked,
+                document.getElementById('optNoAcls').checked
+            );
+            advField.value = [checkbox, custom].filter(Boolean).join(' ');
+        }
+
+        createForm.querySelectorAll('.borg-opt').forEach(cb => cb.addEventListener('change', syncCreateField));
+        document.getElementById('compressionType').addEventListener('change', syncCreateField);
+        // Initialize on load
+        syncCreateField();
+
+        createForm.addEventListener('submit', syncCreateField);
+    }
+
+    // Edit plan forms: sync checkboxes into the visible field
     document.querySelectorAll('.edit-plan-form').forEach(form => {
-        form.addEventListener('submit', function() {
-            const opts = [];
-            const panel = form.closest('.edit-plan-panel');
-            const comp = panel.querySelector('.edit-comp-type').value;
-            const checks = panel.querySelectorAll('.edit-borg-opt');
-            // Compression is first checkbox
-            if (checks[0] && checks[0].checked && comp !== 'none') opts.push('--compression ' + comp);
-            if (checks[1] && checks[1].checked) opts.push('--exclude-caches');
-            if (checks[2] && checks[2].checked) opts.push('--one-file-system');
-            if (checks[3] && checks[3].checked) opts.push('--noatime');
-            if (checks[4] && checks[4].checked) opts.push('--numeric-ids');
-            if (checks[5] && checks[5].checked) opts.push('--noxattrs');
-            if (checks[6] && checks[6].checked) opts.push('--noacls');
-            panel.querySelector('.edit-adv-hidden').value = opts.join(' ');
-        });
+        const panel = form.closest('.edit-plan-panel');
+        const advField = panel.querySelector('.edit-adv-field');
+        const checks = panel.querySelectorAll('.edit-borg-opt');
+        const compSelect = panel.querySelector('.edit-comp-type');
+
+        function syncEditField() {
+            const custom = stripManagedFlags(advField.value);
+            const checkbox = buildCheckboxOpts(
+                checks[0] && checks[0].checked,
+                compSelect.value,
+                checks[1] && checks[1].checked,
+                checks[2] && checks[2].checked,
+                checks[3] && checks[3].checked,
+                checks[4] && checks[4].checked,
+                checks[5] && checks[5].checked,
+                checks[6] && checks[6].checked
+            );
+            advField.value = [checkbox, custom].filter(Boolean).join(' ');
+        }
+
+        checks.forEach(cb => cb.addEventListener('change', syncEditField));
+        compSelect.addEventListener('change', syncEditField);
+        // Initialize on load
+        syncEditField();
+
+        form.addEventListener('submit', syncEditField);
     });
 
     // Edit form template selectors
