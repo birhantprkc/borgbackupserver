@@ -74,7 +74,7 @@
 <!-- Row 2: Backups Chart | Server Stats | Server Partitions -->
 <div class="row g-4 mb-4">
     <div class="<?= $isAdmin ? 'col-lg-4' : 'col-12' ?>">
-        <div class="card border-0 shadow-sm h-100">
+        <div class="card border-0 card-no-outline shadow-sm h-100">
             <div class="card-header bg-white fw-semibold">
                 <i class="bi bi-bar-chart me-1"></i> Backups (24h)
             </div>
@@ -85,7 +85,7 @@
     </div>
     <?php if ($isAdmin): ?>
     <div class="col-lg-3">
-        <div class="card border-0 shadow-sm h-100">
+        <div class="card border-0 card-no-outline shadow-sm h-100">
             <div class="card-header bg-white fw-semibold">
                 <i class="bi bi-cpu me-1"></i> Server Stats
             </div>
@@ -130,7 +130,7 @@
         </div>
     </div>
     <div class="col-lg-5">
-        <div class="card border-0 shadow-sm h-100">
+        <div class="card border-0 card-no-outline shadow-sm h-100">
             <div class="card-header bg-white fw-semibold">
                 <i class="bi bi-hdd-stack me-1"></i> Server Partitions
             </div>
