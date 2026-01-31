@@ -549,8 +549,27 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
 <?php elseif ($tab === 'repos'): ?>
     <h5 class="mb-3">Repositories</h5>
 
+    <script>
+    function showCreateRepo() {
+        var grid = document.getElementById('repo-cards-grid');
+        var solo = document.getElementById('add-repo-card-solo');
+        var create = document.getElementById('create-repo-section');
+        if (grid) grid.style.display = 'none';
+        if (solo) solo.style.display = 'none';
+        if (create) create.style.display = '';
+    }
+    function hideCreateRepo() {
+        var grid = document.getElementById('repo-cards-grid');
+        var solo = document.getElementById('add-repo-card-solo');
+        var create = document.getElementById('create-repo-section');
+        if (grid) grid.style.display = '';
+        if (solo) solo.style.display = '';
+        if (create) create.style.display = 'none';
+    }
+    </script>
+
     <?php if (!empty($repositories)): ?>
-    <div class="row g-3 mb-4">
+    <div id="repo-cards-grid" class="row g-3 mb-4">
         <?php foreach ($repositories as $repo):
             $s = $repo['size_bytes'];
             $sizeLabel = $s >= 1073741824 ? round($s / 1073741824, 1) . ' GB' : ($s >= 1048576 ? round($s / 1048576, 1) . ' MB' : ($s > 0 ? round($s / 1024, 1) . ' KB' : '--'));
@@ -600,13 +619,33 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
             </div>
         </div>
         <?php endforeach; ?>
+        <div class="col-md-6 col-lg-4">
+            <div class="card border-0 shadow-sm h-100" style="cursor:pointer;border:2px dashed #ccc !important;background:#fafafa;" onclick="showCreateRepo()">
+                <div class="card-body d-flex flex-column align-items-center justify-content-center text-muted p-4">
+                    <i class="bi bi-plus-circle" style="font-size:2rem;"></i>
+                    <div class="mt-2 fw-semibold">Add Repository</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+    <?php if (empty($repositories)): ?>
+    <div id="add-repo-card-solo" style="cursor:pointer;" onclick="showCreateRepo()">
+        <div class="card border-0 shadow-sm mb-4" style="border:2px dashed #ccc !important;background:#fafafa;">
+            <div class="card-body d-flex flex-column align-items-center justify-content-center text-muted p-4">
+                <i class="bi bi-plus-circle" style="font-size:2rem;"></i>
+                <div class="mt-2 fw-semibold">Add Repository</div>
+            </div>
+        </div>
     </div>
     <?php endif; ?>
 
     <!-- Create new repo -->
+    <div id="create-repo-section" style="display:none;">
     <div class="card border-0 shadow-sm">
-        <div class="card-header bg-white fw-semibold">
-            <i class="bi bi-plus-circle me-1"></i> Create New Repo
+        <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-plus-circle me-1"></i> Create New Repository</span>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="hideCreateRepo()"><i class="bi bi-arrow-left me-1"></i>Back</button>
         </div>
         <div class="card-body">
             <form method="POST" action="/repositories/create">
@@ -659,6 +698,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 </div>
             </form>
         </div>
+    </div>
     </div>
 
     <script>
