@@ -25,11 +25,13 @@ echo ""
 
 # 1. Pull / checkout code
 if [ -n "$GIT_TAG" ]; then
-    echo "[1/8] Checking out release $GIT_TAG..."
+    echo "[1/8] Upgrading to release $GIT_TAG..."
     git -C "$BBS_DIR" fetch --tags --force
-    git -C "$BBS_DIR" checkout "$GIT_TAG"
+    git -C "$BBS_DIR" checkout main 2>/dev/null || true
+    git -C "$BBS_DIR" reset --hard "$GIT_TAG"
 else
     echo "[1/8] Pulling latest code..."
+    git -C "$BBS_DIR" checkout main 2>/dev/null || true
     git -C "$BBS_DIR" pull
 fi
 
