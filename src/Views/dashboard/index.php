@@ -149,6 +149,48 @@
                     <span id="mysql-free-text"><?= $freePct ?>% free</span>
                 </div>
                 <?php endif; ?>
+                <?php if (!empty($mysqlStats)): ?>
+                <hr class="my-2">
+                <div class="small text-muted mb-2">Database Records</div>
+                <div class="row g-2 text-center" style="font-size:.7rem;">
+                    <div class="col-4">
+                        <div class="rounded py-1" style="background:#f0f4ff;">
+                            <div class="fw-bold text-primary" style="font-size:1rem;" id="stat-total-rows"><?= number_format($mysqlStats['total_rows']) ?></div>
+                            <div class="text-muted">Total Rows</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="rounded py-1" style="background:#f0faf0;">
+                            <div class="fw-bold text-success" style="font-size:1rem;" id="stat-archives"><?= number_format($mysqlStats['archives']) ?></div>
+                            <div class="text-muted">Archives</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="rounded py-1" style="background:#fff8f0;">
+                            <div class="fw-bold" style="font-size:1rem;color:#e67e22;" id="stat-catalog"><?= number_format($mysqlStats['catalog_files']) ?></div>
+                            <div class="text-muted">Catalog</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="rounded py-1" style="background:#f5f0ff;">
+                            <div class="fw-bold text-purple" style="font-size:1rem;color:#6f42c1;" id="stat-paths"><?= number_format($mysqlStats['unique_paths']) ?></div>
+                            <div class="text-muted">File Paths</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="rounded py-1" style="background:#f0faff;">
+                            <div class="fw-bold text-info" style="font-size:1rem;" id="stat-completed-jobs"><?= number_format($mysqlStats['completed_jobs']) ?></div>
+                            <div class="text-muted">Jobs Run</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="rounded py-1" style="background:#fef0f0;">
+                            <div class="fw-bold text-danger" style="font-size:1rem;" id="stat-repos"><?= number_format($mysqlStats['repositories']) ?></div>
+                            <div class="text-muted">Repos</div>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
             </div>
         </div>
     </div>
@@ -618,6 +660,19 @@ setInterval(function() {
                 const memArc = document.getElementById('mem-arc');
                 memArc.setAttribute('stroke-dasharray', (arc * p / 100) + ' ' + circ);
                 memArc.setAttribute('stroke', p > 85 ? '#dc3545' : (p > 60 ? '#ffc107' : '#0dcaf0'));
+            }
+            if (data.mysqlStats) {
+                const ms = data.mysqlStats;
+                const fmt = n => n.toLocaleString();
+                const map = {
+                    'stat-total-rows': ms.total_rows, 'stat-archives': ms.archives,
+                    'stat-catalog': ms.catalog_files, 'stat-paths': ms.unique_paths,
+                    'stat-completed-jobs': ms.completed_jobs, 'stat-repos': ms.repositories
+                };
+                for (const [id, val] of Object.entries(map)) {
+                    const el = document.getElementById(id);
+                    if (el) el.textContent = fmt(val);
+                }
             }
             if (data.mysqlStorage && data.mysqlStorage.disk_total > 0) {
                 const ms = data.mysqlStorage, t = ms.disk_total;

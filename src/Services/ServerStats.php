@@ -150,6 +150,34 @@ class ServerStats
     }
 
     /**
+     * Get MySQL row counts and interesting aggregate stats.
+     */
+    public static function getMysqlStats(): array
+    {
+        $db = \BBS\Core\Database::getInstance();
+
+        $totalRows = $db->fetchOne("
+            SELECT SUM(table_rows) AS total
+            FROM information_schema.TABLES
+            WHERE table_schema = DATABASE()
+        ");
+        $archives = $db->fetchOne("SELECT COUNT(*) AS cnt FROM archives");
+        $catalogFiles = $db->fetchOne("SELECT COUNT(*) AS cnt FROM file_catalog");
+        $uniquePaths = $db->fetchOne("SELECT COUNT(*) AS cnt FROM file_paths");
+        $jobs = $db->fetchOne("SELECT COUNT(*) AS cnt FROM backup_jobs WHERE status = 'completed'");
+        $repos = $db->fetchOne("SELECT COUNT(*) AS cnt FROM repositories");
+
+        return [
+            'total_rows' => (int) ($totalRows['total'] ?? 0),
+            'archives' => (int) ($archives['cnt'] ?? 0),
+            'catalog_files' => (int) ($catalogFiles['cnt'] ?? 0),
+            'unique_paths' => (int) ($uniquePaths['cnt'] ?? 0),
+            'completed_jobs' => (int) ($jobs['cnt'] ?? 0),
+            'repositories' => (int) ($repos['cnt'] ?? 0),
+        ];
+    }
+
+    /**
      * Get MySQL database size and the free space on its data partition.
      */
     public static function getMysqlStorage(): array
