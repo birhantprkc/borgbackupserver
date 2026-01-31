@@ -69,10 +69,10 @@
     <div class="<?= $isAdmin ? 'col-lg-5' : 'col-12' ?>">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-header bg-white fw-semibold">
-                <i class="bi bi-bar-chart me-1"></i> Backups Completed (24h)
+                <i class="bi bi-bar-chart me-1"></i> Backups (24h)
             </div>
             <div class="card-body">
-                <canvas id="backupsChart" height="180"></canvas>
+                <canvas id="backupsChart" height="160"></canvas>
             </div>
         </div>
     </div>
@@ -126,9 +126,9 @@
                         <thead class="table-light">
                             <tr>
                                 <th>Partition</th>
-                                <th style="min-width: 140px;">% Used</th>
-                                <th>Size</th>
-                                <th>Free</th>
+                                <th style="min-width: 100px;">% Used</th>
+                                <th class="d-th-md">Size</th>
+                                <th class="d-th-md">Free</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -142,8 +142,8 @@
                                         </div>
                                     </div>
                                 </td>
-                                <td><?= $part['size'] ?></td>
-                                <td><?= $part['free'] ?></td>
+                                <td class="d-table-cell-md"><?= $part['size'] ?></td>
+                                <td class="d-table-cell-md"><?= $part['free'] ?></td>
                             </tr>
                             <?php endforeach; ?>
                             <?php if (!empty($storage)): ?>
@@ -160,8 +160,8 @@
                                     <span class="text-muted">N/A</span>
                                     <?php endif; ?>
                                 </td>
-                                <td style="border-bottom: none;" class="pb-0"><?= $storage['disk_total'] !== null ? \BBS\Services\ServerStats::formatBytes($storage['disk_total']) : '--' ?></td>
-                                <td style="border-bottom: none;" class="pb-0"><?= $storage['disk_free'] !== null ? \BBS\Services\ServerStats::formatBytes($storage['disk_free']) : 'N/A' ?></td>
+                                <td style="border-bottom: none;" class="pb-0 d-table-cell-md"><?= $storage['disk_total'] !== null ? \BBS\Services\ServerStats::formatBytes($storage['disk_total']) : '--' ?></td>
+                                <td style="border-bottom: none;" class="pb-0 d-table-cell-md"><?= $storage['disk_free'] !== null ? \BBS\Services\ServerStats::formatBytes($storage['disk_free']) : 'N/A' ?></td>
                             </tr>
                             <tr>
                                 <td colspan="4" class="pt-0 text-muted" style="font-size: 0.75em;"><?= htmlspecialchars($storage['path']) ?></td>
@@ -193,10 +193,10 @@
                             <tr>
                                 <th>Client</th>
                                 <th>Task</th>
-                                <th>Plan</th>
-                                <th>Repo</th>
+                                <th class="d-th-md">Plan</th>
+                                <th class="d-th-md">Repo</th>
                                 <th>Progress</th>
-                                <th>Duration</th>
+                                <th class="d-th-md">Duration</th>
                                 <th>Status</th>
                             </tr>
                         </thead>
@@ -213,16 +213,16 @@
                             <tr style="cursor: pointer;" onclick="window.location='/queue/<?= $job['id'] ?>'">
                                 <td><?= htmlspecialchars($job['agent_name']) ?></td>
                                 <td><?= ucfirst($job['task_type']) ?></td>
-                                <td><?= htmlspecialchars($job['plan_name'] ?? '--') ?></td>
-                                <td><?= htmlspecialchars($job['repo_name'] ?? '--') ?></td>
-                                <td style="min-width: 140px;">
+                                <td class="d-table-cell-md"><?= htmlspecialchars($job['plan_name'] ?? '--') ?></td>
+                                <td class="d-table-cell-md"><?= htmlspecialchars($job['repo_name'] ?? '--') ?></td>
+                                <td style="min-width: 100px;">
                                     <?php if ($job['status'] === 'queued'): ?>
                                         <span class="text-muted">Waiting</span>
                                     <?php elseif (($job['files_total'] ?? 0) > 0): ?>
                                         <?php $pct = round(($job['files_processed'] / $job['files_total']) * 100); ?>
                                         <div class="progress" style="height: 20px;">
                                             <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width: <?= $pct ?>%">
-                                                <?= $pct ?>% (<?= number_format($job['files_processed']) ?>/<?= number_format($job['files_total']) ?>)
+                                                <?= $pct ?>%
                                             </div>
                                         </div>
                                     <?php else: ?>
@@ -231,7 +231,7 @@
                                         </div>
                                     <?php endif; ?>
                                 </td>
-                                <td class="text-nowrap"><?= $elapsed ?: '--' ?></td>
+                                <td class="d-table-cell-md text-nowrap"><?= $elapsed ?: '--' ?></td>
                                 <?php
                                 $jobBadge = match($job['status']) {
                                     'running' => 'info',
@@ -265,9 +265,9 @@
                             <tr>
                                 <th>Client</th>
                                 <th>Plan</th>
-                                <th>Frequency</th>
+                                <th class="d-th-md">Frequency</th>
                                 <th>Next Run</th>
-                                <th>Countdown</th>
+                                <th class="d-th-md">Countdown</th>
                                 <th></th>
                             </tr>
                         </thead>
@@ -292,9 +292,9 @@
                             <tr style="cursor: pointer;" onclick="window.location='/clients/<?= $sched['agent_id'] ?>?tab=schedules'">
                                 <td><?= htmlspecialchars($sched['agent_name']) ?></td>
                                 <td><?= htmlspecialchars($sched['plan_name']) ?></td>
-                                <td><?= ucfirst($sched['frequency']) ?></td>
-                                <td class="small text-nowrap"><?= \BBS\Core\TimeHelper::format($sched['next_run'], 'M j, g:i A') ?></td>
-                                <td class="<?= $countdownClass ?>"><?= $countdown ?></td>
+                                <td class="d-table-cell-md"><?= ucfirst($sched['frequency']) ?></td>
+                                <td class="small"><?= \BBS\Core\TimeHelper::format($sched['next_run'], 'M j, g:i A') ?></td>
+                                <td class="d-table-cell-md <?= $countdownClass ?>"><?= $countdown ?></td>
                                 <td class="text-nowrap" onclick="event.stopPropagation()">
                                     <form method="POST" action="/plans/<?= $sched['plan_id'] ?>/trigger" class="d-inline" onsubmit="return confirm('Run this backup now?')">
                                         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
@@ -329,10 +329,10 @@
                             <tr>
                                 <th>Client</th>
                                 <th>Task</th>
-                                <th>Plan</th>
-                                <th>Repo</th>
+                                <th class="d-th-md">Plan</th>
+                                <th class="d-th-md">Repo</th>
                                 <th>Completed</th>
-                                <th>Duration</th>
+                                <th class="d-th-md">Duration</th>
                                 <th>Status</th>
                             </tr>
                         </thead>
@@ -352,10 +352,10 @@
                             <tr style="cursor: pointer;" onclick="window.location='/queue/<?= $job['id'] ?>'">
                                 <td><?= htmlspecialchars($job['agent_name']) ?></td>
                                 <td><?= ucfirst($job['task_type']) ?></td>
-                                <td><?= htmlspecialchars($job['plan_name'] ?? '--') ?></td>
-                                <td><?= htmlspecialchars($job['repo_name'] ?? '--') ?></td>
-                                <td class="small text-nowrap"><?= \BBS\Core\TimeHelper::format($job['completed_at'], 'M j, g:i A') ?></td>
-                                <td class="text-nowrap"><?= $durStr ?></td>
+                                <td class="d-table-cell-md"><?= htmlspecialchars($job['plan_name'] ?? '--') ?></td>
+                                <td class="d-table-cell-md"><?= htmlspecialchars($job['repo_name'] ?? '--') ?></td>
+                                <td class="small"><?= \BBS\Core\TimeHelper::format($job['completed_at'], 'M j, g:i A') ?></td>
+                                <td class="d-table-cell-md text-nowrap"><?= $durStr ?></td>
                                 <td><span class="badge bg-<?= $sBadge ?>"><?= $job['status'] ?></span></td>
                             </tr>
                             <?php endforeach; ?>
@@ -385,7 +385,7 @@
                         <thead class="table-light">
                             <tr>
                                 <th>Time</th>
-                                <th>Client</th>
+                                <th class="d-th-md">Client</th>
                                 <th>Level</th>
                                 <th>Message</th>
                             </tr>
@@ -393,8 +393,8 @@
                         <tbody>
                             <?php foreach ($recentLogs as $log): ?>
                             <tr>
-                                <td class="text-nowrap"><?= \BBS\Core\TimeHelper::format($log['created_at'], 'M j, g:i A') ?></td>
-                                <td><?= htmlspecialchars($log['agent_name'] ?? '--') ?></td>
+                                <td class="small"><?= \BBS\Core\TimeHelper::format($log['created_at'], 'M j, g:i A') ?></td>
+                                <td class="d-table-cell-md"><?= htmlspecialchars($log['agent_name'] ?? '--') ?></td>
                                 <td>
                                     <?php
                                     $levelClass = match($log['level']) {
@@ -493,7 +493,7 @@ function renderActiveJobs(jobs) {
     const el = document.getElementById('active-jobs');
     if (!jobs || !jobs.length) { el.innerHTML = '<div class="p-4 text-muted text-center">No active jobs</div>'; return; }
     const now = Math.floor(Date.now() / 1000);
-    let html = '<div class="table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>Client</th><th>Task</th><th>Plan</th><th>Repo</th><th>Progress</th><th>Duration</th><th>Status</th></tr></thead><tbody class="small">';
+    let html = '<div class="table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>Client</th><th>Task</th><th class="d-th-md">Plan</th><th class="d-th-md">Repo</th><th>Progress</th><th class="d-th-md">Duration</th><th>Status</th></tr></thead><tbody class="small">';
     jobs.forEach(j => {
         let elapsed = '--';
         if (j.started_at) { const e = now - Math.floor(new Date((j.started_at).replace(' ','T')+'Z').getTime()/1000); elapsed = fmtDur(e); }
@@ -501,10 +501,10 @@ function renderActiveJobs(jobs) {
         if (j.status === 'queued') { progress = '<span class="text-muted">Waiting</span>'; }
         else if ((j.files_total || 0) > 0) {
             const pct = Math.round((j.files_processed / j.files_total) * 100);
-            progress = '<div class="progress" style="height:20px"><div class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width:'+pct+'%">'+pct+'% ('+Number(j.files_processed).toLocaleString()+'/'+Number(j.files_total).toLocaleString()+')</div></div>';
+            progress = '<div class="progress" style="height:20px"><div class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width:'+pct+'%">'+pct+'%</div></div>';
         } else { progress = '<div class="progress" style="height:20px"><div class="progress-bar progress-bar-striped progress-bar-animated bg-info" style="width:100%">Preparing...</div></div>'; }
         const badge = { running: 'info', sent: 'primary', queued: 'warning' }[j.status] || 'secondary';
-        html += '<tr style="cursor:pointer" onclick="window.location=\'/queue/'+j.id+'\'"><td>'+esc(j.agent_name)+'</td><td>'+esc(j.task_type?.[0]?.toUpperCase()+j.task_type?.slice(1))+'</td><td>'+esc(j.plan_name||'--')+'</td><td>'+esc(j.repo_name||'--')+'</td><td style="min-width:140px">'+progress+'</td><td class="text-nowrap">'+elapsed+'</td><td><span class="badge bg-'+badge+'">'+esc(j.status)+'</span></td></tr>';
+        html += '<tr style="cursor:pointer" onclick="window.location=\'/queue/'+j.id+'\'"><td>'+esc(j.agent_name)+'</td><td>'+esc(j.task_type?.[0]?.toUpperCase()+j.task_type?.slice(1))+'</td><td class="d-table-cell-md">'+esc(j.plan_name||'--')+'</td><td class="d-table-cell-md">'+esc(j.repo_name||'--')+'</td><td style="min-width:100px">'+progress+'</td><td class="d-table-cell-md text-nowrap">'+elapsed+'</td><td><span class="badge bg-'+badge+'">'+esc(j.status)+'</span></td></tr>';
     });
     html += '</tbody></table></div>';
     el.innerHTML = html;
@@ -514,11 +514,11 @@ function renderUpcoming(schedules, csrfToken) {
     const el = document.getElementById('upcoming-backups');
     if (!schedules || !schedules.length) { el.innerHTML = '<div class="p-4 text-muted text-center">No scheduled backups</div>'; return; }
     const now = Math.floor(Date.now() / 1000);
-    let html = '<div class="table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>Client</th><th>Plan</th><th>Frequency</th><th>Next Run</th><th>Countdown</th><th></th></tr></thead><tbody class="small">';
+    let html = '<div class="table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>Client</th><th>Plan</th><th class="d-th-md">Frequency</th><th>Next Run</th><th class="d-th-md">Countdown</th><th></th></tr></thead><tbody class="small">';
     schedules.forEach(s => {
         const nextTs = Math.floor(new Date((s.next_run).replace(' ','T')+'Z').getTime()/1000);
         const cd = fmtCountdown(nextTs - now);
-        html += '<tr style="cursor:pointer" onclick="window.location=\'/clients/'+s.agent_id+'?tab=schedules\'"><td>'+esc(s.agent_name)+'</td><td>'+esc(s.plan_name)+'</td><td>'+esc(s.frequency?.[0]?.toUpperCase()+s.frequency?.slice(1))+'</td><td class="small text-nowrap">'+fmtDate(s.next_run)+'</td><td class="'+cd.cls+'">'+cd.text+'</td>';
+        html += '<tr style="cursor:pointer" onclick="window.location=\'/clients/'+s.agent_id+'?tab=schedules\'"><td>'+esc(s.agent_name)+'</td><td>'+esc(s.plan_name)+'</td><td class="d-table-cell-md">'+esc(s.frequency?.[0]?.toUpperCase()+s.frequency?.slice(1))+'</td><td class="small">'+fmtDate(s.next_run)+'</td><td class="d-table-cell-md '+cd.cls+'">'+cd.text+'</td>';
         html += '<td class="text-nowrap" onclick="event.stopPropagation()"><form method="POST" action="/plans/'+s.plan_id+'/trigger" class="d-inline" onsubmit="return confirm(\'Run this backup now?\')"><input type="hidden" name="csrf_token" value="'+csrfToken+'"><button type="submit" class="btn btn-sm btn-outline-success py-0 px-2" title="Run now"><i class="bi bi-play-fill"></i></button></form></td>';
         html += '</tr>';
     });
@@ -529,10 +529,10 @@ function renderUpcoming(schedules, csrfToken) {
 function renderRecentJobs(jobs) {
     const el = document.getElementById('recent-jobs');
     if (!jobs || !jobs.length) { el.innerHTML = '<div class="p-4 text-muted text-center">No completed jobs yet</div>'; return; }
-    let html = '<div class="table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>Client</th><th>Task</th><th>Plan</th><th>Repo</th><th>Completed</th><th>Duration</th><th>Status</th></tr></thead><tbody class="small">';
+    let html = '<div class="table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>Client</th><th>Task</th><th class="d-th-md">Plan</th><th class="d-th-md">Repo</th><th>Completed</th><th class="d-th-md">Duration</th><th>Status</th></tr></thead><tbody class="small">';
     jobs.forEach(j => {
         const badge = { completed: 'success', failed: 'danger', cancelled: 'secondary' }[j.status] || 'warning';
-        html += '<tr style="cursor:pointer" onclick="window.location=\'/queue/'+j.id+'\'"><td>'+esc(j.agent_name)+'</td><td>'+esc(j.task_type?.[0]?.toUpperCase()+j.task_type?.slice(1))+'</td><td>'+esc(j.plan_name||'--')+'</td><td>'+esc(j.repo_name||'--')+'</td><td class="small text-nowrap">'+fmtDate(j.completed_at)+'</td><td class="text-nowrap">'+fmtDur(j.duration_seconds)+'</td><td><span class="badge bg-'+badge+'">'+esc(j.status)+'</span></td></tr>';
+        html += '<tr style="cursor:pointer" onclick="window.location=\'/queue/'+j.id+'\'"><td>'+esc(j.agent_name)+'</td><td>'+esc(j.task_type?.[0]?.toUpperCase()+j.task_type?.slice(1))+'</td><td class="d-table-cell-md">'+esc(j.plan_name||'--')+'</td><td class="d-table-cell-md">'+esc(j.repo_name||'--')+'</td><td class="small">'+fmtDate(j.completed_at)+'</td><td class="d-table-cell-md text-nowrap">'+fmtDur(j.duration_seconds)+'</td><td><span class="badge bg-'+badge+'">'+esc(j.status)+'</span></td></tr>';
     });
     html += '</tbody></table></div>';
     el.innerHTML = html;
@@ -541,10 +541,10 @@ function renderRecentJobs(jobs) {
 function renderLogs(logs) {
     const el = document.getElementById('server-log');
     if (!logs || !logs.length) { el.innerHTML = '<div class="p-4 text-muted text-center">No log entries</div>'; return; }
-    let html = '<div class="table-responsive"><table class="table table-hover mb-0 small"><thead class="table-light"><tr><th>Time</th><th>Client</th><th>Level</th><th>Message</th></tr></thead><tbody>';
+    let html = '<div class="table-responsive"><table class="table table-hover mb-0 small"><thead class="table-light"><tr><th>Time</th><th class="d-th-md">Client</th><th>Level</th><th>Message</th></tr></thead><tbody>';
     logs.forEach(l => {
         const badge = { error: 'danger', warning: 'warning' }[l.level] || 'info';
-        html += '<tr><td class="text-nowrap">'+fmtDate(l.created_at)+'</td><td>'+esc(l.agent_name||'--')+'</td><td><span class="badge bg-'+badge+'">'+esc(l.level)+'</span></td><td>'+esc(l.message)+'</td></tr>';
+        html += '<tr><td class="small">'+fmtDate(l.created_at)+'</td><td class="d-table-cell-md">'+esc(l.agent_name||'--')+'</td><td><span class="badge bg-'+badge+'">'+esc(l.level)+'</span></td><td>'+esc(l.message)+'</td></tr>';
     });
     html += '</tbody></table></div>';
     el.innerHTML = html;

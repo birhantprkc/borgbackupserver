@@ -783,7 +783,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     <div class="row mb-3 schedule-daily-row <?= $editFreq !== 'daily' ? 'd-none' : '' ?>">
                         <label class="col-md-3 col-form-label fw-semibold"><i class="bi bi-grid-3x3 me-1"></i> Run Hours</label>
                         <div class="col-md-9">
-                            <div class="mb-2">
+                            <div class="mb-2 d-flex align-items-center hour-picker-row">
                                 <span class="text-muted fw-semibold me-2" style="display:inline-block;width:30px;">AM</span>
                                 <div class="btn-group btn-group-sm">
                                     <?php for ($h = 0; $h < 12; $h++): $label = $h === 0 ? '12' : str_pad($h, 2, '0', STR_PAD_LEFT); ?>
@@ -791,7 +791,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                     <?php endfor; ?>
                                 </div>
                             </div>
-                            <div class="mb-2">
+                            <div class="mb-2 d-flex align-items-center hour-picker-row">
                                 <span class="text-muted fw-semibold me-2" style="display:inline-block;width:30px;">PM</span>
                                 <div class="btn-group btn-group-sm">
                                     <?php for ($h = 12; $h < 24; $h++): $label = $h === 12 ? '12' : str_pad($h - 12, 2, '0', STR_PAD_LEFT); ?>
@@ -1086,7 +1086,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 <div class="row mb-3 schedule-daily-row">
                     <label class="col-md-3 col-form-label fw-semibold"><i class="bi bi-grid-3x3 me-1"></i> Run Hours</label>
                     <div class="col-md-9">
-                        <div class="mb-2">
+                        <div class="mb-2 d-flex align-items-center hour-picker-row">
                             <span class="text-muted fw-semibold me-2" style="display:inline-block;width:30px;">AM</span>
                             <div class="btn-group btn-group-sm">
                                 <?php for ($h = 0; $h < 12; $h++): $label = $h === 0 ? '12' : str_pad($h, 2, '0', STR_PAD_LEFT); ?>
@@ -1094,7 +1094,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                 <?php endfor; ?>
                             </div>
                         </div>
-                        <div class="mb-2">
+                        <div class="mb-2 d-flex align-items-center hour-picker-row">
                             <span class="text-muted fw-semibold me-2" style="display:inline-block;width:30px;">PM</span>
                             <div class="btn-group btn-group-sm">
                                 <?php for ($h = 12; $h < 24; $h++): $label = $h === 12 ? '12' : str_pad($h - 12, 2, '0', STR_PAD_LEFT); ?>

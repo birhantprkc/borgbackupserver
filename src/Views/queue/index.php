@@ -11,9 +11,9 @@
                         <th>Date</th>
                         <th>Client</th>
                         <th>Task</th>
-                        <th>Files</th>
-                        <th>Processed</th>
-                        <th>Repo</th>
+                        <th class="d-th-md">Files</th>
+                        <th>Progress</th>
+                        <th class="d-th-md">Repo</th>
                         <th>Status</th>
                         <th></th>
                     </tr>
@@ -24,11 +24,11 @@
                         <td class="small"><?= \BBS\Core\TimeHelper::format($job['queued_at'], 'M j, g:i A') ?></td>
                         <td><?= htmlspecialchars($job['agent_name']) ?></td>
                         <td><?= $job['task_type'] ?></td>
-                        <td><?= number_format($job['files_total'] ?? 0) ?></td>
+                        <td class="d-table-cell-md"><?= number_format($job['files_total'] ?? 0) ?></td>
                         <td>
                             <?php if (($job['files_total'] ?? 0) > 0 && $job['status'] === 'running'): ?>
                                 <?php $pct = round(($job['files_processed'] / $job['files_total']) * 100); ?>
-                                <div class="progress" style="height: 18px; min-width: 80px;">
+                                <div class="progress" style="height: 18px; min-width: 60px;">
                                     <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width: <?= $pct ?>%">
                                         <?= $pct ?>%
                                     </div>
@@ -37,7 +37,7 @@
                                 <?= number_format($job['files_processed'] ?? 0) ?>
                             <?php endif; ?>
                         </td>
-                        <td><?= htmlspecialchars($job['repo_name'] ?? '--') ?></td>
+                        <td class="d-table-cell-md"><?= htmlspecialchars($job['repo_name'] ?? '--') ?></td>
                         <td>
                             <?php
                             $sc = match($job['status']) {
@@ -82,9 +82,9 @@
                         <th>Date</th>
                         <th>Client</th>
                         <th>Task</th>
-                        <th>Files</th>
-                        <th>Repo</th>
-                        <th>Duration</th>
+                        <th class="d-th-md">Files</th>
+                        <th class="d-th-md">Repo</th>
+                        <th class="d-th-md">Duration</th>
                         <th>Status</th>
                         <th></th>
                     </tr>
@@ -95,9 +95,9 @@
                         <td class="small"><?= \BBS\Core\TimeHelper::format($job['completed_at'], 'M j, g:i A') ?></td>
                         <td><?= htmlspecialchars($job['agent_name']) ?></td>
                         <td><?= $job['task_type'] ?></td>
-                        <td><?= number_format($job['files_total'] ?? 0) ?></td>
-                        <td><?= htmlspecialchars($job['repo_name'] ?? '--') ?></td>
-                        <td>
+                        <td class="d-table-cell-md"><?= number_format($job['files_total'] ?? 0) ?></td>
+                        <td class="d-table-cell-md"><?= htmlspecialchars($job['repo_name'] ?? '--') ?></td>
+                        <td class="d-table-cell-md">
                             <?php
                             $d = $job['duration_seconds'] ?? 0;
                             echo $d >= 60 ? floor($d / 60) . 'm ' . ($d % 60) . 's' : $d . 's';

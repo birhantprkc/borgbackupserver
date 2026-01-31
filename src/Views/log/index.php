@@ -18,7 +18,7 @@
                 <thead class="table-light">
                     <tr>
                         <th>Time</th>
-                        <th>Client</th>
+                        <th class="d-th-md">Client</th>
                         <th>Level</th>
                         <th>Message</th>
                     </tr>
@@ -26,8 +26,8 @@
                 <tbody>
                     <?php foreach ($logs as $log): ?>
                     <tr>
-                        <td class="text-nowrap"><?= \BBS\Core\TimeHelper::format($log['created_at'], 'M j, g:i A') ?></td>
-                        <td><?= htmlspecialchars($log['agent_name'] ?? '--') ?></td>
+                        <td class="small"><?= \BBS\Core\TimeHelper::format($log['created_at'], 'M j, g:i A') ?></td>
+                        <td class="d-table-cell-md"><?= htmlspecialchars($log['agent_name'] ?? '--') ?></td>
                         <td>
                             <?php
                             $lc = match($log['level']) {
