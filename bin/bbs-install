@@ -182,8 +182,8 @@ ok "Privileges granted"
 step "4/10" "Download BBS"
 
 if [[ -d "$BBS_DIR/.git" ]]; then
-    warn "Repository already cloned — pulling latest"
-    git -C "$BBS_DIR" pull --quiet
+    warn "Repository already cloned — fetching latest"
+    git -C "$BBS_DIR" fetch --tags --force --quiet
 else
     if [[ -d "$BBS_DIR" ]]; then
         # Directory exists but not a git repo — remove and clone fresh
@@ -191,6 +191,15 @@ else
     fi
     git clone --quiet https://github.com/marcpope/borgbackupserver.git "$BBS_DIR"
     ok "Cloned to $BBS_DIR"
+fi
+
+# Check out the latest release tag instead of staying on main
+LATEST_TAG=$(git -C "$BBS_DIR" tag --sort=-v:refname | grep -E '^v[0-9]' | head -1)
+if [[ -n "$LATEST_TAG" ]]; then
+    git -C "$BBS_DIR" checkout "$LATEST_TAG" --quiet
+    ok "Checked out release $LATEST_TAG"
+else
+    warn "No release tags found — using main branch"
 fi
 
 cd "$BBS_DIR"

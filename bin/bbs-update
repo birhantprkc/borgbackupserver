@@ -30,9 +30,18 @@ if [ -n "$GIT_TAG" ]; then
     git -C "$BBS_DIR" checkout main 2>/dev/null || true
     git -C "$BBS_DIR" reset --hard "$GIT_TAG"
 else
-    echo "[1/8] Pulling latest code..."
-    git -C "$BBS_DIR" checkout main 2>/dev/null || true
-    git -C "$BBS_DIR" pull
+    echo "[1/8] Checking for latest release..."
+    git -C "$BBS_DIR" fetch --tags --force
+    LATEST_TAG=$(git -C "$BBS_DIR" tag --sort=-v:refname | grep -E '^v[0-9]' | head -1)
+    if [ -n "$LATEST_TAG" ]; then
+        echo "  Upgrading to $LATEST_TAG"
+        git -C "$BBS_DIR" checkout main 2>/dev/null || true
+        git -C "$BBS_DIR" reset --hard "$LATEST_TAG"
+    else
+        echo "  No release tags found, pulling main"
+        git -C "$BBS_DIR" checkout main 2>/dev/null || true
+        git -C "$BBS_DIR" pull
+    fi
 fi
 
 # 2. Install/update PHP dependencies
