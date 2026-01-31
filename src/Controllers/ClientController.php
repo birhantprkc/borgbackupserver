@@ -106,7 +106,7 @@ class ClientController extends Controller
         ]);
 
         $this->flash('success', 'Client created. Install the agent using the command below.');
-        $this->redirect("/clients/{$id}");
+        $this->redirect("/clients/{$id}?tab=install");
     }
 
     public function detail(int $id): void

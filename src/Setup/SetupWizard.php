@@ -234,6 +234,20 @@ ENV;
                     @mkdir('/var/bbs/cache/www-data', 0700, true);
                 }
 
+                // Auto-login the admin user so they can proceed directly
+                $adminUser = $pdo->prepare("SELECT id, username, role FROM users WHERE username = ?");
+                $adminUser->execute([$setup['admin_username']]);
+                $admin = $adminUser->fetch(\PDO::FETCH_ASSOC);
+                if ($admin) {
+                    session_regenerate_id(true);
+                    $_SESSION['user_id'] = $admin['id'];
+                    $_SESSION['username'] = $admin['username'];
+                    $_SESSION['user_role'] = $admin['role'];
+                    $_SESSION['timezone'] = 'UTC';
+                    $_SESSION['login_time'] = time();
+                    $_SESSION['last_activity'] = time();
+                }
+
                 // Clear setup session
                 unset($_SESSION['setup']);
 
