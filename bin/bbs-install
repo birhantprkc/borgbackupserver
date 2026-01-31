@@ -186,6 +186,7 @@ step "4/10" "Download BBS"
 
 if [[ -d "$BBS_DIR/.git" ]]; then
     warn "Repository already cloned — fetching latest"
+    git config --global --add safe.directory "$BBS_DIR" 2>/dev/null || true
     git -C "$BBS_DIR" fetch --tags --force --quiet
 else
     if [[ -d "$BBS_DIR" ]]; then
