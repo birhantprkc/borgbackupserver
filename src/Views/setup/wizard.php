@@ -131,18 +131,18 @@
                             <input type="hidden" name="step" value="3">
 
                             <div class="mb-3">
-                                <label class="form-label fw-semibold">Username</label>
-                                <input type="text" class="form-control" name="username"
-                                       value="<?= htmlspecialchars($_SESSION['setup']['admin_username'] ?? 'admin') ?>" required>
-                            </div>
-                            <div class="mb-3">
                                 <label class="form-label fw-semibold">Email</label>
-                                <input type="email" class="form-control" name="email"
+                                <input type="email" class="form-control" name="email" autocomplete="email"
                                        value="<?= htmlspecialchars($_SESSION['setup']['admin_email'] ?? '') ?>" required>
                             </div>
                             <div class="mb-3">
+                                <label class="form-label fw-semibold">Username</label>
+                                <input type="text" class="form-control" name="username" autocomplete="username"
+                                       value="<?= htmlspecialchars($_SESSION['setup']['admin_username'] ?? 'admin') ?>" required>
+                            </div>
+                            <div class="mb-3">
                                 <label class="form-label fw-semibold">Password</label>
-                                <input type="password" class="form-control" name="password" minlength="8" required>
+                                <input type="password" class="form-control" name="password" autocomplete="new-password" minlength="8" required>
                                 <div class="form-text">Minimum 8 characters.</div>
                             </div>
                             <div class="mb-3">
