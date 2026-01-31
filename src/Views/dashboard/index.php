@@ -121,76 +121,6 @@
                         <div class="text-muted" style="font-size:.75rem;margin-top:-8px;">Memory</div>
                     </div>
                 </div>
-                <?php if (!empty($mysqlStorage) && $mysqlStorage['disk_total'] > 0): ?>
-                <hr class="my-2">
-                <div class="small text-muted mb-1">MySQL Partition</div>
-                <?php
-                    $ms = $mysqlStorage;
-                    $dbPct = round($ms['db_bytes'] / $ms['disk_total'] * 100, 1);
-                    $usedPct = round($ms['disk_used'] / $ms['disk_total'] * 100, 1);
-                    $freePct = round($ms['disk_free'] / $ms['disk_total'] * 100, 1);
-                ?>
-                <div class="rounded overflow-hidden d-flex" id="mysql-bar" style="height:22px;background:#e9ecef;font-size:.65rem;">
-                    <div style="width:<?= $dbPct ?>%;background:#0d6efd;color:#fff;overflow:hidden;white-space:nowrap;padding:0 4px;line-height:22px;"
-                         title="MySQL Data: <?= \BBS\Services\ServerStats::formatBytes($ms['db_bytes']) ?>">
-                        DB <?= \BBS\Services\ServerStats::formatBytes($ms['db_bytes']) ?>
-                    </div>
-                    <div style="width:<?= max($usedPct - $dbPct, 0) ?>%;background:#6c757d;color:#fff;overflow:hidden;white-space:nowrap;padding:0 4px;line-height:22px;"
-                         title="Other used: <?= \BBS\Services\ServerStats::formatBytes($ms['disk_used'] - $ms['db_bytes']) ?>">
-                        Other
-                    </div>
-                    <div style="width:<?= $freePct ?>%;background:#e9ecef;color:#666;overflow:hidden;white-space:nowrap;padding:0 4px;line-height:22px;"
-                         title="Free: <?= \BBS\Services\ServerStats::formatBytes($ms['disk_free']) ?>">
-                        <?= \BBS\Services\ServerStats::formatBytes($ms['disk_free']) ?> free
-                    </div>
-                </div>
-                <div class="d-flex justify-content-between mt-1" style="font-size:.6rem;color:#999;">
-                    <span>Total: <?= \BBS\Services\ServerStats::formatBytes($ms['disk_total']) ?></span>
-                    <span id="mysql-free-text"><?= $freePct ?>% free</span>
-                </div>
-                <?php endif; ?>
-                <?php if (!empty($mysqlStats)): ?>
-                <hr class="my-2">
-                <div class="small text-muted mb-2">Database Records</div>
-                <div class="row g-2 text-center" style="font-size:.7rem;">
-                    <div class="col-4">
-                        <div class="rounded py-1" style="background:#f0f4ff;">
-                            <div class="fw-bold text-primary" style="font-size:1rem;" id="stat-total-rows"><?= number_format($mysqlStats['total_rows']) ?></div>
-                            <div class="text-muted">Total Rows</div>
-                        </div>
-                    </div>
-                    <div class="col-4">
-                        <div class="rounded py-1" style="background:#f0faf0;">
-                            <div class="fw-bold text-success" style="font-size:1rem;" id="stat-archives"><?= number_format($mysqlStats['archives']) ?></div>
-                            <div class="text-muted">Archives</div>
-                        </div>
-                    </div>
-                    <div class="col-4">
-                        <div class="rounded py-1" style="background:#fff8f0;">
-                            <div class="fw-bold" style="font-size:1rem;color:#e67e22;" id="stat-catalog"><?= number_format($mysqlStats['catalog_files']) ?></div>
-                            <div class="text-muted">Catalog</div>
-                        </div>
-                    </div>
-                    <div class="col-4">
-                        <div class="rounded py-1" style="background:#f5f0ff;">
-                            <div class="fw-bold text-purple" style="font-size:1rem;color:#6f42c1;" id="stat-paths"><?= number_format($mysqlStats['unique_paths']) ?></div>
-                            <div class="text-muted">File Paths</div>
-                        </div>
-                    </div>
-                    <div class="col-4">
-                        <div class="rounded py-1" style="background:#f0faff;">
-                            <div class="fw-bold text-info" style="font-size:1rem;" id="stat-completed-jobs"><?= number_format($mysqlStats['completed_jobs']) ?></div>
-                            <div class="text-muted">Jobs Run</div>
-                        </div>
-                    </div>
-                    <div class="col-4">
-                        <div class="rounded py-1" style="background:#fef0f0;">
-                            <div class="fw-bold text-danger" style="font-size:1rem;" id="stat-repos"><?= number_format($mysqlStats['repositories']) ?></div>
-                            <div class="text-muted">Repos</div>
-                        </div>
-                    </div>
-                </div>
-                <?php endif; ?>
             </div>
         </div>
     </div>
@@ -256,6 +186,97 @@
     </div>
     <?php endif; ?>
 </div>
+
+<?php if ($isAdmin && (!empty($mysqlStorage) || !empty($mysqlStats))): ?>
+<div class="row g-4 mt-0">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body py-3">
+                <div class="row">
+                    <?php if (!empty($mysqlStorage) && $mysqlStorage['disk_total'] > 0): ?>
+                    <div class="col-md-6">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="bi bi-database me-1 text-muted"></i>
+                            <span class="fw-semibold small">MySQL Partition</span>
+                        </div>
+                        <?php
+                            $ms = $mysqlStorage;
+                            $dbPct = round($ms['db_bytes'] / $ms['disk_total'] * 100, 1);
+                            $usedPct = round($ms['disk_used'] / $ms['disk_total'] * 100, 1);
+                            $freePct = round($ms['disk_free'] / $ms['disk_total'] * 100, 1);
+                        ?>
+                        <div class="rounded overflow-hidden d-flex" id="mysql-bar" style="height:22px;background:#e9ecef;font-size:.65rem;">
+                            <div style="width:<?= $dbPct ?>%;background:#0d6efd;color:#fff;overflow:hidden;white-space:nowrap;padding:0 4px;line-height:22px;"
+                                 title="MySQL Data: <?= \BBS\Services\ServerStats::formatBytes($ms['db_bytes']) ?>">
+                                DB <?= \BBS\Services\ServerStats::formatBytes($ms['db_bytes']) ?>
+                            </div>
+                            <div style="width:<?= max($usedPct - $dbPct, 0) ?>%;background:#6c757d;color:#fff;overflow:hidden;white-space:nowrap;padding:0 4px;line-height:22px;"
+                                 title="Other used: <?= \BBS\Services\ServerStats::formatBytes($ms['disk_used'] - $ms['db_bytes']) ?>">
+                                Other
+                            </div>
+                            <div style="width:<?= $freePct ?>%;background:#e9ecef;color:#666;overflow:hidden;white-space:nowrap;padding:0 4px;line-height:22px;"
+                                 title="Free: <?= \BBS\Services\ServerStats::formatBytes($ms['disk_free']) ?>">
+                                <?= \BBS\Services\ServerStats::formatBytes($ms['disk_free']) ?> free
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between mt-1" style="font-size:.6rem;color:#999;">
+                            <span>Total: <?= \BBS\Services\ServerStats::formatBytes($ms['disk_total']) ?></span>
+                            <span id="mysql-free-text"><?= $freePct ?>% free</span>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                    <?php if (!empty($mysqlStats)): ?>
+                    <div class="col-md-6<?= empty($mysqlStorage) || $mysqlStorage['disk_total'] <= 0 ? '' : ' border-start' ?>">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="bi bi-table me-1 text-muted"></i>
+                            <span class="fw-semibold small">Database Records</span>
+                        </div>
+                        <div class="row g-2 text-center" style="font-size:.7rem;">
+                            <div class="col-4">
+                                <div class="rounded py-1" style="background:#f0f4ff;">
+                                    <div class="fw-bold text-primary" style="font-size:1rem;" id="stat-total-rows"><?= number_format($mysqlStats['total_rows']) ?></div>
+                                    <div class="text-muted">Total Rows</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="rounded py-1" style="background:#f0faf0;">
+                                    <div class="fw-bold text-success" style="font-size:1rem;" id="stat-archives"><?= number_format($mysqlStats['archives']) ?></div>
+                                    <div class="text-muted">Archives</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="rounded py-1" style="background:#fff8f0;">
+                                    <div class="fw-bold" style="font-size:1rem;color:#e67e22;" id="stat-catalog"><?= number_format($mysqlStats['catalog_files']) ?></div>
+                                    <div class="text-muted">Catalog</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="rounded py-1" style="background:#f5f0ff;">
+                                    <div class="fw-bold" style="font-size:1rem;color:#6f42c1;" id="stat-paths"><?= number_format($mysqlStats['unique_paths']) ?></div>
+                                    <div class="text-muted">File Paths</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="rounded py-1" style="background:#f0faff;">
+                                    <div class="fw-bold text-info" style="font-size:1rem;" id="stat-completed-jobs"><?= number_format($mysqlStats['completed_jobs']) ?></div>
+                                    <div class="text-muted">Jobs Run</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="rounded py-1" style="background:#fef0f0;">
+                                    <div class="fw-bold text-danger" style="font-size:1rem;" id="stat-repos"><?= number_format($mysqlStats['repositories']) ?></div>
+                                    <div class="text-muted">Repos</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <div class="row g-4">
     <!-- Active Jobs -->
