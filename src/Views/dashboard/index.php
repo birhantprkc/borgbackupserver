@@ -197,67 +197,67 @@
                 <span class="fw-semibold"><i class="bi bi-device-hdd me-1"></i> Storage Pool</span>
                 <span class="text-muted" style="font-size:.7rem;"><?= htmlspecialchars($storage['path']) ?></span>
             </div>
-            <div class="card-body py-3">
+            <div class="card-body px-3 py-2">
                 <!-- Stats 2x2 -->
-                <div class="row g-0 mb-3">
-                    <div class="col-6 pe-2 mb-3">
-                        <div class="fw-semibold text-success" style="font-size:.75rem;">Repositories</div>
-                        <div class="d-flex align-items-center mt-1">
-                            <i class="bi bi-archive text-muted me-1" style="font-size:1rem;"></i>
-                            <span class="fw-bold" style="font-size:1.5rem;line-height:1;color:#333;"><?= $storage['repo_count'] ?></span>
+                <div class="row g-0 mb-2">
+                    <div class="col-6 pe-2 mb-2">
+                        <div class="fw-semibold text-success" style="font-size:.65rem;">Repositories</div>
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-archive text-muted me-1" style="font-size:.8rem;"></i>
+                            <span class="fw-bold" style="font-size:1.1rem;line-height:1;color:#333;"><?= $storage['repo_count'] ?></span>
                         </div>
                     </div>
-                    <div class="col-6 ps-2 mb-3">
-                        <div class="fw-semibold text-success" style="font-size:.75rem;">Recovery Points</div>
-                        <div class="d-flex align-items-center mt-1">
-                            <i class="bi bi-clock-history text-muted me-1" style="font-size:1rem;"></i>
-                            <span class="fw-bold" style="font-size:1.5rem;line-height:1;color:#333;"><?= number_format($storage['total_archives'] ?? 0) ?></span>
+                    <div class="col-6 ps-2 mb-2">
+                        <div class="fw-semibold text-success" style="font-size:.65rem;">Recovery Points</div>
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-clock-history text-muted me-1" style="font-size:.8rem;"></i>
+                            <span class="fw-bold" style="font-size:1.1rem;line-height:1;color:#333;"><?= number_format($storage['total_archives'] ?? 0) ?></span>
                         </div>
                     </div>
                     <div class="col-6 pe-2">
-                        <div class="fw-semibold text-success" style="font-size:.75rem;">Protected Data</div>
-                        <div class="d-flex align-items-center mt-1">
-                            <i class="bi bi-shield-check text-muted me-1" style="font-size:1rem;"></i>
-                            <span class="fw-bold" style="font-size:1.5rem;line-height:1;color:#333;"><?= \BBS\Services\ServerStats::formatBytes($totalOrig) ?></span>
+                        <div class="fw-semibold text-success" style="font-size:.65rem;">Protected Data</div>
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-shield-check text-muted me-1" style="font-size:.8rem;"></i>
+                            <span class="fw-bold" style="font-size:1.1rem;line-height:1;color:#333;"><?= \BBS\Services\ServerStats::formatBytes($totalOrig) ?></span>
                         </div>
                     </div>
                     <div class="col-6 ps-2">
-                        <div class="fw-semibold text-success" style="font-size:.75rem;">Dedup Savings</div>
-                        <div class="d-flex align-items-center mt-1">
-                            <span class="fw-bold" style="font-size:1.5rem;line-height:1;color:#333;"><?= $dedupSavings ?>%</span>
+                        <div class="fw-semibold text-success" style="font-size:.65rem;">Dedup Savings</div>
+                        <div class="d-flex align-items-center">
+                            <span class="fw-bold" style="font-size:1.1rem;line-height:1;color:#333;"><?= $dedupSavings ?>%</span>
                             <?php if ($dedupRatio >= 1): ?>
-                            <span class="text-muted ms-1" style="font-size:.8rem;">(<?= $dedupRatio ?>:1)</span>
+                            <span class="text-muted ms-1" style="font-size:.65rem;">(<?= $dedupRatio ?>:1)</span>
                             <?php endif; ?>
                         </div>
                     </div>
                 </div>
                 <!-- Donut + Legend -->
-                <div class="d-flex align-items-center justify-content-center">
-                    <div style="width:110px;flex-shrink:0;">
+                <div class="d-flex align-items-center">
+                    <div style="width:90px;flex-shrink:0;">
                         <svg viewBox="0 0 120 120" style="width:100%;height:auto;transform:rotate(-90deg);">
-                            <circle cx="60" cy="60" r="<?= $r ?>" fill="none" stroke="#e9ecef" stroke-width="12"/>
+                            <circle cx="60" cy="60" r="<?= $r ?>" fill="none" stroke="#e9ecef" stroke-width="14"/>
                             <?php if ($stRepoPct > 0): ?>
-                            <circle cx="60" cy="60" r="<?= $r ?>" fill="none" stroke="#48bb78" stroke-width="12"
+                            <circle cx="60" cy="60" r="<?= $r ?>" fill="none" stroke="#48bb78" stroke-width="14"
                                 stroke-dasharray="<?= round($seg1, 2) ?> <?= round($c - $seg1, 2) ?>"
                                 stroke-dashoffset="0"/>
                             <?php endif; ?>
                             <?php if ($stOtherPct > 0): ?>
-                            <circle cx="60" cy="60" r="<?= $r ?>" fill="none" stroke="#6c757d" stroke-width="12"
+                            <circle cx="60" cy="60" r="<?= $r ?>" fill="none" stroke="#6c757d" stroke-width="14"
                                 stroke-dasharray="<?= round($seg2, 2) ?> <?= round($c - $seg2, 2) ?>"
                                 stroke-dashoffset="-<?= round($off2, 2) ?>"/>
                             <?php endif; ?>
                         </svg>
-                        <div class="text-center" style="margin-top:-72px;position:relative;line-height:1.3;">
-                            <div class="fw-bold" style="font-size:1.1rem;color:#333;"><?= $stUsedPct ?>%</div>
-                            <div class="text-muted" style="font-size:.65rem;">used</div>
+                        <div class="text-center" style="margin-top:-60px;position:relative;line-height:1.2;">
+                            <div class="fw-bold" style="font-size:.85rem;color:#333;"><?= $stUsedPct ?>%</div>
+                            <div class="text-muted" style="font-size:.55rem;">used</div>
                         </div>
                     </div>
-                    <div class="ms-3" style="font-size:.7rem;line-height:1.9;">
-                        <div><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#48bb78;margin-right:5px;"></span>Repos <?= \BBS\Services\ServerStats::formatBytes($storage['total_repo_bytes']) ?></div>
+                    <div class="ms-2" style="font-size:.65rem;line-height:1.8;">
+                        <div><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#48bb78;margin-right:4px;"></span>Repos <?= \BBS\Services\ServerStats::formatBytes($storage['total_repo_bytes']) ?></div>
                         <?php if ($stOtherPct > 0): ?>
-                        <div><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#6c757d;margin-right:5px;"></span>Other <?= \BBS\Services\ServerStats::formatBytes($stUsed - $storage['total_repo_bytes']) ?></div>
+                        <div><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#6c757d;margin-right:4px;"></span>Other <?= \BBS\Services\ServerStats::formatBytes($stUsed - $storage['total_repo_bytes']) ?></div>
                         <?php endif; ?>
-                        <div><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#e9ecef;margin-right:5px;"></span>Free <?= \BBS\Services\ServerStats::formatBytes($storage['disk_free']) ?></div>
+                        <div><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#e9ecef;margin-right:4px;"></span>Free <?= \BBS\Services\ServerStats::formatBytes($storage['disk_free']) ?></div>
                         <div class="text-muted mt-1">Total: <?= \BBS\Services\ServerStats::formatBytes($storage['disk_total']) ?></div>
                     </div>
                 </div>
