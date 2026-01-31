@@ -71,11 +71,10 @@
     </div>
 </div>
 
-<!-- Row 2: Chart (left 1/3) + Server Stats / Storage / MySQL (right 2/3) -->
+<!-- Row 2: Backups Chart | Server Stats | Server Partitions -->
 <div class="row g-4 mb-4">
-    <!-- Backups Chart + Storage Pool — left column -->
     <div class="<?= $isAdmin ? 'col-lg-4' : 'col-12' ?>">
-        <div class="card border-0 shadow-sm mb-4">
+        <div class="card border-0 shadow-sm h-100">
             <div class="card-header bg-white fw-semibold">
                 <i class="bi bi-bar-chart me-1"></i> Backups (24h)
             </div>
@@ -83,8 +82,99 @@
                 <canvas id="backupsChart" height="160"></canvas>
             </div>
         </div>
-        <?php if ($isAdmin && !empty($storage) && $storage['disk_total'] !== null): ?>
-        <div class="card border-0 shadow-sm">
+    </div>
+    <?php if ($isAdmin): ?>
+    <div class="col-lg-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white fw-semibold">
+                <i class="bi bi-cpu me-1"></i> Server Stats
+            </div>
+            <div class="card-body">
+                <?php
+                    $cpuColor = $cpuLoad['percent'] > 80 ? '#dc3545' : ($cpuLoad['percent'] > 50 ? '#ffc107' : '#198754');
+                    $memColor = $memory['percent'] > 85 ? '#dc3545' : ($memory['percent'] > 60 ? '#ffc107' : '#0dcaf0');
+                    $arcLen = 212.06;
+                    $circum = 282.74;
+                    $cpuDash = $arcLen * $cpuLoad['percent'] / 100;
+                    $memDash = $arcLen * $memory['percent'] / 100;
+                ?>
+                <div class="d-flex justify-content-around">
+                    <div class="text-center" style="width:120px;">
+                        <svg viewBox="0 0 120 95" style="width:100%;height:auto;">
+                            <circle cx="60" cy="55" r="45" fill="none" stroke="#e9ecef" stroke-width="8"
+                                stroke-dasharray="<?= $arcLen ?> <?= $circum ?>" stroke-linecap="round"
+                                transform="rotate(135 60 55)"/>
+                            <circle cx="60" cy="55" r="45" fill="none" stroke="<?= $cpuColor ?>" stroke-width="8"
+                                id="cpu-arc" stroke-dasharray="<?= $cpuDash ?> <?= $circum ?>" stroke-linecap="round"
+                                transform="rotate(135 60 55)" style="transition: stroke-dasharray .5s ease, stroke .5s ease;"/>
+                            <text x="60" y="48" text-anchor="middle" font-size="18" font-weight="bold" fill="#333" id="cpu-pct"><?= $cpuLoad['percent'] ?>%</text>
+                            <text x="60" y="62" text-anchor="middle" font-size="8" fill="#888" id="cpu-detail"><?= $cpuLoad['1min'] ?> / <?= $cpuLoad['cores'] ?> cores</text>
+                        </svg>
+                        <div class="text-muted" style="font-size:.75rem;margin-top:-8px;">CPU</div>
+                    </div>
+                    <div class="text-center" style="width:120px;">
+                        <svg viewBox="0 0 120 95" style="width:100%;height:auto;">
+                            <circle cx="60" cy="55" r="45" fill="none" stroke="#e9ecef" stroke-width="8"
+                                stroke-dasharray="<?= $arcLen ?> <?= $circum ?>" stroke-linecap="round"
+                                transform="rotate(135 60 55)"/>
+                            <circle cx="60" cy="55" r="45" fill="none" stroke="<?= $memColor ?>" stroke-width="8"
+                                id="mem-arc" stroke-dasharray="<?= $memDash ?> <?= $circum ?>" stroke-linecap="round"
+                                transform="rotate(135 60 55)" style="transition: stroke-dasharray .5s ease, stroke .5s ease;"/>
+                            <text x="60" y="48" text-anchor="middle" font-size="18" font-weight="bold" fill="#333" id="mem-pct"><?= $memory['percent'] ?>%</text>
+                            <text x="60" y="62" text-anchor="middle" font-size="8" fill="#888" id="mem-detail"><?= \BBS\Services\ServerStats::formatBytes($memory['used']) ?> / <?= \BBS\Services\ServerStats::formatBytes($memory['total']) ?></text>
+                        </svg>
+                        <div class="text-muted" style="font-size:.75rem;margin-top:-8px;">Memory</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white fw-semibold">
+                <i class="bi bi-hdd-stack me-1"></i> Server Partitions
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0 small">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Partition</th>
+                                <th style="min-width: 100px;">% Used</th>
+                                <th class="d-th-md">Size</th>
+                                <th class="d-th-md">Free</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($partitions as $part): ?>
+                            <tr>
+                                <td><i class="bi bi-device-hdd text-muted me-1"></i> <?= htmlspecialchars($part['mount']) ?></td>
+                                <td>
+                                    <div class="progress" style="height: 18px; background-color: #e9ecef;">
+                                        <div class="progress-bar progress-bar-striped <?= $part['percent'] > 90 ? 'bg-danger' : ($part['percent'] > 70 ? 'bg-warning' : '') ?>"
+                                             style="width: <?= $part['percent'] ?>%; background-color: <?= $part['percent'] <= 70 ? '#8faabe' : '' ?>;">
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="d-table-cell-md"><?= $part['size'] ?></td>
+                                <td class="d-table-cell-md"><?= $part['free'] ?></td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+</div>
+
+<?php if ($isAdmin): ?>
+<!-- Row 3: Storage Pool | MySQL Stats -->
+<div class="row g-4 mb-4">
+    <?php if (!empty($storage) && $storage['disk_total'] !== null): ?>
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm h-100">
             <div class="card-header bg-white fw-semibold">
                 <i class="bi bi-device-hdd me-1"></i> Storage Pool
             </div>
@@ -122,196 +212,102 @@
                 </div>
             </div>
         </div>
-        <?php endif; ?>
     </div>
-
-    <?php if ($isAdmin): ?>
-    <!-- Right 2/3 — stacked: Server Stats + Storage on top, MySQL below -->
-    <div class="col-lg-8">
-        <div class="row g-4">
-            <!-- Server Stats -->
-            <div class="col-lg-5">
-                <div class="card border-0 shadow-sm h-100">
-                    <div class="card-header bg-white fw-semibold">
-                        <i class="bi bi-cpu me-1"></i> Server Stats
-                    </div>
-                    <div class="card-body">
+    <?php endif; ?>
+    <?php if (!empty($mysqlStorage) || !empty($mysqlStats)): ?>
+    <div class="<?= (!empty($storage) && $storage['disk_total'] !== null) ? 'col-lg-8' : 'col-12' ?>">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body py-3">
+                <div class="row">
+                    <?php if (!empty($mysqlStorage) && $mysqlStorage['disk_total'] > 0): ?>
+                    <div class="col-md-5">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="bi bi-database me-1 text-muted"></i>
+                            <span class="fw-semibold small">MySQL Partition</span>
+                        </div>
                         <?php
-                            $cpuColor = $cpuLoad['percent'] > 80 ? '#dc3545' : ($cpuLoad['percent'] > 50 ? '#ffc107' : '#198754');
-                            $memColor = $memory['percent'] > 85 ? '#dc3545' : ($memory['percent'] > 60 ? '#ffc107' : '#0dcaf0');
-                            $arcLen = 212.06;
-                            $circum = 282.74;
-                            $cpuDash = $arcLen * $cpuLoad['percent'] / 100;
-                            $memDash = $arcLen * $memory['percent'] / 100;
+                            $ms = $mysqlStorage;
+                            $dbPct = round($ms['db_bytes'] / $ms['disk_total'] * 100, 1);
+                            $usedPct = round($ms['disk_used'] / $ms['disk_total'] * 100, 1);
+                            $freePct = round($ms['disk_free'] / $ms['disk_total'] * 100, 1);
                         ?>
-                        <div class="d-flex justify-content-around">
-                            <div class="text-center" style="width:120px;">
-                                <svg viewBox="0 0 120 95" style="width:100%;height:auto;">
-                                    <circle cx="60" cy="55" r="45" fill="none" stroke="#e9ecef" stroke-width="8"
-                                        stroke-dasharray="<?= $arcLen ?> <?= $circum ?>" stroke-linecap="round"
-                                        transform="rotate(135 60 55)"/>
-                                    <circle cx="60" cy="55" r="45" fill="none" stroke="<?= $cpuColor ?>" stroke-width="8"
-                                        id="cpu-arc" stroke-dasharray="<?= $cpuDash ?> <?= $circum ?>" stroke-linecap="round"
-                                        transform="rotate(135 60 55)" style="transition: stroke-dasharray .5s ease, stroke .5s ease;"/>
-                                    <text x="60" y="48" text-anchor="middle" font-size="18" font-weight="bold" fill="#333" id="cpu-pct"><?= $cpuLoad['percent'] ?>%</text>
-                                    <text x="60" y="62" text-anchor="middle" font-size="8" fill="#888" id="cpu-detail"><?= $cpuLoad['1min'] ?> / <?= $cpuLoad['cores'] ?> cores</text>
-                                </svg>
-                                <div class="text-muted" style="font-size:.75rem;margin-top:-8px;">CPU</div>
+                        <div class="rounded overflow-hidden d-flex" id="mysql-bar" style="height:22px;background:#e9ecef;font-size:.65rem;">
+                            <div style="width:<?= $dbPct ?>%;background:#0d6efd;color:#fff;overflow:hidden;white-space:nowrap;padding:0 4px;line-height:22px;"
+                                 title="MySQL Data: <?= \BBS\Services\ServerStats::formatBytes($ms['db_bytes']) ?>">
+                                DB <?= \BBS\Services\ServerStats::formatBytes($ms['db_bytes']) ?>
                             </div>
-                            <div class="text-center" style="width:120px;">
-                                <svg viewBox="0 0 120 95" style="width:100%;height:auto;">
-                                    <circle cx="60" cy="55" r="45" fill="none" stroke="#e9ecef" stroke-width="8"
-                                        stroke-dasharray="<?= $arcLen ?> <?= $circum ?>" stroke-linecap="round"
-                                        transform="rotate(135 60 55)"/>
-                                    <circle cx="60" cy="55" r="45" fill="none" stroke="<?= $memColor ?>" stroke-width="8"
-                                        id="mem-arc" stroke-dasharray="<?= $memDash ?> <?= $circum ?>" stroke-linecap="round"
-                                        transform="rotate(135 60 55)" style="transition: stroke-dasharray .5s ease, stroke .5s ease;"/>
-                                    <text x="60" y="48" text-anchor="middle" font-size="18" font-weight="bold" fill="#333" id="mem-pct"><?= $memory['percent'] ?>%</text>
-                                    <text x="60" y="62" text-anchor="middle" font-size="8" fill="#888" id="mem-detail"><?= \BBS\Services\ServerStats::formatBytes($memory['used']) ?> / <?= \BBS\Services\ServerStats::formatBytes($memory['total']) ?></text>
-                                </svg>
-                                <div class="text-muted" style="font-size:.75rem;margin-top:-8px;">Memory</div>
+                            <div style="width:<?= max($usedPct - $dbPct, 0) ?>%;background:#6c757d;color:#fff;overflow:hidden;white-space:nowrap;padding:0 4px;line-height:22px;"
+                                 title="Other used: <?= \BBS\Services\ServerStats::formatBytes($ms['disk_used'] - $ms['db_bytes']) ?>">
+                                Other
+                            </div>
+                            <div style="width:<?= $freePct ?>%;background:#e9ecef;color:#666;overflow:hidden;white-space:nowrap;padding:0 4px;line-height:22px;"
+                                 title="Free: <?= \BBS\Services\ServerStats::formatBytes($ms['disk_free']) ?>">
+                                <?= \BBS\Services\ServerStats::formatBytes($ms['disk_free']) ?> free
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between mt-1" style="font-size:.6rem;color:#999;">
+                            <span>Total: <?= \BBS\Services\ServerStats::formatBytes($ms['disk_total']) ?></span>
+                            <span id="mysql-free-text"><?= $freePct ?>% free</span>
+                        </div>
+                        <div class="mt-2" style="font-size:.65rem;color:#888;line-height:1.4;">
+                            <strong id="mysql-summary-text">MySQL Data: <?= \BBS\Services\ServerStats::formatBytes($ms['db_bytes']) ?> (<?= $dbPct ?>% of partition)</strong><br>
+                            This chart shows disk usage on the MySQL partition. BBS stores file catalog data in MySQL, enabling fast search and restore operations without locking the Borg repository.
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                    <?php if (!empty($mysqlStats)): ?>
+                    <div class="col-md-7<?= !empty($mysqlStorage) && $mysqlStorage['disk_total'] > 0 ? ' border-start' : '' ?>">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="bi bi-table me-1 text-muted"></i>
+                            <span class="fw-semibold small">Database Records</span>
+                        </div>
+                        <div class="row g-2 text-center" style="font-size:.7rem;">
+                            <div class="col-4">
+                                <div class="rounded py-1" style="background:#f0f4ff;">
+                                    <div class="fw-bold text-primary" style="font-size:1rem;" id="stat-total-rows"><?= number_format($mysqlStats['total_rows']) ?></div>
+                                    <div class="text-muted">Total Rows</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="rounded py-1" style="background:#f0faf0;">
+                                    <div class="fw-bold text-success" style="font-size:1rem;" id="stat-archives"><?= number_format($mysqlStats['archives']) ?></div>
+                                    <div class="text-muted">Archives</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="rounded py-1" style="background:#fff8f0;">
+                                    <div class="fw-bold" style="font-size:1rem;color:#e67e22;" id="stat-catalog"><?= number_format($mysqlStats['catalog_files']) ?></div>
+                                    <div class="text-muted">Catalog</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="rounded py-1" style="background:#f5f0ff;">
+                                    <div class="fw-bold" style="font-size:1rem;color:#6f42c1;" id="stat-paths"><?= number_format($mysqlStats['unique_paths']) ?></div>
+                                    <div class="text-muted">File Paths</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="rounded py-1" style="background:#f0faff;">
+                                    <div class="fw-bold text-info" style="font-size:1rem;" id="stat-completed-jobs"><?= number_format($mysqlStats['completed_jobs']) ?></div>
+                                    <div class="text-muted">Jobs Run</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="rounded py-1" style="background:#fef0f0;">
+                                    <div class="fw-bold text-danger" style="font-size:1rem;" id="stat-repos"><?= number_format($mysqlStats['repositories']) ?></div>
+                                    <div class="text-muted">Repos</div>
+                                </div>
                             </div>
                         </div>
                     </div>
+                    <?php endif; ?>
                 </div>
             </div>
-
-            <!-- Storage -->
-            <div class="col-lg-7">
-                <div class="card border-0 shadow-sm h-100">
-                    <div class="card-header bg-white fw-semibold">
-                        <i class="bi bi-hdd-stack me-1"></i> Server Partitions
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-sm align-middle mb-0 small">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Partition</th>
-                                        <th style="min-width: 100px;">% Used</th>
-                                        <th class="d-th-md">Size</th>
-                                        <th class="d-th-md">Free</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($partitions as $part): ?>
-                                    <tr>
-                                        <td><i class="bi bi-device-hdd text-muted me-1"></i> <?= htmlspecialchars($part['mount']) ?></td>
-                                        <td>
-                                            <div class="progress" style="height: 18px; background-color: #e9ecef;">
-                                                <div class="progress-bar progress-bar-striped <?= $part['percent'] > 90 ? 'bg-danger' : ($part['percent'] > 70 ? 'bg-warning' : '') ?>"
-                                                     style="width: <?= $part['percent'] ?>%; background-color: <?= $part['percent'] <= 70 ? '#8faabe' : '' ?>;">
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td class="d-table-cell-md"><?= $part['size'] ?></td>
-                                        <td class="d-table-cell-md"><?= $part['free'] ?></td>
-                                    </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <?php if (!empty($mysqlStorage) || !empty($mysqlStats)): ?>
-            <!-- MySQL Stats -->
-            <div class="col-12">
-                <div class="card border-0 shadow-sm">
-                    <div class="card-body py-3">
-                        <div class="row">
-                            <?php if (!empty($mysqlStorage) && $mysqlStorage['disk_total'] > 0): ?>
-                            <div class="col-md-5">
-                                <div class="d-flex align-items-center mb-2">
-                                    <i class="bi bi-database me-1 text-muted"></i>
-                                    <span class="fw-semibold small">MySQL Partition</span>
-                                </div>
-                                <?php
-                                    $ms = $mysqlStorage;
-                                    $dbPct = round($ms['db_bytes'] / $ms['disk_total'] * 100, 1);
-                                    $usedPct = round($ms['disk_used'] / $ms['disk_total'] * 100, 1);
-                                    $freePct = round($ms['disk_free'] / $ms['disk_total'] * 100, 1);
-                                ?>
-                                <div class="rounded overflow-hidden d-flex" id="mysql-bar" style="height:22px;background:#e9ecef;font-size:.65rem;">
-                                    <div style="width:<?= $dbPct ?>%;background:#0d6efd;color:#fff;overflow:hidden;white-space:nowrap;padding:0 4px;line-height:22px;"
-                                         title="MySQL Data: <?= \BBS\Services\ServerStats::formatBytes($ms['db_bytes']) ?>">
-                                        DB <?= \BBS\Services\ServerStats::formatBytes($ms['db_bytes']) ?>
-                                    </div>
-                                    <div style="width:<?= max($usedPct - $dbPct, 0) ?>%;background:#6c757d;color:#fff;overflow:hidden;white-space:nowrap;padding:0 4px;line-height:22px;"
-                                         title="Other used: <?= \BBS\Services\ServerStats::formatBytes($ms['disk_used'] - $ms['db_bytes']) ?>">
-                                        Other
-                                    </div>
-                                    <div style="width:<?= $freePct ?>%;background:#e9ecef;color:#666;overflow:hidden;white-space:nowrap;padding:0 4px;line-height:22px;"
-                                         title="Free: <?= \BBS\Services\ServerStats::formatBytes($ms['disk_free']) ?>">
-                                        <?= \BBS\Services\ServerStats::formatBytes($ms['disk_free']) ?> free
-                                    </div>
-                                </div>
-                                <div class="d-flex justify-content-between mt-1" style="font-size:.6rem;color:#999;">
-                                    <span>Total: <?= \BBS\Services\ServerStats::formatBytes($ms['disk_total']) ?></span>
-                                    <span id="mysql-free-text"><?= $freePct ?>% free</span>
-                                </div>
-                                <div class="mt-2" style="font-size:.65rem;color:#888;line-height:1.4;">
-                                    <strong id="mysql-summary-text">MySQL Data: <?= \BBS\Services\ServerStats::formatBytes($ms['db_bytes']) ?> (<?= $dbPct ?>% of partition)</strong><br>
-                                    This chart shows disk usage on the MySQL partition. BBS stores file catalog data in MySQL, enabling fast search and restore operations without locking the Borg repository.
-                                </div>
-                            </div>
-                            <?php endif; ?>
-                            <?php if (!empty($mysqlStats)): ?>
-                            <div class="col-md-7<?= !empty($mysqlStorage) && $mysqlStorage['disk_total'] > 0 ? ' border-start' : '' ?>">
-                                <div class="d-flex align-items-center mb-2">
-                                    <i class="bi bi-table me-1 text-muted"></i>
-                                    <span class="fw-semibold small">Database Records</span>
-                                </div>
-                                <div class="row g-2 text-center" style="font-size:.7rem;">
-                                    <div class="col-4">
-                                        <div class="rounded py-1" style="background:#f0f4ff;">
-                                            <div class="fw-bold text-primary" style="font-size:1rem;" id="stat-total-rows"><?= number_format($mysqlStats['total_rows']) ?></div>
-                                            <div class="text-muted">Total Rows</div>
-                                        </div>
-                                    </div>
-                                    <div class="col-4">
-                                        <div class="rounded py-1" style="background:#f0faf0;">
-                                            <div class="fw-bold text-success" style="font-size:1rem;" id="stat-archives"><?= number_format($mysqlStats['archives']) ?></div>
-                                            <div class="text-muted">Archives</div>
-                                        </div>
-                                    </div>
-                                    <div class="col-4">
-                                        <div class="rounded py-1" style="background:#fff8f0;">
-                                            <div class="fw-bold" style="font-size:1rem;color:#e67e22;" id="stat-catalog"><?= number_format($mysqlStats['catalog_files']) ?></div>
-                                            <div class="text-muted">Catalog</div>
-                                        </div>
-                                    </div>
-                                    <div class="col-4">
-                                        <div class="rounded py-1" style="background:#f5f0ff;">
-                                            <div class="fw-bold" style="font-size:1rem;color:#6f42c1;" id="stat-paths"><?= number_format($mysqlStats['unique_paths']) ?></div>
-                                            <div class="text-muted">File Paths</div>
-                                        </div>
-                                    </div>
-                                    <div class="col-4">
-                                        <div class="rounded py-1" style="background:#f0faff;">
-                                            <div class="fw-bold text-info" style="font-size:1rem;" id="stat-completed-jobs"><?= number_format($mysqlStats['completed_jobs']) ?></div>
-                                            <div class="text-muted">Jobs Run</div>
-                                        </div>
-                                    </div>
-                                    <div class="col-4">
-                                        <div class="rounded py-1" style="background:#fef0f0;">
-                                            <div class="fw-bold text-danger" style="font-size:1rem;" id="stat-repos"><?= number_format($mysqlStats['repositories']) ?></div>
-                                            <div class="text-muted">Repos</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <?php endif; ?>
         </div>
     </div>
     <?php endif; ?>
 </div>
+<?php endif; ?>
 
 <div class="row g-4">
     <!-- Active Jobs -->
