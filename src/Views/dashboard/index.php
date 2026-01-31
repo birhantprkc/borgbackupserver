@@ -85,28 +85,40 @@
                 <i class="bi bi-cpu me-1"></i> Server Stats
             </div>
             <div class="card-body">
-                <div class="d-flex gap-2">
-                    <?php
-                        $cpuColor = $cpuLoad['percent'] > 80 ? '#dc3545' : ($cpuLoad['percent'] > 50 ? '#ffc107' : '#198754');
-                        $memColor = $memory['percent'] > 85 ? '#dc3545' : ($memory['percent'] > 60 ? '#ffc107' : '#0dcaf0');
-                    ?>
-                    <div class="flex-fill rounded position-relative overflow-hidden" id="cpu-box"
-                         style="height: 80px; background: #f0f0f0; border: 1px solid #dee2e6;">
-                        <div id="cpu-fill" style="position:absolute;bottom:0;left:0;right:0;height:<?= $cpuLoad['percent'] ?>%;background:<?= $cpuColor ?>;opacity:0.2;transition:height .5s ease,background .5s ease;"></div>
-                        <div class="position-relative d-flex flex-column align-items-center justify-content-center h-100 px-2">
-                            <div class="fw-bold" style="font-size: 1.3rem; line-height:1;" id="cpu-pct"><?= $cpuLoad['percent'] ?>%</div>
-                            <div class="text-muted" style="font-size: .7rem;">CPU</div>
-                            <div class="text-muted" style="font-size: .65rem;" id="cpu-detail"><?= $cpuLoad['1min'] ?> / <?= $cpuLoad['cores'] ?> cores</div>
-                        </div>
+                <?php
+                    $cpuColor = $cpuLoad['percent'] > 80 ? '#dc3545' : ($cpuLoad['percent'] > 50 ? '#ffc107' : '#198754');
+                    $memColor = $memory['percent'] > 85 ? '#dc3545' : ($memory['percent'] > 60 ? '#ffc107' : '#0dcaf0');
+                    $arcLen = 212.06; // 270° arc on r=45: 2*π*45*0.75
+                    $circum = 282.74;
+                    $cpuDash = $arcLen * $cpuLoad['percent'] / 100;
+                    $memDash = $arcLen * $memory['percent'] / 100;
+                ?>
+                <div class="d-flex justify-content-around">
+                    <div class="text-center" style="width:120px;">
+                        <svg viewBox="0 0 120 95" style="width:100%;height:auto;">
+                            <circle cx="60" cy="55" r="45" fill="none" stroke="#e9ecef" stroke-width="8"
+                                stroke-dasharray="<?= $arcLen ?> <?= $circum ?>" stroke-linecap="round"
+                                transform="rotate(135 60 55)"/>
+                            <circle cx="60" cy="55" r="45" fill="none" stroke="<?= $cpuColor ?>" stroke-width="8"
+                                id="cpu-arc" stroke-dasharray="<?= $cpuDash ?> <?= $circum ?>" stroke-linecap="round"
+                                transform="rotate(135 60 55)" style="transition: stroke-dasharray .5s ease, stroke .5s ease;"/>
+                            <text x="60" y="48" text-anchor="middle" font-size="18" font-weight="bold" fill="#333" id="cpu-pct"><?= $cpuLoad['percent'] ?>%</text>
+                            <text x="60" y="62" text-anchor="middle" font-size="8" fill="#888" id="cpu-detail"><?= $cpuLoad['1min'] ?> / <?= $cpuLoad['cores'] ?> cores</text>
+                        </svg>
+                        <div class="text-muted" style="font-size:.75rem;margin-top:-8px;">CPU</div>
                     </div>
-                    <div class="flex-fill rounded position-relative overflow-hidden" id="mem-box"
-                         style="height: 80px; background: #f0f0f0; border: 1px solid #dee2e6;">
-                        <div id="mem-fill" style="position:absolute;bottom:0;left:0;right:0;height:<?= $memory['percent'] ?>%;background:<?= $memColor ?>;opacity:0.2;transition:height .5s ease,background .5s ease;"></div>
-                        <div class="position-relative d-flex flex-column align-items-center justify-content-center h-100 px-2">
-                            <div class="fw-bold" style="font-size: 1.3rem; line-height:1;" id="mem-pct"><?= $memory['percent'] ?>%</div>
-                            <div class="text-muted" style="font-size: .7rem;">Memory</div>
-                            <div class="text-muted" style="font-size: .65rem;" id="mem-detail"><?= \BBS\Services\ServerStats::formatBytes($memory['used']) ?> / <?= \BBS\Services\ServerStats::formatBytes($memory['total']) ?></div>
-                        </div>
+                    <div class="text-center" style="width:120px;">
+                        <svg viewBox="0 0 120 95" style="width:100%;height:auto;">
+                            <circle cx="60" cy="55" r="45" fill="none" stroke="#e9ecef" stroke-width="8"
+                                stroke-dasharray="<?= $arcLen ?> <?= $circum ?>" stroke-linecap="round"
+                                transform="rotate(135 60 55)"/>
+                            <circle cx="60" cy="55" r="45" fill="none" stroke="<?= $memColor ?>" stroke-width="8"
+                                id="mem-arc" stroke-dasharray="<?= $memDash ?> <?= $circum ?>" stroke-linecap="round"
+                                transform="rotate(135 60 55)" style="transition: stroke-dasharray .5s ease, stroke .5s ease;"/>
+                            <text x="60" y="48" text-anchor="middle" font-size="18" font-weight="bold" fill="#333" id="mem-pct"><?= $memory['percent'] ?>%</text>
+                            <text x="60" y="62" text-anchor="middle" font-size="8" fill="#888" id="mem-detail"><?= \BBS\Services\ServerStats::formatBytes($memory['used']) ?> / <?= \BBS\Services\ServerStats::formatBytes($memory['total']) ?></text>
+                        </svg>
+                        <div class="text-muted" style="font-size:.75rem;margin-top:-8px;">Memory</div>
                     </div>
                 </div>
             </div>
@@ -565,19 +577,19 @@ setInterval(function() {
 
             <?php if ($isAdmin): ?>
             if (data.cpuLoad) {
-                const p = data.cpuLoad.percent;
+                const p = data.cpuLoad.percent, arc = 212.06, circ = 282.74;
                 document.getElementById('cpu-pct').textContent = p + '%';
                 document.getElementById('cpu-detail').textContent = data.cpuLoad['1min'] + ' / ' + data.cpuLoad.cores + ' cores';
-                const cpuFill = document.getElementById('cpu-fill');
-                cpuFill.style.height = p + '%';
-                cpuFill.style.background = p > 80 ? '#dc3545' : (p > 50 ? '#ffc107' : '#198754');
+                const cpuArc = document.getElementById('cpu-arc');
+                cpuArc.setAttribute('stroke-dasharray', (arc * p / 100) + ' ' + circ);
+                cpuArc.setAttribute('stroke', p > 80 ? '#dc3545' : (p > 50 ? '#ffc107' : '#198754'));
             }
             if (data.memory) {
-                const p = data.memory.percent;
+                const p = data.memory.percent, arc = 212.06, circ = 282.74;
                 document.getElementById('mem-pct').textContent = p + '%';
-                const memFill = document.getElementById('mem-fill');
-                memFill.style.height = p + '%';
-                memFill.style.background = p > 85 ? '#dc3545' : (p > 60 ? '#ffc107' : '#0dcaf0');
+                const memArc = document.getElementById('mem-arc');
+                memArc.setAttribute('stroke-dasharray', (arc * p / 100) + ' ' + circ);
+                memArc.setAttribute('stroke', p > 85 ? '#dc3545' : (p > 60 ? '#ffc107' : '#0dcaf0'));
             }
             <?php endif; ?>
 
