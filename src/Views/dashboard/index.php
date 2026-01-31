@@ -189,7 +189,7 @@
         $dedupSavings = $storage['dedup_savings'] ?? 0;
         $totalOrig = (int)($storage['total_original'] ?? 0);
         $totalDedup = (int)($storage['total_dedup'] ?? 0);
-        $dedupRatio = $totalDedup > 0 ? round($totalOrig / $totalDedup) : 0;
+        $dedupRatio = ($totalDedup > 0 && $totalOrig > 0) ? round($totalOrig / $totalDedup, 1) : 0;
     ?>
     <div class="col-lg-4">
         <div class="card border-0 shadow-sm h-100">
@@ -230,7 +230,7 @@
                             <div class="d-flex align-items-center">
                                 <span class="fw-bold" style="font-size:1rem;line-height:1;color:#333;"><?= $dedupSavings ?>%</span>
                                 <?php if ($dedupRatio >= 1): ?>
-                                <span class="text-muted ms-1" style="font-size:.55rem;">(<?= $dedupRatio ?>:1)</span>
+                                <span class="text-muted ms-1" style="font-size:.55rem;">(<?= $dedupRatio == (int)$dedupRatio ? (int)$dedupRatio : $dedupRatio ?>:1)</span>
                                 <?php endif; ?>
                             </div>
                         </div>
@@ -372,7 +372,7 @@
             <div class="card-header bg-white fw-semibold">
                 <i class="bi bi-play-circle me-1"></i> Active &amp; Queued Jobs
             </div>
-            <div class="card-body p-0" id="active-jobs">
+            <div class="card-body p-0 dash-table" id="active-jobs">
                 <?php if (empty($activeJobs)): ?>
                     <div class="p-4 text-muted text-center">No active jobs</div>
                 <?php else: ?>
@@ -444,7 +444,7 @@
             <div class="card-header bg-white fw-semibold">
                 <i class="bi bi-calendar-event me-1"></i> Upcoming Backups
             </div>
-            <div class="card-body p-0" id="upcoming-backups">
+            <div class="card-body p-0 dash-table" id="upcoming-backups">
                 <?php if (empty($upcomingSchedules)): ?>
                     <div class="p-4 text-muted text-center">No scheduled backups</div>
                 <?php else: ?>
@@ -508,7 +508,7 @@
             <div class="card-header bg-white fw-semibold">
                 <i class="bi bi-check-circle me-1"></i> Recently Completed
             </div>
-            <div class="card-body p-0" id="recent-jobs">
+            <div class="card-body p-0 dash-table" id="recent-jobs">
                 <?php if (empty($recentJobs)): ?>
                     <div class="p-4 text-muted text-center">No completed jobs yet</div>
                 <?php else: ?>
@@ -565,7 +565,7 @@
                 <span><i class="bi bi-journal-text me-1"></i> Server Log</span>
                 <a href="/log" class="text-decoration-none small">View all</a>
             </div>
-            <div class="card-body p-0" id="server-log">
+            <div class="card-body p-0 dash-table" id="server-log">
                 <?php if (empty($recentLogs)): ?>
                     <div class="p-4 text-muted text-center">No log entries</div>
                 <?php else: ?>
