@@ -550,9 +550,10 @@ def execute_task(config, task):
             })
             return
 
-    # Pre-count files for progress
+    # Pre-count files for progress (skip when --pattern is used since count would be inaccurate)
     files_total = 0
-    if task_type == "backup" and directories:
+    has_patterns = any(arg.startswith("--pattern") for arg in command)
+    if task_type == "backup" and directories and not has_patterns:
         files_total = count_files(directories)
         logger.info(f"Pre-counted {files_total} files to backup")
 
