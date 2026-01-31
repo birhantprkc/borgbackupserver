@@ -73,6 +73,7 @@ See [docs/AGENT.md](docs/AGENT.md) for manual install and configuration.
 | [Agent Deployment](docs/AGENT.md) | Agent install, config, service management |
 | [User Guide](docs/USER_GUIDE.md) | Using the web UI, creating plans, restoring files |
 | [API Reference](docs/API.md) | Agent API endpoints with request/response examples |
+| [MySQL Storage Requirements](docs/MySQL-Storage-Requirements.md) | File catalog sizing, MySQL tuning for large deployments |
 | [Contributing](docs/CONTRIBUTING.md) | Development setup, conventions, how to help |
 
 ---
