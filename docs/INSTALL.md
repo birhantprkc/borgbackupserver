@@ -93,14 +93,24 @@ chmod 755 /var/www/bbs/config
 
 ## Step 5: Create Backup Storage Directory
 
-Choose where borg repositories will be stored. This should be on a partition with plenty of space:
+The default storage path is `/var/bbs/home`. Each client gets a subdirectory here automatically.
 
 ```bash
 mkdir -p /var/bbs/home
 chown www-data:www-data /var/bbs/home
 ```
 
-You'll enter this path in the setup wizard. Each client gets a subdirectory here automatically.
+> **Large storage volumes:** If you have a dedicated disk or partition for backups, mount it at `/var/bbs/home` before running the installer. For example:
+>
+> ```bash
+> mkfs.ext4 /dev/sdb1
+> echo '/dev/sdb1 /var/bbs/home ext4 defaults 0 2' >> /etc/fstab
+> mkdir -p /var/bbs/home
+> mount /var/bbs/home
+> chown www-data:www-data /var/bbs/home
+> ```
+>
+> This keeps the default storage path while using your large volume for actual data.
 
 ---
 

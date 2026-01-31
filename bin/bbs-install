@@ -217,10 +217,11 @@ ok "Ownership set to www-data"
 # ─── Step 5: Create system directories ───────────────────────────────────────
 step "5/10" "Create system directories"
 
-mkdir -p /var/bbs/cache
-chown www-data:www-data /var/bbs/cache
-chmod 755 /var/bbs /var/bbs/cache
+mkdir -p /var/bbs/cache /var/bbs/home
+chown www-data:www-data /var/bbs /var/bbs/cache /var/bbs/home
+chmod 755 /var/bbs /var/bbs/cache /var/bbs/home
 ok "Created /var/bbs/cache"
+ok "Created /var/bbs/home (default storage path)"
 
 # ─── Step 6: SSH helper & sudoers ───────────────────────────────────────────
 step "6/10" "Install SSH helper & sudoers"
