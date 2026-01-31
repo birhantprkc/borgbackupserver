@@ -307,7 +307,7 @@ fi
 step "9/10" "Setup cron"
 
 CRON_LINE="* * * * * php $BBS_DIR/scheduler.php >> /var/log/bbs-scheduler.log 2>&1"
-( crontab -u www-data -l 2>/dev/null; echo "$CRON_LINE" ) | sort -u | crontab -u www-data -
+( crontab -u www-data -l 2>/dev/null || true; echo "$CRON_LINE" ) | sort -u | crontab -u www-data -
 ok "Scheduler cron installed"
 
 # ─── Step 10: Set timezone ──────────────────────────────────────────────────
