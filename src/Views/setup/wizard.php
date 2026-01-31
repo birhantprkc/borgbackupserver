@@ -177,7 +177,8 @@
                                 <label class="form-label fw-semibold">Storage Path</label>
                                 <input type="text" class="form-control" name="storage_path"
                                        value="<?= htmlspecialchars($_SESSION['setup']['storage_path'] ?? '/var/bbs/home') ?>" required>
-                                <div class="form-text">Absolute path where agent home directories and borg repositories will be stored.</div>
+                                <div class="form-text">Absolute path where agent home directories and borg repositories will be stored.
+                                    The recommended default is <code>/var/bbs/home</code>. If you have a dedicated storage volume, mount it at this path before continuing.</div>
                             </div>
 
                             <h6 class="mt-4 mb-2">Server Connection</h6>
