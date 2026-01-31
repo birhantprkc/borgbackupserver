@@ -22,11 +22,13 @@ html, body {
 /* Sidebar */
 .sidebar {
     width: 90px;
-    min-height: calc(100vh - 56px);
+    height: calc(100vh - 56px);
     background-color: #2c3e50;
-    position: sticky;
+    position: fixed;
     top: 56px;
-    align-self: flex-start;
+    left: 0;
+    overflow-y: auto;
+    z-index: 1020;
 }
 
 .sidebar-link {
@@ -127,6 +129,13 @@ html, body {
 
 .mobile-nav-item:hover {
     color: #fff;
+}
+
+/* Offset main content for fixed sidebar on desktop */
+@media (min-width: 768px) {
+    .main-content {
+        margin-left: 90px;
+    }
 }
 
 /* Add padding at bottom for mobile nav */
