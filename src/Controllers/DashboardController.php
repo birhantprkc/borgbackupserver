@@ -174,16 +174,27 @@ class DashboardController extends Controller
                 $db = \BBS\Core\Database::getInstance();
                 $setting = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
                 $path = $setting['value'] ?? '';
-                $repoStats = $db->fetchOne("SELECT COUNT(*) as repo_count, COALESCE(SUM(size_bytes), 0) as total_repo_bytes FROM repositories");
+                $repoStats = $db->fetchOne("SELECT COUNT(*) as repo_count, COALESCE(SUM(size_bytes), 0) as total_repo_bytes, COALESCE(SUM(archive_count), 0) as total_archives FROM repositories");
+                $archiveStats = $db->fetchOne("SELECT COALESCE(SUM(original_size), 0) as total_original, COALESCE(SUM(deduplicated_size), 0) as total_dedup, COALESCE(SUM(file_count), 0) as total_files FROM archives");
+                $clientCount = $db->fetchOne("SELECT COUNT(*) as cnt FROM agents");
 
                 $info = [
                     'path' => $path,
                     'repo_count' => (int) ($repoStats['repo_count'] ?? 0),
                     'total_repo_bytes' => (int) ($repoStats['total_repo_bytes'] ?? 0),
+                    'total_archives' => (int) ($repoStats['total_archives'] ?? 0),
+                    'total_original' => (int) ($archiveStats['total_original'] ?? 0),
+                    'total_dedup' => (int) ($archiveStats['total_dedup'] ?? 0),
+                    'total_files' => (int) ($archiveStats['total_files'] ?? 0),
+                    'dedup_savings' => 0,
+                    'client_count' => (int) ($clientCount['cnt'] ?? 0),
                     'disk_total' => null,
                     'disk_free' => null,
                     'disk_percent' => null,
                 ];
+                if ($info['total_original'] > 0) {
+                    $info['dedup_savings'] = round((1 - $info['total_dedup'] / $info['total_original']) * 100, 1);
+                }
                 if (!empty($path) && is_dir($path)) {
                     $total = @disk_total_space($path);
                     $free = @disk_free_space($path);

@@ -173,43 +173,101 @@
 <!-- Row 3: Storage Pool | MySQL Stats -->
 <div class="row g-4 mb-4">
     <?php if (!empty($storage) && $storage['disk_total'] !== null): ?>
+    <?php
+        $stUsed = $storage['disk_total'] - $storage['disk_free'];
+        $stRepoPct = $storage['disk_total'] > 0 ? round($storage['total_repo_bytes'] / $storage['disk_total'] * 100, 1) : 0;
+        $stOtherPct = $storage['disk_total'] > 0 ? round(($stUsed - $storage['total_repo_bytes']) / $storage['disk_total'] * 100, 1) : 0;
+        if ($stOtherPct < 0) $stOtherPct = 0;
+        $stFreePct = $storage['disk_total'] > 0 ? round($storage['disk_free'] / $storage['disk_total'] * 100, 1) : 0;
+        // SVG donut segments (repo=green, other=gray, free=light)
+        $r = 45; $c = 2 * M_PI * $r; // circumference ~282.74
+        $seg1 = $c * $stRepoPct / 100;
+        $seg2 = $c * $stOtherPct / 100;
+        $seg3 = $c * $stFreePct / 100;
+        $off1 = 0;
+        $off2 = $seg1;
+        $off3 = $seg1 + $seg2;
+    ?>
     <div class="col-lg-4">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-header bg-white fw-semibold">
                 <i class="bi bi-device-hdd me-1"></i> Storage Pool
             </div>
             <div class="card-body">
-                <?php
-                    $stUsed = $storage['disk_total'] - $storage['disk_free'];
-                    $stRepoPct = $storage['disk_total'] > 0 ? round($storage['total_repo_bytes'] / $storage['disk_total'] * 100, 1) : 0;
-                    $stOtherPct = $storage['disk_total'] > 0 ? round(($stUsed - $storage['total_repo_bytes']) / $storage['disk_total'] * 100, 1) : 0;
-                    if ($stOtherPct < 0) $stOtherPct = 0;
-                    $stFreePct = $storage['disk_total'] > 0 ? round($storage['disk_free'] / $storage['disk_total'] * 100, 1) : 0;
-                ?>
-                <div class="rounded overflow-hidden d-flex" style="height:28px;background:#e9ecef;font-size:.7rem;">
-                    <div style="width:<?= $stRepoPct ?>%;background:#48bb78;color:#fff;overflow:hidden;white-space:nowrap;padding:0 6px;line-height:28px;"
-                         title="Borg Repos: <?= \BBS\Services\ServerStats::formatBytes($storage['total_repo_bytes']) ?>">
-                        Repos <?= \BBS\Services\ServerStats::formatBytes($storage['total_repo_bytes']) ?>
+                <div class="d-flex align-items-center">
+                    <!-- Donut Chart -->
+                    <div style="width:130px;flex-shrink:0;" class="me-3">
+                        <svg viewBox="0 0 120 120" style="width:100%;height:auto;transform:rotate(-90deg);">
+                            <!-- Free (background) -->
+                            <circle cx="60" cy="60" r="<?= $r ?>" fill="none" stroke="#e9ecef" stroke-width="14"/>
+                            <!-- Repos -->
+                            <?php if ($stRepoPct > 0): ?>
+                            <circle cx="60" cy="60" r="<?= $r ?>" fill="none" stroke="#48bb78" stroke-width="14"
+                                stroke-dasharray="<?= round($seg1, 2) ?> <?= round($c - $seg1, 2) ?>"
+                                stroke-dashoffset="0"/>
+                            <?php endif; ?>
+                            <!-- Other -->
+                            <?php if ($stOtherPct > 0): ?>
+                            <circle cx="60" cy="60" r="<?= $r ?>" fill="none" stroke="#6c757d" stroke-width="14"
+                                stroke-dasharray="<?= round($seg2, 2) ?> <?= round($c - $seg2, 2) ?>"
+                                stroke-dashoffset="-<?= round($off2, 2) ?>"/>
+                            <?php endif; ?>
+                        </svg>
+                        <div class="text-center" style="margin-top:-78px;position:relative;font-size:.7rem;line-height:1.3;">
+                            <div class="fw-bold" style="font-size:1.1rem;color:#333;"><?= round(100 - $stFreePct, 1) ?>%</div>
+                            <div class="text-muted">used</div>
+                        </div>
                     </div>
-                    <?php if ($stOtherPct > 0): ?>
-                    <div style="width:<?= $stOtherPct ?>%;background:#6c757d;color:#fff;overflow:hidden;white-space:nowrap;padding:0 6px;line-height:28px;"
-                         title="Other used: <?= \BBS\Services\ServerStats::formatBytes($stUsed - $storage['total_repo_bytes']) ?>">
-                        Other
-                    </div>
-                    <?php endif; ?>
-                    <div style="width:<?= $stFreePct ?>%;background:#e9ecef;color:#666;overflow:hidden;white-space:nowrap;padding:0 6px;line-height:28px;"
-                         title="Free: <?= \BBS\Services\ServerStats::formatBytes($storage['disk_free']) ?>">
-                        <?= \BBS\Services\ServerStats::formatBytes($storage['disk_free']) ?> free
+                    <!-- Legend -->
+                    <div style="font-size:.7rem;line-height:1.8;">
+                        <div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#48bb78;margin-right:5px;"></span>Repos <?= \BBS\Services\ServerStats::formatBytes($storage['total_repo_bytes']) ?></div>
+                        <?php if ($stOtherPct > 0): ?>
+                        <div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#6c757d;margin-right:5px;"></span>Other <?= \BBS\Services\ServerStats::formatBytes($stUsed - $storage['total_repo_bytes']) ?></div>
+                        <?php endif; ?>
+                        <div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#e9ecef;margin-right:5px;"></span>Free <?= \BBS\Services\ServerStats::formatBytes($storage['disk_free']) ?></div>
+                        <div class="text-muted mt-1">Total: <?= \BBS\Services\ServerStats::formatBytes($storage['disk_total']) ?></div>
                     </div>
                 </div>
-                <div class="d-flex justify-content-between mt-1" style="font-size:.6rem;color:#999;">
-                    <span>Total: <?= \BBS\Services\ServerStats::formatBytes($storage['disk_total']) ?></span>
-                    <span><?= $stFreePct ?>% free</span>
+                <!-- Stats Grid -->
+                <div class="row g-2 mt-3 text-center" style="font-size:.7rem;">
+                    <div class="col-4">
+                        <div class="rounded py-2" style="background:#f0faf0;">
+                            <div class="fw-bold" style="font-size:1.1rem;color:#48bb78;"><?= $storage['repo_count'] ?></div>
+                            <div class="text-muted">Repositories</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="rounded py-2" style="background:#f0f4ff;">
+                            <div class="fw-bold" style="font-size:1.1rem;color:#4a90d9;"><?= number_format($storage['total_archives']) ?></div>
+                            <div class="text-muted">Recovery Pts</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="rounded py-2" style="background:#fff8f0;">
+                            <div class="fw-bold" style="font-size:1.1rem;color:#e67e22;"><?= $storage['client_count'] ?></div>
+                            <div class="text-muted">Clients</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="rounded py-2" style="background:#f5f0ff;">
+                            <div class="fw-bold" style="font-size:1.1rem;color:#6f42c1;"><?= \BBS\Services\ServerStats::formatBytes($storage['total_original']) ?></div>
+                            <div class="text-muted">Protected</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="rounded py-2" style="background:#f0faff;">
+                            <div class="fw-bold" style="font-size:1.1rem;color:#0dcaf0;"><?= $storage['dedup_savings'] ?>%</div>
+                            <div class="text-muted">Dedup Savings</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="rounded py-2" style="background:#fef0f0;">
+                            <div class="fw-bold" style="font-size:1.1rem;color:#c0392b;"><?= number_format($storage['total_files']) ?></div>
+                            <div class="text-muted">Files Tracked</div>
+                        </div>
+                    </div>
                 </div>
-                <div class="mt-2" style="font-size:.65rem;color:#888;line-height:1.4;">
-                    <strong>Borg Repos: <?= \BBS\Services\ServerStats::formatBytes($storage['total_repo_bytes']) ?> (<?= $stRepoPct ?>% of pool)</strong><br>
-                    <?= htmlspecialchars($storage['path']) ?> &mdash; <?= $storage['repo_count'] ?> repositories
-                </div>
+                <div class="text-muted text-center mt-2" style="font-size:.6rem;"><?= htmlspecialchars($storage['path']) ?></div>
             </div>
         </div>
     </div>
