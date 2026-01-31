@@ -232,6 +232,10 @@
                                     <span>Total: <?= \BBS\Services\ServerStats::formatBytes($ms['disk_total']) ?></span>
                                     <span id="mysql-free-text"><?= $freePct ?>% free</span>
                                 </div>
+                                <div class="mt-2" style="font-size:.65rem;color:#888;line-height:1.4;">
+                                    <strong id="mysql-summary-text">MySQL Data: <?= \BBS\Services\ServerStats::formatBytes($ms['db_bytes']) ?> (<?= $dbPct ?>% of partition)</strong><br>
+                                    This chart represents the partition MySQL tables are running on. BBS stores catalog data in MySQL for searchability and restoring without locking the Borg repo.
+                                </div>
                             </div>
                             <?php endif; ?>
                             <?php if (!empty($mysqlStats)): ?>
@@ -721,6 +725,9 @@ setInterval(function() {
                 }
                 const ft = document.getElementById('mysql-free-text');
                 if (ft) ft.textContent = freePct + '% free';
+                const st = document.getElementById('mysql-summary-text');
+                const fmtB = b => b >= 1073741824 ? (b/1073741824).toFixed(2)+' GB' : b >= 1048576 ? (b/1048576).toFixed(1)+' MB' : (b/1024).toFixed(1)+' KB';
+                if (st) st.textContent = 'MySQL Data: ' + fmtB(ms.db_bytes) + ' (' + dbPct + '% of partition)';
             }
             <?php endif; ?>
 
