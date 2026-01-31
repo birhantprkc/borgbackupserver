@@ -314,7 +314,7 @@
                                 <th>Status</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody class="small">
                             <?php foreach ($activeJobs as $job): ?>
                             <?php
                                 $elapsed = '';
@@ -385,7 +385,7 @@
                                 <th></th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody class="small">
                             <?php foreach ($upcomingSchedules as $sched): ?>
                             <?php
                                 $nextDiff = strtotime($sched['next_run']) - time();
@@ -450,7 +450,7 @@
                                 <th>Status</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody class="small">
                             <?php foreach ($recentJobs as $job): ?>
                             <?php
                                 $d = $job['duration_seconds'] ?? 0;
@@ -507,8 +507,8 @@
                         <tbody>
                             <?php foreach ($recentLogs as $log): ?>
                             <tr>
-                                <td class="small"><?= \BBS\Core\TimeHelper::format($log['created_at'], 'M j, g:i A') ?></td>
-                                <td class="d-table-cell-md"><?= htmlspecialchars($log['agent_name'] ?? '--') ?></td>
+                                <td class="small text-nowrap"><?= \BBS\Core\TimeHelper::format($log['created_at'], 'M j, g:i A') ?></td>
+                                <td class="d-table-cell-md text-nowrap"><?= htmlspecialchars($log['agent_name'] ?? '--') ?></td>
                                 <td>
                                     <?php
                                     $levelClass = match($log['level']) {
@@ -658,7 +658,7 @@ function renderLogs(logs) {
     let html = '<div class="table-responsive"><table class="table table-hover mb-0 small"><thead class="table-light"><tr><th>Time</th><th class="d-th-md">Client</th><th>Level</th><th>Message</th></tr></thead><tbody>';
     logs.forEach(l => {
         const badge = { error: 'danger', warning: 'warning' }[l.level] || 'info';
-        html += '<tr><td class="small">'+fmtDate(l.created_at)+'</td><td class="d-table-cell-md">'+esc(l.agent_name||'--')+'</td><td><span class="badge bg-'+badge+'">'+esc(l.level)+'</span></td><td>'+esc(l.message)+'</td></tr>';
+        html += '<tr><td class="small text-nowrap">'+fmtDate(l.created_at)+'</td><td class="d-table-cell-md text-nowrap">'+esc(l.agent_name||'--')+'</td><td><span class="badge bg-'+badge+'">'+esc(l.level)+'</span></td><td>'+esc(l.message)+'</td></tr>';
     });
     html += '</tbody></table></div>';
     el.innerHTML = html;
