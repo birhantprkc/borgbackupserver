@@ -163,6 +163,12 @@ install_ssh_key() {
         chmod 600 "$CONFIG_DIR/ssh_key"
         echo "SSH key installed to $CONFIG_DIR/ssh_key"
 
+        # Remove any stale host keys for the BBS server so SSH doesn't reject
+        # connections after a server rebuild
+        if [ -n "$ssh_host" ]; then
+            ssh-keygen -R "$ssh_host" 2>/dev/null || true
+        fi
+
         # Write SSH config to config.ini
         if [ -n "$ssh_user" ]; then
             echo "" >> "$CONFIG_DIR/config.ini"
