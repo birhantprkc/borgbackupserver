@@ -113,6 +113,14 @@ install_agent() {
 
     chmod +x "$INSTALL_DIR/bbs-agent.py"
 
+    # Download uninstaller
+    if command -v curl &>/dev/null; then
+        curl -s -o "$INSTALL_DIR/uninstall.sh" "$SERVER_URL/api/agent/download?file=uninstall.sh"
+    elif command -v wget &>/dev/null; then
+        wget -q -O "$INSTALL_DIR/uninstall.sh" "$SERVER_URL/api/agent/download?file=uninstall.sh"
+    fi
+    chmod +x "$INSTALL_DIR/uninstall.sh" 2>/dev/null || true
+
     # Write config
     cat > "$CONFIG_DIR/config.ini" <<EOF
 [server]

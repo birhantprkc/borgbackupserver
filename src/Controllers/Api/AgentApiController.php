@@ -501,6 +501,7 @@ class AgentApiController extends Controller
             'install.sh' => 'agent/install.sh',
             'bbs-agent.py' => 'agent/bbs-agent.py',
             'com.borgbackupserver.agent.plist' => 'agent/com.borgbackupserver.agent.plist',
+            'uninstall.sh' => 'agent/uninstall.sh',
         ];
 
         $filename = $_GET['file'] ?? '';

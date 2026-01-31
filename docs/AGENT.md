@@ -425,18 +425,12 @@ launchctl unload /Library/LaunchDaemons/com.borgbackupserver.agent.plist
 ### Uninstall
 
 ```bash
-# Stop service
-systemctl stop bbs-agent
-systemctl disable bbs-agent
-
-# Remove files
-rm /etc/systemd/system/bbs-agent.service
-rm -rf /opt/bbs-agent
-rm -rf /etc/bbs-agent
-rm /var/log/bbs-agent.log
-
-systemctl daemon-reload
+sudo /opt/bbs-agent/uninstall.sh
 ```
+
+This stops the service, removes all agent files (`/opt/bbs-agent`, `/etc/bbs-agent`, log file), and cleans up the systemd or launchd configuration. Works on both Linux and macOS.
+
+After uninstalling, remove the client entry from the BBS web UI.
 
 ---
 
