@@ -8,6 +8,7 @@
 set -euo pipefail
 
 BBS_DIR="${1:-/var/www/bbs}"
+GIT_TAG="${2:-}"
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "Error: must run as root (use sudo)"
@@ -22,9 +23,15 @@ fi
 echo "=== BBS Update ==="
 echo ""
 
-# 1. Pull latest code
-echo "[1/8] Pulling latest code..."
-git -C "$BBS_DIR" pull
+# 1. Pull / checkout code
+if [ -n "$GIT_TAG" ]; then
+    echo "[1/8] Checking out release $GIT_TAG..."
+    git -C "$BBS_DIR" fetch --tags --force
+    git -C "$BBS_DIR" checkout "$GIT_TAG"
+else
+    echo "[1/8] Pulling latest code..."
+    git -C "$BBS_DIR" pull
+fi
 
 # 2. Install/update PHP dependencies
 echo "[2/8] Installing PHP dependencies..."

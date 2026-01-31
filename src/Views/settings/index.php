@@ -320,29 +320,29 @@
                     <div class="text-muted small mb-3">Last checked: <?= \BBS\Core\TimeHelper::format($latest['checked_at'], 'M j, Y g:i A') ?></div>
                 <?php endif; ?>
 
-                <div class="d-flex gap-2 flex-wrap">
+                <div class="d-flex gap-2 flex-wrap align-items-start">
                     <form method="POST" action="/settings/check-update">
                         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                         <button type="submit" class="btn btn-outline-primary">
-                            <i class="bi bi-arrow-clockwise me-1"></i> Check Now
-                        </button>
-                    </form>
-
-                    <form method="POST" action="/settings/sync" onsubmit="return confirm('This will pull the latest code, update dependencies, fix all file and storage permissions, update the SSH helper, and run database migrations.\n\nProceed?')">
-                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                        <button type="submit" class="btn btn-outline-secondary">
-                            <i class="bi bi-wrench me-1"></i> Pull &amp; Fix Permissions
+                            <i class="bi bi-arrow-clockwise me-1"></i> Check for Updates
                         </button>
                     </form>
 
                     <?php if ($hasUpdate): ?>
-                    <form method="POST" action="/settings/upgrade" onsubmit="return confirm('This will enable maintenance mode (pausing new backups), pull the latest code, update dependencies, and run migrations.\n\nRecommendation: Back up your database first.\n\nProceed with upgrade to v<?= htmlspecialchars($latest['version']) ?>?')">
+                    <form method="POST" action="/settings/upgrade" onsubmit="return confirm('This will enable maintenance mode (pausing new backups), checkout release v<?= htmlspecialchars($latest['version']) ?>, update dependencies, and run migrations.\n\nRecommendation: Back up your database first.\n\nProceed with upgrade?')">
                         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                         <button type="submit" class="btn btn-warning">
                             <i class="bi bi-cloud-arrow-down me-1"></i> Upgrade to v<?= htmlspecialchars($latest['version']) ?>
                         </button>
                     </form>
                     <?php endif; ?>
+
+                    <form method="POST" action="/settings/sync" onsubmit="return confirm('This pulls the latest code from the main branch, which may include unreleased or unstable changes.\n\nUse Upgrade instead for stable releases.\n\nProceed?')">
+                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                        <button type="submit" class="btn btn-outline-secondary btn-sm mt-1" title="Pulls latest from main branch (may include unreleased changes)">
+                            <i class="bi bi-git me-1"></i> Sync Dev Code
+                        </button>
+                    </form>
                 </div>
             </div>
         </div>

@@ -50,36 +50,40 @@ class UpdateService
             ],
         ]);
 
-        $url = 'https://api.github.com/repos/marcpope/borgbackupserver/releases/latest';
+        // Use /releases (not /releases/latest) to include pre-releases
+        $url = 'https://api.github.com/repos/marcpope/borgbackupserver/releases';
         $json = @file_get_contents($url, false, $ctx);
 
         if ($json === false) {
-            // Check if it was a 404 (no releases yet) vs actual failure
-            $lastError = error_get_last()['message'] ?? '';
-            if (str_contains($lastError, '404')) {
-                $this->setSetting('last_update_check', date('Y-m-d H:i:s'));
-                return [
-                    'version' => $this->getCurrentVersion(),
-                    'current' => $this->getCurrentVersion(),
-                    'update_available' => false,
-                    'notes' => '',
-                    'url' => '',
-                    'message' => 'No releases published yet.',
-                ];
-            }
             return ['error' => 'Could not reach GitHub API'];
         }
 
-        $release = json_decode($json, true);
-        if (!$release || empty($release['tag_name'])) {
+        $releases = json_decode($json, true);
+        if (!is_array($releases) || empty($releases)) {
+            $this->setSetting('last_update_check', date('Y-m-d H:i:s'));
+            return [
+                'version' => $this->getCurrentVersion(),
+                'current' => $this->getCurrentVersion(),
+                'update_available' => false,
+                'notes' => '',
+                'url' => '',
+                'message' => 'No releases published yet.',
+            ];
+        }
+
+        // First entry is the most recent release (including pre-releases)
+        $release = $releases[0];
+        if (empty($release['tag_name'])) {
             return ['error' => 'Invalid response from GitHub'];
         }
 
-        $version = ltrim($release['tag_name'], 'v');
+        $tag = $release['tag_name'];
+        $version = ltrim($tag, 'v');
         $notes = $release['body'] ?? '';
         $htmlUrl = $release['html_url'] ?? '';
 
         $this->setSetting('latest_version', $version);
+        $this->setSetting('latest_release_tag', $tag);
         $this->setSetting('latest_release_notes', $notes);
         $this->setSetting('latest_release_url', $htmlUrl);
         $this->setSetting('last_update_check', date('Y-m-d H:i:s'));
@@ -122,12 +126,13 @@ class UpdateService
         $log[] = 'Maintenance mode enabled — new backups paused';
 
         try {
-            // Run bbs-update via sudo (handles git pull, composer, permissions, SSH helper, migrations)
+            // Run bbs-update via sudo with tag for release checkout
             $updateScript = $this->projectRoot . '/bin/bbs-update';
+            $tag = $this->getSetting('latest_release_tag', 'v' . $latest);
             $lines = [];
             $code = 0;
 
-            exec("sudo " . escapeshellarg($updateScript) . " " . escapeshellarg($this->projectRoot) . " 2>&1", $lines, $code);
+            exec("sudo " . escapeshellarg($updateScript) . " " . escapeshellarg($this->projectRoot) . " " . escapeshellarg($tag) . " 2>&1", $lines, $code);
             foreach ($lines as $line) {
                 $log[] = $line;
             }
