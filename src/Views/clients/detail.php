@@ -513,35 +513,35 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         ?>
         <div class="col-md-6 col-lg-4">
             <div class="card border-0 shadow-sm h-100 repo-card">
-                <div class="card-body">
-                    <div class="d-flex align-items-start mb-3">
-                        <div class="repo-icon me-3">
-                            <i class="bi bi-download"></i>
-                        </div>
-                        <div class="flex-grow-1 min-width-0">
-                            <h6 class="fw-bold mb-1"><?= htmlspecialchars($repo['name']) ?></h6>
-                            <div class="small text-muted">
-                                <i class="bi bi-shield-lock me-1"></i><?= htmlspecialchars($repo['encryption'] ?? 'none') ?>
+                <div class="card-body p-0">
+                    <div class="repo-card-header text-white text-center p-3">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="text-start">
+                                <h6 class="fw-bold mb-0 text-white"><?= htmlspecialchars($repo['name']) ?></h6>
+                                <small class="opacity-75">(<?= $repo['archive_count'] ?>)</small>
                             </div>
+                            <?php if ($deleteBlocked): ?>
+                                <span data-bs-toggle="tooltip" title="<?= htmlspecialchars($blockReason) ?>">
+                                    <button type="button" class="btn btn-sm text-white-50" disabled><i class="bi bi-trash"></i></button>
+                                </span>
+                            <?php else: ?>
+                                <form method="POST" action="/repositories/<?= $repo['id'] ?>/delete" class="d-inline" onsubmit="return confirm('PERMANENTLY delete repository &quot;<?= htmlspecialchars($repo['name']) ?>&quot;, all its archives, and the data on disk?\n\nThis action is NOT reversible.')">
+                                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                    <button type="submit" class="btn btn-sm text-white-50" title="Delete"><i class="bi bi-trash"></i></button>
+                                </form>
+                            <?php endif; ?>
                         </div>
-                        <?php if ($deleteBlocked): ?>
-                            <span data-bs-toggle="tooltip" title="<?= htmlspecialchars($blockReason) ?>">
-                                <button type="button" class="btn btn-sm btn-outline-danger border-0 opacity-50" disabled><i class="bi bi-trash"></i></button>
-                            </span>
-                        <?php else: ?>
-                            <form method="POST" action="/repositories/<?= $repo['id'] ?>/delete" class="d-inline" onsubmit="return confirm('PERMANENTLY delete repository &quot;<?= htmlspecialchars($repo['name']) ?>&quot;, all its archives, and the data on disk?\n\nThis action is NOT reversible.')">
-                                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Delete"><i class="bi bi-trash"></i></button>
-                            </form>
-                        <?php endif; ?>
+                        <div class="my-2">
+                            <i class="bi bi-download" style="font-size: 2.5rem; opacity: 0.8;"></i>
+                        </div>
                     </div>
-                    <div class="d-flex gap-2">
-                        <div class="repo-stat">
-                            <div class="repo-stat-value"><?= $sizeLabel ?></div>
+                    <div class="d-flex">
+                        <div class="repo-stat-block flex-fill text-center p-2 border-end">
+                            <div class="fw-bold fs-5"><?= $sizeLabel ?></div>
                             <div class="repo-stat-label">Repo Size</div>
                         </div>
-                        <div class="repo-stat">
-                            <div class="repo-stat-value"><?= $repo['archive_count'] ?></div>
+                        <div class="repo-stat-block flex-fill text-center p-2">
+                            <div class="fw-bold fs-5"><?= $repo['archive_count'] ?></div>
                             <div class="repo-stat-label">Recovery Points</div>
                         </div>
                     </div>
@@ -653,48 +653,59 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
             $statusLabel = $isActive ? 'Active' : ($isManual ? 'Manual' : 'Paused');
         ?>
         <div class="col-md-6">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-body pb-2">
-                    <div class="d-flex align-items-start">
-                        <div class="me-3">
-                            <div class="rounded-3 d-flex align-items-center justify-content-center" style="width:48px;height:48px;background:<?= $isActive ? '#d1fae5' : ($isManual ? '#dbeafe' : '#f3f4f6') ?>;">
-                                <i class="bi bi-calendar-event fs-4" style="color:<?= $isActive ? '#059669' : ($isManual ? '#3b82f6' : '#6b7280') ?>;"></i>
-                            </div>
+            <div class="card border-0 shadow-sm h-100 schedule-card">
+                <div class="card-body p-3">
+                    <div class="d-flex align-items-center">
+                        <div class="schedule-icon-wrap me-3 <?= $isActive ? 'schedule-active' : ($isManual ? 'schedule-manual' : 'schedule-paused') ?>">
+                            <i class="bi bi-calendar-event"></i>
+                            <span class="schedule-id">#<?= $plan['id'] ?></span>
                         </div>
                         <div class="flex-grow-1 min-width-0">
                             <h6 class="mb-1 fw-bold"><?= htmlspecialchars($plan['name']) ?></h6>
-                            <div class="small text-muted mb-1">
+                            <div class="small text-muted">
                                 <i class="bi bi-clock me-1"></i><?= $schedSummary ?>
                             </div>
                             <div class="small text-muted">
                                 <i class="bi bi-archive me-1"></i><?= htmlspecialchars($plan['repo_name'] ?? '--') ?>
                             </div>
                         </div>
-                        <div class="ms-2">
-                            <span class="badge bg-<?= $statusColor ?>"><?= $statusLabel ?></span>
+                        <div class="dropdown ms-2">
+                            <button class="btn btn-sm btn-light border-0" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-three-dots-vertical"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li>
+                                    <form method="POST" action="/plans/<?= $plan['id'] ?>/trigger">
+                                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                        <button type="submit" class="dropdown-item"><i class="bi bi-play-fill text-success me-2"></i>Run Now</button>
+                                    </form>
+                                </li>
+                                <?php if ($plan['schedule_id']): ?>
+                                <li>
+                                    <form method="POST" action="/schedules/<?= $plan['schedule_id'] ?>/toggle">
+                                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                        <?php if ($isActive): ?>
+                                        <button type="submit" class="dropdown-item"><i class="bi bi-pause-fill text-warning me-2"></i>Pause</button>
+                                        <?php else: ?>
+                                        <button type="submit" class="dropdown-item"><i class="bi bi-play-fill text-secondary me-2"></i>Resume</button>
+                                        <?php endif; ?>
+                                    </form>
+                                </li>
+                                <?php endif; ?>
+                                <li><button class="dropdown-item" type="button" data-bs-toggle="collapse" data-bs-target="#edit-plan-<?= $plan['id'] ?>"><i class="bi bi-pencil text-primary me-2"></i>Edit</button></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <form method="POST" action="/plans/<?= $plan['id'] ?>/delete" onsubmit="return confirm('Delete this backup plan and its schedule?')">
+                                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                        <button type="submit" class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Delete</button>
+                                    </form>
+                                </li>
+                            </ul>
                         </div>
                     </div>
                 </div>
-                <div class="card-footer bg-white border-top-0 pt-0 d-flex gap-1 justify-content-end">
-                    <form method="POST" action="/plans/<?= $plan['id'] ?>/trigger" class="d-inline">
-                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                        <button type="submit" class="btn btn-sm btn-outline-success" title="Run Now"><i class="bi bi-play-fill me-1"></i>Run</button>
-                    </form>
-                    <?php if ($plan['schedule_id']): ?>
-                    <form method="POST" action="/schedules/<?= $plan['schedule_id'] ?>/toggle" class="d-inline">
-                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                        <?php if ($isActive): ?>
-                        <button type="submit" class="btn btn-sm btn-outline-warning" title="Pause"><i class="bi bi-pause-fill me-1"></i>Pause</button>
-                        <?php else: ?>
-                        <button type="submit" class="btn btn-sm btn-outline-secondary" title="Resume"><i class="bi bi-play-fill me-1"></i>Resume</button>
-                        <?php endif; ?>
-                    </form>
-                    <?php endif; ?>
-                    <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#edit-plan-<?= $plan['id'] ?>" title="Edit"><i class="bi bi-pencil me-1"></i>Edit</button>
-                    <form method="POST" action="/plans/<?= $plan['id'] ?>/delete" class="d-inline" onsubmit="return confirm('Delete this backup plan and its schedule?')">
-                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete"><i class="bi bi-trash"></i></button>
-                    </form>
+                <div class="schedule-status-bar bg-<?= $statusColor ?>">
+                    Current Status: <?= $statusLabel ?>
                 </div>
             </div>
         </div>
@@ -2071,21 +2082,32 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     </div>
 
 <?php elseif ($tab === 'delete'): ?>
-    <h5 class="mb-3 text-danger">Delete Client</h5>
+    <h5 class="mb-3">Delete Client : <?= htmlspecialchars($agent['name']) ?></h5>
 
-    <div class="card border-0 shadow-sm border-danger">
-        <div class="card-body">
-            <p>This will permanently delete <strong><?= htmlspecialchars($agent['name']) ?></strong> and all associated repositories, schedules, backup plans, and job history.</p>
-            <p class="text-danger fw-semibold">This action cannot be undone.</p>
+    <p class="text-muted">You have selected to delete a client from Borg Backup Server. When you delete a client, all backup data will be deleted including schedules and repositories. The client machine will be un-affected.</p>
 
-            <form method="POST" action="/clients/<?= $agent['id'] ?>/delete" onsubmit="return confirm('Are you sure? This will delete all data for this client.')">
-                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                <button type="submit" class="btn btn-danger">
-                    <i class="bi bi-trash me-1"></i> Delete Client
-                </button>
-                <a href="/clients/<?= $agent['id'] ?>" class="btn btn-outline-secondary ms-2">Cancel</a>
-            </form>
+    <div class="delete-warning-box">
+        <div class="d-flex align-items-start mb-3">
+            <i class="bi bi-exclamation-triangle-fill text-danger fs-3 me-3"></i>
+            <div>
+                <h5 class="fw-bold text-danger mb-2">WARNING: ALL CLIENT DATA WILL BE DESTROYED!</h5>
+                <p class="mb-3">There will be no way to recover your data. Are you sure you wish to continue?</p>
+                <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="confirmDeleteCheck" onchange="document.getElementById('deleteBtn').disabled = !this.checked;">
+                    <label class="form-check-label fw-semibold" for="confirmDeleteCheck">Yes. I understand.</label>
+                </div>
+            </div>
         </div>
+    </div>
+
+    <div class="d-flex gap-2 mt-3">
+        <a href="/clients/<?= $agent['id'] ?>" class="btn btn-outline-secondary">Cancel</a>
+        <form method="POST" action="/clients/<?= $agent['id'] ?>/delete" class="d-inline">
+            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+            <button type="submit" class="btn btn-danger" id="deleteBtn" disabled>
+                <i class="bi bi-trash me-1"></i> DELETE CLIENT
+            </button>
+        </form>
     </div>
 <?php endif; ?>
 </div><!-- /client-tab-content -->

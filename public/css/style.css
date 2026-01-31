@@ -226,9 +226,10 @@ body.bg-light {
     flex-shrink: 0;
 }
 
-/* Repo cards */
+/* Repo cards - dark header style */
 .repo-card {
     transition: transform 0.15s;
+    overflow: hidden;
 }
 
 .repo-card:hover {
@@ -236,41 +237,95 @@ body.bg-light {
     box-shadow: 0 .2rem .5rem rgba(0,0,0,.1) !important;
 }
 
-.repo-card .repo-icon {
-    width: 64px;
-    height: 64px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
+.repo-card-header {
+    background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+    border-radius: 8px 8px 0 0;
 }
 
-.repo-card .repo-icon i {
-    font-size: 1.75rem;
-    color: #fff;
-}
-
-.repo-stat {
-    text-align: center;
-    padding: 8px 12px;
+.repo-stat-block {
     background: #f8f9fa;
-    border-radius: 8px;
-    flex: 1;
 }
 
-.repo-stat .repo-stat-value {
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: #2c3e50;
-}
-
-.repo-stat .repo-stat-label {
+.repo-stat-label {
     font-size: 0.7rem;
     color: #6c757d;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+}
+
+/* Schedule cards */
+.schedule-card {
+    overflow: hidden;
+    transition: transform 0.15s;
+}
+
+.schedule-card:hover {
+    transform: translateY(-1px);
+}
+
+.schedule-icon-wrap {
+    width: 56px;
+    height: 56px;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.schedule-icon-wrap i {
+    font-size: 1.4rem;
+}
+
+.schedule-icon-wrap .schedule-id {
+    font-size: 0.55rem;
+    font-weight: 700;
+    margin-top: 1px;
+}
+
+.schedule-active {
+    background: linear-gradient(135deg, #86c540 0%, #5da832 100%);
+    color: #fff;
+}
+
+.schedule-manual {
+    background: linear-gradient(135deg, #4a90d9 0%, #357abd 100%);
+    color: #fff;
+}
+
+.schedule-paused {
+    background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+    color: #fff;
+}
+
+.schedule-status-bar {
+    text-align: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 6px 12px;
+    color: #fff;
+    border-radius: 0 0 8px 8px;
+}
+
+/* Delete warning box */
+.delete-warning-box {
+    background-color: #fef2f2;
+    border: 2px solid #fecaca;
+    border-radius: 8px;
+    padding: 1.25rem;
+}
+
+/* Topbar mobile improvements */
+@media (max-width: 767.98px) {
+    .topbar {
+        height: 48px;
+        border-bottom: 3px solid #e67e22;
+    }
+    .topbar .navbar-brand {
+        height: 48px;
+    }
 }
 
 /* Mobile responsive helpers */
