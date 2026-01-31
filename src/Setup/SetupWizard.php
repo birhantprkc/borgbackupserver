@@ -100,6 +100,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = 'Storage path is required.';
                 break;
             }
+            if ($storagePath[0] !== '/') {
+                $error = 'Storage path must be an absolute path (starting with /).';
+                break;
+            }
+            // Validate the storage path is usable by the web server
+            if (is_dir($storagePath)) {
+                if (!is_writable($storagePath)) {
+                    $error = "Storage path exists but is not writable by the web server. Run: sudo chown www-data:www-data " . escapeshellarg($storagePath);
+                    break;
+                }
+            } else {
+                // Try to create it
+                if (!@mkdir($storagePath, 0750, true)) {
+                    $parent = dirname($storagePath);
+                    $error = "Cannot create storage directory. Run: sudo mkdir -p " . escapeshellarg($storagePath) . " && sudo chown www-data:www-data " . escapeshellarg($storagePath);
+                    break;
+                }
+            }
             if (empty($serverHost)) {
                 $error = 'Server hostname is required for agent connections.';
                 break;
@@ -202,10 +220,10 @@ ENV;
                 file_put_contents($configDir . '/.env', $envContent);
                 chmod($configDir . '/.env', 0600);
 
-                // 9. Create storage directory if it doesn't exist
+                // 9. Ensure storage directory exists (validated in step 4)
                 $storagePath = $setup['storage_path'];
                 if (!is_dir($storagePath)) {
-                    @mkdir($storagePath, 0750, true);
+                    mkdir($storagePath, 0750, true);
                 }
 
                 // 10. Create borg cache directory
