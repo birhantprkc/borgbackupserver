@@ -18,7 +18,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.1.0"
+AGENT_VERSION = "1.2.0"
 CONFIG_PATH = "/etc/bbs-agent/config.ini"
 LOG_PATH = "/var/log/bbs-agent.log"
 SSH_KEY_PATH = "/etc/bbs-agent/ssh_key"
@@ -299,6 +299,82 @@ def execute_update_borg(config, task):
         info = get_system_info()
         api_request(config, "/api/agent/info", method="POST", data=info)
         logger.info(f"Updated borg version: {info.get('borg_version', 'unknown')}")
+
+
+def execute_update_agent(config, task):
+    """Download and replace the agent script from the server, then restart."""
+    job_id = task.get("job_id")
+    logger.info(f"Executing agent update job #{job_id}")
+
+    # Report running
+    api_request(config, "/api/agent/progress", method="POST", data={
+        "job_id": job_id, "files_total": 0, "files_processed": 0,
+    })
+
+    error_output = ""
+    result = "failed"
+    update_output = ""
+
+    try:
+        # Download new agent script from server
+        url = f"{config['server_url']}/api/agent/download?file=bbs-agent.py"
+        headers = {
+            "Authorization": f"Bearer {config['api_key']}",
+        }
+        req = urllib.request.Request(url, headers=headers, method="GET")
+
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            new_script = resp.read().decode("utf-8")
+
+        # Validate the downloaded script
+        if "AGENT_VERSION" not in new_script or len(new_script) < 1000:
+            error_output = "Downloaded script failed validation"
+            logger.error(error_output)
+        else:
+            # Determine current script path
+            script_path = os.path.abspath(__file__)
+            logger.info(f"Replacing agent at: {script_path}")
+
+            # Write new script to temp file first, then move
+            tmp_path = script_path + ".tmp"
+            with open(tmp_path, "w") as f:
+                f.write(new_script)
+            os.chmod(tmp_path, os.stat(script_path).st_mode)
+            os.replace(tmp_path, script_path)
+
+            # Extract new version from downloaded script
+            new_version = "unknown"
+            for line in new_script.split("\n")[:50]:
+                m = __import__("re").match(r'^AGENT_VERSION\s*=\s*["\']([^"\']+)["\']', line)
+                if m:
+                    new_version = m.group(1)
+                    break
+
+            result = "completed"
+            update_output = f"Agent updated to v{new_version}"
+            logger.info(update_output)
+
+    except urllib.error.HTTPError as e:
+        error_output = f"Download failed: HTTP {e.code}"
+        logger.error(error_output)
+    except Exception as e:
+        error_output = str(e)
+        logger.error(f"Agent update error: {e}")
+
+    # Report status
+    status_data = {"job_id": job_id, "result": result}
+    if error_output:
+        status_data["error_log"] = error_output[:10000]
+    elif result == "completed":
+        status_data["output_log"] = update_output[:10000]
+    api_request(config, "/api/agent/status", method="POST", data=status_data)
+
+    # Re-report system info so agent_version gets updated, then restart
+    if result == "completed":
+        info = get_system_info()
+        api_request(config, "/api/agent/info", method="POST", data=info)
+        logger.info("Restarting agent with new script...")
+        os.execv(sys.executable, [sys.executable] + sys.argv)
 
 
 def execute_plugins(plugins):
@@ -720,6 +796,8 @@ def main():
                         break
                     if task.get("task") == "update_borg":
                         execute_update_borg(config, task)
+                    elif task.get("task") == "update_agent":
+                        execute_update_agent(config, task)
                     else:
                         execute_task(config, task)
             elif result is None:

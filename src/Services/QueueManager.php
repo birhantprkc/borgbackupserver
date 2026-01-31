@@ -157,6 +157,8 @@ class QueueManager
                 $taskPayload = $this->buildRestorePayload($job);
             } elseif ($job['task_type'] === 'update_borg') {
                 $taskPayload = ['task' => 'update_borg', 'job_id' => $job['id']];
+            } elseif ($job['task_type'] === 'update_agent') {
+                $taskPayload = ['task' => 'update_agent', 'job_id' => $job['id']];
             }
 
             if ($taskPayload) {

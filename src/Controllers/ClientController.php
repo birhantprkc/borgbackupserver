@@ -695,4 +695,32 @@ class ClientController extends Controller
         $this->flash('success', 'Borg update job queued for ' . $agent['name']);
         $this->redirect("/clients/{$id}");
     }
+
+    public function updateAgent(int $id): void
+    {
+        $this->requireAuth();
+        $this->verifyCsrf();
+
+        $agent = $this->getAgent($id);
+        if (!$agent) {
+            http_response_code(404);
+            echo 'Not found';
+            return;
+        }
+
+        $this->db->insert('backup_jobs', [
+            'agent_id' => $id,
+            'task_type' => 'update_agent',
+            'status' => 'queued',
+        ]);
+
+        $this->db->insert('server_log', [
+            'agent_id' => $id,
+            'level' => 'info',
+            'message' => 'Agent update requested by ' . ($_SESSION['username'] ?? 'unknown'),
+        ]);
+
+        $this->flash('success', 'Agent update job queued for ' . $agent['name']);
+        $this->redirect("/clients/{$id}");
+    }
 }

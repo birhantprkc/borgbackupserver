@@ -113,7 +113,7 @@ CREATE TABLE backup_jobs (
     backup_plan_id INT DEFAULT NULL,
     agent_id INT NOT NULL,
     repository_id INT DEFAULT NULL,
-    task_type ENUM('backup', 'prune', 'restore', 'check', 'compact', 'update_borg') NOT NULL DEFAULT 'backup',
+    task_type ENUM('backup', 'prune', 'restore', 'check', 'compact', 'update_borg', 'update_agent') NOT NULL DEFAULT 'backup',
     status ENUM('queued', 'sent', 'running', 'completed', 'failed', 'cancelled') NOT NULL DEFAULT 'queued',
     files_total INT DEFAULT NULL,
     files_processed INT DEFAULT NULL,

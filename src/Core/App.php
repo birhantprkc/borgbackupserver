@@ -64,6 +64,7 @@ class App
         $this->router->map('POST', '/clients/[i:id]/edit', 'ClientController@update');
         $this->router->map('POST', '/clients/[i:id]/delete', 'ClientController@delete');
         $this->router->map('POST', '/clients/[i:id]/update-borg', 'ClientController@updateBorg');
+        $this->router->map('POST', '/clients/[i:id]/update-agent', 'ClientController@updateAgent');
 
         // Plugins
         $this->router->map('POST', '/clients/[i:id]/plugins', 'PluginController@updateAgentPlugins');

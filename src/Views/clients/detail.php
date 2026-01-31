@@ -1,5 +1,23 @@
 <?php
 $tab = $_GET['tab'] ?? 'status';
+
+// Detect server's agent version from the bundled bbs-agent.py
+$serverAgentVersion = null;
+$agentFile = dirname(__DIR__, 2) . '/agent/bbs-agent.py';
+if (file_exists($agentFile)) {
+    $handle = fopen($agentFile, 'r');
+    if ($handle) {
+        // Only read first 50 lines to find AGENT_VERSION
+        for ($i = 0; $i < 50 && ($line = fgets($handle)) !== false; $i++) {
+            if (preg_match('/^AGENT_VERSION\s*=\s*["\']([^"\']+)["\']/m', $line, $m)) {
+                $serverAgentVersion = $m[1];
+                break;
+            }
+        }
+        fclose($handle);
+    }
+}
+$agentNeedsUpdate = $serverAgentVersion && $agent['agent_version'] && $agent['agent_version'] !== $serverAgentVersion;
 ?>
 
 <!-- Client Header -->
@@ -39,6 +57,14 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     <?php endif; ?>
                     <?php if ($agent['agent_version']): ?>
                         <span class="ms-2"><i class="bi bi-box me-1"></i>Agent v<?= htmlspecialchars($agent['agent_version']) ?></span>
+                        <?php if ($agentNeedsUpdate): ?>
+                            <form method="POST" action="/clients/<?= $agent['id'] ?>/update-agent" class="d-inline ms-1">
+                                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                <button type="submit" class="btn btn-sm btn-outline-warning border-0 py-0 px-1" title="Update agent to v<?= htmlspecialchars($serverAgentVersion) ?>" onclick="return confirm('Queue an agent update to v<?= htmlspecialchars($serverAgentVersion) ?>?')">
+                                    <i class="bi bi-arrow-up-circle"></i>
+                                </button>
+                            </form>
+                        <?php endif; ?>
                     <?php endif; ?>
                     <?php if ($agent['borg_version']): ?>
                         <span class="ms-2"><i class="bi bi-archive me-1"></i>Borg <?= htmlspecialchars($agent['borg_version']) ?></span>
