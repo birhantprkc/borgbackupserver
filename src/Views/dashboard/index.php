@@ -493,7 +493,7 @@ function renderActiveJobs(jobs) {
     const el = document.getElementById('active-jobs');
     if (!jobs || !jobs.length) { el.innerHTML = '<div class="p-4 text-muted text-center">No active jobs</div>'; return; }
     const now = Math.floor(Date.now() / 1000);
-    let html = '<div class="table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>Client</th><th>Task</th><th>Plan</th><th>Repo</th><th>Progress</th><th>Duration</th><th>Status</th></tr></thead><tbody>';
+    let html = '<div class="table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>Client</th><th>Task</th><th>Plan</th><th>Repo</th><th>Progress</th><th>Duration</th><th>Status</th></tr></thead><tbody class="small">';
     jobs.forEach(j => {
         let elapsed = '--';
         if (j.started_at) { const e = now - Math.floor(new Date((j.started_at).replace(' ','T')+'Z').getTime()/1000); elapsed = fmtDur(e); }
@@ -514,7 +514,7 @@ function renderUpcoming(schedules, csrfToken) {
     const el = document.getElementById('upcoming-backups');
     if (!schedules || !schedules.length) { el.innerHTML = '<div class="p-4 text-muted text-center">No scheduled backups</div>'; return; }
     const now = Math.floor(Date.now() / 1000);
-    let html = '<div class="table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>Client</th><th>Plan</th><th>Frequency</th><th>Next Run</th><th>Countdown</th><th></th></tr></thead><tbody>';
+    let html = '<div class="table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>Client</th><th>Plan</th><th>Frequency</th><th>Next Run</th><th>Countdown</th><th></th></tr></thead><tbody class="small">';
     schedules.forEach(s => {
         const nextTs = Math.floor(new Date((s.next_run).replace(' ','T')+'Z').getTime()/1000);
         const cd = fmtCountdown(nextTs - now);
@@ -529,7 +529,7 @@ function renderUpcoming(schedules, csrfToken) {
 function renderRecentJobs(jobs) {
     const el = document.getElementById('recent-jobs');
     if (!jobs || !jobs.length) { el.innerHTML = '<div class="p-4 text-muted text-center">No completed jobs yet</div>'; return; }
-    let html = '<div class="table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>Client</th><th>Task</th><th>Plan</th><th>Repo</th><th>Completed</th><th>Duration</th><th>Status</th></tr></thead><tbody>';
+    let html = '<div class="table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>Client</th><th>Task</th><th>Plan</th><th>Repo</th><th>Completed</th><th>Duration</th><th>Status</th></tr></thead><tbody class="small">';
     jobs.forEach(j => {
         const badge = { completed: 'success', failed: 'danger', cancelled: 'secondary' }[j.status] || 'warning';
         html += '<tr style="cursor:pointer" onclick="window.location=\'/queue/'+j.id+'\'"><td>'+esc(j.agent_name)+'</td><td>'+esc(j.task_type?.[0]?.toUpperCase()+j.task_type?.slice(1))+'</td><td>'+esc(j.plan_name||'--')+'</td><td>'+esc(j.repo_name||'--')+'</td><td class="small text-nowrap">'+fmtDate(j.completed_at)+'</td><td class="text-nowrap">'+fmtDur(j.duration_seconds)+'</td><td><span class="badge bg-'+badge+'">'+esc(j.status)+'</span></td></tr>';
