@@ -155,7 +155,7 @@ class ClientController extends Controller
             FROM archives ar
             JOIN repositories r ON r.id = ar.repository_id
             WHERE r.agent_id = ?
-            ORDER BY ar.created_at DESC
+            ORDER BY r.name ASC, ar.created_at DESC
         ", [$id]);
 
         // Summary stats for header

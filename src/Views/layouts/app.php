@@ -13,7 +13,7 @@
 </head>
 <body>
     <!-- Top bar -->
-    <nav class="navbar navbar-expand navbar-light topbar p-0">
+    <nav class="navbar navbar-expand navbar-dark topbar p-0">
         <div class="container-fluid p-0">
             <a href="/" class="navbar-brand d-flex align-items-center justify-content-center m-0 p-0 topbar-logo">
                 <img src="/images/bbs-logo-small.png" alt="BBS" style="height: 36px;">
@@ -24,7 +24,7 @@
                 <?php
                 $notifCount = $notifCount ?? (new \BBS\Services\NotificationService())->unreadCount();
                 ?>
-                <a href="/notifications" class="btn btn-link position-relative me-2 me-md-3 text-dark p-1">
+                <a href="/notifications" class="btn btn-link position-relative me-2 me-md-3 text-white p-1">
                     <i class="bi bi-bell fs-5"></i>
                     <?php if ($notifCount > 0): ?>
                     <span class="position-absolute badge rounded-pill bg-danger" style="top: 0; right: -4px; font-size: 0.6em;">
@@ -40,7 +40,7 @@
                 </a>
                 <?php endif; ?>
                 <div class="dropdown">
-                    <a class="btn btn-link text-dark dropdown-toggle text-decoration-none p-1" href="#" role="button" data-bs-toggle="dropdown">
+                    <a class="btn btn-link text-white dropdown-toggle text-decoration-none p-1" href="#" role="button" data-bs-toggle="dropdown">
                         <i class="bi bi-person-circle"></i>
                         <span class="d-none d-md-inline ms-1"><?= htmlspecialchars($_SESSION['username'] ?? 'User') ?></span>
                     </a>

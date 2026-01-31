@@ -54,26 +54,30 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     <?php if ($agent['os_info']): ?>
                         <span class="d-none d-md-inline"><i class="bi bi-cpu me-1"></i><?= htmlspecialchars($agent['os_info']) ?></span>
                     <?php endif; ?>
+                    <span>
                     <?php if ($agent['agent_version']): ?>
-                        <span class="ms-2"><i class="bi bi-box me-1"></i>Agent v<?= htmlspecialchars($agent['agent_version']) ?></span>
                         <?php if ($agentNeedsUpdate): ?>
-                            <form method="POST" action="/clients/<?= $agent['id'] ?>/update-agent" class="d-inline ms-1">
+                            <form method="POST" action="/clients/<?= $agent['id'] ?>/update-agent" class="d-inline">
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                <button type="submit" class="btn btn-sm btn-outline-warning border-0 py-0 px-1" title="Update agent to v<?= htmlspecialchars($serverAgentVersion) ?>" onclick="return confirm('Queue an agent update to v<?= htmlspecialchars($serverAgentVersion) ?>?')">
-                                    <i class="bi bi-arrow-up-circle"></i>
+                                <button type="submit" class="btn btn-link text-warning p-0 text-decoration-none" style="font-size: inherit;" title="Update agent to v<?= htmlspecialchars($serverAgentVersion) ?>" onclick="return confirm('Queue an agent update to v<?= htmlspecialchars($serverAgentVersion) ?>?')">
+                                    <i class="bi bi-box me-1"></i>Agent v<?= htmlspecialchars($agent['agent_version']) ?> <i class="bi bi-arrow-up-circle-fill"></i>
                                 </button>
                             </form>
+                        <?php else: ?>
+                            <i class="bi bi-box me-1"></i>Agent v<?= htmlspecialchars($agent['agent_version']) ?>
                         <?php endif; ?>
                     <?php endif; ?>
                     <?php if ($agent['borg_version']): ?>
-                        <span class="ms-2"><i class="bi bi-archive me-1"></i>Borg <?= htmlspecialchars($agent['borg_version']) ?></span>
-                        <form method="POST" action="/clients/<?= $agent['id'] ?>/update-borg" class="d-inline ms-1">
-                            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                            <button type="submit" class="btn btn-sm btn-outline-info border-0 py-0 px-1" title="Update Borg on this client" onclick="return confirm('Queue a borg update on this client?')">
-                                <i class="bi bi-arrow-up-circle"></i>
-                            </button>
-                        </form>
+                        <span class="ms-2">
+                            <form method="POST" action="/clients/<?= $agent['id'] ?>/update-borg" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                <button type="submit" class="btn btn-link text-muted p-0 text-decoration-none" style="font-size: inherit;" title="Update Borg on this client" onclick="return confirm('Queue a borg update on this client?')">
+                                    <i class="bi bi-archive me-1"></i>Borg <?= htmlspecialchars($agent['borg_version']) ?>
+                                </button>
+                            </form>
+                        </span>
                     <?php endif; ?>
+                    </span>
                 </div>
             </div>
             <?php if ($agent['owner_name']): ?>
@@ -1651,12 +1655,20 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
             <label class="form-label fw-semibold">Select Archive</label>
             <select class="form-select" id="archive-select">
                 <option value="">Choose an archive...</option>
-                <?php foreach ($archives as $ar): ?>
+                <?php
+                $currentRepo = null;
+                foreach ($archives as $ar):
+                    if ($ar['repo_name'] !== $currentRepo):
+                        if ($currentRepo !== null) echo '</optgroup>';
+                        $currentRepo = $ar['repo_name'];
+                        echo '<optgroup label="' . htmlspecialchars($currentRepo) . '">';
+                    endif;
+                ?>
                     <option value="<?= $ar['id'] ?>">
-                        <?= htmlspecialchars($ar['archive_name']) ?> — <?= $ar['repo_name'] ?>
-                        (<?= number_format($ar['file_count']) ?> files, <?= \BBS\Core\TimeHelper::format($ar['created_at'], 'M j g:ia') ?>)
+                        <?= \BBS\Core\TimeHelper::format($ar['created_at'], 'l, M j, Y \a\t g:i A') ?>
                     </option>
                 <?php endforeach; ?>
+                <?php if ($currentRepo !== null) echo '</optgroup>'; ?>
             </select>
         </div>
         <div class="col-md-4">
