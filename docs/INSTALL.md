@@ -75,6 +75,7 @@ Replace `CHANGE_THIS_PASSWORD` with a strong password. You'll enter this in the 
 cd /var/www
 git clone https://github.com/marcpope/borgbackupserver.git bbs
 cd bbs
+git checkout $(git tag --sort=-v:refname | grep -E '^v[0-9]' | head -1)
 composer install --no-dev
 ```
 
@@ -310,13 +311,20 @@ The agent supports Ubuntu, Debian, CentOS, RHEL, Rocky, AlmaLinux, Fedora, Arch,
 sudo /var/www/bbs/bin/bbs-update
 ```
 
-This pulls the latest code, installs dependencies, fixes permissions, updates the SSH helper, and runs database migrations.
+This fetches the latest release tag, installs dependencies, fixes permissions, updates the SSH helper, and runs database migrations.
+
+To upgrade to a specific version:
+
+```bash
+sudo /var/www/bbs/bin/bbs-update /var/www/bbs v0.8.1-beta
+```
 
 If you prefer to update manually:
 
 ```bash
 cd /var/www/bbs
-git pull
+git fetch --tags --force
+git checkout $(git tag --sort=-v:refname | grep -E '^v[0-9]' | head -1)
 composer install --no-dev
 chown -R www-data:www-data /var/www/bbs
 cp bin/bbs-ssh-helper /usr/local/bin/bbs-ssh-helper
