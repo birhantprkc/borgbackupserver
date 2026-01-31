@@ -124,7 +124,8 @@ class QueueManager
             $taskPayload = null;
 
             if ($job['task_type'] === 'backup') {
-                $archiveName = BorgCommandBuilder::generateArchiveName($job['repo_name'] ?? 'backup');
+                $prefix = $job['backup_plan_id'] ? 'plan' . $job['backup_plan_id'] : ($job['repo_name'] ?? 'backup');
+                $archiveName = BorgCommandBuilder::generateArchiveName($prefix);
                 $cmd = BorgCommandBuilder::buildCreateCommand($plan, $repo, $archiveName);
                 $env = BorgCommandBuilder::buildEnv($repo);
                 // Build plugin payload if any plugins are configured
@@ -233,7 +234,8 @@ class QueueManager
             ];
 
             if ($job['task_type'] === 'backup') {
-                $archiveName = BorgCommandBuilder::generateArchiveName($job['repo_name'] ?? 'backup');
+                $prefix = $job['backup_plan_id'] ? 'plan' . $job['backup_plan_id'] : ($job['repo_name'] ?? 'backup');
+                $archiveName = BorgCommandBuilder::generateArchiveName($prefix);
                 $cmd = BorgCommandBuilder::buildCreateCommand($plan, $repo, $archiveName);
                 $env = BorgCommandBuilder::buildEnv($repo);
                 $tasks[] = BorgCommandBuilder::toTaskPayload('backup', $cmd, $env, [

@@ -137,7 +137,8 @@ foreach ($serverJobs as $sj) {
 
     // Build command
     if ($sj['task_type'] === 'prune') {
-        $cmd = \BBS\Services\BorgCommandBuilder::buildPruneCommand($plan, $localRepo);
+        $archivePrefix = $sj['backup_plan_id'] ? 'plan' . $sj['backup_plan_id'] : null;
+        $cmd = \BBS\Services\BorgCommandBuilder::buildPruneCommand($plan, $localRepo, $archivePrefix);
     } else {
         // compact
         $cmd = ['borg', 'compact', $localPath];

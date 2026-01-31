@@ -55,9 +55,14 @@ class BorgCommandBuilder
     /**
      * Build the borg prune command arguments.
      */
-    public static function buildPruneCommand(array $plan, array $repo): array
+    public static function buildPruneCommand(array $plan, array $repo, ?string $archivePrefix = null): array
     {
         $cmd = ['borg', 'prune', '--list', '--log-json'];
+
+        // Scope prune to archives from this specific plan
+        if ($archivePrefix) {
+            $cmd[] = '--glob-archives=' . $archivePrefix . '-*';
+        }
 
         if ($plan['prune_minutes'] > 0) $cmd[] = '--keep-minutely=' . $plan['prune_minutes'];
         if ($plan['prune_hours'] > 0)   $cmd[] = '--keep-hourly=' . $plan['prune_hours'];
