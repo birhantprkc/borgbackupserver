@@ -2,7 +2,7 @@
     <h4 class="mb-0">Backup Clients</h4>
     <?php if (($_SESSION['user_role'] ?? '') === 'admin'): ?>
     <a href="/clients/add" class="btn btn-success">
-        <i class="bi bi-plus-circle me-1"></i> Add Client
+        <i class="bi bi-plus-circle me-1"></i><span class="d-none d-sm-inline"> Add Client</span>
     </a>
     <?php endif; ?>
 </div>
@@ -17,7 +17,9 @@
             </div>
         </div>
         <?php endif; ?>
-        <div class="table-responsive">
+
+        <!-- Desktop table view -->
+        <div class="table-responsive d-none d-md-block">
             <table class="table table-hover mb-0" id="clientsTable">
                 <thead class="table-light">
                     <tr>
@@ -80,6 +82,46 @@
                 </tbody>
             </table>
         </div>
+
+        <!-- Mobile card/list view -->
+        <div class="d-md-none">
+            <?php if (empty($agents)): ?>
+            <div class="text-center text-muted py-4">No clients configured. Click "Add Client" to get started.</div>
+            <?php endif; ?>
+            <div class="list-group list-group-flush" id="clientsList">
+                <?php foreach ($agents as $agent):
+                    $statusClass = match($agent['status']) {
+                        'online' => 'success',
+                        'offline' => 'secondary',
+                        'error' => 'danger',
+                        default => 'warning',
+                    };
+                    $bytes = $agent['total_size'];
+                    $sizeStr = $bytes >= 1073741824 ? round($bytes / 1073741824, 1) . ' GB'
+                        : ($bytes >= 1048576 ? round($bytes / 1048576, 1) . ' MB' : '--');
+                ?>
+                <a href="/clients/<?= $agent['id'] ?>" class="list-group-item list-group-item-action py-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="fw-bold">
+                                <i class="bi bi-pc-display me-1 text-muted"></i>
+                                <?= htmlspecialchars($agent['name']) ?>
+                            </div>
+                            <?php if ($agent['hostname']): ?>
+                            <small class="text-muted"><?= htmlspecialchars($agent['hostname']) ?></small>
+                            <?php endif; ?>
+                        </div>
+                        <span class="badge bg-<?= $statusClass ?>"><?= ucfirst($agent['status']) ?></span>
+                    </div>
+                    <div class="d-flex gap-3 mt-2 small text-muted">
+                        <span><i class="bi bi-stack me-1"></i><?= number_format($agent['restore_points']) ?> pts</span>
+                        <span><i class="bi bi-hdd me-1"></i><?= $sizeStr ?></span>
+                        <span><i class="bi bi-archive me-1"></i><?= $agent['repo_count'] ?> repos</span>
+                    </div>
+                </a>
+                <?php endforeach; ?>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -87,10 +129,13 @@
 <script>
 document.getElementById('clientSearch').addEventListener('input', function() {
     const filter = this.value.toLowerCase();
-    const rows = document.querySelectorAll('#clientsTable tbody tr');
-    rows.forEach(function(row) {
-        const text = row.textContent.toLowerCase();
-        row.style.display = text.includes(filter) ? '' : 'none';
+    // Filter desktop table
+    document.querySelectorAll('#clientsTable tbody tr').forEach(function(row) {
+        row.style.display = row.textContent.toLowerCase().includes(filter) ? '' : 'none';
+    });
+    // Filter mobile list
+    document.querySelectorAll('#clientsList .list-group-item').forEach(function(item) {
+        item.style.display = item.textContent.toLowerCase().includes(filter) ? '' : 'none';
     });
 });
 </script>

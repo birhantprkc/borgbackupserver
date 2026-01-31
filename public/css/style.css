@@ -47,6 +47,63 @@
     flex-shrink: 0;
 }
 
+.topbar-logo {
+    width: 90px;
+}
+
+/* Mobile bottom navigation */
+.mobile-bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: #2c3e50;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    z-index: 1040;
+    padding: 4px 0;
+    padding-bottom: calc(4px + env(safe-area-inset-bottom));
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.15);
+}
+
+.mobile-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-decoration: none;
+    color: rgba(255,255,255,0.6);
+    padding: 4px 8px;
+    font-size: 0.65rem;
+    line-height: 1;
+    transition: color 0.2s;
+    flex: 1;
+    text-align: center;
+}
+
+.mobile-nav-item i {
+    font-size: 1.25rem;
+    margin-bottom: 2px;
+}
+
+.mobile-nav-item.active {
+    color: #e67e22;
+}
+
+.mobile-nav-item:hover {
+    color: #fff;
+}
+
+/* Add padding at bottom for mobile nav */
+@media (max-width: 767.98px) {
+    .main-content {
+        padding-bottom: 64px;
+    }
+    .topbar-logo {
+        width: 56px;
+    }
+}
+
 /* Stat cards */
 .stat-card {
     transition: transform 0.15s;
@@ -108,6 +165,7 @@ body.bg-light {
     border-bottom: none;
     margin-bottom: -1px;
     white-space: nowrap;
+    text-align: center;
 }
 
 .client-tabs .nav-link:hover {
@@ -137,6 +195,27 @@ body.bg-light {
     border-radius: 0 0 8px 8px;
 }
 
+/* Mobile: icon-focused tabs */
+@media (max-width: 767.98px) {
+    .client-tabs .nav-link {
+        padding: 8px 10px;
+        font-size: 0.8rem;
+    }
+    .client-tabs .nav-link i {
+        display: block;
+        font-size: 1.1rem;
+        margin-bottom: 2px;
+        margin-right: 0 !important;
+    }
+    .client-tabs .tab-label {
+        display: block;
+        font-size: 0.65rem;
+    }
+    .client-tab-content {
+        padding: 1rem !important;
+    }
+}
+
 /* Header stat icon cards */
 .stat-icon-sm {
     display: flex;
@@ -145,4 +224,77 @@ body.bg-light {
     width: 32px;
     height: 32px;
     flex-shrink: 0;
+}
+
+/* Repo cards */
+.repo-card {
+    transition: transform 0.15s;
+}
+
+.repo-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 .2rem .5rem rgba(0,0,0,.1) !important;
+}
+
+.repo-card .repo-icon {
+    width: 64px;
+    height: 64px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.repo-card .repo-icon i {
+    font-size: 1.75rem;
+    color: #fff;
+}
+
+.repo-stat {
+    text-align: center;
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    flex: 1;
+}
+
+.repo-stat .repo-stat-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #2c3e50;
+}
+
+.repo-stat .repo-stat-label {
+    font-size: 0.7rem;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Mobile responsive helpers */
+@media (max-width: 767.98px) {
+    /* Hide less important table columns on mobile */
+    .d-table-cell-md {
+        display: none !important;
+    }
+    /* Smaller stat cards on mobile */
+    .stat-icon {
+        padding: 0.5rem !important;
+    }
+    .stat-icon i {
+        font-size: 1.25rem !important;
+    }
+    /* Stack client header info vertically */
+    .client-header-info {
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+}
+
+@media (min-width: 768px) {
+    .d-table-cell-md {
+        display: table-cell !important;
+    }
 }

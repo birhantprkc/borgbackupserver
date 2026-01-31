@@ -44,16 +44,15 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                         <i class="bi bi-pencil"></i>
                     </button>
                 </div>
-                <div class="text-muted mt-1">
+                <div class="text-muted mt-1 client-header-info d-flex flex-wrap gap-1">
                     <?php if ($agent['hostname']): ?>
-                        <i class="bi bi-hdd-network me-1"></i><?= htmlspecialchars($agent['hostname']) ?>
+                        <span><i class="bi bi-hdd-network me-1"></i><?= htmlspecialchars($agent['hostname']) ?></span>
                         <?php if ($agent['ip_address'] ?? null): ?>
-                            <span class="ms-2"><i class="bi bi-globe me-1"></i><?= htmlspecialchars($agent['ip_address']) ?></span>
+                            <span class="d-none d-sm-inline ms-1"><i class="bi bi-globe me-1"></i><?= htmlspecialchars($agent['ip_address']) ?></span>
                         <?php endif; ?>
-                        <span class="ms-2">&middot;</span>
                     <?php endif; ?>
                     <?php if ($agent['os_info']): ?>
-                        <span class="ms-1"><i class="bi bi-cpu me-1"></i><?= htmlspecialchars($agent['os_info']) ?></span>
+                        <span class="d-none d-md-inline"><i class="bi bi-cpu me-1"></i><?= htmlspecialchars($agent['os_info']) ?></span>
                     <?php endif; ?>
                     <?php if ($agent['agent_version']): ?>
                         <span class="ms-2"><i class="bi bi-box me-1"></i>Agent v<?= htmlspecialchars($agent['agent_version']) ?></span>
@@ -187,33 +186,33 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
 <ul class="nav nav-pills client-tabs mb-0 flex-wrap">
     <li class="nav-item">
         <a class="nav-link <?= $tab === 'status' ? 'active' : '' ?>" href="?tab=status">
-            <i class="bi bi-activity me-1"></i> Status
+            <i class="bi bi-activity me-1"></i><span class="tab-label">Status</span>
         </a>
     </li>
     <li class="nav-item">
         <a class="nav-link <?= $tab === 'repos' ? 'active' : '' ?>" href="?tab=repos">
-            <i class="bi bi-archive me-1"></i> Repos
+            <i class="bi bi-archive me-1"></i><span class="tab-label">Repos</span>
         </a>
     </li>
     <li class="nav-item">
         <a class="nav-link <?= $tab === 'schedules' ? 'active' : '' ?>" href="?tab=schedules">
-            <i class="bi bi-calendar-event me-1"></i> Schedules
+            <i class="bi bi-calendar-event me-1"></i><span class="tab-label">Schedule</span>
         </a>
     </li>
     <li class="nav-item">
         <a class="nav-link <?= $tab === 'restore' ? 'active' : '' ?>" href="?tab=restore">
-            <i class="bi bi-arrow-counterclockwise me-1"></i> Restore
+            <i class="bi bi-arrow-counterclockwise me-1"></i><span class="tab-label">Restore</span>
         </a>
     </li>
     <?php if ($this->isAdmin()): ?>
     <li class="nav-item">
         <a class="nav-link <?= $tab === 'install' ? 'active' : '' ?>" href="?tab=install">
-            <i class="bi bi-download me-1"></i> Install Agent
+            <i class="bi bi-download me-1"></i><span class="tab-label">Install</span>
         </a>
     </li>
     <li class="nav-item">
         <a class="nav-link text-danger <?= $tab === 'delete' ? 'active' : '' ?>" href="?tab=delete">
-            <i class="bi bi-trash me-1"></i> Delete
+            <i class="bi bi-trash me-1"></i><span class="tab-label">Delete</span>
         </a>
     </li>
     <?php endif; ?>
@@ -499,59 +498,57 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     <h5 class="mb-3">Repositories</h5>
 
     <?php if (!empty($repositories)): ?>
-    <div class="card border-0 shadow-sm mb-4">
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Name</th>
-                            <th>Encryption</th>
-                            <th>Size</th>
-                            <th>Archives</th>
-                            <th class="text-end">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($repositories as $repo): ?>
-                        <tr>
-                            <td class="fw-semibold"><i class="bi bi-device-hdd me-1 text-muted"></i><?= htmlspecialchars($repo['name']) ?> <small class="text-muted">(#<?= $repo['id'] ?>)</small></td>
-                            <td><code class="small"><?= htmlspecialchars($repo['encryption'] ?? '--') ?></code></td>
-                            <td>
-                                <?php
-                                $s = $repo['size_bytes'];
-                                echo $s >= 1073741824 ? round($s / 1073741824, 1) . ' GB' : ($s >= 1048576 ? round($s / 1048576, 1) . ' MB' : ($s > 0 ? round($s / 1024, 1) . ' KB' : '--'));
-                                ?>
-                            </td>
-                            <td><?= $repo['archive_count'] ?></td>
-                            <td class="text-end">
-                                <?php
-                                $repoPlanCount = 0;
-                                foreach ($plans as $p) { if (($p['repository_id'] ?? 0) == $repo['id']) $repoPlanCount++; }
-                                $repoActiveJobs = 0;
-                                foreach ($recentJobs as $j) { if (($j['repository_id'] ?? 0) == $repo['id'] && in_array($j['status'], ['queued', 'sent', 'running'])) $repoActiveJobs++; }
-                                $deleteBlocked = $repoPlanCount > 0 || $repoActiveJobs > 0;
-                                $blockReason = $repoPlanCount > 0
-                                    ? "Delete the {$repoPlanCount} backup plan(s) using this repo first"
-                                    : "Wait for {$repoActiveJobs} active job(s) to finish first";
-                                ?>
-                                <?php if ($deleteBlocked): ?>
-                                    <span data-bs-toggle="tooltip" title="<?= htmlspecialchars($blockReason) ?>">
-                                        <button type="button" class="btn btn-sm btn-outline-danger" disabled><i class="bi bi-trash"></i></button>
-                                    </span>
-                                <?php else: ?>
-                                    <form method="POST" action="/repositories/<?= $repo['id'] ?>/delete" class="d-inline" onsubmit="return confirm('PERMANENTLY delete repository &quot;<?= htmlspecialchars($repo['name']) ?>&quot;, all its archives, and the data on disk?\n\nThis action is NOT reversible.')">
-                                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete"><i class="bi bi-trash"></i></button>
-                                    </form>
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+    <div class="row g-3 mb-4">
+        <?php foreach ($repositories as $repo):
+            $s = $repo['size_bytes'];
+            $sizeLabel = $s >= 1073741824 ? round($s / 1073741824, 1) . ' GB' : ($s >= 1048576 ? round($s / 1048576, 1) . ' MB' : ($s > 0 ? round($s / 1024, 1) . ' KB' : '--'));
+            $repoPlanCount = 0;
+            foreach ($plans as $p) { if (($p['repository_id'] ?? 0) == $repo['id']) $repoPlanCount++; }
+            $repoActiveJobs = 0;
+            foreach ($recentJobs as $j) { if (($j['repository_id'] ?? 0) == $repo['id'] && in_array($j['status'], ['queued', 'sent', 'running'])) $repoActiveJobs++; }
+            $deleteBlocked = $repoPlanCount > 0 || $repoActiveJobs > 0;
+            $blockReason = $repoPlanCount > 0
+                ? "Delete the {$repoPlanCount} backup plan(s) using this repo first"
+                : "Wait for {$repoActiveJobs} active job(s) to finish first";
+        ?>
+        <div class="col-md-6 col-lg-4">
+            <div class="card border-0 shadow-sm h-100 repo-card">
+                <div class="card-body">
+                    <div class="d-flex align-items-start mb-3">
+                        <div class="repo-icon me-3">
+                            <i class="bi bi-download"></i>
+                        </div>
+                        <div class="flex-grow-1 min-width-0">
+                            <h6 class="fw-bold mb-1"><?= htmlspecialchars($repo['name']) ?></h6>
+                            <div class="small text-muted">
+                                <i class="bi bi-shield-lock me-1"></i><?= htmlspecialchars($repo['encryption'] ?? 'none') ?>
+                            </div>
+                        </div>
+                        <?php if ($deleteBlocked): ?>
+                            <span data-bs-toggle="tooltip" title="<?= htmlspecialchars($blockReason) ?>">
+                                <button type="button" class="btn btn-sm btn-outline-danger border-0 opacity-50" disabled><i class="bi bi-trash"></i></button>
+                            </span>
+                        <?php else: ?>
+                            <form method="POST" action="/repositories/<?= $repo['id'] ?>/delete" class="d-inline" onsubmit="return confirm('PERMANENTLY delete repository &quot;<?= htmlspecialchars($repo['name']) ?>&quot;, all its archives, and the data on disk?\n\nThis action is NOT reversible.')">
+                                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Delete"><i class="bi bi-trash"></i></button>
+                            </form>
+                        <?php endif; ?>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <div class="repo-stat">
+                            <div class="repo-stat-value"><?= $sizeLabel ?></div>
+                            <div class="repo-stat-label">Repo Size</div>
+                        </div>
+                        <div class="repo-stat">
+                            <div class="repo-stat-value"><?= $repo['archive_count'] ?></div>
+                            <div class="repo-stat-label">Recovery Points</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
+        <?php endforeach; ?>
     </div>
     <?php endif; ?>
 
