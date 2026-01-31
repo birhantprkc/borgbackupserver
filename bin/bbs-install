@@ -306,6 +306,8 @@ fi
 # ─── Step 9: Setup cron ─────────────────────────────────────────────────────
 step "9/10" "Setup cron"
 
+touch /var/log/bbs-scheduler.log
+chown www-data:www-data /var/log/bbs-scheduler.log
 CRON_LINE="* * * * * php $BBS_DIR/scheduler.php >> /var/log/bbs-scheduler.log 2>&1"
 ( crontab -u www-data -l 2>/dev/null || true; echo "$CRON_LINE" ) | sort -u | crontab -u www-data -
 ok "Scheduler cron installed"

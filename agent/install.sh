@@ -184,6 +184,7 @@ install_service() {
             curl -s -o /Library/LaunchDaemons/com.borgbackupserver.agent.plist \
                 "$SERVER_URL/api/agent/download?file=com.borgbackupserver.agent.plist"
         fi
+        launchctl unload /Library/LaunchDaemons/com.borgbackupserver.agent.plist 2>/dev/null || true
         launchctl load /Library/LaunchDaemons/com.borgbackupserver.agent.plist
         echo "Service installed and started (launchd)"
     else
@@ -208,7 +209,7 @@ WantedBy=multi-user.target
 EOF
         systemctl daemon-reload
         systemctl enable bbs-agent
-        systemctl start bbs-agent
+        systemctl restart bbs-agent
         echo "Service installed and started (systemd)"
     fi
 }
