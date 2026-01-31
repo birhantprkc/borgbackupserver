@@ -238,31 +238,31 @@
                     </div>
                     <div class="col-4">
                         <div class="rounded py-2" style="background:#f0f4ff;">
-                            <div class="fw-bold" style="font-size:1.1rem;color:#4a90d9;"><?= number_format($storage['total_archives']) ?></div>
+                            <div class="fw-bold" style="font-size:1.1rem;color:#4a90d9;"><?= number_format($storage['total_archives'] ?? 0) ?></div>
                             <div class="text-muted">Recovery Pts</div>
                         </div>
                     </div>
                     <div class="col-4">
                         <div class="rounded py-2" style="background:#fff8f0;">
-                            <div class="fw-bold" style="font-size:1.1rem;color:#e67e22;"><?= $storage['client_count'] ?></div>
+                            <div class="fw-bold" style="font-size:1.1rem;color:#e67e22;"><?= $storage['client_count'] ?? 0 ?></div>
                             <div class="text-muted">Clients</div>
                         </div>
                     </div>
                     <div class="col-4">
                         <div class="rounded py-2" style="background:#f5f0ff;">
-                            <div class="fw-bold" style="font-size:1.1rem;color:#6f42c1;"><?= \BBS\Services\ServerStats::formatBytes($storage['total_original']) ?></div>
+                            <div class="fw-bold" style="font-size:1.1rem;color:#6f42c1;"><?= \BBS\Services\ServerStats::formatBytes((int)($storage['total_original'] ?? 0)) ?></div>
                             <div class="text-muted">Protected</div>
                         </div>
                     </div>
                     <div class="col-4">
                         <div class="rounded py-2" style="background:#f0faff;">
-                            <div class="fw-bold" style="font-size:1.1rem;color:#0dcaf0;"><?= $storage['dedup_savings'] ?>%</div>
+                            <div class="fw-bold" style="font-size:1.1rem;color:#0dcaf0;"><?= $storage['dedup_savings'] ?? 0 ?>%</div>
                             <div class="text-muted">Dedup Savings</div>
                         </div>
                     </div>
                     <div class="col-4">
                         <div class="rounded py-2" style="background:#fef0f0;">
-                            <div class="fw-bold" style="font-size:1.1rem;color:#c0392b;"><?= number_format($storage['total_files']) ?></div>
+                            <div class="fw-bold" style="font-size:1.1rem;color:#c0392b;"><?= number_format($storage['total_files'] ?? 0) ?></div>
                             <div class="text-muted">Files Tracked</div>
                         </div>
                     </div>
