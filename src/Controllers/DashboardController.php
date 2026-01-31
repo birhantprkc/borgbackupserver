@@ -166,6 +166,7 @@ class DashboardController extends Controller
             $result['cpuLoad'] = $cache->remember('server_cpu', 10, fn() => ServerStats::getCpuLoad());
             $result['memory'] = $cache->remember('server_mem', 10, fn() => ServerStats::getMemory());
             $result['partitions'] = $cache->remember('server_parts', 30, fn() => ServerStats::getPartitions());
+            $result['mysqlStorage'] = $cache->remember('mysql_storage', 30, fn() => ServerStats::getMysqlStorage());
 
             // Storage disk usage
             $result['storage'] = $cache->remember('storage_info', 30, function() {

@@ -121,6 +121,34 @@
                         <div class="text-muted" style="font-size:.75rem;margin-top:-8px;">Memory</div>
                     </div>
                 </div>
+                <?php if (!empty($mysqlStorage) && $mysqlStorage['disk_total'] > 0): ?>
+                <hr class="my-2">
+                <div class="small text-muted mb-1">MySQL Partition</div>
+                <?php
+                    $ms = $mysqlStorage;
+                    $dbPct = round($ms['db_bytes'] / $ms['disk_total'] * 100, 1);
+                    $usedPct = round($ms['disk_used'] / $ms['disk_total'] * 100, 1);
+                    $freePct = round($ms['disk_free'] / $ms['disk_total'] * 100, 1);
+                ?>
+                <div class="rounded overflow-hidden d-flex" id="mysql-bar" style="height:22px;background:#e9ecef;font-size:.65rem;">
+                    <div style="width:<?= $dbPct ?>%;background:#0d6efd;color:#fff;overflow:hidden;white-space:nowrap;padding:0 4px;line-height:22px;"
+                         title="MySQL Data: <?= \BBS\Services\ServerStats::formatBytes($ms['db_bytes']) ?>">
+                        DB <?= \BBS\Services\ServerStats::formatBytes($ms['db_bytes']) ?>
+                    </div>
+                    <div style="width:<?= max($usedPct - $dbPct, 0) ?>%;background:#6c757d;color:#fff;overflow:hidden;white-space:nowrap;padding:0 4px;line-height:22px;"
+                         title="Other used: <?= \BBS\Services\ServerStats::formatBytes($ms['disk_used'] - $ms['db_bytes']) ?>">
+                        Other
+                    </div>
+                    <div style="width:<?= $freePct ?>%;background:#e9ecef;color:#666;overflow:hidden;white-space:nowrap;padding:0 4px;line-height:22px;"
+                         title="Free: <?= \BBS\Services\ServerStats::formatBytes($ms['disk_free']) ?>">
+                        <?= \BBS\Services\ServerStats::formatBytes($ms['disk_free']) ?> free
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between mt-1" style="font-size:.6rem;color:#999;">
+                    <span>Total: <?= \BBS\Services\ServerStats::formatBytes($ms['disk_total']) ?></span>
+                    <span id="mysql-free-text"><?= $freePct ?>% free</span>
+                </div>
+                <?php endif; ?>
             </div>
         </div>
     </div>
@@ -590,6 +618,21 @@ setInterval(function() {
                 const memArc = document.getElementById('mem-arc');
                 memArc.setAttribute('stroke-dasharray', (arc * p / 100) + ' ' + circ);
                 memArc.setAttribute('stroke', p > 85 ? '#dc3545' : (p > 60 ? '#ffc107' : '#0dcaf0'));
+            }
+            if (data.mysqlStorage && data.mysqlStorage.disk_total > 0) {
+                const ms = data.mysqlStorage, t = ms.disk_total;
+                const dbPct = (ms.db_bytes / t * 100).toFixed(1);
+                const usedPct = (ms.disk_used / t * 100).toFixed(1);
+                const freePct = (ms.disk_free / t * 100).toFixed(1);
+                const bar = document.getElementById('mysql-bar');
+                if (bar) {
+                    const c = bar.children;
+                    c[0].style.width = dbPct + '%';
+                    c[1].style.width = Math.max(usedPct - dbPct, 0) + '%';
+                    c[2].style.width = freePct + '%';
+                }
+                const ft = document.getElementById('mysql-free-text');
+                if (ft) ft.textContent = freePct + '% free';
             }
             <?php endif; ?>
 

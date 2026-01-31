@@ -150,6 +150,40 @@ class ServerStats
     }
 
     /**
+     * Get MySQL database size and the free space on its data partition.
+     */
+    public static function getMysqlStorage(): array
+    {
+        $db = \BBS\Core\Database::getInstance();
+
+        // Total size of all tables in the current database
+        $row = $db->fetchOne("
+            SELECT SUM(data_length + index_length) AS db_bytes
+            FROM information_schema.TABLES
+            WHERE table_schema = DATABASE()
+        ");
+        $dbBytes = (int) ($row['db_bytes'] ?? 0);
+
+        // Find MySQL data directory and get partition free space
+        $dataDirRow = $db->fetchOne("SHOW VARIABLES LIKE 'datadir'");
+        $dataDir = $dataDirRow['Value'] ?? '/var/lib/mysql';
+
+        $diskTotal = 0;
+        $diskFree = 0;
+        if (is_dir($dataDir)) {
+            $diskTotal = (int) @disk_total_space($dataDir);
+            $diskFree = (int) @disk_free_space($dataDir);
+        }
+
+        return [
+            'db_bytes' => $dbBytes,
+            'disk_total' => $diskTotal,
+            'disk_free' => $diskFree,
+            'disk_used' => $diskTotal - $diskFree,
+        ];
+    }
+
+    /**
      * Format bytes to human readable.
      */
     public static function formatBytes(int $bytes, int $precision = 1): string
