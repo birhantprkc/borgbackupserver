@@ -200,7 +200,7 @@
             <div class="card-body px-3 py-2">
                 <div class="row g-0">
                     <!-- Col 1: Repositories / Protected Data -->
-                    <div class="col-3 pe-2">
+                    <div class="col-6 col-lg-3 pe-2">
                         <div class="mb-2">
                             <div class="fw-semibold text-success" style="font-size:.6rem;">Repositories</div>
                             <div class="d-flex align-items-center">
@@ -217,7 +217,7 @@
                         </div>
                     </div>
                     <!-- Col 2: Recovery Points / Dedup Savings -->
-                    <div class="col-3 ps-1 pe-1">
+                    <div class="col-6 col-lg-3 ps-1 pe-1">
                         <div class="mb-2">
                             <div class="fw-semibold text-success" style="font-size:.6rem;">Recovery Points</div>
                             <div class="d-flex align-items-center">
@@ -236,7 +236,7 @@
                         </div>
                     </div>
                     <!-- Col 3: Donut + Legend -->
-                    <div class="col-6 d-flex align-items-center">
+                    <div class="col-12 col-lg-6 d-flex align-items-center mt-2 mt-lg-0 justify-content-center justify-content-lg-start">
                         <div style="width:80px;flex-shrink:0;">
                             <svg viewBox="0 0 120 120" style="width:100%;height:auto;transform:rotate(-90deg);">
                                 <circle cx="60" cy="60" r="<?= $r ?>" fill="none" stroke="#e9ecef" stroke-width="14"/>
