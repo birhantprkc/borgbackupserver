@@ -172,6 +172,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // Allow re-running the wizard on an existing database
                 $schema = str_replace('CREATE TABLE', 'CREATE TABLE IF NOT EXISTS', $schema);
+                $schema = str_replace('INSERT INTO', 'INSERT IGNORE INTO', $schema);
 
                 // Remove the INSERT for default admin user — we'll create our own
                 $schema = preg_replace(
