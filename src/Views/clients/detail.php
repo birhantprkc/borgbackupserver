@@ -1563,6 +1563,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 this.classList.toggle('active');
                 this.classList.toggle('btn-primary');
                 this.classList.toggle('btn-outline-primary');
+                this.blur();
                 syncDailyTimes();
             });
         });
