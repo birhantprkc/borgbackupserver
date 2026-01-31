@@ -679,9 +679,32 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         </button>
     </div>
 
+    <script>
+    function showCreatePlan() {
+        var grid = document.getElementById('schedule-cards-grid');
+        var solo = document.getElementById('add-plan-card-solo');
+        var create = document.getElementById('create-plan-section');
+        if (grid) grid.style.display = 'none';
+        if (solo) solo.style.display = 'none';
+        if (create) create.style.display = '';
+        // Collapse any open edit panels
+        document.querySelectorAll('.edit-plan-panel.show').forEach(function(p) {
+            bootstrap.Collapse.getOrCreateInstance(p).hide();
+        });
+    }
+    function hideCreatePlan() {
+        var grid = document.getElementById('schedule-cards-grid');
+        var solo = document.getElementById('add-plan-card-solo');
+        var create = document.getElementById('create-plan-section');
+        if (grid) grid.style.display = '';
+        if (solo) solo.style.display = '';
+        if (create) create.style.display = 'none';
+    }
+    </script>
+
     <!-- Existing Plans -->
     <?php if (!empty($plans)): ?>
-    <div class="row g-3 mb-4">
+    <div id="schedule-cards-grid" class="row g-3 mb-4">
         <?php foreach ($plans as $plan):
             $freq = $plan['frequency'] ?? 'manual';
             $isActive = $plan['schedule_enabled'] ?? false;
@@ -761,6 +784,26 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
             </div>
         </div>
         <?php endforeach; ?>
+        <?php if (!empty($repositories)): ?>
+        <div class="col-md-6 col-lg-4">
+            <div class="card border-0 shadow-sm h-100 schedule-card" id="add-plan-card" style="cursor:pointer;border:2px dashed #ccc !important;background:#fafafa;" onclick="showCreatePlan()">
+                <div class="card-body d-flex flex-column align-items-center justify-content-center text-muted p-4">
+                    <i class="bi bi-plus-circle" style="font-size:2rem;"></i>
+                    <div class="mt-2 fw-semibold">Add Backup Plan</div>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+    </div>
+    <?php endif; ?>
+    <?php if (empty($plans) && !empty($repositories)): ?>
+    <div id="add-plan-card-solo" style="cursor:pointer;" onclick="showCreatePlan()">
+        <div class="card border-0 shadow-sm mb-4" style="border:2px dashed #ccc !important;background:#fafafa;">
+            <div class="card-body d-flex flex-column align-items-center justify-content-center text-muted p-4">
+                <i class="bi bi-plus-circle" style="font-size:2rem;"></i>
+                <div class="mt-2 fw-semibold">Add Backup Plan</div>
+            </div>
+        </div>
     </div>
     <?php endif; ?>
 
@@ -1087,13 +1130,14 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     <?php endforeach; ?>
 
     <!-- Create New Schedule -->
-    <div id="create-plan-section" class="mt-4">
+    <div id="create-plan-section" style="display:none;">
     <?php if (empty($repositories)): ?>
     <div class="alert alert-warning">You need to <a href="?tab=repos">create a repository</a> before adding a backup schedule.</div>
     <?php else: ?>
     <div class="card border-0 shadow-sm">
-        <div class="card-header bg-white fw-semibold">
-            <i class="bi bi-plus-circle me-1"></i> Create New Backup Plan
+        <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-plus-circle me-1"></i> Create New Backup Plan</span>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="hideCreatePlan()"><i class="bi bi-arrow-left me-1"></i>Back</button>
         </div>
         <div class="card-body">
             <form method="POST" action="/plans/create">
@@ -1645,7 +1689,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
             document.getElementById('create-plan-section').style.display = 'none';
         });
         panel.addEventListener('hidden.bs.collapse', function() {
-            document.getElementById('create-plan-section').style.display = '';
+            document.getElementById('create-plan-section').style.display = 'none';
         });
     });
     </script>
