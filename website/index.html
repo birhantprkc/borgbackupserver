@@ -15,14 +15,14 @@
 <meta property="og:url" content="https://borgbackupserver.com/">
 <meta property="og:title" content="Borg Backup Server — Web Management for BorgBackup">
 <meta property="og:description" content="Open-source web interface to schedule, monitor, and restore BorgBackup across all your servers. Agent-based, SSH append-only, real-time progress.">
-<meta property="og:image" content="https://borgbackupserver.com/screenshot.jpg">
+<meta property="og:image" content="https://borgbackupserver.com/borgbackupserver.png">
 <meta property="og:site_name" content="Borg Backup Server">
 
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Borg Backup Server — Web Management for BorgBackup">
 <meta name="twitter:description" content="Open-source web interface to schedule, monitor, and restore BorgBackup across all your servers.">
-<meta name="twitter:image" content="https://borgbackupserver.com/screenshot.jpg">
+<meta name="twitter:image" content="https://borgbackupserver.com/borgbackupserver.png">
 
 <!-- JSON-LD Structured Data -->
 <script type="application/ld+json">
@@ -277,7 +277,7 @@ footer a:hover { color: var(--text); }
 <section style="padding-top:0;padding-bottom:80px">
   <div class="container" style="text-align:center">
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:8px;display:inline-block;max-width:100%">
-      <img src="screenshot.jpg" alt="Borg Backup Server Dashboard" style="max-width:100%;border-radius:8px;display:block">
+      <img src="borgbackupserver.png" alt="Borg Backup Server Web GUI for Borgbackup Utility" style="max-width:100%;border-radius:8px;display:block">
     </div>
     <p style="color:var(--text-muted);margin-top:16px;font-size:0.875rem">The BBS dashboard — monitor clients, jobs, storage, and server health at a glance.</p>
   </div>
@@ -347,30 +347,7 @@ footer a:hover { color: var(--text); }
   <div class="container">
     <h2 class="section-title">Getting Started</h2>
     <p class="section-sub">Start with a fresh Ubuntu 22.04+ server with SSH access and enough disk space for your backup repositories.</p>
-    <div class="code-block">
-<span class="comment"># Run the automated installer on your server</span>
-<span class="cmd">curl -sO https://raw.githubusercontent.com/marcpope/borgbackupserver/main/bin/bbs-install</span>
-<span class="cmd">sudo bash bbs-install --hostname backups.example.com</span>
-
-<span class="comment"># For LAN-only installs without SSL</span>
-<span class="cmd">sudo bash bbs-install --hostname 192.168.1.100 --no-ssl</span>
-
-<span class="comment"># Open the URL it prints and follow the setup wizard</span></div>
-    <p style="text-align:center;color:var(--text-muted);margin-top:20px;font-size:0.9rem">The installer sets up Apache, MySQL, PHP, BorgBackup, SSL (via Let's Encrypt), cron, and all required permissions.<br>When it finishes, just open your browser and the setup wizard handles the rest.</p>
-    <p style="text-align:center;margin-top:16px"><a href="https://github.com/marcpope/borgbackupserver/blob/main/docs/INSTALL.md" style="color:var(--accent);font-size:0.9rem">Manual installation guide &rarr;</a></p>
-  </div>
-</section>
-
-<!-- Agent Install -->
-<section>
-  <div class="container">
-    <h2 class="section-title">Add Your Servers</h2>
-    <p class="section-sub">Create a client in the web UI, then run one command on each server you want to back up.</p>
-    <div class="code-block">
-<span class="comment"># Install the agent on any Linux or macOS endpoint</span>
-<span class="cmd">curl -s https://your-server/get-agent | sudo bash -s -- \</span>
-<span class="cmd">    --server https://your-server --key YOUR_API_KEY</span></div>
-    <p style="text-align:center;color:var(--text-muted);margin-top:20px;font-size:0.9rem">The agent installs BorgBackup, registers with your server, downloads SSH keys, and starts a background service.<br>Works behind firewalls and NAT &mdash; agents initiate all connections, no inbound ports required on endpoints.</p>
+    <p style="text-align:center;margin-top:16px"><a href="https://github.com/marcpope/borgbackupserver/blob/main/docs/INSTALL.md" class="btn btn-primary">Installation Guide &rarr;</a></p>
   </div>
 </section>
 
