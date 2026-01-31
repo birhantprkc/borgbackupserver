@@ -234,7 +234,7 @@
                                 </div>
                                 <div class="mt-2" style="font-size:.65rem;color:#888;line-height:1.4;">
                                     <strong id="mysql-summary-text">MySQL Data: <?= \BBS\Services\ServerStats::formatBytes($ms['db_bytes']) ?> (<?= $dbPct ?>% of partition)</strong><br>
-                                    This chart represents the partition MySQL tables are running on. BBS stores catalog data in MySQL for searchability and restoring without locking the Borg repo.
+                                    This chart shows disk usage on the MySQL partition. BBS stores file catalog data in MySQL, enabling fast search and restore operations without locking the Borg repository.
                                 </div>
                             </div>
                             <?php endif; ?>
