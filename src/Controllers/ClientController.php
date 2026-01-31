@@ -730,17 +730,17 @@ class ClientController extends Controller
             $this->redirect('/clients');
         }
 
-        // Deprovision SSH user (also removes storage directory)
+        // Deprovision SSH user
         if (!empty($agent['ssh_unix_user'])) {
             SshKeyManager::deprovisionClient($agent['ssh_unix_user']);
         }
 
-        // Fallback: remove storage directory if SSH helper didn't
+        // Remove storage directory (runs as root via SSH helper)
         $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
         if ($storageSetting) {
             $clientDir = rtrim($storageSetting['value'], '/') . '/' . $id;
             if (is_dir($clientDir)) {
-                $this->removeDir($clientDir);
+                SshKeyManager::deleteStorage($clientDir);
             }
         }
 

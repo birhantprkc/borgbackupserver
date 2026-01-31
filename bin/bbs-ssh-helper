@@ -178,15 +178,8 @@ case "$ACTION" in
         fi
 
         if id "$USERNAME" &>/dev/null; then
-            HOME_DIR=$(eval echo "~$USERNAME" 2>/dev/null)
             userdel "$USERNAME" 2>/dev/null || true
             echo "Deleted user: $USERNAME"
-
-            # Remove home/storage directory and all borg repos
-            if [ -n "$HOME_DIR" ] && [ -d "$HOME_DIR" ] && [[ "$HOME_DIR" == /var/bbs/home/* ]]; then
-                rm -rf "$HOME_DIR"
-                echo "Removed storage directory: $HOME_DIR"
-            fi
         else
             echo "User $USERNAME does not exist"
         fi
@@ -194,8 +187,34 @@ case "$ACTION" in
         echo "OK"
         ;;
 
+    delete-storage)
+        STORAGE_DIR="${2:-}"
+
+        if [ -z "$STORAGE_DIR" ]; then
+            echo "Usage: bbs-ssh-helper delete-storage <directory>"
+            exit 1
+        fi
+
+        # Safety: refuse to delete system directories
+        case "$STORAGE_DIR" in
+            /|/bin|/boot|/dev|/etc|/home|/lib*|/opt|/proc|/root|/run|/sbin|/srv|/sys|/tmp|/usr|/var|/var/www|/var/www/bbs)
+                echo "Error: refusing to delete system directory: $STORAGE_DIR"
+                exit 1
+                ;;
+        esac
+
+        if [ -d "$STORAGE_DIR" ]; then
+            rm -rf "$STORAGE_DIR"
+            echo "Removed storage directory: $STORAGE_DIR"
+        else
+            echo "Directory does not exist: $STORAGE_DIR"
+        fi
+
+        echo "OK"
+        ;;
+
     *)
-        echo "Usage: bbs-ssh-helper {create-user|create-repo-dir|borg-extract|fix-repo-perms|delete-user} [args...]"
+        echo "Usage: bbs-ssh-helper {create-user|create-repo-dir|borg-extract|fix-repo-perms|delete-user|delete-storage} [args...]"
         exit 1
         ;;
 esac

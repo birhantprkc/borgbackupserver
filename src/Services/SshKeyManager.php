@@ -119,6 +119,14 @@ class SshKeyManager
     }
 
     /**
+     * Remove a client's storage directory via the SSH helper (runs as root).
+     */
+    public static function deleteStorage(string $directory): void
+    {
+        self::runHelper('delete-storage', $directory);
+    }
+
+    /**
      * Build the SSH repo path for an agent.
      * Format: ssh://bbs-clientname@serverhost/./reponame
      */

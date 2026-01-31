@@ -104,6 +104,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = 'Storage path must be an absolute path (starting with /).';
                 break;
             }
+            // Warn against system directories that require root ownership
+            $blocked = ['/', '/bin', '/boot', '/dev', '/etc', '/home', '/lib', '/opt', '/proc', '/root', '/run', '/sbin', '/srv', '/sys', '/tmp', '/usr', '/var'];
+            if (in_array(rtrim($storagePath, '/'), $blocked)) {
+                $error = "Cannot use {$storagePath} as a storage path — it is a system directory. Use a subdirectory such as /var/bbs/home or mount your storage volume at a dedicated path.";
+                break;
+            }
             // Validate the storage path is usable by the web server
             if (is_dir($storagePath)) {
                 if (!is_writable($storagePath)) {
