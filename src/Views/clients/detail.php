@@ -31,7 +31,7 @@ $statusClass = match($agent['status']) {
 $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB'
     : ($totalSize >= 1048576 ? round($totalSize / 1048576, 1) . ' MB' : '0');
 ?>
-<div class="card border-0 shadow-sm mb-4">
+<div class="card border-0 shadow-sm mb-4 card-no-outline">
     <div class="card-body pb-2">
         <div class="d-flex justify-content-between align-items-start mb-3">
             <div>
@@ -103,7 +103,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         ?>
         <div class="row g-2 border-top pt-3">
             <div class="col-6 col-sm-4 col-lg-2">
-                <div class="d-flex align-items-center p-2 rounded border bg-light">
+                <div class="d-flex align-items-center p-2 rounded bg-light">
                     <div class="stat-icon-sm bg-primary bg-opacity-10 text-primary rounded-2 p-2 me-2">
                         <i class="bi bi-archive"></i>
                     </div>
@@ -114,7 +114,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 </div>
             </div>
             <div class="col-6 col-sm-4 col-lg-2">
-                <div class="d-flex align-items-center p-2 rounded border bg-light">
+                <div class="d-flex align-items-center p-2 rounded bg-light">
                     <div class="stat-icon-sm bg-info bg-opacity-10 text-info rounded-2 p-2 me-2">
                         <i class="bi bi-stack"></i>
                     </div>
@@ -125,7 +125,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 </div>
             </div>
             <div class="col-6 col-sm-4 col-lg-2">
-                <div class="d-flex align-items-center p-2 rounded border bg-light">
+                <div class="d-flex align-items-center p-2 rounded bg-light">
                     <div class="stat-icon-sm bg-success bg-opacity-10 text-success rounded-2 p-2 me-2">
                         <i class="bi bi-hdd"></i>
                     </div>
@@ -136,7 +136,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 </div>
             </div>
             <div class="col-6 col-sm-4 col-lg-2">
-                <div class="d-flex align-items-center p-2 rounded border bg-light">
+                <div class="d-flex align-items-center p-2 rounded bg-light">
                     <div class="stat-icon-sm bg-warning bg-opacity-10 text-warning rounded-2 p-2 me-2">
                         <i class="bi bi-clipboard-check"></i>
                     </div>
@@ -147,7 +147,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 </div>
             </div>
             <div class="col-6 col-sm-4 col-lg-2">
-                <div class="d-flex align-items-center p-2 rounded border bg-light">
+                <div class="d-flex align-items-center p-2 rounded bg-light">
                     <div class="stat-icon-sm bg-<?= $lastBackupColor ?> bg-opacity-10 text-<?= $lastBackupColor ?> rounded-2 p-2 me-2">
                         <i class="bi bi-<?= $lastBackupIcon ?>"></i>
                     </div>
@@ -158,7 +158,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 </div>
             </div>
             <div class="col-6 col-sm-4 col-lg-2">
-                <div class="d-flex align-items-center p-2 rounded border bg-light">
+                <div class="d-flex align-items-center p-2 rounded bg-light">
                     <div class="stat-icon-sm bg-<?= $statusClass ?> bg-opacity-10 text-<?= $statusClass ?> rounded-2 p-2 me-2">
                         <i class="bi bi-broadcast"></i>
                     </div>

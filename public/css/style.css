@@ -193,6 +193,10 @@ body.bg-light {
     border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
+.card.card-no-outline {
+    border: none !important;
+}
+
 /* Client detail tabs */
 .client-tabs {
     gap: 4px;
