@@ -170,6 +170,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 $schema = file_get_contents($schemaPath);
 
+                // Allow re-running the wizard on an existing database
+                $schema = str_replace('CREATE TABLE', 'CREATE TABLE IF NOT EXISTS', $schema);
+
                 // Remove the INSERT for default admin user — we'll create our own
                 $schema = preg_replace(
                     "/INSERT INTO users.*?;\s*/s",
@@ -180,9 +183,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $pdo->exec($schema);
 
-                // 4. Create admin user
+                // 4. Create admin user (update password if user already exists)
                 $passwordHash = password_hash($setup['admin_password'], PASSWORD_BCRYPT, ['cost' => 12]);
-                $stmt = $pdo->prepare("INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, 'admin')");
+                $stmt = $pdo->prepare("INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, 'admin') ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), email = VALUES(email)");
                 $stmt->execute([$setup['admin_username'], $setup['admin_email'], $passwordHash]);
 
                 // 5. Set storage_path and server_host in settings
