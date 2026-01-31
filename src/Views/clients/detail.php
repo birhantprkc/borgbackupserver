@@ -1696,77 +1696,110 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         <div class="alert alert-info">No archives available yet. Run a backup first.</div>
     <?php else: ?>
 
-    <!-- Archive Selector & Options -->
-    <div class="row mb-3">
-        <div class="col-md-4">
-            <label class="form-label fw-semibold">Select Archive</label>
-            <select class="form-select" id="archive-select">
-                <option value="">Choose an archive...</option>
-                <?php
-                $currentRepo = null;
-                foreach ($archives as $ar):
-                    if ($ar['repo_name'] !== $currentRepo):
-                        if ($currentRepo !== null) echo '</optgroup>';
-                        $currentRepo = $ar['repo_name'];
-                        echo '<optgroup label="' . htmlspecialchars($currentRepo) . '">';
-                    endif;
-                ?>
-                    <option value="<?= $ar['id'] ?>">
-                        <?= \BBS\Core\TimeHelper::format($ar['created_at'], 'l, M j, Y \a\t g:i A') ?>
-                    </option>
-                <?php endforeach; ?>
-                <?php if ($currentRepo !== null) echo '</optgroup>'; ?>
-            </select>
-        </div>
-        <div class="col-md-4">
-            <label class="form-label fw-semibold">Search Files</label>
-            <div class="input-group">
-                <input type="text" class="form-control" id="catalog-search" placeholder="e.g. nginx.conf" disabled>
-                <button class="btn btn-outline-secondary" type="button" id="catalog-search-btn" disabled>
-                    <i class="bi bi-search"></i>
+    <!-- Control Bar -->
+    <div class="restore-control-bar mb-3">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-5">
+                <label class="form-label fw-semibold mb-1 small">Archive</label>
+                <select class="form-select" id="archive-select">
+                    <option value="">Choose a restore point...</option>
+                    <?php
+                    $currentRepo = null;
+                    foreach ($archives as $ar):
+                        if ($ar['repo_name'] !== $currentRepo):
+                            if ($currentRepo !== null) echo '</optgroup>';
+                            $currentRepo = $ar['repo_name'];
+                            echo '<optgroup label="' . htmlspecialchars($currentRepo) . '">';
+                        endif;
+                    ?>
+                        <option value="<?= $ar['id'] ?>">
+                            <?= \BBS\Core\TimeHelper::format($ar['created_at'], 'l, M j, Y \a\t g:i A') ?>
+                        </option>
+                    <?php endforeach; ?>
+                    <?php if ($currentRepo !== null) echo '</optgroup>'; ?>
+                </select>
+            </div>
+            <div class="col-md-5">
+                <label class="form-label fw-semibold mb-1 small">Search</label>
+                <div class="input-group">
+                    <input type="text" class="form-control" id="restore-search" placeholder="e.g. nginx.conf" disabled>
+                    <button class="btn btn-outline-secondary" type="button" id="restore-search-btn" disabled>
+                        <i class="bi bi-search"></i>
+                    </button>
+                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="search-mode-btn" data-bs-toggle="dropdown">
+                        <i class="bi bi-funnel"></i> This Archive
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end" id="search-mode-menu">
+                        <li><a class="dropdown-item" href="#" data-mode="current"><i class="bi bi-archive me-1"></i> Search This Archive</a></li>
+                        <li><a class="dropdown-item" href="#" data-mode="all"><i class="bi bi-clock-history me-1"></i> Search All Archives (File History)</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <button class="restore-back-btn w-100" id="back-to-browse" style="display:none;">
+                    <i class="bi bi-arrow-left me-1"></i> Back to Browse
                 </button>
             </div>
         </div>
-        <div class="col-md-4">
-            <label class="form-label fw-semibold">Restore Destination (optional)</label>
-            <input type="text" class="form-control" id="restore-destination" placeholder="Leave blank for original paths">
-        </div>
     </div>
 
-    <!-- Tree + Search Results -->
-    <div class="row">
-        <!-- Tree Browser -->
-        <div class="col-md-7">
-            <div class="card border-0 shadow-sm" id="tree-container" style="display:none;">
-                <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-folder-fill text-warning me-1"></i> Browse Archive</span>
-                    <span class="badge bg-secondary" id="tree-path">/</span>
+    <!-- Two-Panel Layout -->
+    <div class="row g-3">
+        <!-- LEFT: Browse / Search / History -->
+        <div class="col-lg-7">
+            <!-- Browse Panel -->
+            <div id="browse-panel">
+                <div class="restore-panel-header">
+                    <i class="bi bi-folder2-open me-1"></i> Browse Archive
                 </div>
-                <div class="card-body p-0" style="max-height: 550px; overflow-y: auto;">
-                    <div id="tree-root" class="font-monospace small"></div>
+                <div class="restore-panel-body font-monospace small" id="tree-root"></div>
+            </div>
+
+            <!-- Search Results Panel (hidden) -->
+            <div id="search-panel" style="display:none;">
+                <div class="restore-panel-header d-flex justify-content-between">
+                    <span><i class="bi bi-search me-1"></i> Search Results (<span id="search-count">0</span>)</span>
+                    <span>
+                        <button class="btn btn-sm btn-outline-light py-0 px-1" id="search-prev" disabled>&laquo;</button>
+                        <span class="mx-1 small" id="search-page-info"></span>
+                        <button class="btn btn-sm btn-outline-light py-0 px-1" id="search-next" disabled>&raquo;</button>
+                    </span>
                 </div>
+                <div class="restore-panel-body font-monospace small" id="search-results-body"></div>
             </div>
-            <div id="tree-loading" style="display:none;" class="text-center py-4">
-                <div class="spinner-border text-primary" role="status"></div>
-                <div class="text-muted mt-2">Loading file tree...</div>
-            </div>
-            <div id="tree-empty" style="display:none;" class="alert alert-warning">
-                No file catalog available for this archive. The catalog is created when a backup completes.
+
+            <!-- File History Panel (hidden) -->
+            <div id="history-panel" style="display:none;">
+                <div class="restore-panel-header d-flex justify-content-between">
+                    <span><i class="bi bi-clock-history me-1"></i> File History (<span id="history-count">0</span> files)</span>
+                    <span>
+                        <button class="btn btn-sm btn-outline-light py-0 px-1" id="history-prev" disabled>&laquo;</button>
+                        <span class="mx-1 small" id="history-page-info"></span>
+                        <button class="btn btn-sm btn-outline-light py-0 px-1" id="history-next" disabled>&raquo;</button>
+                    </span>
+                </div>
+                <div class="restore-panel-body" id="history-results-body"></div>
             </div>
         </div>
 
-        <!-- Selection Summary -->
-        <div class="col-md-5">
-            <div class="card border-0 shadow-sm" id="selection-panel" style="display:none;">
-                <div class="card-header bg-white fw-semibold">
-                    <i class="bi bi-check2-square me-1"></i>
-                    Selected Paths (<span id="selected-count">0</span>)
+        <!-- RIGHT: Selection + Actions -->
+        <div class="col-lg-5">
+            <div class="restore-panel-header" style="background: linear-gradient(135deg, #4a90d9 0%, #357abd 100%);">
+                <i class="bi bi-check2-square me-1"></i> Files to Restore (<span id="selected-count">0</span>)
+            </div>
+            <div class="restore-panel-body" style="height: 340px;">
+                <div id="selected-list"></div>
+                <div class="p-3 text-muted small text-center" id="no-selection">
+                    <i class="bi bi-arrow-left-circle d-block mb-2" style="font-size:2rem;opacity:0.3;"></i>
+                    Browse or search, then check files to add them here
                 </div>
-                <div class="card-body p-0" style="max-height: 400px; overflow-y: auto;">
-                    <ul class="list-group list-group-flush" id="selected-list"></ul>
-                    <div class="p-3 text-muted small text-center" id="no-selection">No files or directories selected</div>
+            </div>
+            <div class="restore-actions">
+                <div class="mb-2">
+                    <label class="form-label small fw-semibold mb-1">Destination (optional)</label>
+                    <input type="text" class="form-control form-control-sm" id="restore-destination" placeholder="Leave blank for original paths">
                 </div>
-                <div class="card-footer bg-white d-flex gap-2">
+                <div class="d-flex gap-2">
                     <button class="btn btn-success flex-fill" id="restore-btn" disabled>
                         <i class="bi bi-arrow-counterclockwise me-1"></i> Restore to Client
                     </button>
@@ -1775,348 +1808,27 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     </button>
                 </div>
             </div>
-
-            <!-- Search results -->
-            <div class="card border-0 shadow-sm mt-3" id="search-results" style="display:none;">
-                <div class="card-header bg-white fw-semibold">
-                    <i class="bi bi-search me-1"></i> Search Results (<span id="search-count">0</span>)
-                </div>
-                <div class="card-body p-0" style="max-height: 300px; overflow-y: auto;">
-                    <table class="table table-hover table-sm mb-0">
-                        <tbody id="search-body"></tbody>
-                    </table>
-                </div>
-                <div class="card-footer bg-white">
-                    <button class="btn btn-sm btn-outline-secondary" id="search-prev" disabled>&laquo; Prev</button>
-                    <span class="mx-2 small" id="search-page-info"></span>
-                    <button class="btn btn-sm btn-outline-secondary" id="search-next" disabled>Next &raquo;</button>
-                </div>
-            </div>
         </div>
     </div>
 
-    <!-- Hidden restore form -->
+    <!-- Hidden forms -->
     <form id="restore-form" method="POST" action="/clients/<?= $agent['id'] ?>/restore" style="display:none;">
         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
         <input type="hidden" name="archive_id" id="restore-archive-id">
         <input type="hidden" name="destination" id="restore-dest-field">
         <div id="restore-files-container"></div>
     </form>
-    <!-- Hidden download form -->
     <form id="download-form" method="POST" action="/clients/<?= $agent['id'] ?>/download" style="display:none;">
         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
         <input type="hidden" name="archive_id" id="download-archive-id">
         <div id="download-files-container"></div>
     </form>
 
-    <style>
-    .tree-item { padding: 3px 0; cursor: pointer; white-space: nowrap; }
-    .tree-item:hover { background: #f8f9fa; }
-    .tree-dir > .tree-label { font-weight: 600; }
-    .tree-children { display: none; }
-    .tree-children.open { display: block; }
-    .tree-toggle { display: inline-block; width: 16px; text-align: center; color: #6c757d; }
-    .tree-cb { margin-right: 4px; }
-    .tree-icon { margin-right: 4px; }
-    .tree-size { color: #6c757d; margin-left: 8px; }
-    .tree-count { color: #6c757d; font-size: 0.8em; margin-left: 6px; }
-    </style>
-
-    <script>
-    (function() {
-        const agentId = <?= $agent['id'] ?>;
-        const archiveSelect = document.getElementById('archive-select');
-        const searchInput = document.getElementById('catalog-search');
-        const searchBtn = document.getElementById('catalog-search-btn');
-        const treeContainer = document.getElementById('tree-container');
-        const treeLoading = document.getElementById('tree-loading');
-        const treeEmpty = document.getElementById('tree-empty');
-        const treeRoot = document.getElementById('tree-root');
-        const selectionPanel = document.getElementById('selection-panel');
-        const selectedList = document.getElementById('selected-list');
-        const selectedCountEl = document.getElementById('selected-count');
-        const noSelection = document.getElementById('no-selection');
-        const restoreBtn = document.getElementById('restore-btn');
-        const searchResults = document.getElementById('search-results');
-        const searchBody = document.getElementById('search-body');
-        const searchCount = document.getElementById('search-count');
-
-        // Selected paths: can be directories (ending with /) or file paths
-        let selectedPaths = new Set();
-
-        function formatSize(bytes) {
-            if (!bytes || bytes === 0) return '';
-            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-            let i = 0, size = bytes;
-            while (size >= 1024 && i < units.length - 1) { size /= 1024; i++; }
-            return size.toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
-        }
-
-        function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-
-        function statusBadge(s) {
-            const map = { A: ['success','N'], M: ['warning','M'], U: ['secondary','U'], E: ['danger','E'] };
-            const [color, label] = map[s] || ['secondary', s];
-            return '<span class="badge bg-' + color + '" style="font-size:0.7em;">' + label + '</span>';
-        }
-
-        // Check if a path is selected (directly or via parent directory)
-        function isPathSelected(path) {
-            if (selectedPaths.has(path)) return true;
-            // Check if any parent directory is selected
-            for (const sel of selectedPaths) {
-                if (sel.endsWith('/') && path.startsWith(sel)) return true;
-            }
-            return false;
-        }
-
-        function updateSelectionUI() {
-            const count = selectedPaths.size;
-            selectedCountEl.textContent = count;
-            restoreBtn.disabled = count === 0;
-            document.getElementById('download-btn').disabled = count === 0;
-            noSelection.style.display = count === 0 ? 'block' : 'none';
-
-            selectedList.innerHTML = '';
-            selectedPaths.forEach(path => {
-                const li = document.createElement('li');
-                li.className = 'list-group-item d-flex justify-content-between align-items-center py-1 px-3';
-                const isDir = path.endsWith('/');
-                li.innerHTML =
-                    '<span class="small font-monospace"><i class="bi bi-' + (isDir ? 'folder-fill text-warning' : 'file-earmark') + ' me-1"></i>' + esc(path) + '</span>' +
-                    '<button class="btn btn-sm btn-outline-danger border-0 p-0" data-remove="' + esc(path) + '"><i class="bi bi-x-lg"></i></button>';
-                selectedList.appendChild(li);
-            });
-        }
-
-        // Remove from selection
-        selectedList.addEventListener('click', function(e) {
-            const btn = e.target.closest('[data-remove]');
-            if (btn) {
-                const path = btn.dataset.remove;
-                selectedPaths.delete(path);
-                // Uncheck the corresponding checkbox in the tree
-                const cb = treeRoot.querySelector('input[data-path="' + CSS.escape(path) + '"]');
-                if (cb) cb.checked = false;
-                updateSelectionUI();
-            }
-        });
-
-        function togglePath(path, checked) {
-            if (checked) {
-                // If selecting a directory, remove any individual children already selected
-                if (path.endsWith('/')) {
-                    for (const sel of selectedPaths) {
-                        if (sel.startsWith(path) && sel !== path) selectedPaths.delete(sel);
-                    }
-                }
-                selectedPaths.add(path);
-            } else {
-                selectedPaths.delete(path);
-            }
-            updateSelectionUI();
-        }
-
-        function loadTreeNode(parentEl, path) {
-            const archiveId = archiveSelect.value;
-            if (!archiveId) return;
-
-            const spinner = document.createElement('div');
-            spinner.className = 'ps-4 py-1 text-muted small';
-            spinner.innerHTML = '<div class="spinner-border spinner-border-sm me-1"></div> Loading...';
-            parentEl.appendChild(spinner);
-
-            fetch('/clients/' + agentId + '/catalog/' + archiveId + '/tree?path=' + encodeURIComponent(path), { credentials: 'same-origin' })
-                .then(r => r.json())
-                .then(data => {
-                    spinner.remove();
-
-                    if (data.dirs.length === 0 && data.files.length === 0) {
-                        if (path === '/') {
-                            treeContainer.style.display = 'none';
-                            treeEmpty.style.display = 'block';
-                        }
-                        return;
-                    }
-
-                    // Render directories
-                    data.dirs.forEach(d => {
-                        const item = document.createElement('div');
-                        item.className = 'tree-item tree-dir';
-
-                        const isChecked = isPathSelected(d.path);
-
-                        item.innerHTML =
-                            '<span class="tree-toggle"><i class="bi bi-chevron-right"></i></span>' +
-                            '<input type="checkbox" class="tree-cb" data-path="' + esc(d.path) + '" data-type="dir"' + (isChecked ? ' checked' : '') + '>' +
-                            '<span class="tree-icon"><i class="bi bi-folder-fill text-warning"></i></span>' +
-                            '<span class="tree-label">' + esc(d.name) + '</span>' +
-                            '<span class="tree-count">(' + d.file_count.toLocaleString() + ' files, ' + formatSize(d.total_size) + ')</span>';
-
-                        const children = document.createElement('div');
-                        children.className = 'tree-children';
-                        children.style.paddingLeft = '20px';
-
-                        parentEl.appendChild(item);
-                        parentEl.appendChild(children);
-
-                        let loaded = false;
-
-                        // Click to expand/collapse
-                        item.querySelector('.tree-toggle, .tree-label').addEventListener('click', function(e) {
-                            e.stopPropagation();
-                            const isOpen = children.classList.contains('open');
-                            if (isOpen) {
-                                children.classList.remove('open');
-                                item.querySelector('.tree-toggle i').className = 'bi bi-chevron-right';
-                            } else {
-                                children.classList.add('open');
-                                item.querySelector('.tree-toggle i').className = 'bi bi-chevron-down';
-                                if (!loaded) {
-                                    loaded = true;
-                                    loadTreeNode(children, d.path);
-                                }
-                            }
-                        });
-
-                        // Checkbox
-                        item.querySelector('.tree-cb').addEventListener('change', function(e) {
-                            e.stopPropagation();
-                            togglePath(d.path, this.checked);
-                            // If checking a dir, check all visible child checkboxes too
-                            if (this.checked) {
-                                children.querySelectorAll('.tree-cb').forEach(cb => cb.checked = true);
-                            } else {
-                                children.querySelectorAll('.tree-cb').forEach(cb => cb.checked = false);
-                            }
-                        });
-                    });
-
-                    // Render files
-                    data.files.forEach(f => {
-                        const item = document.createElement('div');
-                        item.className = 'tree-item tree-file';
-
-                        const isChecked = isPathSelected(f.file_path);
-
-                        item.innerHTML =
-                            '<span class="tree-toggle"></span>' +
-                            '<input type="checkbox" class="tree-cb" data-path="' + esc(f.file_path) + '" data-type="file"' + (isChecked ? ' checked' : '') + '>' +
-                            '<span class="tree-icon"><i class="bi bi-file-earmark"></i></span>' +
-                            '<span class="tree-label">' + esc(f.file_name) + '</span>' +
-                            ' ' + statusBadge(f.status) +
-                            '<span class="tree-size">' + formatSize(f.file_size) + '</span>';
-
-                        parentEl.appendChild(item);
-
-                        item.querySelector('.tree-cb').addEventListener('change', function(e) {
-                            e.stopPropagation();
-                            togglePath(f.file_path, this.checked);
-                        });
-                    });
-                })
-                .catch(() => {
-                    spinner.remove();
-                    if (path === '/') {
-                        treeContainer.style.display = 'none';
-                        treeEmpty.style.display = 'block';
-                    }
-                });
-        }
-
-        // Archive selection
-        archiveSelect.addEventListener('change', function() {
-            selectedPaths.clear();
-            updateSelectionUI();
-            searchInput.disabled = !this.value;
-            searchBtn.disabled = !this.value;
-            searchResults.style.display = 'none';
-
-            if (this.value) {
-                treeEmpty.style.display = 'none';
-                treeContainer.style.display = 'block';
-                selectionPanel.style.display = 'block';
-                treeRoot.innerHTML = '';
-                loadTreeNode(treeRoot, '/');
-            } else {
-                treeContainer.style.display = 'none';
-                treeEmpty.style.display = 'none';
-                selectionPanel.style.display = 'none';
-            }
-        });
-
-        // Search
-        let searchPage = 1;
-        function doSearch(page) {
-            const archiveId = archiveSelect.value;
-            const search = searchInput.value.trim();
-            if (!archiveId || !search) return;
-
-            searchPage = page || 1;
-            fetch('/clients/' + agentId + '/catalog/' + archiveId + '?page=' + searchPage + '&search=' + encodeURIComponent(search), { credentials: 'same-origin' })
-                .then(r => r.json())
-                .then(data => {
-                    searchResults.style.display = 'block';
-                    searchCount.textContent = data.total.toLocaleString();
-                    document.getElementById('search-page-info').textContent = 'Page ' + data.page + ' of ' + data.pages;
-                    document.getElementById('search-prev').disabled = data.page <= 1;
-                    document.getElementById('search-next').disabled = data.page >= data.pages;
-
-                    searchBody.innerHTML = '';
-                    data.files.forEach(f => {
-                        const row = document.createElement('tr');
-                        const isChecked = isPathSelected(f.file_path);
-                        row.innerHTML =
-                            '<td style="width:30px;"><input type="checkbox" class="search-cb" data-path="' + esc(f.file_path) + '"' + (isChecked ? ' checked' : '') + '></td>' +
-                            '<td class="small font-monospace">' + esc(f.file_path) + '</td>' +
-                            '<td class="small">' + formatSize(f.file_size) + '</td>';
-                        searchBody.appendChild(row);
-                    });
-                });
-        }
-
-        searchBtn.addEventListener('click', () => doSearch(1));
-        searchInput.addEventListener('keypress', e => { if (e.key === 'Enter') { e.preventDefault(); doSearch(1); } });
-        document.getElementById('search-prev').addEventListener('click', () => doSearch(searchPage - 1));
-        document.getElementById('search-next').addEventListener('click', () => doSearch(searchPage + 1));
-
-        searchBody.addEventListener('change', function(e) {
-            if (e.target.classList.contains('search-cb')) {
-                togglePath(e.target.dataset.path, e.target.checked);
-            }
-        });
-
-        function fillFormAndSubmit(formId, archiveFieldId, filesContainerId) {
-            document.getElementById(archiveFieldId).value = archiveSelect.value;
-            const container = document.getElementById(filesContainerId);
-            container.innerHTML = '';
-            selectedPaths.forEach(path => {
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = 'files[]';
-                input.value = path;
-                container.appendChild(input);
-            });
-            document.getElementById(formId).submit();
-        }
-
-        // Restore to client
-        restoreBtn.addEventListener('click', function() {
-            if (selectedPaths.size === 0) return;
-            if (!confirm('Restore ' + selectedPaths.size + ' path(s) to the client? This may overwrite existing files.')) return;
-            document.getElementById('restore-dest-field').value = document.getElementById('restore-destination').value;
-            fillFormAndSubmit('restore-form', 'restore-archive-id', 'restore-files-container');
-        });
-
-        // Download as tar.gz
-        const downloadBtn = document.getElementById('download-btn');
-        downloadBtn.addEventListener('click', function() {
-            if (selectedPaths.size === 0) return;
-            if (!confirm('Download ' + selectedPaths.size + ' path(s) as a .tar.gz archive?')) return;
-            fillFormAndSubmit('download-form', 'download-archive-id', 'download-files-container');
-        });
-    })();
-    </script>
+    <script>window.RESTORE_AGENT_ID = <?= $agent['id'] ?>;</script>
+    <?php
+    if (!isset($scripts)) $scripts = [];
+    $scripts[] = '/js/restore.js?v=' . filemtime(__DIR__ . '/../../../public/js/restore.js');
+    ?>
 
     <?php endif; ?>
 

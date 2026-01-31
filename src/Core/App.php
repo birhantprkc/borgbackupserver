@@ -134,6 +134,7 @@ class App
         // Catalog & Restore (client-facing)
         $this->router->map('GET', '/clients/[i:id]/catalog/[i:archive_id]', 'ClientController@catalog');
         $this->router->map('GET', '/clients/[i:id]/catalog/[i:archive_id]/tree', 'ClientController@catalogTree');
+        $this->router->map('GET', '/clients/[i:id]/catalog/search-all', 'ClientController@catalogSearchAll');
         $this->router->map('POST', '/clients/[i:id]/restore', 'ClientController@restoreSubmit');
         $this->router->map('POST', '/clients/[i:id]/download', 'ClientController@download');
     }

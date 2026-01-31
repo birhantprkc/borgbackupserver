@@ -367,6 +367,96 @@ class ClientController extends Controller
     }
 
     /**
+     * GET /clients/{id}/catalog/search-all
+     * Search for a file across ALL archives for this agent, showing version history.
+     */
+    public function catalogSearchAll(int $id): void
+    {
+        $this->requireAuth();
+
+        $agent = $this->getAgent($id);
+        if (!$agent) {
+            $this->json(['error' => 'Client not found'], 404);
+        }
+
+        $search = trim($_GET['q'] ?? '');
+        if ($search === '') {
+            $this->json(['files' => [], 'total' => 0, 'page' => 1, 'pages' => 1]);
+            return;
+        }
+
+        $page = max(1, (int) ($_GET['page'] ?? 1));
+        $perPage = 20;
+
+        // Find distinct file paths matching the search
+        $countRow = $this->db->fetchOne(
+            "SELECT COUNT(DISTINCT fp.id) as cnt
+             FROM file_paths fp
+             JOIN file_catalog fc ON fc.file_path_id = fp.id
+             WHERE fp.agent_id = ? AND (fp.file_name LIKE ? OR fp.path LIKE ?)",
+            [$id, "%{$search}%", "%{$search}%"]
+        );
+        $total = (int) ($countRow['cnt'] ?? 0);
+        $pages = max(1, ceil($total / $perPage));
+        $offset = ($page - 1) * $perPage;
+
+        // Get the matching file_path IDs (paginated by unique file)
+        $pathRows = $this->db->fetchAll(
+            "SELECT DISTINCT fp.id, fp.path, fp.file_name
+             FROM file_paths fp
+             JOIN file_catalog fc ON fc.file_path_id = fp.id
+             WHERE fp.agent_id = ? AND (fp.file_name LIKE ? OR fp.path LIKE ?)
+             ORDER BY fp.path
+             LIMIT {$perPage} OFFSET {$offset}",
+            [$id, "%{$search}%", "%{$search}%"]
+        );
+
+        if (empty($pathRows)) {
+            $this->json(['files' => [], 'total' => $total, 'page' => $page, 'pages' => $pages]);
+            return;
+        }
+
+        $pathIds = array_column($pathRows, 'id');
+        $placeholders = implode(',', array_fill(0, count($pathIds), '?'));
+
+        // Get all versions for these paths across all archives
+        $versions = $this->db->fetchAll(
+            "SELECT fc.file_path_id, fc.archive_id, fc.file_size, fc.status, fc.mtime,
+                    ar.archive_name, ar.created_at as archive_date,
+                    r.name as repo_name
+             FROM file_catalog fc
+             JOIN archives ar ON ar.id = fc.archive_id
+             JOIN repositories r ON r.id = ar.repository_id
+             WHERE fc.file_path_id IN ({$placeholders})
+             ORDER BY fc.file_path_id, ar.created_at DESC",
+            $pathIds
+        );
+
+        // Group versions by file_path_id
+        $versionMap = [];
+        foreach ($versions as $v) {
+            $versionMap[$v['file_path_id']][] = $v;
+        }
+
+        // Build response
+        $files = [];
+        foreach ($pathRows as $pr) {
+            $files[] = [
+                'path' => $pr['path'],
+                'file_name' => $pr['file_name'],
+                'versions' => $versionMap[$pr['id']] ?? [],
+            ];
+        }
+
+        $this->json([
+            'files' => $files,
+            'total' => $total,
+            'page' => $page,
+            'pages' => $pages,
+        ]);
+    }
+
+    /**
      * POST /clients/{id}/restore
      * Creates a restore job for selected files from an archive.
      */

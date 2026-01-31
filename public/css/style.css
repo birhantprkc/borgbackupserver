@@ -463,3 +463,109 @@ body.bg-light {
         display: table-cell !important;
     }
 }
+
+/* Restore panels */
+.restore-panel-header {
+    background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+    color: #fff;
+    padding: 10px 16px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    border-radius: 8px 8px 0 0;
+}
+
+.restore-panel-body {
+    height: 450px;
+    overflow-y: auto;
+    border: 1px solid rgba(0,0,0,0.08);
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+}
+
+.restore-control-bar {
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 8px;
+    padding: 12px 16px;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.tree-item {
+    padding: 4px 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    border-left: 3px solid transparent;
+    transition: background 0.1s, border-color 0.1s;
+}
+.tree-item:hover {
+    background: #f0fdf4;
+    border-left-color: #48bb78;
+}
+.tree-dir > .tree-label { font-weight: 600; }
+.tree-children { display: none; }
+.tree-children.open { display: block; }
+.tree-toggle { display: inline-block; width: 16px; text-align: center; color: #6c757d; }
+.tree-cb { margin-right: 4px; }
+.tree-icon { margin-right: 4px; }
+.tree-size { color: #6c757d; margin-left: 8px; }
+.tree-count { color: #6c757d; font-size: 0.8em; margin-left: 6px; }
+
+.restore-selection-item {
+    padding: 6px 12px;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.restore-selection-item:last-child { border-bottom: none; }
+.restore-selection-item .btn-remove {
+    opacity: 0.3;
+    transition: opacity 0.15s;
+}
+.restore-selection-item:hover .btn-remove { opacity: 1; }
+
+.restore-actions {
+    border-top: 1px solid rgba(0,0,0,0.08);
+    padding: 12px 16px;
+    background: #f8f9fa;
+    border-radius: 0 0 8px 8px;
+}
+
+.version-group {
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+.version-group-header {
+    position: sticky;
+    top: 0;
+    background: #f8f9fa;
+    padding: 6px 12px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    border-bottom: 1px solid rgba(0,0,0,0.08);
+    z-index: 1;
+}
+.version-row {
+    padding: 4px 12px 4px 28px;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.version-row:hover { background: #f0fdf4; }
+
+.restore-back-btn {
+    border: none;
+    background: none;
+    color: #48bb78;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 4px 8px;
+}
+.restore-back-btn:hover { color: #2f855a; }
+
+/* Mobile: stack restore panels */
+@media (max-width: 991.98px) {
+    .restore-panel-body {
+        height: 300px;
+    }
+}
