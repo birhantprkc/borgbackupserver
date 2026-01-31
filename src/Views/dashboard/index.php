@@ -85,28 +85,27 @@
                 <i class="bi bi-cpu me-1"></i> Server Stats
             </div>
             <div class="card-body">
-                <div class="mb-3">
-                    <div class="d-flex justify-content-between small mb-1">
-                        <span>CPU Load</span>
-                        <span id="cpu-text"><?= $cpuLoad['percent'] ?>%</span>
-                    </div>
-                    <div class="progress" style="height: 22px;">
-                        <div class="progress-bar <?= $cpuLoad['percent'] > 80 ? 'bg-danger' : ($cpuLoad['percent'] > 50 ? 'bg-warning' : 'bg-success') ?>"
-                             id="cpu-bar" style="width: <?= $cpuLoad['percent'] ?>%">
-                            <?= $cpuLoad['1min'] ?> / <?= $cpuLoad['cores'] ?> cores
+                <div class="d-flex gap-2">
+                    <?php
+                        $cpuColor = $cpuLoad['percent'] > 80 ? '#dc3545' : ($cpuLoad['percent'] > 50 ? '#ffc107' : '#198754');
+                        $memColor = $memory['percent'] > 85 ? '#dc3545' : ($memory['percent'] > 60 ? '#ffc107' : '#0dcaf0');
+                    ?>
+                    <div class="flex-fill rounded position-relative overflow-hidden" id="cpu-box"
+                         style="height: 80px; background: #f0f0f0; border: 1px solid #dee2e6;">
+                        <div id="cpu-fill" style="position:absolute;bottom:0;left:0;right:0;height:<?= $cpuLoad['percent'] ?>%;background:<?= $cpuColor ?>;opacity:0.2;transition:height .5s ease,background .5s ease;"></div>
+                        <div class="position-relative d-flex flex-column align-items-center justify-content-center h-100 px-2">
+                            <div class="fw-bold" style="font-size: 1.3rem; line-height:1;" id="cpu-pct"><?= $cpuLoad['percent'] ?>%</div>
+                            <div class="text-muted" style="font-size: .7rem;">CPU</div>
+                            <div class="text-muted" style="font-size: .65rem;" id="cpu-detail"><?= $cpuLoad['1min'] ?> / <?= $cpuLoad['cores'] ?> cores</div>
                         </div>
                     </div>
-                </div>
-
-                <div>
-                    <div class="d-flex justify-content-between small mb-1">
-                        <span>Memory</span>
-                        <span id="mem-text"><?= $memory['percent'] ?>%</span>
-                    </div>
-                    <div class="progress" style="height: 22px;">
-                        <div class="progress-bar <?= $memory['percent'] > 85 ? 'bg-danger' : ($memory['percent'] > 60 ? 'bg-warning' : 'bg-info') ?>"
-                             id="mem-bar" style="width: <?= $memory['percent'] ?>%">
-                            <?= \BBS\Services\ServerStats::formatBytes($memory['used']) ?> / <?= \BBS\Services\ServerStats::formatBytes($memory['total']) ?>
+                    <div class="flex-fill rounded position-relative overflow-hidden" id="mem-box"
+                         style="height: 80px; background: #f0f0f0; border: 1px solid #dee2e6;">
+                        <div id="mem-fill" style="position:absolute;bottom:0;left:0;right:0;height:<?= $memory['percent'] ?>%;background:<?= $memColor ?>;opacity:0.2;transition:height .5s ease,background .5s ease;"></div>
+                        <div class="position-relative d-flex flex-column align-items-center justify-content-center h-100 px-2">
+                            <div class="fw-bold" style="font-size: 1.3rem; line-height:1;" id="mem-pct"><?= $memory['percent'] ?>%</div>
+                            <div class="text-muted" style="font-size: .7rem;">Memory</div>
+                            <div class="text-muted" style="font-size: .65rem;" id="mem-detail"><?= \BBS\Services\ServerStats::formatBytes($memory['used']) ?> / <?= \BBS\Services\ServerStats::formatBytes($memory['total']) ?></div>
                         </div>
                     </div>
                 </div>
@@ -566,15 +565,19 @@ setInterval(function() {
 
             <?php if ($isAdmin): ?>
             if (data.cpuLoad) {
-                document.getElementById('cpu-text').textContent = data.cpuLoad.percent + '%';
-                const cpuBar = document.getElementById('cpu-bar');
-                cpuBar.style.width = data.cpuLoad.percent + '%';
-                cpuBar.textContent = data.cpuLoad['1min'] + ' / ' + data.cpuLoad.cores + ' cores';
+                const p = data.cpuLoad.percent;
+                document.getElementById('cpu-pct').textContent = p + '%';
+                document.getElementById('cpu-detail').textContent = data.cpuLoad['1min'] + ' / ' + data.cpuLoad.cores + ' cores';
+                const cpuFill = document.getElementById('cpu-fill');
+                cpuFill.style.height = p + '%';
+                cpuFill.style.background = p > 80 ? '#dc3545' : (p > 50 ? '#ffc107' : '#198754');
             }
             if (data.memory) {
-                document.getElementById('mem-text').textContent = data.memory.percent + '%';
-                const memBar = document.getElementById('mem-bar');
-                memBar.style.width = data.memory.percent + '%';
+                const p = data.memory.percent;
+                document.getElementById('mem-pct').textContent = p + '%';
+                const memFill = document.getElementById('mem-fill');
+                memFill.style.height = p + '%';
+                memFill.style.background = p > 85 ? '#dc3545' : (p > 60 ? '#ffc107' : '#0dcaf0');
             }
             <?php endif; ?>
 
