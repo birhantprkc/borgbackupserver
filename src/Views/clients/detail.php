@@ -3,7 +3,7 @@ $tab = $_GET['tab'] ?? 'status';
 
 // Detect server's agent version from the bundled bbs-agent.py
 $serverAgentVersion = null;
-$agentFile = dirname(__DIR__, 2) . '/agent/bbs-agent.py';
+$agentFile = dirname(__DIR__, 3) . '/agent/bbs-agent.py';
 if (file_exists($agentFile)) {
     $handle = fopen($agentFile, 'r');
     if ($handle) {
