@@ -290,20 +290,24 @@ body.bg-light {
     border-radius: 8px 8px 0 0;
 }
 
-.repo-stat-block {
-    background: #f8f9fa;
+.repo-icon-wrap {
+    background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+    color: #fff;
 }
 
-.repo-stat-label {
-    font-size: 0.7rem;
-    color: #6c757d;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+.repo-status-bar {
+    text-align: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 6px 12px;
+    color: #fff;
+    border-radius: 0 0 8px 8px;
+    background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
 }
 
 /* Schedule cards */
 .schedule-card {
-    overflow: hidden;
+    overflow: visible;
     transition: transform 0.15s;
 }
 

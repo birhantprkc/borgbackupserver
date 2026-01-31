@@ -54,6 +54,9 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     <?php if ($agent['os_info']): ?>
                         <span class="d-none d-md-inline"><i class="bi bi-cpu me-1"></i><?= htmlspecialchars($agent['os_info']) ?></span>
                     <?php endif; ?>
+                    <?php if ($agent['owner_name']): ?>
+                        <span class="d-md-none"><i class="bi bi-person me-1"></i><?= htmlspecialchars($agent['owner_name']) ?></span>
+                    <?php endif; ?>
                     <span>
                     <?php if ($agent['agent_version']): ?>
                         <?php if ($agentNeedsUpdate): ?>
@@ -81,7 +84,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 </div>
             </div>
             <?php if ($agent['owner_name']): ?>
-            <div class="text-end text-muted small">
+            <div class="text-end text-muted small d-none d-md-block">
                 <i class="bi bi-person me-1"></i>Owner: <strong><?= htmlspecialchars($agent['owner_name']) ?></strong>
             </div>
             <?php endif; ?>
@@ -177,6 +180,17 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     <label class="form-label fw-semibold small">Client Name</label>
                     <input type="text" class="form-control form-control-sm" name="name" value="<?= htmlspecialchars($agent['name']) ?>" required>
                 </div>
+                <?php if ($this->isAdmin() && !empty($users)): ?>
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold small">Owner</label>
+                    <select name="user_id" class="form-select form-select-sm">
+                        <option value="">No owner</option>
+                        <?php foreach ($users as $u): ?>
+                        <option value="<?= $u['id'] ?>" <?= ($agent['user_id'] ?? '') == $u['id'] ? 'selected' : '' ?>><?= htmlspecialchars($u['username']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <?php endif; ?>
                 <div class="col-auto">
                     <button type="submit" class="btn btn-sm btn-primary">Save</button>
                     <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#edit-client">Cancel</button>
@@ -517,38 +531,37 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         ?>
         <div class="col-md-6 col-lg-4">
             <div class="card border-0 shadow-sm h-100 repo-card">
-                <div class="card-body p-0">
-                    <div class="repo-card-header text-white text-center p-3">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <div class="text-start">
-                                <h6 class="fw-bold mb-0 text-white"><?= htmlspecialchars($repo['name']) ?></h6>
-                                <small class="opacity-75">(<?= $repo['archive_count'] ?>)</small>
+                <div class="card-body p-3">
+                    <div class="d-flex align-items-center">
+                        <div class="schedule-icon-wrap me-3 repo-icon-wrap">
+                            <i class="bi bi-archive"></i>
+                            <span class="schedule-id"><?= $repo['archive_count'] ?></span>
+                        </div>
+                        <div class="flex-grow-1 min-width-0">
+                            <h6 class="mb-1 fw-bold"><?= htmlspecialchars($repo['name']) ?></h6>
+                            <div class="small text-muted">
+                                <i class="bi bi-hdd me-1"></i><?= $sizeLabel ?>
                             </div>
+                            <div class="small text-muted">
+                                <i class="bi bi-stack me-1"></i><?= $repo['archive_count'] ?> recovery points
+                            </div>
+                        </div>
+                        <div class="ms-2">
                             <?php if ($deleteBlocked): ?>
                                 <span data-bs-toggle="tooltip" title="<?= htmlspecialchars($blockReason) ?>">
-                                    <button type="button" class="btn btn-sm text-white-50" disabled><i class="bi bi-trash"></i></button>
+                                    <button type="button" class="btn btn-sm btn-light border-0 text-muted" disabled><i class="bi bi-trash"></i></button>
                                 </span>
                             <?php else: ?>
                                 <form method="POST" action="/repositories/<?= $repo['id'] ?>/delete" class="d-inline" onsubmit="return confirm('PERMANENTLY delete repository &quot;<?= htmlspecialchars($repo['name']) ?>&quot;, all its archives, and the data on disk?\n\nThis action is NOT reversible.')">
                                     <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                    <button type="submit" class="btn btn-sm text-white-50" title="Delete"><i class="bi bi-trash"></i></button>
+                                    <button type="submit" class="btn btn-sm btn-light border-0 text-muted" title="Delete"><i class="bi bi-trash"></i></button>
                                 </form>
                             <?php endif; ?>
                         </div>
-                        <div class="my-2">
-                            <i class="bi bi-download" style="font-size: 2.5rem; opacity: 0.8;"></i>
-                        </div>
                     </div>
-                    <div class="d-flex">
-                        <div class="repo-stat-block flex-fill text-center p-2 border-end">
-                            <div class="fw-bold fs-5"><?= $sizeLabel ?></div>
-                            <div class="repo-stat-label">Repo Size</div>
-                        </div>
-                        <div class="repo-stat-block flex-fill text-center p-2">
-                            <div class="fw-bold fs-5"><?= $repo['archive_count'] ?></div>
-                            <div class="repo-stat-label">Recovery Points</div>
-                        </div>
-                    </div>
+                </div>
+                <div class="repo-status-bar">
+                    <?= $sizeLabel ?> &middot; <?= $repo['archive_count'] ?> archives
                 </div>
             </div>
         </div>
@@ -656,7 +669,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
             $statusColor = $isActive ? 'success' : ($isManual ? 'info' : 'secondary');
             $statusLabel = $isActive ? 'Active' : ($isManual ? 'Manual' : 'Paused');
         ?>
-        <div class="col-md-6">
+        <div class="col-md-6 col-lg-4">
             <div class="card border-0 shadow-sm h-100 schedule-card">
                 <div class="card-body p-3">
                     <div class="d-flex align-items-center">
@@ -2123,3 +2136,19 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     </div>
 <?php endif; ?>
 </div><!-- /client-tab-content -->
+
+<script>
+// Hide content below header when edit panel is open
+(function() {
+    const editPanel = document.getElementById('edit-client');
+    const belowHeader = document.querySelectorAll('.card.border-0.shadow-sm.mb-4 ~ *');
+    if (editPanel) {
+        editPanel.addEventListener('shown.bs.collapse', function() {
+            belowHeader.forEach(el => el.style.display = 'none');
+        });
+        editPanel.addEventListener('hidden.bs.collapse', function() {
+            belowHeader.forEach(el => el.style.display = '');
+        });
+    }
+})();
+</script>

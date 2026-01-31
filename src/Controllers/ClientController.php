@@ -617,6 +617,9 @@ class ClientController extends Controller
         if (isset($_POST['name']) && trim($_POST['name']) !== '') {
             $data['name'] = trim($_POST['name']);
         }
+        if ($this->isAdmin() && array_key_exists('user_id', $_POST)) {
+            $data['user_id'] = $_POST['user_id'] !== '' ? (int) $_POST['user_id'] : null;
+        }
 
         if (!empty($data)) {
             $this->db->update('agents', $data, 'id = ?', [$id]);
