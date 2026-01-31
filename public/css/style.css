@@ -203,6 +203,11 @@ body.bg-light {
     flex-wrap: nowrap;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+.client-tabs::-webkit-scrollbar {
+    display: none;
 }
 
 .client-tabs .nav-link {
@@ -244,6 +249,7 @@ body.bg-light {
 
 .client-tab-content {
     border-radius: 0 0 8px 8px;
+    overflow-x: hidden;
 }
 
 /* Mobile: icon-focused tabs */
