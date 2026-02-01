@@ -523,6 +523,8 @@
         const dbSelectedCount = document.getElementById('db-selected-count');
         const dbRestoreBtn = document.getElementById('db-restore-btn');
         const dbAllDbNote = document.getElementById('db-all-databases-note');
+        const dbConnectionPicker = document.getElementById('db-connection-picker');
+        const dbConfigId = document.getElementById('db-config-id');
 
         let dbRestoreMode = 'files';
         let dbPerDatabase = true;
@@ -543,9 +545,11 @@
                 if (dbRestoreMode === 'database') {
                     filesSection.style.display = 'none';
                     dbSection.style.display = '';
+                    if (dbConnectionPicker) dbConnectionPicker.style.display = '';
                 } else {
                     filesSection.style.display = '';
                     dbSection.style.display = 'none';
+                    if (dbConnectionPicker) dbConnectionPicker.style.display = 'none';
                 }
             });
         }
@@ -621,7 +625,7 @@
         function updateDbSelection() {
             const checked = dbTableBody.querySelectorAll('.db-select-cb:checked');
             dbSelectedCount.textContent = checked.length;
-            dbRestoreBtn.disabled = checked.length === 0;
+            dbRestoreBtn.disabled = checked.length === 0 || !window.MYSQL_CONFIG_AVAILABLE;
         }
 
         // Submit DB restore
@@ -637,6 +641,8 @@
             const fieldsContainer = document.getElementById('db-restore-fields');
             fieldsContainer.innerHTML = '';
             document.getElementById('db-restore-archive-id').value = dbArchiveSelect.value;
+            const configIdField = document.getElementById('db-restore-config-id');
+            if (configIdField && dbConfigId) configIdField.value = dbConfigId.value || '';
 
             checked.forEach(function(cb, i) {
                 const dbName = cb.dataset.db;

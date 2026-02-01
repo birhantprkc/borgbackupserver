@@ -386,19 +386,28 @@ class QueueManager
         $perDatabase = $dbInfo['per_database'] ?? true;
         $compress = $dbInfo['compress'] ?? true;
 
-        // Find mysql_dump plugin config for this agent
+        // Find mysql_dump plugin config: use specified config ID, or fall back to first available
         $pluginManager = new PluginManager();
-        $configs = $pluginManager->getPluginConfigs($job['agent_id']);
         $mysqlConfig = null;
-        foreach ($configs as $c) {
-            if ($c['slug'] === 'mysql_dump') {
-                $configData = json_decode($c['config'] ?? '{}', true) ?: [];
-                // Decrypt password
-                if (!empty($configData['password'])) {
-                    $configData['password'] = Encryption::decrypt($configData['password']);
+
+        if (!empty($job['plugin_config_id'])) {
+            $payload = $pluginManager->buildTestPayload((int) $job['plugin_config_id']);
+            if ($payload && $payload['slug'] === 'mysql_dump') {
+                $mysqlConfig = $payload['config'];
+            }
+        }
+
+        if (!$mysqlConfig) {
+            $configs = $pluginManager->getPluginConfigs($job['agent_id']);
+            foreach ($configs as $c) {
+                if ($c['slug'] === 'mysql_dump') {
+                    $configData = json_decode($c['config'] ?? '{}', true) ?: [];
+                    if (!empty($configData['password'])) {
+                        $configData['password'] = Encryption::decrypt($configData['password']);
+                    }
+                    $mysqlConfig = $configData;
+                    break;
                 }
-                $mysqlConfig = $configData;
-                break;
             }
         }
 

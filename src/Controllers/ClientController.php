@@ -738,10 +738,21 @@ class ClientController extends Controller
 
         $archive_id = (int) ($_POST['archive_id'] ?? 0);
         $databases = $_POST['databases'] ?? [];
+        $pluginConfigId = (int) ($_POST['plugin_config_id'] ?? 0);
 
         if (!$archive_id || empty($databases)) {
             $this->flash('danger', 'Select an archive and at least one database to restore.');
             $this->redirect("/clients/{$id}?tab=restore");
+        }
+
+        // Validate plugin config exists and belongs to this agent
+        if ($pluginConfigId) {
+            $pluginManager = new \BBS\Services\PluginManager();
+            $configCheck = $pluginManager->getPluginConfig($pluginConfigId);
+            if (!$configCheck || $configCheck['agent_id'] != $id || $configCheck['slug'] !== 'mysql_dump') {
+                $this->flash('danger', 'Invalid MySQL connection selected.');
+                $this->redirect("/clients/{$id}?tab=restore");
+            }
         }
 
         // Validate archive exists and has database info
@@ -797,6 +808,7 @@ class ClientController extends Controller
             'queued_at' => date('Y-m-d H:i:s'),
             'restore_archive_id' => $archive_id,
             'restore_databases' => json_encode($restoreDatabases),
+            'plugin_config_id' => $pluginConfigId ?: null,
         ]);
 
         $dbNames = array_column($restoreDatabases, 'database');

@@ -2007,7 +2007,7 @@ FLUSH PRIVILEGES;</pre>
 <?php elseif ($tab === 'restore'): ?>
     <?php
     $mysqlPluginEnabled = false;
-    $mysqlUser = 'your_user';
+    $mysqlConfigs = [];
     foreach ($agentPlugins as $ap) {
         if ($ap['slug'] === 'mysql_dump' && $ap['agent_enabled']) {
             $mysqlPluginEnabled = true;
@@ -2017,16 +2017,19 @@ FLUSH PRIVILEGES;</pre>
     if ($mysqlPluginEnabled && !empty($pluginConfigs)) {
         foreach ($pluginConfigs as $pc) {
             if ($pc['slug'] === 'mysql_dump') {
-                $cfg = json_decode($pc['config'] ?? '{}', true);
-                if (!empty($cfg['user'])) $mysqlUser = $cfg['user'];
-                break;
+                $mysqlConfigs[] = $pc;
             }
         }
+    }
+    $mysqlUser = 'your_user';
+    if (!empty($mysqlConfigs)) {
+        $firstCfg = json_decode($mysqlConfigs[0]['config'] ?? '{}', true);
+        if (!empty($firstCfg['user'])) $mysqlUser = $firstCfg['user'];
     }
     ?>
 
     <?php if ($mysqlPluginEnabled): ?>
-    <div class="d-flex align-items-center gap-2 mb-3">
+    <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
         <h5 class="mb-0">Restore:</h5>
         <div class="btn-group" role="group" id="restore-mode-toggle">
             <button type="button" class="btn btn-sm btn-primary active" data-restore-mode="files">
@@ -2035,6 +2038,22 @@ FLUSH PRIVILEGES;</pre>
             <button type="button" class="btn btn-sm btn-outline-primary" data-restore-mode="database">
                 <i class="bi bi-database me-1"></i>Database
             </button>
+        </div>
+        <div id="db-connection-picker" style="display:none;" class="d-flex align-items-center gap-2">
+            <span class="text-muted small">using</span>
+            <?php if (empty($mysqlConfigs)): ?>
+                <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>No MySQL connection configured</span>
+                <a href="?tab=plugins" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-circle me-1"></i>Add Connection</a>
+            <?php elseif (count($mysqlConfigs) === 1): ?>
+                <span class="badge bg-secondary fw-normal"><i class="bi bi-database me-1"></i><?= htmlspecialchars($mysqlConfigs[0]['name']) ?></span>
+                <input type="hidden" id="db-config-id" value="<?= $mysqlConfigs[0]['id'] ?>">
+            <?php else: ?>
+                <select class="form-select form-select-sm" id="db-config-id" style="width:auto;">
+                    <?php foreach ($mysqlConfigs as $mc): ?>
+                        <option value="<?= $mc['id'] ?>"><?= htmlspecialchars($mc['name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            <?php endif; ?>
         </div>
     </div>
     <?php else: ?>
@@ -2248,6 +2267,7 @@ FLUSH PRIVILEGES;</pre>
         <form id="db-restore-form" method="POST" action="/clients/<?= $agent['id'] ?>/restore-mysql" style="display:none;">
             <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
             <input type="hidden" name="archive_id" id="db-restore-archive-id">
+            <input type="hidden" name="plugin_config_id" id="db-restore-config-id">
             <div id="db-restore-fields"></div>
         </form>
     </div>
@@ -2255,6 +2275,7 @@ FLUSH PRIVILEGES;</pre>
 
     <script>window.RESTORE_AGENT_ID = <?= $agent['id'] ?>;</script>
     <script>window.MYSQL_PLUGIN_ENABLED = <?= $mysqlPluginEnabled ? 'true' : 'false' ?>;</script>
+    <script>window.MYSQL_CONFIG_AVAILABLE = <?= !empty($mysqlConfigs) ? 'true' : 'false' ?>;</script>
     <?php
     if (!isset($scripts)) $scripts = [];
     $scripts[] = '/js/restore.js?v=' . filemtime(__DIR__ . '/../../../public/js/restore.js');
