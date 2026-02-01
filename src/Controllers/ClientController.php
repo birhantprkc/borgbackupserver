@@ -518,7 +518,7 @@ class ClientController extends Controller
 
         // Get files directly at this level (no more / after prefix)
         $files = $this->db->fetchAll("
-            SELECT fp.id, fp.path as file_path, fp.file_name, fc.file_size, fc.status
+            SELECT fp.id, fp.path as file_path, fp.file_name, fc.file_size, fc.status, fc.mtime
             FROM file_catalog fc
             JOIN file_paths fp ON fp.id = fc.file_path_id
             WHERE fc.archive_id = ? AND fp.agent_id = ?

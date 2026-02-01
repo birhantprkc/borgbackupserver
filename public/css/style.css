@@ -552,6 +552,7 @@ body.bg-light {
 .tree-cb { margin-right: 4px; }
 .tree-icon { margin-right: 4px; }
 .tree-size { color: #6c757d; margin-left: 8px; }
+.tree-mtime { font-size: 0.8em; margin-left: 8px; }
 .tree-count { color: #6c757d; font-size: 0.8em; margin-left: 6px; }
 
 .restore-selection-item {

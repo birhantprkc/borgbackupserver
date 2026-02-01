@@ -218,7 +218,8 @@
                         '<span class="tree-icon"><i class="bi bi-file-earmark"></i></span>' +
                         '<span class="tree-label">' + esc(f.file_name) + '</span>' +
                         ' ' + statusBadge(f.status) +
-                        '<span class="tree-size">' + formatSize(f.file_size) + '</span>';
+                        '<span class="tree-size">' + formatSize(f.file_size) + '</span>' +
+                        (f.mtime ? '<span class="tree-mtime text-muted">' + formatDate(f.mtime) + '</span>' : '');
 
                     parentEl.appendChild(item);
 
