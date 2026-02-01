@@ -216,15 +216,7 @@ class AgentApiController extends Controller
         if (isset($input['bytes_processed'])) $data['bytes_processed'] = (int) $input['bytes_processed'];
         if (!empty($input['error_log']))      $data['error_log'] = $input['error_log'];
 
-        $rowsAffected = $this->db->update('backup_jobs', $data, 'id = ?', [$jobId]);
-
-        // Debug: verify the update took effect
-        $verify = $this->db->fetchOne("SELECT `status`, `completed_at` FROM backup_jobs WHERE id = ?", [$jobId]);
-        $debugMsg = date('Y-m-d H:i:s') . " STATUS UPDATE: job #{$jobId} rows={$rowsAffected} expected={$result} got={$verify['status']} data=" . json_encode($data) . "\n";
-        @file_put_contents('/var/www/bbs/storage/logs/status-debug.log', $debugMsg, FILE_APPEND);
-        if ($verify && $verify['status'] !== $result) {
-            error_log("BBS STATUS BUG: job #{$jobId} update returned {$rowsAffected} rows, expected status={$result} but got status={$verify['status']}. Data: " . json_encode($data));
-        }
+        $this->db->update('backup_jobs', $data, 'id = ?', [$jobId]);
 
         // Log the result
         $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
