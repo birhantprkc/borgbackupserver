@@ -186,7 +186,7 @@ class SettingsController extends Controller
 
         $lines = [];
         $code = 0;
-        exec("sudo " . escapeshellarg($updateScript) . " " . escapeshellarg($projectRoot) . " 2>&1", $lines, $code);
+        exec("sudo " . escapeshellarg($updateScript) . " " . escapeshellarg($projectRoot) . " main 2>&1", $lines, $code);
 
         $_SESSION['upgrade_result'] = [
             'success' => $code === 0,
