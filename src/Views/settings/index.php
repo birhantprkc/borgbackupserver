@@ -337,9 +337,14 @@
                     </form>
                     <?php endif; ?>
 
+                    <hr>
+                    <div class="alert alert-secondary small py-2 px-3 mb-2">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        <strong>Developer Use Only:</strong> Syncs unpublished development code from the main branch. This may include incomplete features and untested changes. Only use if directed by a developer for troubleshooting purposes.
+                    </div>
                     <form method="POST" action="/settings/sync" onsubmit="return confirm('This pulls the latest code from the main branch, which may include unreleased or unstable changes.\n\nUse Upgrade instead for stable releases.\n\nProceed?')">
                         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                        <button type="submit" class="btn btn-outline-secondary btn-sm mt-1" title="Pulls latest from main branch (may include unreleased changes)">
+                        <button type="submit" class="btn btn-outline-secondary btn-sm" title="Pulls latest from main branch (may include unreleased changes)">
                             <i class="bi bi-git me-1"></i> Sync Dev Code
                         </button>
                     </form>
