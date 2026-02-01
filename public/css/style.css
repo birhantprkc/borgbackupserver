@@ -543,6 +543,9 @@ body.bg-light {
     display: flex;
     align-items: center;
 }
+.tree-item:nth-child(even) {
+    background: #f8f9fa;
+}
 .tree-item:hover {
     background: #f0fdf4;
     border-left-color: #48bb78;

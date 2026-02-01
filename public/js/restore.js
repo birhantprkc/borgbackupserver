@@ -30,7 +30,9 @@
 
     // Utilities
     function formatSize(bytes) {
-        if (!bytes || bytes === 0) return '';
+        if (bytes === null || bytes === undefined || bytes === '') return '';
+        bytes = Number(bytes);
+        if (bytes === 0) return '0 B';
         const units = ['B', 'KB', 'MB', 'GB', 'TB'];
         let i = 0, size = bytes;
         while (size >= 1024 && i < units.length - 1) { size /= 1024; i++; }
