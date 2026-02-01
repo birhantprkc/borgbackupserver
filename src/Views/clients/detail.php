@@ -1851,7 +1851,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                         <input type="hidden" name="plugin_id" value="<?= $plugin['id'] ?>">
                         <div class="row">
-                            <div class="<?= $plugin['slug'] === 'mysql_dump' ? 'col-lg-6' : 'col-12' ?>">
+                            <div class="<?= in_array($plugin['slug'], ['mysql_dump', 'pg_dump']) ? 'col-lg-6' : 'col-12' ?>">
                                 <div class="mb-2">
                                     <label class="form-label small fw-semibold">Configuration Name <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control form-control-sm" name="name" placeholder="e.g. Production DB" required>
