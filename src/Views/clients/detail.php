@@ -2175,14 +2175,14 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 <div id="db-all-databases-note" class="alert alert-info small mb-2 py-1 px-2" style="display:none;">
                     <i class="bi bi-info-circle me-1"></i> This backup used a single combined dump file. Rename mode is not available.
                 </div>
-                <div class="alert alert-warning small py-2 px-3 mb-2">
+                <button class="btn btn-success mb-3" id="db-restore-btn" disabled>
+                    <i class="bi bi-arrow-counterclockwise me-1"></i> Restore Selected Databases
+                </button>
+                <div class="alert alert-warning small py-2 px-3 mb-0">
                     <i class="bi bi-shield-exclamation me-1"></i>
                     <strong>Note:</strong> Database restore requires additional MySQL privileges. Your backup user needs:
                     <code class="d-block mt-1" style="font-size:0.8em;">GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER, CREATE, INSERT, DROP, ALTER, INDEX, REFERENCES ON *.* TO '<?= htmlspecialchars($mysqlUser) ?>'@'localhost'; FLUSH PRIVILEGES;</code>
                 </div>
-                <button class="btn btn-success" id="db-restore-btn" disabled>
-                    <i class="bi bi-arrow-counterclockwise me-1"></i> Restore Selected Databases
-                </button>
             </div>
         </div>
 
