@@ -11,7 +11,9 @@ class BorgCommandBuilder
     {
         $cmd = ['borg', 'create'];
 
-        // JSON logging for progress parsing + file list for catalog
+        // JSON output on stdout for archive stats (original_size, deduplicated_size)
+        $cmd[] = '--json';
+        // JSON logging on stderr for progress parsing + file list for catalog
         $cmd[] = '--log-json';
         $cmd[] = '--list';
         $cmd[] = '--progress';
