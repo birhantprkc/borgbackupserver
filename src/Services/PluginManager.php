@@ -161,6 +161,16 @@ class PluginManager
                 continue;
             }
 
+            // Resolve config from named plugin_config if available, else inline
+            if (!empty($pp['plugin_config_id'])) {
+                $resolved = $this->buildTestPayload($pp['plugin_config_id']);
+                if (!empty($resolved)) {
+                    $payload[] = $resolved;
+                    continue;
+                }
+            }
+
+            // Fallback to inline config
             $config = json_decode($pp['config'], true) ?: [];
 
             // Decrypt password
@@ -179,6 +189,128 @@ class PluginManager
         }
 
         return $payload;
+    }
+
+    /**
+     * Get all named plugin configs for an agent.
+     */
+    public function getPluginConfigs(int $agentId): array
+    {
+        return $this->db->fetchAll("
+            SELECT pc.*, p.slug, p.name as plugin_name, p.description as plugin_description
+            FROM plugin_configs pc
+            JOIN plugins p ON p.id = pc.plugin_id
+            WHERE pc.agent_id = ?
+            ORDER BY p.name ASC, pc.name ASC
+        ", [$agentId]);
+    }
+
+    /**
+     * Get a single named plugin config by ID.
+     */
+    public function getPluginConfig(int $configId): ?array
+    {
+        return $this->db->fetchOne("
+            SELECT pc.*, p.slug, p.name as plugin_name
+            FROM plugin_configs pc
+            JOIN plugins p ON p.id = pc.plugin_id
+            WHERE pc.id = ?
+        ", [$configId]);
+    }
+
+    /**
+     * Save a new named plugin config.
+     */
+    public function savePluginConfig(int $agentId, int $pluginId, string $name, array $config): int
+    {
+        $slug = $this->getPluginSlug($pluginId);
+        $config = $this->processConfigFields($slug, $config);
+
+        return $this->db->insert('plugin_configs', [
+            'agent_id' => $agentId,
+            'plugin_id' => $pluginId,
+            'name' => $name,
+            'config' => json_encode($config),
+        ]);
+    }
+
+    /**
+     * Update an existing named plugin config.
+     */
+    public function updatePluginConfig(int $configId, string $name, array $config): void
+    {
+        $existing = $this->getPluginConfig($configId);
+        if (!$existing) return;
+
+        // Preserve encrypted password if new value is empty
+        $existingConfig = json_decode($existing['config'], true) ?: [];
+        if (empty($config['password']) && !empty($existingConfig['password'])) {
+            $config['password'] = $existingConfig['password'];
+        }
+
+        $config = $this->processConfigFields($existing['slug'], $config, true);
+
+        $this->db->update('plugin_configs', [
+            'name' => $name,
+            'config' => json_encode($config),
+        ], 'id = ?', [$configId]);
+    }
+
+    /**
+     * Delete a named plugin config.
+     */
+    public function deletePluginConfig(int $configId): void
+    {
+        $this->db->delete('plugin_configs', 'id = ?', [$configId]);
+    }
+
+    /**
+     * Build a test payload for a plugin config (decrypts password).
+     */
+    public function buildTestPayload(int $configId): array
+    {
+        $pc = $this->getPluginConfig($configId);
+        if (!$pc) return [];
+
+        $config = json_decode($pc['config'], true) ?: [];
+        if (!empty($config['password'])) {
+            try {
+                $config['password'] = Encryption::decrypt($config['password']);
+            } catch (\Exception $e) {
+                // May already be plaintext
+            }
+        }
+
+        return ['slug' => $pc['slug'], 'config' => $config];
+    }
+
+    /**
+     * Process config fields: encrypt passwords, convert tags/checkboxes.
+     */
+    private function processConfigFields(string $slug, array $config, bool $passwordPreserved = false): array
+    {
+        $schema = $this->getPluginSchema($slug);
+
+        // Encrypt password if it's a new plaintext value
+        if (!empty($config['password']) && !$passwordPreserved) {
+            $config['password'] = Encryption::encrypt($config['password']);
+        }
+
+        // Convert tags
+        foreach ($schema as $field => $def) {
+            if (($def['type'] ?? '') === 'tags' && isset($config[$field]) && is_string($config[$field])) {
+                $config[$field] = array_map('trim', explode(',', $config[$field]));
+            }
+        }
+
+        // Convert checkboxes
+        foreach ($schema as $field => $def) {
+            if (($def['type'] ?? '') === 'checkbox') {
+                $config[$field] = isset($config[$field]) && $config[$field] ? true : false;
+            }
+        }
+
+        return $config;
     }
 
     /**

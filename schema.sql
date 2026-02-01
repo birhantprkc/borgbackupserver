@@ -113,7 +113,8 @@ CREATE TABLE backup_jobs (
     backup_plan_id INT DEFAULT NULL,
     agent_id INT NOT NULL,
     repository_id INT DEFAULT NULL,
-    task_type ENUM('backup', 'prune', 'restore', 'check', 'compact', 'update_borg', 'update_agent') NOT NULL DEFAULT 'backup',
+    task_type ENUM('backup', 'prune', 'restore', 'check', 'compact', 'update_borg', 'update_agent', 'plugin_test') NOT NULL DEFAULT 'backup',
+    plugin_config_id INT DEFAULT NULL,
     status ENUM('queued', 'sent', 'running', 'completed', 'failed', 'cancelled') NOT NULL DEFAULT 'queued',
     files_total INT DEFAULT NULL,
     files_processed INT DEFAULT NULL,
@@ -253,16 +254,31 @@ CREATE TABLE agent_plugins (
     UNIQUE KEY unique_agent_plugin (agent_id, plugin_id)
 ) ENGINE=InnoDB;
 
+CREATE TABLE plugin_configs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    agent_id INT NOT NULL,
+    plugin_id INT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    config JSON NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
+    FOREIGN KEY (plugin_id) REFERENCES plugins(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_agent_config_name (agent_id, plugin_id, name)
+) ENGINE=InnoDB;
+
 CREATE TABLE backup_plan_plugins (
     id INT AUTO_INCREMENT PRIMARY KEY,
     backup_plan_id INT NOT NULL,
     plugin_id INT NOT NULL,
+    plugin_config_id INT DEFAULT NULL,
     config JSON NOT NULL,
     execution_order INT NOT NULL DEFAULT 0,
     enabled TINYINT(1) NOT NULL DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (backup_plan_id) REFERENCES backup_plans(id) ON DELETE CASCADE,
     FOREIGN KEY (plugin_id) REFERENCES plugins(id) ON DELETE CASCADE,
+    FOREIGN KEY (plugin_config_id) REFERENCES plugin_configs(id) ON DELETE SET NULL,
     UNIQUE KEY unique_plan_plugin (backup_plan_id, plugin_id)
 ) ENGINE=InnoDB;
 

@@ -70,6 +70,13 @@ class App
         // Plugins
         $this->router->map('POST', '/clients/[i:id]/plugins', 'PluginController@updateAgentPlugins');
 
+        // Plugin Configs (named configurations)
+        $this->router->map('POST', '/clients/[i:id]/plugin-configs', 'PluginConfigController@store');
+        $this->router->map('POST', '/clients/[i:id]/plugin-configs/[i:configId]/edit', 'PluginConfigController@update');
+        $this->router->map('POST', '/clients/[i:id]/plugin-configs/[i:configId]/delete', 'PluginConfigController@delete');
+        $this->router->map('POST', '/clients/[i:id]/plugin-configs/[i:configId]/test', 'PluginConfigController@test');
+        $this->router->map('GET', '/clients/[i:id]/plugin-configs/[i:configId]/test-status', 'PluginConfigController@testStatus');
+
         // Repositories
         $this->router->map('POST', '/repositories/create', 'RepositoryController@store');
         $this->router->map('POST', '/repositories/[i:id]/delete', 'RepositoryController@delete');

@@ -212,6 +212,11 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         </a>
     </li>
     <li class="nav-item">
+        <a class="nav-link <?= $tab === 'plugins' ? 'active' : '' ?>" href="?tab=plugins">
+            <i class="bi bi-plug me-1"></i><span class="tab-label">Plugins</span>
+        </a>
+    </li>
+    <li class="nav-item">
         <a class="nav-link <?= $tab === 'restore' ? 'active' : '' ?>" href="?tab=restore">
             <i class="bi bi-arrow-counterclockwise me-1"></i><span class="tab-label">Restore</span>
         </a>
@@ -707,13 +712,10 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
 <?php elseif ($tab === 'schedules'): ?>
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h5 class="mb-0">Backup Schedules</h5>
-        <?php
-        $enabledPluginsList = array_filter($agentPlugins, fn($p) => !empty($p['agent_enabled']));
-        ?>
-        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#managePluginsModal">
-            <i class="bi bi-plug me-1"></i> Plugins<?php if (!empty($enabledPluginsList)): ?> <span class="badge bg-success"><?= count($enabledPluginsList) ?></span><?php endif; ?>
-        </button>
     </div>
+    <?php
+    $enabledPluginsList = array_filter($agentPlugins, fn($p) => !empty($p['agent_enabled']));
+    ?>
 
     <script>
     function showCreatePlan() {
@@ -925,7 +927,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                 <span class="text-muted fw-semibold me-2" style="display:inline-block;width:30px;">AM</span>
                                 <div class="btn-group btn-group-sm">
                                     <?php for ($h = 0; $h < 12; $h++): $label = $h === 0 ? '12' : str_pad($h, 2, '0', STR_PAD_LEFT); ?>
-                                    <button type="button" class="btn <?= in_array($h, $editSelectedHours) ? 'btn-primary active' : 'btn-outline-primary' ?> hour-btn" data-hour="<?= $h ?>"><?= $label ?></button>
+                                    <button type="button" class="btn <?= in_array($h, $editSelectedHours) ? 'btn-success active' : 'btn-outline-success' ?> hour-btn" data-hour="<?= $h ?>"><?= $label ?></button>
                                     <?php endfor; ?>
                                 </div>
                             </div>
@@ -933,7 +935,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                 <span class="text-muted fw-semibold me-2" style="display:inline-block;width:30px;">PM</span>
                                 <div class="btn-group btn-group-sm">
                                     <?php for ($h = 12; $h < 24; $h++): $label = $h === 12 ? '12' : str_pad($h - 12, 2, '0', STR_PAD_LEFT); ?>
-                                    <button type="button" class="btn <?= in_array($h, $editSelectedHours) ? 'btn-primary active' : 'btn-outline-primary' ?> hour-btn" data-hour="<?= $h ?>"><?= $label ?></button>
+                                    <button type="button" class="btn <?= in_array($h, $editSelectedHours) ? 'btn-success active' : 'btn-outline-success' ?> hour-btn" data-hour="<?= $h ?>"><?= $label ?></button>
                                     <?php endfor; ?>
                                 </div>
                             </div>
@@ -956,7 +958,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                 <?php endforeach; ?>
                             </div>
                             <input type="hidden" name="day_of_week" class="schedule-dow-hidden" value="<?= (int)$editDow ?>">
-                            <div class="input-group" style="max-width:220px">
+                            <div class="input-group" style="max-width:300px">
                                 <span class="input-group-text">@ time of day</span>
                                 <input type="time" class="form-control schedule-time-input" value="<?= htmlspecialchars($editTimes ?: '00:00') ?>">
                             </div>
@@ -977,7 +979,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                     <option value="8,23" <?= $editDom === '8,23' ? 'selected' : '' ?>>8th & 23rd</option>
                                     <option value="last" <?= $editDom === 'last' ? 'selected' : '' ?>>Last Day of Month</option>
                                 </select>
-                                <div class="input-group" style="max-width:220px">
+                                <div class="input-group" style="max-width:300px">
                                     <span class="input-group-text">@ time of day</span>
                                     <input type="time" class="form-control schedule-time-input" value="<?= htmlspecialchars($editTimes ?: '00:00') ?>">
                                 </div>
@@ -1110,68 +1112,32 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     </div>
 
                     <!-- Plugins (edit) -->
-                    <?php if (!empty($enabledPluginsList)):
+                    <?php
+                    if (!empty($enabledPluginsList) && !empty($pluginConfigs)):
                         $existingPlanPlugins = $pluginManager->getPlanPlugins($plan['id']);
-                        $existingByPluginId = [];
-                        foreach ($existingPlanPlugins as $epp) {
-                            $existingByPluginId[$epp['plugin_id']] = json_decode($epp['config'], true) ?: [];
-                        }
                     ?>
                     <div class="row mb-3">
                         <label class="col-md-3 col-form-label fw-semibold">Plugins</label>
                         <div class="col-md-9">
                             <?php foreach ($enabledPluginsList as $plugin):
-                                $schema = $pluginManager->getPluginSchema($plugin['slug']);
-                                $existingConfig = $existingByPluginId[$plugin['id']] ?? [];
-                                $isActive = !empty($existingConfig);
+                                $configs = array_filter($pluginConfigs, fn($c) => $c['plugin_id'] == $plugin['id']);
+                                if (empty($configs)) continue;
+                                $currentConfigId = null;
+                                foreach ($existingPlanPlugins as $epp) {
+                                    if ($epp['plugin_id'] == $plugin['id']) $currentConfigId = $epp['plugin_config_id'] ?? null;
+                                }
                             ?>
-                            <div class="border rounded mb-2">
-                                <div class="p-2 d-flex align-items-center">
-                                    <div class="form-check mb-0 me-2">
-                                        <input class="form-check-input" type="checkbox"
-                                               name="plugin_enabled[<?= $plugin['id'] ?>]" value="1"
-                                               id="editPluginEnable<?= $plan['id'] ?>_<?= $plugin['id'] ?>"
-                                               data-bs-toggle="collapse" data-bs-target="#editPlugin<?= $plan['id'] ?>_<?= $plugin['id'] ?>"
-                                               <?= $isActive ? 'checked' : '' ?>>
-                                    </div>
-                                    <label class="form-check-label fw-semibold" for="editPluginEnable<?= $plan['id'] ?>_<?= $plugin['id'] ?>">
-                                        <?= htmlspecialchars($plugin['name']) ?>
-                                    </label>
-                                </div>
-                                <div class="collapse <?= $isActive ? 'show' : '' ?>" id="editPlugin<?= $plan['id'] ?>_<?= $plugin['id'] ?>">
-                                    <div class="p-3 pt-0">
-                                        <?php foreach ($schema as $field => $def):
-                                            $val = $existingConfig[$field] ?? $def['default'] ?? '';
-                                            if (is_array($val)) $val = implode(', ', $val);
-                                            if ($def['type'] === 'password' && $isActive && empty($existingConfig[$field])) $val = '';
-                                            $fieldName = "plugin_config[{$plugin['id']}][{$field}]";
-                                        ?>
-                                        <div class="mb-2">
-                                            <?php if ($def['type'] === 'checkbox'): ?>
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="checkbox" name="<?= $fieldName ?>" value="1"
-                                                           id="editPF<?= $plan['id'] ?>_<?= $plugin['id'] ?>_<?= $field ?>"
-                                                           <?= $val ? 'checked' : '' ?>>
-                                                    <label class="form-check-label small" for="editPF<?= $plan['id'] ?>_<?= $plugin['id'] ?>_<?= $field ?>">
-                                                        <?= htmlspecialchars($def['label']) ?>
-                                                    </label>
-                                                </div>
-                                            <?php else: ?>
-                                                <label class="form-label small fw-semibold mb-1"><?= htmlspecialchars($def['label']) ?></label>
-                                                <input type="<?= $def['type'] === 'password' ? 'password' : ($def['type'] === 'number' ? 'number' : 'text') ?>"
-                                                       class="form-control form-control-sm" name="<?= $fieldName ?>"
-                                                       value="<?= htmlspecialchars($val) ?>"
-                                                       <?= $def['type'] === 'password' && $isActive ? 'placeholder="(unchanged if empty)"' : '' ?>>
-                                            <?php endif; ?>
-                                            <?php if (!empty($def['help'])): ?>
-                                                <div class="form-text small"><?= htmlspecialchars($def['help']) ?></div>
-                                            <?php endif; ?>
-                                        </div>
-                                        <?php endforeach; ?>
-                                    </div>
-                                </div>
+                            <div class="mb-2">
+                                <label class="form-label small fw-semibold"><?= htmlspecialchars($plugin['name']) ?></label>
+                                <select name="plugin_config[<?= $plugin['id'] ?>]" class="form-select form-select-sm">
+                                    <option value="">-- None --</option>
+                                    <?php foreach ($configs as $pcfg): ?>
+                                    <option value="<?= $pcfg['id'] ?>" <?= $pcfg['id'] == $currentConfigId ? 'selected' : '' ?>><?= htmlspecialchars($pcfg['name']) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
                             </div>
                             <?php endforeach; ?>
+                            <small class="text-muted"><a href="?tab=plugins">Manage plugin configurations</a></small>
                         </div>
                     </div>
                     <?php endif; ?>
@@ -1244,7 +1210,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                             <span class="text-muted fw-semibold me-2" style="display:inline-block;width:30px;">AM</span>
                             <div class="btn-group btn-group-sm">
                                 <?php for ($h = 0; $h < 12; $h++): $label = $h === 0 ? '12' : str_pad($h, 2, '0', STR_PAD_LEFT); ?>
-                                <button type="button" class="btn <?= $h === 1 ? 'btn-primary active' : 'btn-outline-primary' ?> hour-btn" data-hour="<?= $h ?>"><?= $label ?></button>
+                                <button type="button" class="btn <?= $h === 1 ? 'btn-success active' : 'btn-outline-success' ?> hour-btn" data-hour="<?= $h ?>"><?= $label ?></button>
                                 <?php endfor; ?>
                             </div>
                         </div>
@@ -1252,7 +1218,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                             <span class="text-muted fw-semibold me-2" style="display:inline-block;width:30px;">PM</span>
                             <div class="btn-group btn-group-sm">
                                 <?php for ($h = 12; $h < 24; $h++): $label = $h === 12 ? '12' : str_pad($h - 12, 2, '0', STR_PAD_LEFT); ?>
-                                <button type="button" class="btn btn-outline-primary hour-btn" data-hour="<?= $h ?>"><?= $label ?></button>
+                                <button type="button" class="btn btn-outline-success hour-btn" data-hour="<?= $h ?>"><?= $label ?></button>
                                 <?php endfor; ?>
                             </div>
                         </div>
@@ -1278,7 +1244,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                             <button type="button" class="btn btn-outline-primary day-btn" data-day="6">Sat</button>
                         </div>
                         <input type="hidden" name="day_of_week" class="schedule-dow-hidden" value="1">
-                        <div class="input-group" style="max-width:220px">
+                        <div class="input-group" style="max-width:300px">
                             <span class="input-group-text">@ time of day</span>
                             <input type="time" class="form-control schedule-time-input" value="00:00">
                         </div>
@@ -1299,7 +1265,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                 <option value="8,23">8th & 23rd</option>
                                 <option value="last">Last Day of Month</option>
                             </select>
-                            <div class="input-group" style="max-width:220px">
+                            <div class="input-group" style="max-width:300px">
                                 <span class="input-group-text">@ time of day</span>
                                 <input type="time" class="form-control schedule-time-input" value="00:00">
                             </div>
@@ -1452,70 +1418,25 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 </div>
 
                 <!-- Plugins -->
-                <?php if (!empty($enabledPluginsList)): ?>
+                <?php if (!empty($enabledPluginsList) && !empty($pluginConfigs)): ?>
                 <div class="row mb-3">
                     <label class="col-md-3 col-form-label fw-semibold">Plugins</label>
                     <div class="col-md-9">
-                        <div class="accordion accordion-flush" id="pluginAccordionCreate">
-                            <?php foreach ($enabledPluginsList as $plugin):
-                                $schema = $pluginManager->getPluginSchema($plugin['slug']);
-                                $helpSql = $pluginManager->getPluginHelp($plugin['slug']);
-                            ?>
-                            <div class="border rounded mb-2">
-                                <div class="p-2 d-flex align-items-center">
-                                    <div class="form-check mb-0 me-2">
-                                        <input class="form-check-input plugin-toggle" type="checkbox"
-                                               name="plugin_enabled[<?= $plugin['id'] ?>]" value="1"
-                                               id="createPluginEnable<?= $plugin['id'] ?>"
-                                               data-bs-toggle="collapse" data-bs-target="#createPlugin<?= $plugin['id'] ?>">
-                                    </div>
-                                    <label class="form-check-label fw-semibold" for="createPluginEnable<?= $plugin['id'] ?>">
-                                        <?= htmlspecialchars($plugin['name']) ?>
-                                    </label>
-                                    <small class="text-muted ms-2"><?= htmlspecialchars($plugin['description']) ?></small>
-                                </div>
-                                <div class="collapse" id="createPlugin<?= $plugin['id'] ?>">
-                                    <div class="p-3 pt-0">
-                                        <?php foreach ($schema as $field => $def):
-                                            $default = $def['default'] ?? '';
-                                            $fieldVal = is_array($default) ? implode(', ', $default) : $default;
-                                            $fieldName = "plugin_config[{$plugin['id']}][{$field}]";
-                                        ?>
-                                        <div class="mb-2">
-                                            <?php if ($def['type'] === 'checkbox'): ?>
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="checkbox" name="<?= $fieldName ?>" value="1"
-                                                           id="createPF<?= $plugin['id'] ?>_<?= $field ?>"
-                                                           <?= $default ? 'checked' : '' ?>>
-                                                    <label class="form-check-label small" for="createPF<?= $plugin['id'] ?>_<?= $field ?>">
-                                                        <?= htmlspecialchars($def['label']) ?>
-                                                    </label>
-                                                </div>
-                                            <?php else: ?>
-                                                <label class="form-label small fw-semibold mb-1"><?= htmlspecialchars($def['label']) ?>
-                                                    <?php if ($def['required'] ?? false): ?><span class="text-danger">*</span><?php endif; ?>
-                                                </label>
-                                                <input type="<?= $def['type'] === 'password' ? 'password' : ($def['type'] === 'number' ? 'number' : 'text') ?>"
-                                                       class="form-control form-control-sm" name="<?= $fieldName ?>"
-                                                       value="<?= htmlspecialchars($fieldVal) ?>"
-                                                       <?= ($def['required'] ?? false) ? '' : '' ?>>
-                                            <?php endif; ?>
-                                            <?php if (!empty($def['help'])): ?>
-                                                <div class="form-text small"><?= htmlspecialchars($def['help']) ?></div>
-                                            <?php endif; ?>
-                                        </div>
-                                        <?php endforeach; ?>
-                                        <?php if ($helpSql): ?>
-                                        <div class="alert alert-info small mt-2 mb-0">
-                                            <strong>Setup hint:</strong>
-                                            <pre class="mb-0 mt-1" style="font-size: 0.8rem;"><?= htmlspecialchars($helpSql) ?></pre>
-                                        </div>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-                            </div>
-                            <?php endforeach; ?>
+                        <?php foreach ($enabledPluginsList as $plugin):
+                            $configs = array_filter($pluginConfigs, fn($c) => $c['plugin_id'] == $plugin['id']);
+                            if (empty($configs)) continue;
+                        ?>
+                        <div class="mb-2">
+                            <label class="form-label small fw-semibold"><?= htmlspecialchars($plugin['name']) ?></label>
+                            <select name="plugin_config[<?= $plugin['id'] ?>]" class="form-select form-select-sm">
+                                <option value="">-- None --</option>
+                                <?php foreach ($configs as $pcfg): ?>
+                                <option value="<?= $pcfg['id'] ?>"><?= htmlspecialchars($pcfg['name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
                         </div>
+                        <?php endforeach; ?>
+                        <small class="text-muted"><a href="?tab=plugins">Manage plugin configurations</a></small>
                     </div>
                 </div>
                 <?php endif; ?>
@@ -1565,8 +1486,8 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
             btn.addEventListener('click', function(e) {
                 e.preventDefault();
                 this.classList.toggle('active');
-                this.classList.toggle('btn-primary');
-                this.classList.toggle('btn-outline-primary');
+                this.classList.toggle('btn-success');
+                this.classList.toggle('btn-outline-success');
                 this.blur();
                 syncDailyTimes();
             });
@@ -1802,42 +1723,227 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     </div><!-- /create-plan-section -->
     <?php endif; ?>
 
-    <!-- Manage Plugins Modal -->
-    <div class="modal fade" id="managePluginsModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title"><i class="bi bi-plug me-1"></i> Plugins for <?= htmlspecialchars($agent['name']) ?></h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+<?php elseif ($tab === 'plugins'): ?>
+    <h5 class="mb-3"><i class="bi bi-plug me-1"></i> Plugins</h5>
+
+    <!-- Enable/Disable Plugins -->
+    <div class="card mb-4">
+        <div class="card-header fw-semibold">Available Plugins</div>
+        <div class="card-body">
+            <form method="POST" action="/clients/<?= $agent['id'] ?>/plugins">
+                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                <p class="text-muted small mb-3">Enable plugins to add pre-backup tasks (e.g. database dumps) for this client.</p>
+                <?php if (empty($allPlugins)): ?>
+                    <p class="text-muted">No plugins available.</p>
+                <?php else: ?>
+                    <?php foreach ($allPlugins as $plugin): ?>
+                    <div class="form-check mb-2">
+                        <input type="checkbox" class="form-check-input" name="plugins[]"
+                               value="<?= $plugin['id'] ?>" id="enablePlugin<?= $plugin['id'] ?>"
+                               <?php foreach ($agentPlugins as $ap): if ($ap['id'] == $plugin['id'] && $ap['agent_enabled']): ?>checked<?php endif; endforeach; ?>>
+                        <label class="form-check-label" for="enablePlugin<?= $plugin['id'] ?>">
+                            <strong><?= htmlspecialchars($plugin['name']) ?></strong>
+                            <span class="text-muted ms-1">&mdash; <?= htmlspecialchars($plugin['description']) ?></span>
+                        </label>
+                    </div>
+                    <?php endforeach; ?>
+                    <button type="submit" class="btn btn-sm btn-primary mt-2"><i class="bi bi-check-lg me-1"></i> Save</button>
+                <?php endif; ?>
+            </form>
+        </div>
+    </div>
+
+    <!-- Plugin Configurations -->
+    <?php
+    $enabledPluginsList = array_filter($agentPlugins, fn($p) => !empty($p['agent_enabled']));
+    foreach ($enabledPluginsList as $plugin):
+        $schema = $pluginManager->getPluginSchema($plugin['slug']);
+        $helpSql = $pluginManager->getPluginHelp($plugin['slug']);
+        $configs = array_filter($pluginConfigs, fn($c) => $c['plugin_id'] == $plugin['id']);
+    ?>
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span class="fw-semibold"><?= htmlspecialchars($plugin['name']) ?> Configurations</span>
+            <button type="button" class="btn btn-sm btn-success" data-bs-toggle="collapse" data-bs-target="#newPluginConfig<?= $plugin['id'] ?>">
+                <i class="bi bi-plus-circle me-1"></i> Add Configuration
+            </button>
+        </div>
+        <div class="card-body">
+            <?php if (empty($configs)): ?>
+                <p class="text-muted mb-0">No configurations yet. Click "Add Configuration" to create one.</p>
+            <?php endif; ?>
+
+            <?php foreach ($configs as $cfg):
+                $cfgData = json_decode($cfg['config'], true) ?: [];
+                $summaryParts = [];
+                if (!empty($cfgData['host'])) $summaryParts[] = $cfgData['host'] . (!empty($cfgData['port']) && $cfgData['port'] != 3306 ? ':' . $cfgData['port'] : '');
+                if (!empty($cfgData['user'])) $summaryParts[] = 'user: ' . $cfgData['user'];
+                if (!empty($cfgData['databases'])) $summaryParts[] = 'db: ' . $cfgData['databases'];
+            ?>
+            <div class="border rounded p-3 mb-3">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="mb-1"><?= htmlspecialchars($cfg['name']) ?></h6>
+                        <small class="text-muted"><?= htmlspecialchars(implode(' | ', $summaryParts)) ?></small>
+                    </div>
+                    <div class="d-flex gap-1">
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="testPluginConfig(<?= $agent['id'] ?>, <?= $cfg['id'] ?>)">
+                            <i class="bi bi-lightning me-1"></i> Test
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#editConfig<?= $cfg['id'] ?>">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <form method="POST" action="/clients/<?= $agent['id'] ?>/plugin-configs/<?= $cfg['id'] ?>/delete" class="d-inline" onsubmit="return confirm('Delete this configuration?')">
+                            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </div>
                 </div>
-                <form method="POST" action="/clients/<?= $agent['id'] ?>/plugins">
-                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                    <div class="modal-body">
-                        <p class="text-muted small">Enable plugins to add pre-backup tasks (e.g. database dumps) for this client. Once enabled, you can configure them per backup plan.</p>
-                        <?php if (empty($allPlugins)): ?>
-                            <p class="text-muted">No plugins available.</p>
-                        <?php else: ?>
-                            <?php foreach ($allPlugins as $plugin): ?>
-                            <div class="form-check mb-3">
-                                <input type="checkbox" class="form-check-input" name="plugins[]"
-                                       value="<?= $plugin['id'] ?>" id="managePlugin<?= $plugin['id'] ?>"
-                                       <?php foreach ($agentPlugins as $ap): if ($ap['id'] == $plugin['id'] && $ap['agent_enabled']): ?>checked<?php endif; endforeach; ?>>
-                                <label class="form-check-label" for="managePlugin<?= $plugin['id'] ?>">
-                                    <strong><?= htmlspecialchars($plugin['name']) ?></strong><br>
-                                    <small class="text-muted"><?= htmlspecialchars($plugin['description']) ?></small>
+                <div id="test-result-<?= $cfg['id'] ?>" class="mt-2"></div>
+
+                <!-- Edit form (collapsed) -->
+                <div class="collapse mt-3" id="editConfig<?= $cfg['id'] ?>">
+                    <form method="POST" action="/clients/<?= $agent['id'] ?>/plugin-configs/<?= $cfg['id'] ?>/edit">
+                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                        <div class="mb-2">
+                            <label class="form-label small fw-semibold">Configuration Name</label>
+                            <input type="text" class="form-control form-control-sm" name="name" value="<?= htmlspecialchars($cfg['name']) ?>" required>
+                        </div>
+                        <?php foreach ($schema as $field => $def):
+                            $val = $cfgData[$field] ?? $def['default'] ?? '';
+                            if (is_array($val)) $val = implode(', ', $val);
+                            $fieldName = "plugin_config[{$field}]";
+                        ?>
+                        <div class="mb-2">
+                            <?php if ($def['type'] === 'checkbox'): ?>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="<?= $fieldName ?>" value="1"
+                                           id="editCfg<?= $cfg['id'] ?>_<?= $field ?>"
+                                           <?= $val ? 'checked' : '' ?>>
+                                    <label class="form-check-label small" for="editCfg<?= $cfg['id'] ?>_<?= $field ?>">
+                                        <?= htmlspecialchars($def['label']) ?>
+                                    </label>
+                                </div>
+                            <?php else: ?>
+                                <label class="form-label small fw-semibold mb-1"><?= htmlspecialchars($def['label']) ?></label>
+                                <input type="<?= $def['type'] === 'password' ? 'password' : ($def['type'] === 'number' ? 'number' : 'text') ?>"
+                                       class="form-control form-control-sm" name="<?= $fieldName ?>"
+                                       value="<?= $def['type'] === 'password' ? '' : htmlspecialchars($val) ?>"
+                                       <?= $def['type'] === 'password' ? 'placeholder="(unchanged if empty)"' : '' ?>>
+                            <?php endif; ?>
+                            <?php if (!empty($def['help'])): ?>
+                                <div class="form-text small"><?= htmlspecialchars($def['help']) ?></div>
+                            <?php endif; ?>
+                        </div>
+                        <?php endforeach; ?>
+                        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-check-lg me-1"></i> Save Changes</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-1" data-bs-toggle="collapse" data-bs-target="#editConfig<?= $cfg['id'] ?>">Cancel</button>
+                    </form>
+                </div>
+            </div>
+            <?php endforeach; ?>
+
+            <!-- Add new config form (collapsed) -->
+            <div class="collapse mt-3" id="newPluginConfig<?= $plugin['id'] ?>">
+                <div class="border rounded p-3 bg-light">
+                    <h6 class="mb-3">New <?= htmlspecialchars($plugin['name']) ?> Configuration</h6>
+                    <form method="POST" action="/clients/<?= $agent['id'] ?>/plugin-configs">
+                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                        <input type="hidden" name="plugin_id" value="<?= $plugin['id'] ?>">
+                        <div class="mb-2">
+                            <label class="form-label small fw-semibold">Configuration Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-sm" name="name" placeholder="e.g. Production DB" required>
+                        </div>
+                        <?php foreach ($schema as $field => $def):
+                            $default = $def['default'] ?? '';
+                            $fieldVal = is_array($default) ? implode(', ', $default) : $default;
+                            $fieldName = "plugin_config[{$field}]";
+                        ?>
+                        <div class="mb-2">
+                            <?php if ($def['type'] === 'checkbox'): ?>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="<?= $fieldName ?>" value="1"
+                                           id="newCfg<?= $plugin['id'] ?>_<?= $field ?>"
+                                           <?= $default ? 'checked' : '' ?>>
+                                    <label class="form-check-label small" for="newCfg<?= $plugin['id'] ?>_<?= $field ?>">
+                                        <?= htmlspecialchars($def['label']) ?>
+                                    </label>
+                                </div>
+                            <?php else: ?>
+                                <label class="form-label small fw-semibold mb-1"><?= htmlspecialchars($def['label']) ?>
+                                    <?php if ($def['required'] ?? false): ?><span class="text-danger">*</span><?php endif; ?>
                                 </label>
-                            </div>
-                            <?php endforeach; ?>
+                                <input type="<?= $def['type'] === 'password' ? 'password' : ($def['type'] === 'number' ? 'number' : 'text') ?>"
+                                       class="form-control form-control-sm" name="<?= $fieldName ?>"
+                                       value="<?= htmlspecialchars($fieldVal) ?>">
+                            <?php endif; ?>
+                            <?php if (!empty($def['help'])): ?>
+                                <div class="form-text small"><?= htmlspecialchars($def['help']) ?></div>
+                            <?php endif; ?>
+                        </div>
+                        <?php endforeach; ?>
+                        <?php if ($helpSql): ?>
+                        <div class="alert alert-info small mt-2">
+                            <strong>Setup hint:</strong>
+                            <pre class="mb-0 mt-1" style="font-size: 0.8rem;"><?= htmlspecialchars($helpSql) ?></pre>
+                        </div>
                         <?php endif; ?>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i> Save</button>
-                    </div>
-                </form>
+                        <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-plus-circle me-1"></i> Create Configuration</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-1" data-bs-toggle="collapse" data-bs-target="#newPluginConfig<?= $plugin['id'] ?>">Cancel</button>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
+    <?php endforeach; ?>
+
+    <script>
+    function testPluginConfig(agentId, configId) {
+        const resultDiv = document.getElementById('test-result-' + configId);
+        resultDiv.innerHTML = '<div class="d-flex align-items-center text-muted small"><span class="spinner-border spinner-border-sm me-2"></span> Contacting client, please wait...</div>';
+
+        fetch('/clients/' + agentId + '/plugin-configs/' + configId + '/test', {
+            method: 'POST',
+            credentials: 'same-origin'
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.job_id) {
+                pollTestStatus(agentId, configId);
+            } else {
+                resultDiv.innerHTML = '<div class="alert alert-danger small mb-0 mt-1">Failed to create test job.</div>';
+            }
+        })
+        .catch(() => {
+            resultDiv.innerHTML = '<div class="alert alert-danger small mb-0 mt-1">Error contacting server.</div>';
+        });
+    }
+
+    function pollTestStatus(agentId, configId) {
+        const resultDiv = document.getElementById('test-result-' + configId);
+        const poll = setInterval(() => {
+            fetch('/clients/' + agentId + '/plugin-configs/' + configId + '/test-status', { credentials: 'same-origin' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'completed') {
+                    clearInterval(poll);
+                    resultDiv.innerHTML = '<div class="alert alert-success small mb-0 mt-1"><i class="bi bi-check-circle me-1"></i> ' + (data.message || 'Test passed.') + '</div>';
+                } else if (data.status === 'failed') {
+                    clearInterval(poll);
+                    resultDiv.innerHTML = '<div class="alert alert-danger small mb-0 mt-1"><i class="bi bi-x-circle me-1"></i> ' + (data.error || 'Test failed.') + '</div>';
+                }
+            });
+        }, 2000);
+
+        // Timeout after 60 seconds
+        setTimeout(() => {
+            clearInterval(poll);
+            if (resultDiv.querySelector('.spinner-border')) {
+                resultDiv.innerHTML = '<div class="alert alert-warning small mb-0 mt-1"><i class="bi bi-clock me-1"></i> Test timed out. The client may be offline.</div>';
+            }
+        }, 60000);
+    }
+    </script>
 
 <?php elseif ($tab === 'restore'): ?>
     <h5 class="mb-3">Restore Files</h5>

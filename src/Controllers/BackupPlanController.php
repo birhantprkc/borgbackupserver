@@ -216,16 +216,23 @@ class BackupPlanController extends Controller
 
     private function savePluginConfigs(int $planId): void
     {
-        $enabledPlugins = array_keys($_POST['plugin_enabled'] ?? []);
-        if (empty($enabledPlugins)) {
-            // Clear any existing plugin configs
-            $this->db->query("DELETE FROM backup_plan_plugins WHERE backup_plan_id = ?", [$planId]);
-            return;
-        }
-
         $pluginConfigs = $_POST['plugin_config'] ?? [];
-        $pluginManager = new PluginManager();
-        $pluginManager->savePlanPlugins($planId, $enabledPlugins, $pluginConfigs);
+
+        // Clear existing
+        $this->db->query("DELETE FROM backup_plan_plugins WHERE backup_plan_id = ?", [$planId]);
+
+        $order = 0;
+        foreach ($pluginConfigs as $pluginId => $configId) {
+            if (empty($configId)) continue;
+            $this->db->insert('backup_plan_plugins', [
+                'backup_plan_id' => $planId,
+                'plugin_id' => (int) $pluginId,
+                'plugin_config_id' => (int) $configId,
+                'config' => '{}',
+                'execution_order' => $order++,
+                'enabled' => 1,
+            ]);
+        }
     }
 
     private function calculateNextRun(string $frequency, string $times, ?int $dayOfWeek, ?int $dayOfMonth): ?string

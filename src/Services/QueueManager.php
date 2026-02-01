@@ -58,7 +58,7 @@ class QueueManager
         // Get queued jobs ordered by queued_at (FIFO)
         // No LIMIT — we may skip busy-repo jobs and need to see more candidates
         $queuedJobs = $this->db->fetchAll("
-            SELECT bj.*, bp.directories, bp.excludes, bp.advanced_options,
+            SELECT bj.*, bj.plugin_config_id, bp.directories, bp.excludes, bp.advanced_options,
                    bp.prune_minutes, bp.prune_hours, bp.prune_days,
                    bp.prune_weeks, bp.prune_months, bp.prune_years,
                    r.path as repo_path, r.encryption, r.passphrase_encrypted, r.name as repo_name,
@@ -160,6 +160,14 @@ class QueueManager
                 $taskPayload = ['task' => 'update_borg', 'job_id' => $job['id']];
             } elseif ($job['task_type'] === 'update_agent') {
                 $taskPayload = ['task' => 'update_agent', 'job_id' => $job['id']];
+            } elseif ($job['task_type'] === 'plugin_test') {
+                $pluginManager = new PluginManager();
+                $testPayload = $pluginManager->buildTestPayload((int) $job['plugin_config_id']);
+                $taskPayload = [
+                    'task' => 'plugin_test',
+                    'job_id' => $job['id'],
+                    'plugin' => $testPayload,
+                ];
             }
 
             if ($taskPayload) {
@@ -200,7 +208,7 @@ class QueueManager
     public function getTasksForAgent(int $agentId): array
     {
         $jobs = $this->db->fetchAll("
-            SELECT bj.*, bp.directories, bp.excludes, bp.advanced_options,
+            SELECT bj.*, bj.plugin_config_id, bp.directories, bp.excludes, bp.advanced_options,
                    bp.prune_minutes, bp.prune_hours, bp.prune_days,
                    bp.prune_weeks, bp.prune_months, bp.prune_years,
                    r.path as repo_path, r.encryption, r.passphrase_encrypted, r.name as repo_name
@@ -252,6 +260,14 @@ class QueueManager
                 $tasks[] = ['task' => 'update_borg', 'job_id' => $job['id']];
             } elseif ($job['task_type'] === 'update_agent') {
                 $tasks[] = ['task' => 'update_agent', 'job_id' => $job['id']];
+            } elseif ($job['task_type'] === 'plugin_test') {
+                $pluginManager = new PluginManager();
+                $testPayload = $pluginManager->buildTestPayload((int) $job['plugin_config_id']);
+                $tasks[] = [
+                    'task' => 'plugin_test',
+                    'job_id' => $job['id'],
+                    'plugin' => $testPayload,
+                ];
             }
         }
 

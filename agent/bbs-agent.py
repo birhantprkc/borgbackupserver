@@ -522,6 +522,30 @@ def cleanup_plugin_mysql_dump(config, plugin_result):
             os.remove(fpath)
 
 
+def test_plugin_mysql_dump(config):
+    """Test MySQL connectivity without dumping."""
+    host = config.get("host", "localhost")
+    port = str(config.get("port", 3306))
+    user = config.get("user")
+    password = config.get("password")
+    if not user or not password:
+        raise Exception("MySQL plugin requires user and password")
+
+    cmd = ["mysql", f"--host={host}", f"--port={port}", f"--user={user}",
+           f"--password={password}", "-e", "SELECT 1;", "-s", "--skip-column-names"]
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+    if result.returncode != 0:
+        raise Exception(f"Connection failed: {result.stderr.decode('utf-8', errors='replace').strip()}")
+
+    # Test SHOW DATABASES for permissions
+    cmd2 = ["mysql", f"--host={host}", f"--port={port}", f"--user={user}",
+            f"--password={password}", "-e", "SHOW DATABASES;", "-s", "--skip-column-names"]
+    result2 = subprocess.run(cmd2, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+    dbs = result2.stdout.decode("utf-8", errors="replace").strip().split("\n")
+    dbs = [d for d in dbs if d]
+    return f"Connection successful. Found {len(dbs)} database(s): {', '.join(dbs[:10])}"
+
+
 def execute_task(config, task):
     """Execute a borg task and report progress/status."""
     job_id = task.get("job_id")
@@ -534,6 +558,29 @@ def execute_task(config, task):
     cwd = task.get("cwd")  # Working directory for extract (restore) tasks
 
     logger.info(f"Executing {task_type} job #{job_id}: {' '.join(command)}")
+
+    # Handle plugin test
+    if task_type == "plugin_test":
+        plugin_data = task.get("plugin", {})
+        slug = plugin_data.get("slug", "")
+        cfg = plugin_data.get("config", {})
+        test_func = globals().get(f"test_plugin_{slug}")
+        if test_func:
+            try:
+                result_msg = test_func(cfg)
+                api_request(config, "/api/agent/status", method="POST", data={
+                    "job_id": job_id, "result": "completed", "output_log": result_msg,
+                })
+            except Exception as e:
+                api_request(config, "/api/agent/status", method="POST", data={
+                    "job_id": job_id, "result": "failed", "error_log": str(e),
+                })
+        else:
+            api_request(config, "/api/agent/status", method="POST", data={
+                "job_id": job_id, "result": "failed",
+                "error_log": f"No test handler for plugin: {slug}",
+            })
+        return
 
     # Execute pre-backup plugins
     plugin_results = {}

@@ -32,6 +32,6 @@ class PluginController extends Controller
         }
 
         $this->flash('success', 'Plugin settings updated.');
-        $this->redirect("/clients/{$id}?tab=schedules");
+        $this->redirect("/clients/{$id}?tab=plugins");
     }
 }
