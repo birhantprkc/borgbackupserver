@@ -18,7 +18,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.3.1"
+AGENT_VERSION = "1.3.2"
 CONFIG_PATH = "/etc/bbs-agent/config.ini"
 LOG_PATH = "/var/log/bbs-agent.log"
 SSH_KEY_PATH = "/etc/bbs-agent/ssh_key"
@@ -710,6 +710,8 @@ def execute_task(config, task):
         "files_processed": files_processed,
         "original_size": original_size,
         "deduplicated_size": deduplicated_size,
+        "bytes_total": original_size,
+        "bytes_processed": original_size,
     }
 
     if archive_name:
