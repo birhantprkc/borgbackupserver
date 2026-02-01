@@ -53,7 +53,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     <?php if ($agent['os_info']): ?>
                         <span class="d-none d-md-inline"><i class="bi bi-cpu me-1"></i><?= htmlspecialchars($agent['os_info']) ?></span>
                     <?php endif; ?>
-                    <span>
+                    <span id="agent-version-wrapper">
                     <?php if ($agent['agent_version']): ?>
                         <?php if ($agentNeedsUpdate): ?>
                             <form method="POST" action="/clients/<?= $agent['id'] ?>/update-agent" class="d-inline">
@@ -2172,6 +2172,8 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
 (function() {
     const agentId = <?= (int) $agent['id'] ?>;
     const initialStatus = '<?= $agent['status'] ?>';
+    const serverAgentVersion = <?= json_encode($serverAgentVersion) ?>;
+    const csrfToken = <?= json_encode($this->csrfToken()) ?>;
     let previousStatus = initialStatus;
     const statusMap = { online: 'success', offline: 'secondary', error: 'danger', setup: 'warning' };
 
@@ -2202,6 +2204,20 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 if (alert && data.status === 'online' && previousStatus !== 'online') {
                     alert.style.cssText = '';
                     alert.classList.remove('d-none');
+                }
+
+                // Update agent version display
+                const vw = document.getElementById('agent-version-wrapper');
+                if (vw && data.agent_version) {
+                    const needsUpdate = serverAgentVersion && data.agent_version !== serverAgentVersion;
+                    if (needsUpdate) {
+                        vw.innerHTML = '<form method="POST" action="/clients/' + agentId + '/update-agent" class="d-inline">' +
+                            '<input type="hidden" name="csrf_token" value="' + csrfToken + '">' +
+                            '<button type="submit" class="btn btn-link text-warning p-0 text-decoration-none" style="font-size: inherit;" title="Update agent to v' + serverAgentVersion + '" onclick="return confirm(\'Queue an agent update to v' + serverAgentVersion + '?\')">' +
+                            '<i class="bi bi-box me-1"></i>Agent v' + data.agent_version + ' <i class="bi bi-arrow-up-circle-fill"></i></button></form>';
+                    } else {
+                        vw.innerHTML = '<i class="bi bi-box me-1"></i>Agent v' + data.agent_version;
+                    }
                 }
 
                 previousStatus = data.status;

@@ -398,6 +398,7 @@ class ClientController extends Controller
             'status' => $agent['status'],
             'last_heartbeat' => $agent['last_heartbeat'],
             'seen_ago' => $seenAgo,
+            'agent_version' => $agent['agent_version'],
         ]);
     }
 
