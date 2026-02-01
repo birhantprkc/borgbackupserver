@@ -540,6 +540,8 @@ body.bg-light {
     white-space: nowrap;
     border-left: 3px solid transparent;
     transition: background 0.1s, border-color 0.1s;
+    display: flex;
+    align-items: center;
 }
 .tree-item:hover {
     background: #f0fdf4;
@@ -548,11 +550,13 @@ body.bg-light {
 .tree-dir > .tree-label { font-weight: 600; }
 .tree-children { display: none; }
 .tree-children.open { display: block; }
-.tree-toggle { display: inline-block; width: 16px; text-align: center; color: #6c757d; }
-.tree-cb { margin-right: 4px; }
-.tree-icon { margin-right: 4px; }
-.tree-size { color: #6c757d; margin-left: 8px; }
-.tree-mtime { font-size: 0.8em; margin-left: 8px; }
+.tree-toggle { display: inline-block; width: 16px; text-align: center; color: #6c757d; flex-shrink: 0; }
+.tree-cb { margin-right: 4px; flex-shrink: 0; }
+.tree-icon { margin-right: 4px; flex-shrink: 0; }
+.tree-label { overflow: hidden; text-overflow: ellipsis; }
+.tree-meta { margin-left: auto; display: flex; align-items: center; gap: 12px; padding-left: 12px; flex-shrink: 0; }
+.tree-size { color: #6c757d; white-space: nowrap; min-width: 60px; text-align: right; font-size: 0.85em; }
+.tree-mtime { color: #6c757d; font-size: 0.8em; white-space: nowrap; min-width: 130px; text-align: right; }
 .tree-count { color: #6c757d; font-size: 0.8em; margin-left: 6px; }
 
 .restore-selection-item {

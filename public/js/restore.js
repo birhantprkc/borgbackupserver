@@ -169,7 +169,7 @@
                         '<input type="checkbox" class="tree-cb" data-path="' + esc(d.path) + '" data-type="dir"' + (isChecked ? ' checked' : '') + '>' +
                         '<span class="tree-icon"><i class="bi bi-folder-fill text-warning"></i></span>' +
                         '<span class="tree-label">' + esc(d.name) + '</span>' +
-                        '<span class="tree-count">(' + d.file_count.toLocaleString() + ' files, ' + formatSize(d.total_size) + ')</span>';
+                        '<span class="tree-meta"><span class="tree-count">(' + d.file_count.toLocaleString() + ' files, ' + formatSize(d.total_size) + ')</span></span>';
 
                     const children = document.createElement('div');
                     children.className = 'tree-children';
@@ -217,9 +217,11 @@
                         '<input type="checkbox" class="tree-cb" data-path="' + esc(f.file_path) + '" data-type="file"' + (isChecked ? ' checked' : '') + '>' +
                         '<span class="tree-icon"><i class="bi bi-file-earmark"></i></span>' +
                         '<span class="tree-label">' + esc(f.file_name) + '</span>' +
-                        ' ' + statusBadge(f.status) +
-                        '<span class="tree-size">' + formatSize(f.file_size) + '</span>' +
-                        (f.mtime ? '<span class="tree-mtime text-muted">' + formatDate(f.mtime) + '</span>' : '');
+                        '<span class="tree-meta">' +
+                            statusBadge(f.status) +
+                            '<span class="tree-size">' + formatSize(f.file_size) + '</span>' +
+                            (f.mtime ? '<span class="tree-mtime">' + formatDate(f.mtime) + '</span>' : '') +
+                        '</span>';
 
                     parentEl.appendChild(item);
 
