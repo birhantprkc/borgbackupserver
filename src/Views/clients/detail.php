@@ -2185,7 +2185,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 const badge = document.getElementById('agent-status-badge');
                 if (badge) {
                     const cls = statusMap[data.status] || 'warning';
-                    badge.className = 'badge bg-' + cls + ' fs-6';
+                    badge.className = 'badge bg-' + cls;
                     badge.textContent = data.status.charAt(0).toUpperCase() + data.status.slice(1);
                 }
 
