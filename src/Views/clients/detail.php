@@ -2208,19 +2208,18 @@ FLUSH PRIVILEGES;</pre>
                     <?php
                     $currentRepo = null;
                     foreach ($archives as $ar):
+                        // Skip archives without database metadata
+                        if (empty($ar['databases_backed_up'])) continue;
+                        $dbMeta = json_decode($ar['databases_backed_up'], true);
+                        if (empty($dbMeta['databases'])) continue;
+
                         if ($ar['repo_name'] !== $currentRepo):
                             if ($currentRepo !== null) echo '</optgroup>';
                             $currentRepo = $ar['repo_name'];
                             echo '<optgroup label="' . htmlspecialchars($currentRepo) . '">';
                         endif;
-                        $dbLabel = '';
-                        if (!empty($ar['databases_backed_up'])) {
-                            $dbMeta = json_decode($ar['databases_backed_up'], true);
-                            if (!empty($dbMeta['databases'])) {
-                                $n = count($dbMeta['databases']);
-                                $dbLabel = " ({$n} " . ($n === 1 ? 'database' : 'databases') . ')';
-                            }
-                        }
+                        $n = count($dbMeta['databases']);
+                        $dbLabel = " ({$n} " . ($n === 1 ? 'database' : 'databases') . ')';
                     ?>
                         <option value="<?= $ar['id'] ?>">
                             <?= \BBS\Core\TimeHelper::format($ar['created_at'], 'l, M j, Y \a\t g:i A') ?><?= $dbLabel ?>
@@ -2263,8 +2262,8 @@ FLUSH PRIVILEGES;</pre>
                 </button>
                 <div class="alert alert-warning small py-2 px-3 mb-0">
                     <i class="bi bi-shield-exclamation me-1"></i>
-                    <strong>Note:</strong> Database restore requires additional MySQL privileges. Your backup user needs:
-                    <code class="d-block mt-1" style="font-size:0.8em;">GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER, CREATE, INSERT, DROP, ALTER, INDEX, REFERENCES ON *.* TO '<?= htmlspecialchars($mysqlUser) ?>'@'localhost'; FLUSH PRIVILEGES;</code>
+                    If you don't already have it set up, the database restore requires a user with write permissions such as below:
+                    <code class="d-block mt-1" style="font-size:0.8em;">GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER, CREATE, INSERT, DROP, ALTER, INDEX, REFERENCES ON *.* TO '<span id="db-restore-grant-user"><?= htmlspecialchars($mysqlUser) ?></span>'@'localhost'; FLUSH PRIVILEGES;</code>
                 </div>
             </div>
         </div>
@@ -2281,6 +2280,10 @@ FLUSH PRIVILEGES;</pre>
     <script>window.RESTORE_AGENT_ID = <?= $agent['id'] ?>;</script>
     <script>window.MYSQL_PLUGIN_ENABLED = <?= $mysqlPluginEnabled ? 'true' : 'false' ?>;</script>
     <script>window.MYSQL_CONFIG_AVAILABLE = <?= !empty($mysqlConfigs) ? 'true' : 'false' ?>;</script>
+    <script>window.MYSQL_CONFIG_USERS = <?= json_encode(array_combine(
+        array_column($mysqlConfigs, 'id'),
+        array_map(function($mc) { $c = json_decode($mc['config'] ?? '{}', true); return $c['user'] ?? 'backup_user'; }, $mysqlConfigs)
+    )) ?>;</script>
     <?php
     if (!isset($scripts)) $scripts = [];
     $scripts[] = '/js/restore.js?v=' . filemtime(__DIR__ . '/../../../public/js/restore.js');

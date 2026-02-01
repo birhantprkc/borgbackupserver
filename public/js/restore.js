@@ -529,6 +529,17 @@
         let dbRestoreMode = 'files';
         let dbPerDatabase = true;
 
+        // Update grant username when connection changes
+        function updateGrantUser() {
+            const grantSpan = document.getElementById('db-restore-grant-user');
+            if (!grantSpan || !dbConfigId || !window.MYSQL_CONFIG_USERS) return;
+            grantSpan.textContent = window.MYSQL_CONFIG_USERS[dbConfigId.value] || 'backup_user';
+        }
+        if (dbConfigId) {
+            dbConfigId.addEventListener('change', updateGrantUser);
+            updateGrantUser();
+        }
+
         // Mode toggle
         if (modeToggle) {
             modeToggle.addEventListener('click', function(e) {
