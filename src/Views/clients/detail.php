@@ -839,6 +839,14 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
             </div>
         </div>
     </div>
+    <?php elseif (empty($plans) && empty($repositories)): ?>
+    <div class="card border-0 shadow-sm mb-4" style="border:2px dashed #ccc !important;background:#fafafa;">
+        <div class="card-body d-flex flex-column align-items-center justify-content-center text-muted py-5">
+            <i class="bi bi-exclamation-circle" style="font-size:2rem;"></i>
+            <div class="mt-2 fw-semibold">You must create a Repository before creating a Backup Schedule.</div>
+            <a href="?tab=repos" class="btn btn-sm btn-outline-primary mt-3"><i class="bi bi-archive me-1"></i>Go to Repositories</a>
+        </div>
+    </div>
     <?php endif; ?>
 
     <!-- Edit Plan Forms (full layout, one per plan) -->
