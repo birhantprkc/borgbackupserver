@@ -71,10 +71,27 @@ class ClientController extends Controller
             WHERE bp.enabled = 1 AND {$where}
         ", $params)['cnt'];
 
-        // Out of date agents
-        $latestVersion = $this->db->fetchOne("
-            SELECT MAX(agent_version) as v FROM agents a WHERE agent_version IS NOT NULL AND {$where}
-        ", $params)['v'];
+        // Out of date agents — compare against server's bundled agent version
+        $latestVersion = null;
+        $agentFile = dirname(__DIR__, 2) . '/agent/bbs-agent.py';
+        if (file_exists($agentFile)) {
+            $handle = fopen($agentFile, 'r');
+            if ($handle) {
+                for ($i = 0; $i < 50 && ($line = fgets($handle)) !== false; $i++) {
+                    if (preg_match('/^AGENT_VERSION\s*=\s*["\']([^"\']+)["\']/m', $line, $m)) {
+                        $latestVersion = $m[1];
+                        break;
+                    }
+                }
+                fclose($handle);
+            }
+        }
+        if (!$latestVersion) {
+            // Fallback to max version from agents
+            $latestVersion = $this->db->fetchOne("
+                SELECT MAX(agent_version) as v FROM agents a WHERE agent_version IS NOT NULL AND {$where}
+            ", $params)['v'];
+        }
         $outdatedCount = 0;
         if ($latestVersion) {
             $outdatedCount = $this->db->fetchOne("
