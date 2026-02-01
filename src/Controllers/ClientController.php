@@ -106,9 +106,9 @@ class ClientController extends Controller
         }
 
         $chartActivity = [];
-        $now = new \DateTime('now', $userTz);
+        $today = new \DateTime('today', $userTz);
         for ($i = 6; $i >= 0; $i--) {
-            $dt = clone $now;
+            $dt = clone $today;
             $dt->modify("-{$i} days");
             $dayKey = $dt->format('Y-m-d');
             $label = $dt->format('D');
