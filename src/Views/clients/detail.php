@@ -626,9 +626,11 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     <?php if (empty($repositories)): ?>
     <div id="add-repo-card-solo" style="cursor:pointer;" onclick="showCreateRepo()">
         <div class="card border-0 shadow-sm mb-4" style="border:2px dashed #ccc !important;background:#fafafa;">
-            <div class="card-body d-flex flex-column align-items-center justify-content-center text-muted p-4">
-                <i class="bi bi-plus-circle" style="font-size:2rem;"></i>
-                <div class="mt-2 fw-semibold">Add Repository</div>
+            <div class="card-body d-flex flex-column align-items-center justify-content-center text-muted py-5">
+                <i class="bi bi-archive" style="font-size:2rem;"></i>
+                <div class="mt-2 fw-semibold">Create a Repository to get started</div>
+                <small class="mt-1 text-center" style="max-width:400px;">A repository is a virtual disk where your backup data is stored on the backup server.</small>
+                <span class="btn btn-sm btn-outline-primary mt-3"><i class="bi bi-plus-circle me-1"></i>Add Repository</span>
             </div>
         </div>
     </div>
