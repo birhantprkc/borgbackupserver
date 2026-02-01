@@ -1746,7 +1746,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
             ?>
                 <div class="col-md-3">
                     <label for="enablePlugin<?= $plugin['id'] ?>" class="d-block h-100" style="cursor:pointer;">
-                        <div class="card h-100 border-2 <?= $isEnabled ? 'border-primary' : 'border-light' ?>" id="pluginCard<?= $plugin['id'] ?>">
+                        <div class="card h-100 border-2 <?= $isEnabled ? 'border-primary' : 'border-light' ?>" id="pluginCard<?= $plugin['id'] ?>" style="background-color:rgba(44,62,80,0.04);">
                             <div class="card-body d-flex align-items-start gap-3 p-3">
                                 <?php if ($logo): ?>
                                     <img src="<?= $logo ?>" alt="" style="width:48px;height:48px;object-fit:contain;flex-shrink:0;" class="mt-1">
