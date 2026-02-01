@@ -19,7 +19,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.4.2"
+AGENT_VERSION = "1.5.0"
 CONFIG_PATH = "/etc/bbs-agent/config.ini"
 LOG_PATH = "/var/log/bbs-agent.log"
 SSH_KEY_PATH = "/etc/bbs-agent/ssh_key"
@@ -550,7 +550,14 @@ def execute_plugin_mysql_dump(config):
         dump_files.append(dump_path)
 
     logger.info(f"MySQL dump complete: {len(dump_files)} file(s) in {dump_dir}")
-    return {"dump_files": dump_files, "dump_dir": dump_dir}
+    db_names = [os.path.basename(f).split(".")[0] for f in dump_files]
+    return {
+        "dump_files": dump_files,
+        "dump_dir": dump_dir,
+        "databases": db_names,
+        "per_database": per_database,
+        "compress": compress,
+    }
 
 
 def cleanup_plugin_mysql_dump(config, plugin_result):
@@ -592,6 +599,169 @@ def test_plugin_mysql_dump(config):
     return f"Connection successful. Found {len(dbs)} database(s): {', '.join(dbs[:10])}"
 
 
+def execute_restore_mysql(config, task):
+    """Restore MySQL databases from a borg archive."""
+    job_id = task.get("job_id")
+    command = task.get("command", [])
+    env_vars = task.get("env", {})
+    cwd = task.get("cwd")
+    databases = task.get("databases", [])
+    mysql_config = task.get("mysql_config", {})
+
+    host = mysql_config.get("host", "localhost")
+    port = str(mysql_config.get("port", 3306))
+    user = mysql_config.get("user")
+    password = mysql_config.get("password")
+    compress = mysql_config.get("compress", True)
+    per_database = mysql_config.get("per_database", True)
+    dump_dir = mysql_config.get("dump_dir", "/home/bbs/mysql")
+
+    if not user or not password:
+        api_request(config, "/api/agent/status", method="POST", data={
+            "job_id": job_id, "result": "failed",
+            "error_log": "MySQL restore requires user and password in plugin config",
+        })
+        return
+
+    # Step 1: Extract dump files from borg archive
+    logger.info(f"Job #{job_id}: Extracting MySQL dumps from archive")
+    if cwd:
+        os.makedirs(cwd, exist_ok=True)
+
+    env = os.environ.copy()
+    env.update(env_vars)
+
+    try:
+        proc = subprocess.run(
+            command, env=env, cwd=cwd,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=3600,
+        )
+        if proc.returncode > 1:
+            api_request(config, "/api/agent/status", method="POST", data={
+                "job_id": job_id, "result": "failed",
+                "error_log": f"borg extract failed: {proc.stderr.decode('utf-8', errors='replace')[:5000]}",
+            })
+            return
+    except Exception as e:
+        api_request(config, "/api/agent/status", method="POST", data={
+            "job_id": job_id, "result": "failed",
+            "error_log": f"borg extract error: {e}",
+        })
+        return
+
+    # Step 2: Import each database
+    imported = []
+    errors = []
+    total = len(databases)
+    for i, db_entry in enumerate(databases):
+        db_name = db_entry.get("database")
+        mode = db_entry.get("mode", "replace")  # replace or rename
+        target_db = f"{db_name}_copy" if mode == "rename" else db_name
+
+        # Find the dump file
+        if per_database:
+            if compress:
+                dump_file = os.path.join(dump_dir, f"{db_name}.sql.gz")
+            else:
+                dump_file = os.path.join(dump_dir, f"{db_name}.sql")
+        else:
+            dump_file = os.path.join(dump_dir, "all_databases.sql.gz" if compress else "all_databases.sql")
+
+        if not os.path.exists(dump_file):
+            errors.append(f"{db_name}: dump file not found at {dump_file}")
+            continue
+
+        logger.info(f"Job #{job_id}: Importing {db_name} as {target_db} ({i+1}/{total})")
+
+        # Report progress
+        api_request(config, "/api/agent/progress", method="POST", data={
+            "job_id": job_id,
+            "files_processed": i,
+            "files_total": total,
+            "output_log": f"Importing {db_name} as {target_db}...",
+        })
+
+        try:
+            mysql_base = ["mysql", f"--host={host}", f"--port={port}", f"--user={user}", f"--password={password}"]
+
+            # Create target database if renaming
+            if mode == "rename":
+                create_cmd = mysql_base + ["-e", f"CREATE DATABASE IF NOT EXISTS `{target_db}`;"]
+                r = subprocess.run(create_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
+                if r.returncode != 0:
+                    errors.append(f"{db_name}: failed to create {target_db}: {r.stderr.decode('utf-8', errors='replace')}")
+                    continue
+
+            # Import the dump
+            import_cmd = mysql_base + [target_db]
+
+            if per_database:
+                if compress:
+                    # gunzip | mysql
+                    gunzip = subprocess.Popen(["gunzip", "-c", dump_file], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    mysql_proc = subprocess.Popen(import_cmd, stdin=gunzip.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    gunzip.stdout.close()
+                    mysql_proc.wait()
+                    gunzip.wait()
+                    if mysql_proc.returncode != 0:
+                        stderr = mysql_proc.stderr.read().decode("utf-8", errors="replace")
+                        errors.append(f"{db_name}: import failed: {stderr[:500]}")
+                        continue
+                else:
+                    with open(dump_file, "r") as f:
+                        r = subprocess.run(import_cmd, stdin=f, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=3600)
+                        if r.returncode != 0:
+                            errors.append(f"{db_name}: import failed: {r.stderr.decode('utf-8', errors='replace')[:500]}")
+                            continue
+            else:
+                # all_databases dump — import without specifying target db (uses embedded USE statements)
+                import_cmd = mysql_base  # no db name
+                if compress:
+                    gunzip = subprocess.Popen(["gunzip", "-c", dump_file], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    mysql_proc = subprocess.Popen(import_cmd, stdin=gunzip.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    gunzip.stdout.close()
+                    mysql_proc.wait()
+                    gunzip.wait()
+                    if mysql_proc.returncode != 0:
+                        stderr = mysql_proc.stderr.read().decode("utf-8", errors="replace")
+                        errors.append(f"all_databases: import failed: {stderr[:500]}")
+                else:
+                    with open(dump_file, "r") as f:
+                        r = subprocess.run(import_cmd, stdin=f, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=3600)
+                        if r.returncode != 0:
+                            errors.append(f"all_databases: import failed: {r.stderr.decode('utf-8', errors='replace')[:500]}")
+                # Only import once for all_databases mode
+                imported.append(f"all databases (from {dump_file})")
+                break
+
+            imported.append(f"{db_name} → {target_db}")
+
+        except Exception as e:
+            errors.append(f"{db_name}: {e}")
+
+    # Report final status
+    if errors and not imported:
+        result = "failed"
+        error_log = "; ".join(errors)
+    else:
+        result = "completed"
+        error_log = "; ".join(errors) if errors else None
+
+    status_data = {
+        "job_id": job_id,
+        "result": result,
+        "files_total": total,
+        "files_processed": len(imported),
+    }
+    if error_log:
+        status_data["error_log"] = error_log[:10000]
+    if imported:
+        status_data["output_log"] = f"Imported: {', '.join(imported)}"
+
+    api_request(config, "/api/agent/status", method="POST", data=status_data)
+
+
 def execute_task(config, task):
     """Execute a borg task and report progress/status."""
     job_id = task.get("job_id")
@@ -626,6 +796,11 @@ def execute_task(config, task):
                 "job_id": job_id, "result": "failed",
                 "error_log": f"No test handler for plugin: {slug}",
             })
+        return
+
+    # Handle MySQL database restore
+    if task_type == "restore_mysql":
+        execute_restore_mysql(config, task)
         return
 
     # Execute pre-backup plugins
@@ -822,6 +997,15 @@ def execute_task(config, task):
         status_data["archive_name"] = archive_name
     if error_output:
         status_data["error_log"] = error_output[:10000]  # Limit size
+
+    # Report backed-up databases from mysql_dump plugin
+    if result == "completed" and task_type == "backup" and plugin_results.get("mysql_dump"):
+        mysql_result = plugin_results["mysql_dump"]
+        status_data["databases_backed_up"] = {
+            "databases": mysql_result.get("databases", []),
+            "per_database": mysql_result.get("per_database", True),
+            "compress": mysql_result.get("compress", True),
+        }
 
     status_response = api_request(config, "/api/agent/status", method="POST", data=status_data)
 

@@ -166,6 +166,8 @@ class QueueManager
                 $taskPayload = ['task' => $job['task_type'], 'server_side' => true, 'job_id' => $job['id']];
             } elseif ($job['task_type'] === 'restore') {
                 $taskPayload = $this->buildRestorePayload($job);
+            } elseif ($job['task_type'] === 'restore_mysql') {
+                $taskPayload = $this->buildRestoreMysqlPayload($job);
             } elseif ($job['task_type'] === 'update_borg') {
                 $taskPayload = ['task' => 'update_borg', 'job_id' => $job['id']];
             } elseif ($job['task_type'] === 'update_agent') {
@@ -283,6 +285,11 @@ class QueueManager
                 if ($payload) {
                     $tasks[] = $payload;
                 }
+            } elseif ($job['task_type'] === 'restore_mysql') {
+                $payload = $this->buildRestoreMysqlPayload($job);
+                if ($payload) {
+                    $tasks[] = $payload;
+                }
             } elseif ($job['task_type'] === 'update_borg') {
                 $tasks[] = ['task' => 'update_borg', 'job_id' => $job['id']];
             } elseif ($job['task_type'] === 'update_agent') {
@@ -354,5 +361,73 @@ class QueueManager
         }
 
         return BorgCommandBuilder::toTaskPayload('restore', $cmd, $env, $extra);
+    }
+
+    /**
+     * Build a restore_mysql task payload from a job record.
+     */
+    private function buildRestoreMysqlPayload(array $job): ?array
+    {
+        $archiveId = $job['restore_archive_id'] ?? null;
+        if (!$archiveId) return null;
+
+        $archive = $this->db->fetchOne("
+            SELECT ar.archive_name, ar.databases_backed_up,
+                   r.path as repo_path, r.passphrase_encrypted
+            FROM archives ar
+            JOIN repositories r ON r.id = ar.repository_id
+            WHERE ar.id = ?
+        ", [$archiveId]);
+
+        if (!$archive) return null;
+
+        $dbInfo = json_decode($archive['databases_backed_up'] ?? '{}', true) ?: [];
+        $databases = json_decode($job['restore_databases'] ?? '[]', true) ?: [];
+        $perDatabase = $dbInfo['per_database'] ?? true;
+        $compress = $dbInfo['compress'] ?? true;
+
+        // Find mysql_dump plugin config for this agent
+        $pluginManager = new PluginManager();
+        $configs = $pluginManager->getPluginConfigs($job['agent_id']);
+        $mysqlConfig = null;
+        foreach ($configs as $c) {
+            if ($c['slug'] === 'mysql_dump') {
+                $configData = json_decode($c['config'] ?? '{}', true) ?: [];
+                // Decrypt password
+                if (!empty($configData['password'])) {
+                    $configData['password'] = \BBS\Core\Encryption::decrypt($configData['password']);
+                }
+                $mysqlConfig = $configData;
+                break;
+            }
+        }
+
+        if (!$mysqlConfig) return null;
+
+        $dumpDir = $mysqlConfig['dump_dir'] ?? '/home/bbs/mysql';
+
+        // Build borg extract command: extract the dump_dir from the archive
+        $repo = ['path' => $archive['repo_path'], 'passphrase_encrypted' => $archive['passphrase_encrypted']];
+        $extractPath = ltrim($dumpDir, '/');
+        $cmd = BorgCommandBuilder::buildExtractCommand($repo, $archive['archive_name'], [$extractPath]);
+        $env = BorgCommandBuilder::buildEnv($repo);
+
+        return [
+            'task' => 'restore_mysql',
+            'job_id' => $job['id'],
+            'command' => $cmd,
+            'env' => $env,
+            'cwd' => '/',
+            'databases' => $databases,
+            'mysql_config' => [
+                'host' => $mysqlConfig['host'] ?? 'localhost',
+                'port' => $mysqlConfig['port'] ?? 3306,
+                'user' => $mysqlConfig['user'] ?? '',
+                'password' => $mysqlConfig['password'] ?? '',
+                'dump_dir' => $dumpDir,
+                'compress' => $compress,
+                'per_database' => $perDatabase,
+            ],
+        ];
     }
 }

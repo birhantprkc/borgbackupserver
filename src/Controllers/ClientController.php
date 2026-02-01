@@ -701,6 +701,141 @@ class ClientController extends Controller
     }
 
     /**
+     * GET /clients/{id}/archive/{archive_id}/databases
+     * Returns the list of databases backed up in this archive (JSON).
+     */
+    public function archiveDatabases(int $id, int $archive_id): void
+    {
+        $this->requireAuth();
+
+        $agent = $this->getAgent($id);
+        if (!$agent) {
+            $this->json(['error' => 'Client not found'], 404);
+        }
+
+        $archive = $this->db->fetchOne("
+            SELECT ar.databases_backed_up
+            FROM archives ar
+            JOIN repositories r ON r.id = ar.repository_id
+            WHERE ar.id = ? AND r.agent_id = ?
+        ", [$archive_id, $id]);
+
+        if (!$archive) {
+            $this->json(['error' => 'Archive not found'], 404);
+        }
+
+        $data = $archive['databases_backed_up'] ? json_decode($archive['databases_backed_up'], true) : null;
+
+        $this->json([
+            'databases' => $data['databases'] ?? [],
+            'per_database' => $data['per_database'] ?? true,
+            'compress' => $data['compress'] ?? true,
+        ]);
+    }
+
+    /**
+     * POST /clients/{id}/restore-mysql
+     * Creates a MySQL database restore job.
+     */
+    public function restoreMysqlSubmit(int $id): void
+    {
+        $this->requireAuth();
+        $this->verifyCsrf();
+
+        $agent = $this->getAgent($id);
+        if (!$agent) {
+            $this->flash('danger', 'Client not found.');
+            $this->redirect('/clients');
+        }
+
+        $archive_id = (int) ($_POST['archive_id'] ?? 0);
+        $databases = $_POST['databases'] ?? [];
+
+        if (!$archive_id || empty($databases)) {
+            $this->flash('danger', 'Select an archive and at least one database to restore.');
+            $this->redirect("/clients/{$id}?tab=restore");
+        }
+
+        // Validate archive exists and has database info
+        $archive = $this->db->fetchOne("
+            SELECT ar.*, r.path as repo_path, r.passphrase_encrypted
+            FROM archives ar
+            JOIN repositories r ON r.id = ar.repository_id
+            WHERE ar.id = ? AND r.agent_id = ?
+        ", [$archive_id, $id]);
+
+        if (!$archive || empty($archive['databases_backed_up'])) {
+            $this->flash('danger', 'Archive not found or has no database backup info.');
+            $this->redirect("/clients/{$id}?tab=restore");
+        }
+
+        // Check mysql_dump plugin is enabled
+        $pluginManager = new \BBS\Services\PluginManager();
+        $enabledPlugins = $pluginManager->getEnabledAgentPlugins($id);
+        $mysqlEnabled = false;
+        foreach ($enabledPlugins as $p) {
+            if ($p['slug'] === 'mysql_dump') {
+                $mysqlEnabled = true;
+                break;
+            }
+        }
+        if (!$mysqlEnabled) {
+            $this->flash('danger', 'MySQL plugin is not enabled for this client.');
+            $this->redirect("/clients/{$id}?tab=restore");
+        }
+
+        // Check if repo already has an active job
+        $repoBusy = $this->db->fetchOne("
+            SELECT id FROM backup_jobs
+            WHERE repository_id = ?
+              AND status IN ('queued', 'sent', 'running')
+        ", [$archive['repository_id']]);
+
+        if ($repoBusy) {
+            $this->flash('warning', 'A job is already active for this repository. Wait for it to complete.');
+            $this->redirect("/clients/{$id}?tab=restore");
+            return;
+        }
+
+        // Build restore_databases JSON: [{database: name, mode: replace|rename}, ...]
+        $restoreDatabases = [];
+        foreach ($databases as $entry) {
+            $dbName = $entry['name'] ?? '';
+            $mode = $entry['mode'] ?? 'replace';
+            if ($dbName && in_array($mode, ['replace', 'rename'])) {
+                $restoreDatabases[] = ['database' => $dbName, 'mode' => $mode];
+            }
+        }
+
+        if (empty($restoreDatabases)) {
+            $this->flash('danger', 'No valid databases selected.');
+            $this->redirect("/clients/{$id}?tab=restore");
+        }
+
+        $jobId = $this->db->insert('backup_jobs', [
+            'agent_id' => $id,
+            'backup_plan_id' => null,
+            'repository_id' => $archive['repository_id'],
+            'task_type' => 'restore_mysql',
+            'status' => 'queued',
+            'queued_at' => date('Y-m-d H:i:s'),
+            'restore_archive_id' => $archive_id,
+            'restore_databases' => json_encode($restoreDatabases),
+        ]);
+
+        $dbNames = array_column($restoreDatabases, 'database');
+        $this->db->insert('server_log', [
+            'agent_id' => $id,
+            'backup_job_id' => $jobId,
+            'level' => 'info',
+            'message' => "MySQL restore queued: " . implode(', ', $dbNames) . " from archive {$archive['archive_name']}",
+        ]);
+
+        $this->flash('success', 'MySQL restore job queued. It will run when a slot is available.');
+        $this->redirect("/clients/{$id}?tab=restore");
+    }
+
+    /**
      * POST /clients/{id}/download
      * Extracts selected paths from a borg archive on the server and streams as tar.gz.
      */

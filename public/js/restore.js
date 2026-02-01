@@ -507,4 +507,156 @@
 
     // Initialize
     treeRoot.innerHTML = '<div class="p-3 text-muted text-center">Select an archive to browse files</div>';
+
+    // ================================================================
+    // Database Restore Mode
+    // ================================================================
+    if (window.MYSQL_PLUGIN_ENABLED) {
+        const modeToggle = document.getElementById('restore-mode-toggle');
+        const filesSection = document.getElementById('files-restore-section');
+        const dbSection = document.getElementById('db-restore-section');
+        const dbArchiveSelect = document.getElementById('db-archive-select');
+        const dbTableBody = document.getElementById('db-table-body');
+        const dbTable = document.getElementById('db-table');
+        const dbNoData = document.getElementById('db-no-data');
+        const dbLoading = document.getElementById('db-loading');
+        const dbSelectedCount = document.getElementById('db-selected-count');
+        const dbRestoreBtn = document.getElementById('db-restore-btn');
+        const dbAllDbNote = document.getElementById('db-all-databases-note');
+
+        let dbRestoreMode = 'files';
+        let dbPerDatabase = true;
+
+        // Mode toggle
+        if (modeToggle) {
+            modeToggle.addEventListener('click', function(e) {
+                const btn = e.target.closest('[data-restore-mode]');
+                if (!btn) return;
+                dbRestoreMode = btn.dataset.restoreMode;
+                modeToggle.querySelectorAll('.btn').forEach(b => {
+                    b.classList.remove('btn-primary', 'active');
+                    b.classList.add('btn-outline-primary');
+                });
+                btn.classList.remove('btn-outline-primary');
+                btn.classList.add('btn-primary', 'active');
+
+                if (dbRestoreMode === 'database') {
+                    filesSection.style.display = 'none';
+                    dbSection.style.display = '';
+                } else {
+                    filesSection.style.display = '';
+                    dbSection.style.display = 'none';
+                }
+            });
+        }
+
+        // Archive selection for DB mode
+        if (dbArchiveSelect) {
+            dbArchiveSelect.addEventListener('change', function() {
+                const archiveId = this.value;
+                dbTableBody.innerHTML = '';
+                dbTable.style.display = 'none';
+                dbAllDbNote.style.display = 'none';
+                updateDbSelection();
+
+                if (!archiveId) {
+                    dbNoData.style.display = '';
+                    dbLoading.style.display = 'none';
+                    return;
+                }
+
+                dbNoData.style.display = 'none';
+                dbLoading.style.display = '';
+
+                fetch('/clients/' + agentId + '/archive/' + archiveId + '/databases', { credentials: 'same-origin' })
+                    .then(r => r.json())
+                    .then(data => {
+                        dbLoading.style.display = 'none';
+
+                        if (!data.databases || data.databases.length === 0) {
+                            dbNoData.style.display = '';
+                            dbNoData.innerHTML = '<i class="bi bi-database d-block mb-2" style="font-size:2rem;opacity:0.3;"></i>No database backup info for this archive';
+                            return;
+                        }
+
+                        dbPerDatabase = data.per_database !== false;
+                        if (!dbPerDatabase) {
+                            dbAllDbNote.style.display = '';
+                        }
+
+                        dbTable.style.display = '';
+                        data.databases.forEach(function(dbName) {
+                            const tr = document.createElement('tr');
+                            tr.innerHTML =
+                                '<td><input type="checkbox" class="form-check-input db-select-cb" data-db="' + esc(dbName) + '"></td>' +
+                                '<td class="font-monospace">' + esc(dbName) + '</td>' +
+                                '<td>' +
+                                    '<div class="btn-group btn-group-sm" role="group">' +
+                                        '<input type="radio" class="btn-check" name="dbmode_' + esc(dbName) + '" id="dbmode_replace_' + esc(dbName) + '" value="replace" checked>' +
+                                        '<label class="btn btn-outline-warning" for="dbmode_replace_' + esc(dbName) + '">Replace</label>' +
+                                        (dbPerDatabase ?
+                                            '<input type="radio" class="btn-check" name="dbmode_' + esc(dbName) + '" id="dbmode_rename_' + esc(dbName) + '" value="rename">' +
+                                            '<label class="btn btn-outline-info" for="dbmode_rename_' + esc(dbName) + '">Rename (_copy)</label>'
+                                        : '') +
+                                    '</div>' +
+                                '</td>';
+                            dbTableBody.appendChild(tr);
+                        });
+                    })
+                    .catch(function() {
+                        dbLoading.style.display = 'none';
+                        dbNoData.style.display = '';
+                        dbNoData.innerHTML = '<i class="bi bi-exclamation-triangle d-block mb-2" style="font-size:2rem;opacity:0.3;"></i>Failed to load database info';
+                    });
+            });
+        }
+
+        // Track DB selection
+        document.getElementById('db-list-body').addEventListener('change', function(e) {
+            if (e.target.classList.contains('db-select-cb')) {
+                updateDbSelection();
+            }
+        });
+
+        function updateDbSelection() {
+            const checked = dbTableBody.querySelectorAll('.db-select-cb:checked');
+            dbSelectedCount.textContent = checked.length;
+            dbRestoreBtn.disabled = checked.length === 0;
+        }
+
+        // Submit DB restore
+        dbRestoreBtn.addEventListener('click', function() {
+            const checked = dbTableBody.querySelectorAll('.db-select-cb:checked');
+            if (checked.length === 0) return;
+
+            const dbNames = [];
+            checked.forEach(cb => dbNames.push(cb.dataset.db));
+            if (!confirm('Restore ' + dbNames.length + ' database(s) to the client?\n\nDatabases: ' + dbNames.join(', ') + '\n\nThis may overwrite existing data.')) return;
+
+            const form = document.getElementById('db-restore-form');
+            const fieldsContainer = document.getElementById('db-restore-fields');
+            fieldsContainer.innerHTML = '';
+            document.getElementById('db-restore-archive-id').value = dbArchiveSelect.value;
+
+            checked.forEach(function(cb, i) {
+                const dbName = cb.dataset.db;
+                const modeRadio = dbTableBody.querySelector('input[name="dbmode_' + CSS.escape(dbName) + '"]:checked');
+                const mode = modeRadio ? modeRadio.value : 'replace';
+
+                const nameInput = document.createElement('input');
+                nameInput.type = 'hidden';
+                nameInput.name = 'databases[' + i + '][name]';
+                nameInput.value = dbName;
+                fieldsContainer.appendChild(nameInput);
+
+                const modeInput = document.createElement('input');
+                modeInput.type = 'hidden';
+                modeInput.name = 'databases[' + i + '][mode]';
+                modeInput.value = mode;
+                fieldsContainer.appendChild(modeInput);
+            });
+
+            form.submit();
+        });
+    }
 })();

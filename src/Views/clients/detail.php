@@ -1946,7 +1946,31 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     </script>
 
 <?php elseif ($tab === 'restore'): ?>
+    <?php
+    $mysqlPluginEnabled = false;
+    foreach ($agentPlugins as $ap) {
+        if ($ap['slug'] === 'mysql_dump' && $ap['agent_enabled']) {
+            $mysqlPluginEnabled = true;
+            break;
+        }
+    }
+    ?>
+
+    <?php if ($mysqlPluginEnabled): ?>
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <h5 class="mb-0">Restore:</h5>
+        <div class="btn-group" role="group" id="restore-mode-toggle">
+            <button type="button" class="btn btn-sm btn-primary active" data-restore-mode="files">
+                <i class="bi bi-files me-1"></i>Files
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary" data-restore-mode="database">
+                <i class="bi bi-database me-1"></i>Database
+            </button>
+        </div>
+    </div>
+    <?php else: ?>
     <h5 class="mb-3">Restore Files</h5>
+    <?php endif; ?>
 
     <?php if (empty($archives)): ?>
         <div class="card border-0 shadow-sm mb-4" style="border:2px dashed #ccc !important;background:#fafafa;">
@@ -1958,6 +1982,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         </div>
     <?php else: ?>
 
+    <div id="files-restore-section">
     <!-- Control Bar -->
     <div class="restore-control-bar mb-3">
         <div class="row g-2 align-items-end">
@@ -2085,8 +2110,77 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         <input type="hidden" name="archive_id" id="download-archive-id">
         <div id="download-files-container"></div>
     </form>
+    </div><!-- end files-restore-section -->
+
+    <!-- Database Restore Section (hidden by default) -->
+    <?php if ($mysqlPluginEnabled): ?>
+    <div id="db-restore-section" style="display:none;">
+        <div class="row g-2 align-items-end mb-3">
+            <div class="col-md-6">
+                <label class="form-label fw-semibold mb-1 small">Archive</label>
+                <select class="form-select" id="db-archive-select">
+                    <option value="">Choose a restore point...</option>
+                    <?php
+                    $currentRepo = null;
+                    foreach ($archives as $ar):
+                        if ($ar['repo_name'] !== $currentRepo):
+                            if ($currentRepo !== null) echo '</optgroup>';
+                            $currentRepo = $ar['repo_name'];
+                            echo '<optgroup label="' . htmlspecialchars($currentRepo) . '">';
+                        endif;
+                    ?>
+                        <option value="<?= $ar['id'] ?>">
+                            <?= \BBS\Core\TimeHelper::format($ar['created_at'], 'l, M j, Y \a\t g:i A') ?>
+                        </option>
+                    <?php endforeach; ?>
+                    <?php if ($currentRepo !== null) echo '</optgroup>'; ?>
+                </select>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-primary text-white py-2">
+                <i class="bi bi-database me-1"></i> Databases to Restore (<span id="db-selected-count">0</span>)
+            </div>
+            <div class="card-body p-0" id="db-list-body">
+                <div class="p-4 text-muted text-center" id="db-no-data">
+                    <i class="bi bi-database d-block mb-2" style="font-size:2rem;opacity:0.3;"></i>
+                    Select an archive to see available databases
+                </div>
+                <div id="db-loading" style="display:none;" class="p-4 text-center">
+                    <div class="spinner-border spinner-border-sm me-1"></div> Loading databases...
+                </div>
+                <table class="table table-sm mb-0" id="db-table" style="display:none;">
+                    <thead>
+                        <tr>
+                            <th style="width:40px;"></th>
+                            <th>Database</th>
+                            <th style="width:220px;">Restore Mode</th>
+                        </tr>
+                    </thead>
+                    <tbody id="db-table-body"></tbody>
+                </table>
+            </div>
+            <div class="card-footer">
+                <div id="db-all-databases-note" class="alert alert-info small mb-2 py-1 px-2" style="display:none;">
+                    <i class="bi bi-info-circle me-1"></i> This backup used a single combined dump file. Rename mode is not available.
+                </div>
+                <button class="btn btn-success" id="db-restore-btn" disabled>
+                    <i class="bi bi-arrow-counterclockwise me-1"></i> Restore Selected Databases
+                </button>
+            </div>
+        </div>
+
+        <form id="db-restore-form" method="POST" action="/clients/<?= $agent['id'] ?>/restore-mysql" style="display:none;">
+            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+            <input type="hidden" name="archive_id" id="db-restore-archive-id">
+            <div id="db-restore-fields"></div>
+        </form>
+    </div>
+    <?php endif; ?>
 
     <script>window.RESTORE_AGENT_ID = <?= $agent['id'] ?>;</script>
+    <script>window.MYSQL_PLUGIN_ENABLED = <?= $mysqlPluginEnabled ? 'true' : 'false' ?>;</script>
     <?php
     if (!isset($scripts)) $scripts = [];
     $scripts[] = '/js/restore.js?v=' . filemtime(__DIR__ . '/../../../public/js/restore.js');

@@ -401,9 +401,15 @@ class PluginManager
     public function getPluginHelp(string $slug): string
     {
         $help = [
-            'mysql_dump' => 'CREATE USER \'backup_user\'@\'localhost\' IDENTIFIED BY \'strong_password\';' . "\n"
-                . 'GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER ON *.* TO \'backup_user\'@\'localhost\';' . "\n"
-                . 'FLUSH PRIVILEGES;',
+            'mysql_dump' => "-- Backup only (read-only):\n"
+                . "CREATE USER 'backup_user'@'localhost' IDENTIFIED BY 'strong_password';\n"
+                . "GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER ON *.* TO 'backup_user'@'localhost';\n"
+                . "FLUSH PRIVILEGES;\n\n"
+                . "-- For database restore via GUI (requires additional privileges):\n"
+                . "GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER,\n"
+                . "       CREATE, INSERT, DROP, ALTER, INDEX, REFERENCES\n"
+                . "       ON *.* TO 'backup_user'@'localhost';\n"
+                . "FLUSH PRIVILEGES;",
         ];
 
         return $help[$slug] ?? '';

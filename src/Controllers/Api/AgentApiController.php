@@ -268,14 +268,20 @@ class AgentApiController extends Controller
 
         // If completed and it was a backup, create an archive record
         if ($result === 'completed' && $job['task_type'] === 'backup' && !empty($input['archive_name'])) {
-            $this->db->insert('archives', [
+            $archiveData = [
                 'repository_id' => $job['repository_id'],
                 'backup_job_id' => $jobId,
                 'archive_name' => $input['archive_name'],
                 'file_count' => (int) ($input['files_total'] ?? 0),
                 'original_size' => (int) ($input['original_size'] ?? 0),
                 'deduplicated_size' => (int) ($input['deduplicated_size'] ?? 0),
-            ]);
+            ];
+
+            if (!empty($input['databases_backed_up'])) {
+                $archiveData['databases_backed_up'] = json_encode($input['databases_backed_up']);
+            }
+
+            $this->db->insert('archives', $archiveData);
 
             // Log archive creation
             $origSize = $this->formatBytesLog((int)($input['original_size'] ?? 0));
