@@ -66,6 +66,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                             <i class="bi bi-box me-1"></i>Agent v<?= htmlspecialchars($agent['agent_version']) ?>
                         <?php endif; ?>
                     <?php endif; ?>
+                    </span>
                     <?php if ($agent['borg_version']): ?>
                         <span class="ms-2">
                             <form method="POST" action="/clients/<?= $agent['id'] ?>/update-borg" class="d-inline">
@@ -76,7 +77,6 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                             </form>
                         </span>
                     <?php endif; ?>
-                    </span>
                 </div>
             </div>
             <div class="text-end text-muted small d-none d-md-block text-nowrap ms-3">
