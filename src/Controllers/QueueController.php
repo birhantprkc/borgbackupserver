@@ -36,6 +36,35 @@ class QueueController extends Controller
         ]);
     }
 
+    public function indexJson(): void
+    {
+        $this->requireAuth();
+
+        $inProgress = $this->db->fetchAll("
+            SELECT bj.*, a.name as agent_name, r.name as repo_name
+            FROM backup_jobs bj
+            JOIN agents a ON a.id = bj.agent_id
+            LEFT JOIN repositories r ON r.id = bj.repository_id
+            WHERE bj.status IN ('queued', 'sent', 'running')
+            ORDER BY bj.queued_at ASC
+        ");
+
+        $completed = $this->db->fetchAll("
+            SELECT bj.*, a.name as agent_name, r.name as repo_name
+            FROM backup_jobs bj
+            JOIN agents a ON a.id = bj.agent_id
+            LEFT JOIN repositories r ON r.id = bj.repository_id
+            WHERE bj.status IN ('completed', 'failed')
+            ORDER BY bj.completed_at DESC
+            LIMIT 25
+        ");
+
+        $this->json([
+            'inProgress' => $inProgress,
+            'completed' => $completed,
+        ]);
+    }
+
     public function detail(int $id): void
     {
         $this->requireAuth();

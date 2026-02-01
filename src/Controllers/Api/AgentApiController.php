@@ -211,7 +211,13 @@ class AgentApiController extends Controller
         if (isset($input['bytes_processed'])) $data['bytes_processed'] = (int) $input['bytes_processed'];
         if (!empty($input['error_log']))      $data['error_log'] = $input['error_log'];
 
-        $this->db->update('backup_jobs', $data, 'id = ?', [$jobId]);
+        $rowsAffected = $this->db->update('backup_jobs', $data, 'id = ?', [$jobId]);
+
+        // Debug: verify the update took effect
+        $verify = $this->db->fetchOne("SELECT `status` FROM backup_jobs WHERE id = ?", [$jobId]);
+        if ($verify && $verify['status'] !== $result) {
+            error_log("BBS STATUS BUG: job #{$jobId} update returned {$rowsAffected} rows, expected status={$result} but got status={$verify['status']}. Data: " . json_encode($data));
+        }
 
         // Log the result
         $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
