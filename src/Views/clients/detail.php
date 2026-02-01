@@ -1727,7 +1727,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     <h5 class="mb-3"><i class="bi bi-plug me-1"></i> Plugins</h5>
 
     <!-- Enable/Disable Plugins -->
-    <form method="POST" action="/clients/<?= $agent['id'] ?>/plugins">
+    <form method="POST" action="/clients/<?= $agent['id'] ?>/plugins" id="pluginToggleForm">
         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
         <?php if (empty($allPlugins)): ?>
             <p class="text-muted">No plugins available.</p>
@@ -1760,7 +1760,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                             <input type="checkbox" class="form-check-input" role="switch" name="plugins[]"
                                                    value="<?= $plugin['id'] ?>" id="enablePlugin<?= $plugin['id'] ?>"
                                                    <?= $isEnabled ? 'checked' : '' ?>
-                                                   onchange="document.getElementById('pluginCard<?= $plugin['id'] ?>').classList.toggle('border-primary', this.checked); document.getElementById('pluginCard<?= $plugin['id'] ?>').classList.toggle('border-light', !this.checked);">
+                                                   onchange="var c=document.getElementById('pluginCard<?= $plugin['id'] ?>');c.classList.toggle('border-primary',this.checked);c.classList.toggle('border-light',!this.checked);document.getElementById('pluginToggleForm').submit();">
                                         </div>
                                     </div>
                                     <p class="text-muted small mb-0"><?= htmlspecialchars($plugin['description']) ?></p>
@@ -1771,7 +1771,6 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 </div>
             <?php endforeach; ?>
             </div>
-            <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-check-lg me-1"></i> Save</button>
         <?php endif; ?>
     </form>
 
