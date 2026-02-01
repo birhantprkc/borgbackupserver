@@ -1899,7 +1899,10 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                         <i class="bi bi-terminal me-1"></i> MySQL Setup Instructions
                                     </div>
                                     <div class="card-body small">
-                                        <p class="text-muted mb-2">If you already have a MySQL user you'd like to use, enter the credentials on the left. Otherwise, run one of the commands below on the client to create a dedicated backup user.</p>
+                                        <div class="alert alert-info small py-2 px-3 mb-3">
+                                            <i class="bi bi-info-circle me-1"></i>
+                                            On the client machine with MySQL, you'll need to create a dedicated MySQL user so that Borg Backup Server can perform database backups (and optionally restore them). Run one of the commands below in your MySQL terminal depending on the desired functionality.
+                                        </div>
                                         <div class="mb-3">
                                             <strong>Backup Only</strong>
                                             <span class="text-muted">(read-only, recommended)</span>
