@@ -252,7 +252,7 @@ ENV;
                 }
 
                 // Auto-login the admin user so they can proceed directly
-                $adminUser = $pdo->prepare("SELECT id, username, role FROM users WHERE username = ?");
+                $adminUser = $pdo->prepare("SELECT id, username, role, timezone FROM users WHERE username = ?");
                 $adminUser->execute([$setup['admin_username']]);
                 $admin = $adminUser->fetch(\PDO::FETCH_ASSOC);
                 if ($admin) {
@@ -260,7 +260,7 @@ ENV;
                     $_SESSION['user_id'] = $admin['id'];
                     $_SESSION['username'] = $admin['username'];
                     $_SESSION['user_role'] = $admin['role'];
-                    $_SESSION['timezone'] = 'UTC';
+                    $_SESSION['timezone'] = $admin['timezone'] ?? 'America/New_York';
                     $_SESSION['login_time'] = time();
                     $_SESSION['last_activity'] = time();
                 }
