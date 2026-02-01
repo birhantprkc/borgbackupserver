@@ -246,11 +246,17 @@ class QueueManager
                 $archiveName = BorgCommandBuilder::generateArchiveName($prefix);
                 $cmd = BorgCommandBuilder::buildCreateCommand($plan, $repo, $archiveName);
                 $env = BorgCommandBuilder::buildEnv($repo);
-                $tasks[] = BorgCommandBuilder::toTaskPayload('backup', $cmd, $env, [
+                $pluginManager = new PluginManager();
+                $plugins = $pluginManager->buildPluginPayload($job['backup_plan_id'], $job['agent_id']);
+                $extra = [
                     'job_id' => $job['id'],
                     'archive_name' => $archiveName,
                     'directories' => $plan['directories'],
-                ]);
+                ];
+                if (!empty($plugins)) {
+                    $extra['plugins'] = $plugins;
+                }
+                $tasks[] = BorgCommandBuilder::toTaskPayload('backup', $cmd, $env, $extra);
             } elseif ($job['task_type'] === 'restore') {
                 $payload = $this->buildRestorePayload($job);
                 if ($payload) {
