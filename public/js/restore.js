@@ -42,7 +42,7 @@
     function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
     function statusBadge(s) {
-        const map = { A: ['success','New'], M: ['warning','Mod'], U: ['secondary','Same'], E: ['danger','Err'] };
+        const map = { A: ['success','New'], M: ['warning','Mod'], U: ['secondary','Unch'], E: ['danger','Err'] };
         const [color, label] = map[s] || ['secondary', s];
         return '<span class="badge bg-' + color + '" style="font-size:0.65em;">' + label + '</span>';
     }
