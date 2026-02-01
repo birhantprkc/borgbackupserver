@@ -33,9 +33,135 @@ class ClientController extends Controller
             ORDER BY a.id DESC
         ", $params);
 
+        // Aggregate stats for stat cards
+        $jobScope = $this->isAdmin() ? '' : 'AND a.user_id = ?';
+        $jobParams = $this->isAdmin() ? [] : [$_SESSION['user_id']];
+
+        $totalClients = count($agents);
+        $onlineCount = 0;
+        $offlineCount = 0;
+        $errorCount = 0;
+        $totalRepos = 0;
+        $totalSchedules = 0;
+        $totalSize = 0;
+        $totalRestorePoints = 0;
+        foreach ($agents as $a) {
+            if ($a['status'] === 'online') $onlineCount++;
+            elseif ($a['status'] === 'offline') $offlineCount++;
+            elseif ($a['status'] === 'error') $errorCount++;
+            $totalRepos += (int) $a['repo_count'];
+            $totalSchedules += (int) $a['schedule_count'];
+            $totalSize += (int) $a['total_size'];
+            $totalRestorePoints += (int) $a['restore_points'];
+        }
+
+        // Active schedules (enabled only)
+        $activeSchedules = $this->db->fetchOne("
+            SELECT COUNT(*) as cnt
+            FROM schedules s
+            JOIN backup_plans bp ON bp.id = s.backup_plan_id
+            JOIN agents a ON a.id = bp.agent_id
+            WHERE s.enabled = 1 AND bp.enabled = 1 AND {$where}
+        ", $params)['cnt'];
+
+        $planCount = $this->db->fetchOne("
+            SELECT COUNT(*) as cnt
+            FROM backup_plans bp
+            JOIN agents a ON a.id = bp.agent_id
+            WHERE bp.enabled = 1 AND {$where}
+        ", $params)['cnt'];
+
+        // Out of date agents
+        $latestVersion = $this->db->fetchOne("
+            SELECT MAX(agent_version) as v FROM agents a WHERE agent_version IS NOT NULL AND {$where}
+        ", $params)['v'];
+        $outdatedCount = 0;
+        if ($latestVersion) {
+            $outdatedCount = $this->db->fetchOne("
+                SELECT COUNT(*) as cnt FROM agents a
+                WHERE (agent_version IS NULL OR agent_version != ?) AND status != 'setup' AND {$where}
+            ", array_merge([$latestVersion], $params))['cnt'];
+        }
+
+        // 7-day backup activity chart
+        $userTz = new \DateTimeZone($_SESSION['timezone'] ?? 'UTC');
+        $utcTz = new \DateTimeZone('UTC');
+        $backupsByDay = $this->db->fetchAll("
+            SELECT DATE(bj.completed_at) as day,
+                   SUM(bj.status = 'completed') as completed,
+                   SUM(bj.status = 'failed') as failed
+            FROM backup_jobs bj
+            JOIN agents a ON a.id = bj.agent_id
+            WHERE bj.completed_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
+              AND bj.status IN ('completed', 'failed')
+              {$jobScope}
+            GROUP BY day ORDER BY day
+        ", $jobParams);
+
+        $chartActivity = [];
+        $now = new \DateTime('now', $utcTz);
+        for ($i = 6; $i >= 0; $i--) {
+            $dt = clone $now;
+            $dt->modify("-{$i} days");
+            $dayKey = $dt->format('Y-m-d');
+            $localDt = clone $dt;
+            $localDt->setTimezone($userTz);
+            $label = $localDt->format('D');
+            $completed = 0;
+            $failed = 0;
+            foreach ($backupsByDay as $row) {
+                if ($row['day'] === $dayKey) {
+                    $completed = (int) $row['completed'];
+                    $failed = (int) $row['failed'];
+                    break;
+                }
+            }
+            $chartActivity[] = ['label' => $label, 'completed' => $completed, 'failed' => $failed];
+        }
+
+        // Storage by client (top 5 + other)
+        $storageByClient = [];
+        $sorted = $agents;
+        usort($sorted, fn($a, $b) => (int)$b['total_size'] - (int)$a['total_size']);
+        $otherSize = 0;
+        foreach ($sorted as $i => $a) {
+            if ($i < 5 && (int)$a['total_size'] > 0) {
+                $storageByClient[] = ['name' => $a['name'], 'size' => (int)$a['total_size']];
+            } else {
+                $otherSize += (int)$a['total_size'];
+            }
+        }
+        if ($otherSize > 0) {
+            $storageByClient[] = ['name' => 'Other', 'size' => $otherSize];
+        }
+
+        // Format total size for display
+        $totalSizeFormatted = '--';
+        if ($totalSize >= 1099511627776) {
+            $totalSizeFormatted = round($totalSize / 1099511627776, 1) . ' TB';
+        } elseif ($totalSize >= 1073741824) {
+            $totalSizeFormatted = round($totalSize / 1073741824, 1) . ' GB';
+        } elseif ($totalSize >= 1048576) {
+            $totalSizeFormatted = round($totalSize / 1048576, 1) . ' MB';
+        } elseif ($totalSize > 0) {
+            $totalSizeFormatted = round($totalSize / 1024, 1) . ' KB';
+        }
+
         $this->view('clients/index', [
             'pageTitle' => 'Clients',
             'agents' => $agents,
+            'totalClients' => $totalClients,
+            'onlineCount' => $onlineCount,
+            'offlineCount' => $offlineCount,
+            'errorCount' => $errorCount,
+            'totalRepos' => $totalRepos,
+            'totalSizeFormatted' => $totalSizeFormatted,
+            'activeSchedules' => (int) $activeSchedules,
+            'planCount' => (int) $planCount,
+            'outdatedCount' => $outdatedCount,
+            'latestVersion' => $latestVersion,
+            'chartActivity' => $chartActivity,
+            'storageByClient' => $storageByClient,
         ]);
     }
 

@@ -7,6 +7,105 @@
     <?php endif; ?>
 </div>
 
+<?php if (!empty($agents)): ?>
+<!-- Stat Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-xl-3 col-md-6">
+        <div class="card stat-card border-0 shadow-sm overflow-hidden">
+            <div class="d-flex align-items-stretch">
+                <div class="d-flex align-items-center justify-content-center text-white" style="width:52px;font-size:1.4rem;background:#4a90d9;">
+                    <i class="bi bi-display"></i>
+                </div>
+                <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
+                    <div>
+                        <div class="fw-semibold small text-dark">Client Agents</div>
+                        <div class="text-muted" style="font-size:.7rem;"><?= $onlineCount ?> online<?php if ($offlineCount): ?>, <?= $offlineCount ?> offline<?php endif; ?><?php if ($errorCount): ?>, <?= $errorCount ?> error<?php endif; ?></div>
+                    </div>
+                    <div class="fs-2 fw-bold" style="color:#4a90d9;"><?= $totalClients ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="card stat-card border-0 shadow-sm overflow-hidden">
+            <div class="d-flex align-items-stretch">
+                <div class="d-flex align-items-center justify-content-center text-white" style="width:52px;font-size:1.4rem;background:#48bb78;">
+                    <i class="bi bi-archive"></i>
+                </div>
+                <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
+                    <div>
+                        <div class="fw-semibold small text-dark">Repositories</div>
+                        <div class="text-muted" style="font-size:.7rem;"><?= $totalSizeFormatted ?> total</div>
+                    </div>
+                    <div class="fs-2 fw-bold" style="color:#48bb78;"><?= $totalRepos ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="card stat-card border-0 shadow-sm overflow-hidden">
+            <div class="d-flex align-items-stretch">
+                <div class="d-flex align-items-center justify-content-center text-white" style="width:52px;font-size:1.4rem;background:#e67e22;">
+                    <i class="bi bi-calendar-check"></i>
+                </div>
+                <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
+                    <div>
+                        <div class="fw-semibold small text-dark">Active Schedules</div>
+                        <div class="text-muted" style="font-size:.7rem;"><?= $planCount ?> backup plan<?= $planCount !== 1 ? 's' : '' ?></div>
+                    </div>
+                    <div class="fs-2 fw-bold" style="color:#e67e22;"><?= $activeSchedules ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="card stat-card border-0 shadow-sm overflow-hidden">
+            <div class="d-flex align-items-stretch">
+                <?php $outdatedColor = $outdatedCount > 0 ? '#c0392b' : '#48bb78'; ?>
+                <div class="d-flex align-items-center justify-content-center text-white" style="width:52px;font-size:1.4rem;background:<?= $outdatedColor ?>;">
+                    <i class="bi bi-<?= $outdatedCount > 0 ? 'exclamation-triangle' : 'check-circle' ?>"></i>
+                </div>
+                <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
+                    <div>
+                        <div class="fw-semibold small text-dark">Out of Date</div>
+                        <div class="text-muted" style="font-size:.7rem;"><?= $latestVersion ? 'latest: v' . htmlspecialchars($latestVersion) : 'no agents reporting' ?></div>
+                    </div>
+                    <div class="fs-2 fw-bold" style="color:<?= $outdatedColor ?>;"><?= $outdatedCount ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white fw-semibold border-0">
+                <i class="bi bi-bar-chart me-1"></i> Backup Activity (7 days)
+            </div>
+            <div class="card-body py-2">
+                <canvas id="activityChart" height="160"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white fw-semibold border-0">
+                <i class="bi bi-pie-chart me-1"></i> Storage by Client
+            </div>
+            <div class="card-body py-2 d-flex align-items-center justify-content-center">
+                <?php if (empty($storageByClient)): ?>
+                    <span class="text-muted">No storage data yet</span>
+                <?php else: ?>
+                    <canvas id="storageChart" height="160"></canvas>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
 <div class="card border-0 shadow-sm">
     <div class="card-body p-0">
         <?php if (!empty($agents)): ?>
@@ -138,5 +237,82 @@ document.getElementById('clientSearch').addEventListener('input', function() {
         item.style.display = item.textContent.toLowerCase().includes(filter) ? '' : 'none';
     });
 });
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    // Backup Activity Chart (7 days)
+    const activityData = <?= json_encode($chartActivity) ?>;
+    const actCtx = document.getElementById('activityChart');
+    if (actCtx) {
+        new Chart(actCtx, {
+            type: 'bar',
+            data: {
+                labels: activityData.map(d => d.label),
+                datasets: [
+                    {
+                        label: 'Completed',
+                        data: activityData.map(d => d.completed),
+                        backgroundColor: '#48bb78',
+                        borderRadius: 3,
+                    },
+                    {
+                        label: 'Failed',
+                        data: activityData.map(d => d.failed),
+                        backgroundColor: '#c0392b',
+                        borderRadius: 3,
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 15, font: { size: 11 } } } },
+                scales: {
+                    x: { stacked: true, grid: { display: false } },
+                    y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1, font: { size: 11 } } }
+                }
+            }
+        });
+    }
+
+    // Storage by Client Chart
+    const storageData = <?= json_encode($storageByClient) ?>;
+    const storCtx = document.getElementById('storageChart');
+    if (storCtx && storageData.length > 0) {
+        const colors = ['#4a90d9', '#48bb78', '#e67e22', '#c0392b', '#9b59b6', '#95a5a6'];
+        new Chart(storCtx, {
+            type: 'doughnut',
+            data: {
+                labels: storageData.map(d => d.name),
+                datasets: [{
+                    data: storageData.map(d => d.size),
+                    backgroundColor: colors.slice(0, storageData.length),
+                    borderWidth: 2,
+                    borderColor: '#fff',
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'right', labels: { boxWidth: 12, padding: 10, font: { size: 11 } } },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                let bytes = ctx.raw;
+                                let label = ctx.label || '';
+                                if (bytes >= 1099511627776) return label + ': ' + (bytes / 1099511627776).toFixed(1) + ' TB';
+                                if (bytes >= 1073741824) return label + ': ' + (bytes / 1073741824).toFixed(1) + ' GB';
+                                if (bytes >= 1048576) return label + ': ' + (bytes / 1048576).toFixed(1) + ' MB';
+                                return label + ': ' + (bytes / 1024).toFixed(1) + ' KB';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+})();
 </script>
 <?php endif; ?>
