@@ -361,7 +361,7 @@ class PluginManager
                     'label' => 'Dump Directory',
                     'default' => '/home/bbs/mysql',
                     'required' => true,
-                    'help' => 'Local directory where dumps are saved. Include this path in the backup directories.',
+                    'help' => 'Local directory where dumps are saved. Automatically included in backup directories.',
                 ],
                 'per_database' => [
                     'type' => 'checkbox',

@@ -126,11 +126,21 @@ class QueueManager
             if ($job['task_type'] === 'backup') {
                 $prefix = $job['backup_plan_id'] ? 'plan' . $job['backup_plan_id'] : ($job['repo_name'] ?? 'backup');
                 $archiveName = BorgCommandBuilder::generateArchiveName($prefix);
-                $cmd = BorgCommandBuilder::buildCreateCommand($plan, $repo, $archiveName);
-                $env = BorgCommandBuilder::buildEnv($repo);
-                // Build plugin payload if any plugins are configured
+
+                // Build plugin payload and auto-include plugin directories (e.g. mysql dump_dir)
                 $pluginManager = new PluginManager();
                 $plugins = $pluginManager->buildPluginPayload($job['backup_plan_id'], $job['agent_id']);
+                foreach ($plugins as $p) {
+                    if (!empty($p['config']['dump_dir'])) {
+                        $dumpDir = rtrim($p['config']['dump_dir'], '/');
+                        if (strpos($plan['directories'], $dumpDir) === false) {
+                            $plan['directories'] .= "\n" . $dumpDir;
+                        }
+                    }
+                }
+
+                $cmd = BorgCommandBuilder::buildCreateCommand($plan, $repo, $archiveName);
+                $env = BorgCommandBuilder::buildEnv($repo);
 
                 $extra = [
                     'job_id' => $job['id'],
@@ -244,10 +254,21 @@ class QueueManager
             if ($job['task_type'] === 'backup') {
                 $prefix = $job['backup_plan_id'] ? 'plan' . $job['backup_plan_id'] : ($job['repo_name'] ?? 'backup');
                 $archiveName = BorgCommandBuilder::generateArchiveName($prefix);
-                $cmd = BorgCommandBuilder::buildCreateCommand($plan, $repo, $archiveName);
-                $env = BorgCommandBuilder::buildEnv($repo);
+
+                // Build plugin payload and auto-include plugin directories (e.g. mysql dump_dir)
                 $pluginManager = new PluginManager();
                 $plugins = $pluginManager->buildPluginPayload($job['backup_plan_id'], $job['agent_id']);
+                foreach ($plugins as $p) {
+                    if (!empty($p['config']['dump_dir'])) {
+                        $dumpDir = rtrim($p['config']['dump_dir'], '/');
+                        if (strpos($plan['directories'], $dumpDir) === false) {
+                            $plan['directories'] .= "\n" . $dumpDir;
+                        }
+                    }
+                }
+
+                $cmd = BorgCommandBuilder::buildCreateCommand($plan, $repo, $archiveName);
+                $env = BorgCommandBuilder::buildEnv($repo);
                 $extra = [
                     'job_id' => $job['id'],
                     'archive_name' => $archiveName,
