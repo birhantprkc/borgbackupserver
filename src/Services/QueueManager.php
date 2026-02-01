@@ -168,6 +168,8 @@ class QueueManager
                 $taskPayload = $this->buildRestorePayload($job);
             } elseif ($job['task_type'] === 'restore_mysql') {
                 $taskPayload = $this->buildRestoreMysqlPayload($job);
+            } elseif ($job['task_type'] === 'restore_pg') {
+                $taskPayload = $this->buildRestorePgPayload($job);
             } elseif ($job['task_type'] === 'update_borg') {
                 $taskPayload = ['task' => 'update_borg', 'job_id' => $job['id']];
             } elseif ($job['task_type'] === 'update_agent') {
@@ -436,6 +438,80 @@ class QueueManager
                 'dump_dir' => $dumpDir,
                 'compress' => $compress,
                 'per_database' => $perDatabase,
+            ],
+        ];
+    }
+
+    /**
+     * Build a restore_pg task payload from a job record.
+     */
+    private function buildRestorePgPayload(array $job): ?array
+    {
+        $archiveId = $job['restore_archive_id'] ?? null;
+        if (!$archiveId) return null;
+
+        $archive = $this->db->fetchOne("
+            SELECT ar.archive_name, ar.databases_backed_up,
+                   r.path as repo_path, r.passphrase_encrypted
+            FROM archives ar
+            JOIN repositories r ON r.id = ar.repository_id
+            WHERE ar.id = ?
+        ", [$archiveId]);
+
+        if (!$archive) return null;
+
+        $dbInfo = json_decode($archive['databases_backed_up'] ?? '{}', true) ?: [];
+        $databases = json_decode($job['restore_databases'] ?? '[]', true) ?: [];
+        $compress = $dbInfo['compress'] ?? true;
+
+        // Find pg_dump plugin config: use specified config ID, or fall back to first available
+        $pluginManager = new PluginManager();
+        $pgConfig = null;
+
+        if (!empty($job['plugin_config_id'])) {
+            $payload = $pluginManager->buildTestPayload((int) $job['plugin_config_id']);
+            if ($payload && $payload['slug'] === 'pg_dump') {
+                $pgConfig = $payload['config'];
+            }
+        }
+
+        if (!$pgConfig) {
+            $configs = $pluginManager->getPluginConfigs($job['agent_id']);
+            foreach ($configs as $c) {
+                if ($c['slug'] === 'pg_dump') {
+                    $configData = json_decode($c['config'] ?? '{}', true) ?: [];
+                    if (!empty($configData['password'])) {
+                        $configData['password'] = Encryption::decrypt($configData['password']);
+                    }
+                    $pgConfig = $configData;
+                    break;
+                }
+            }
+        }
+
+        if (!$pgConfig) return null;
+
+        $dumpDir = $pgConfig['dump_dir'] ?? '/home/bbs/pgdump';
+
+        $repo = ['path' => $archive['repo_path'], 'passphrase_encrypted' => $archive['passphrase_encrypted']];
+        $extractPath = ltrim($dumpDir, '/');
+        $cmd = BorgCommandBuilder::buildExtractCommand($repo, $archive['archive_name'], [$extractPath]);
+        $env = BorgCommandBuilder::buildEnv($repo);
+
+        return [
+            'task' => 'restore_pg',
+            'job_id' => $job['id'],
+            'command' => $cmd,
+            'env' => $env,
+            'cwd' => '/',
+            'databases' => $databases,
+            'pg_config' => [
+                'host' => $pgConfig['host'] ?? 'localhost',
+                'port' => $pgConfig['port'] ?? 5432,
+                'user' => $pgConfig['user'] ?? '',
+                'password' => $pgConfig['password'] ?? '',
+                'dump_dir' => $dumpDir,
+                'compress' => $compress,
             ],
         ];
     }

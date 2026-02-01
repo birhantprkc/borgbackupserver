@@ -19,7 +19,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.5.0"
+AGENT_VERSION = "1.6.0"
 CONFIG_PATH = "/etc/bbs-agent/config.ini"
 LOG_PATH = "/var/log/bbs-agent.log"
 SSH_KEY_PATH = "/etc/bbs-agent/ssh_key"
@@ -423,6 +423,13 @@ def _plugin_summary(slug, config, result):
         total_size = sum(os.path.getsize(f) for f in dump_files if os.path.exists(f))
         size_str = _format_size(total_size)
         return f"MySQL dump: {len(dump_files)} database(s) ({', '.join(db_names)}) dumped to {dump_dir} ({size_str})"
+    if slug == "pg_dump":
+        dump_files = result.get("dump_files", [])
+        dump_dir = result.get("dump_dir", "")
+        db_names = [os.path.basename(f).split(".")[0] for f in dump_files]
+        total_size = sum(os.path.getsize(f) for f in dump_files if os.path.exists(f))
+        size_str = _format_size(total_size)
+        return f"PostgreSQL dump: {len(dump_files)} database(s) ({', '.join(db_names)}) dumped to {dump_dir} ({size_str})"
     return None
 
 
@@ -597,6 +604,268 @@ def test_plugin_mysql_dump(config):
     dbs = result2.stdout.decode("utf-8", errors="replace").strip().split("\n")
     dbs = [d for d in dbs if d]
     return f"Connection successful. Found {len(dbs)} database(s): {', '.join(dbs[:10])}"
+
+
+def execute_plugin_pg_dump(config):
+    """Dump PostgreSQL databases before backup."""
+    dump_dir = config.get("dump_dir", "/home/bbs/pgdump")
+    os.makedirs(dump_dir, exist_ok=True)
+
+    host = config.get("host", "localhost")
+    port = str(config.get("port", 5432))
+    user = config.get("user")
+    password = config.get("password")
+    databases = config.get("databases", "*")
+    compress = config.get("compress", True)
+    exclude = config.get("exclude_databases", ["template0", "template1", "postgres"])
+    extra_options = config.get("extra_options", "--no-owner --no-privileges")
+
+    if not user or not password:
+        raise Exception("PostgreSQL plugin requires user and password")
+
+    pg_env = os.environ.copy()
+    pg_env["PGPASSWORD"] = password
+
+    if isinstance(databases, str) and databases.strip() == "*":
+        # List all databases via psql
+        list_cmd = ["psql", f"-h", host, "-p", port, "-U", user, "-l", "-t", "-A"]
+        result = subprocess.run(list_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=pg_env)
+        if result.returncode != 0:
+            raise Exception(f"Failed to list databases: {result.stderr.decode('utf-8', errors='replace').strip()}")
+        if isinstance(exclude, str):
+            exclude = [x.strip() for x in exclude.split(",")]
+        # psql -l -t -A outputs: dbname|owner|encoding|collate|ctype|access
+        databases = []
+        for line in result.stdout.decode("utf-8", errors="replace").strip().split("\n"):
+            parts = line.split("|")
+            if parts and parts[0].strip() and parts[0].strip() not in exclude:
+                databases.append(parts[0].strip())
+    elif isinstance(databases, str):
+        databases = [d.strip() for d in databases.split(",") if d.strip()]
+
+    dump_files = []
+
+    for db in databases:
+        filename = f"{db}.sql.gz" if compress else f"{db}.sql"
+        dump_path = os.path.join(dump_dir, filename)
+        logger.info(f"Dumping PostgreSQL database {db} to {dump_path}")
+
+        cmd = ["pg_dump", "-h", host, "-p", port, "-U", user]
+        if extra_options:
+            cmd.extend(extra_options.split())
+        cmd.append(db)
+
+        if compress:
+            dump_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=pg_env)
+            with open(dump_path, "wb") as f:
+                gzip_proc = subprocess.Popen(["gzip"], stdin=dump_proc.stdout, stdout=f, stderr=subprocess.PIPE)
+            dump_proc.stdout.close()
+            gzip_proc.wait()
+            dump_proc.wait()
+            if dump_proc.returncode != 0:
+                stderr = dump_proc.stderr.read().decode() if dump_proc.stderr else ""
+                raise Exception(f"pg_dump failed for {db}: {stderr}")
+        else:
+            with open(dump_path, "w") as f:
+                r = subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE, env=pg_env)
+                if r.returncode != 0:
+                    raise Exception(f"pg_dump failed for {db}: {r.stderr.decode('utf-8', errors='replace')}")
+
+        dump_files.append(dump_path)
+
+    logger.info(f"PostgreSQL dump complete: {len(dump_files)} file(s) in {dump_dir}")
+    db_names = [os.path.basename(f).split(".")[0] for f in dump_files]
+    return {
+        "dump_files": dump_files,
+        "dump_dir": dump_dir,
+        "databases": db_names,
+        "per_database": True,
+        "compress": compress,
+    }
+
+
+def cleanup_plugin_pg_dump(config, plugin_result):
+    """Delete PostgreSQL dump files after backup if cleanup_after is enabled."""
+    if not config.get("cleanup_after", True):
+        return
+    dump_dir = plugin_result.get("dump_dir")
+    if not dump_dir or not os.path.exists(dump_dir):
+        return
+    logger.info(f"Cleaning up PostgreSQL dumps in {dump_dir}")
+    for f in os.listdir(dump_dir):
+        fpath = os.path.join(dump_dir, f)
+        if os.path.isfile(fpath) and (f.endswith(".sql") or f.endswith(".sql.gz")):
+            os.remove(fpath)
+
+
+def test_plugin_pg_dump(config):
+    """Test PostgreSQL connectivity without dumping."""
+    host = config.get("host", "localhost")
+    port = str(config.get("port", 5432))
+    user = config.get("user")
+    password = config.get("password")
+    if not user or not password:
+        raise Exception("PostgreSQL plugin requires user and password")
+
+    pg_env = os.environ.copy()
+    pg_env["PGPASSWORD"] = password
+
+    cmd = ["psql", "-h", host, "-p", port, "-U", user, "-c", "SELECT 1;", "-t", "-A", "postgres"]
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=pg_env, timeout=15)
+    if result.returncode != 0:
+        raise Exception(f"Connection failed: {result.stderr.decode('utf-8', errors='replace').strip()}")
+
+    # List databases
+    cmd2 = ["psql", "-h", host, "-p", port, "-U", user, "-l", "-t", "-A"]
+    result2 = subprocess.run(cmd2, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=pg_env, timeout=15)
+    dbs = []
+    for line in result2.stdout.decode("utf-8", errors="replace").strip().split("\n"):
+        parts = line.split("|")
+        if parts and parts[0].strip():
+            dbs.append(parts[0].strip())
+    return f"Connection successful. Found {len(dbs)} database(s): {', '.join(dbs[:10])}"
+
+
+def execute_restore_pg(config, task):
+    """Restore PostgreSQL databases from a borg archive."""
+    job_id = task.get("job_id")
+    command = task.get("command", [])
+    env_vars = task.get("env", {})
+    cwd = task.get("cwd")
+    databases = task.get("databases", [])
+    pg_config = task.get("pg_config", {})
+
+    host = pg_config.get("host", "localhost")
+    port = str(pg_config.get("port", 5432))
+    user = pg_config.get("user")
+    password = pg_config.get("password")
+    compress = pg_config.get("compress", True)
+    dump_dir = pg_config.get("dump_dir", "/home/bbs/pgdump")
+
+    if not user or not password:
+        api_request(config, "/api/agent/status", method="POST", data={
+            "job_id": job_id, "result": "failed",
+            "error_log": "PostgreSQL restore requires user and password in plugin config",
+        })
+        return
+
+    pg_env = os.environ.copy()
+    pg_env["PGPASSWORD"] = password
+
+    # Step 1: Extract dump files from borg archive
+    logger.info(f"Job #{job_id}: Extracting PostgreSQL dumps from archive")
+    if cwd:
+        os.makedirs(cwd, exist_ok=True)
+
+    env = os.environ.copy()
+    env.update(env_vars)
+
+    try:
+        proc = subprocess.run(
+            command, env=env, cwd=cwd,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=3600,
+        )
+        if proc.returncode > 1:
+            api_request(config, "/api/agent/status", method="POST", data={
+                "job_id": job_id, "result": "failed",
+                "error_log": f"borg extract failed: {proc.stderr.decode('utf-8', errors='replace')[:5000]}",
+            })
+            return
+    except Exception as e:
+        api_request(config, "/api/agent/status", method="POST", data={
+            "job_id": job_id, "result": "failed",
+            "error_log": f"borg extract error: {e}",
+        })
+        return
+
+    # Step 2: Import each database
+    imported = []
+    errors = []
+    total = len(databases)
+    for i, db_entry in enumerate(databases):
+        db_name = db_entry.get("database")
+        mode = db_entry.get("mode", "replace")
+        target_db = f"{db_name}_copy" if mode == "rename" else db_name
+
+        # Find the dump file
+        if compress:
+            dump_file = os.path.join(dump_dir, f"{db_name}.sql.gz")
+        else:
+            dump_file = os.path.join(dump_dir, f"{db_name}.sql")
+
+        if not os.path.exists(dump_file):
+            errors.append(f"{db_name}: dump file not found at {dump_file}")
+            continue
+
+        logger.info(f"Job #{job_id}: Importing {db_name} as {target_db} ({i+1}/{total})")
+
+        # Report progress
+        api_request(config, "/api/agent/progress", method="POST", data={
+            "job_id": job_id,
+            "files_processed": i,
+            "files_total": total,
+            "output_log": f"Importing {db_name} as {target_db}...",
+        })
+
+        try:
+            psql_base = ["psql", "-h", host, "-p", port, "-U", user]
+
+            # Create target database if renaming
+            if mode == "rename":
+                create_cmd = psql_base + ["-c", f'CREATE DATABASE "{target_db}";', "postgres"]
+                r = subprocess.run(create_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=pg_env, timeout=30)
+                if r.returncode != 0:
+                    stderr = r.stderr.decode('utf-8', errors='replace')
+                    if "already exists" not in stderr:
+                        errors.append(f"{db_name}: failed to create {target_db}: {stderr}")
+                        continue
+
+            # Import the dump
+            import_cmd = psql_base + ["-d", target_db]
+
+            if compress:
+                gunzip = subprocess.Popen(["gunzip", "-c", dump_file], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                psql_proc = subprocess.Popen(import_cmd, stdin=gunzip.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=pg_env)
+                gunzip.stdout.close()
+                psql_proc.wait()
+                gunzip.wait()
+                if psql_proc.returncode != 0:
+                    stderr = psql_proc.stderr.read().decode("utf-8", errors="replace")
+                    errors.append(f"{db_name}: import failed: {stderr[:500]}")
+                    continue
+            else:
+                with open(dump_file, "r") as f:
+                    r = subprocess.run(import_cmd, stdin=f, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=pg_env, timeout=3600)
+                    if r.returncode != 0:
+                        errors.append(f"{db_name}: import failed: {r.stderr.decode('utf-8', errors='replace')[:500]}")
+                        continue
+
+            imported.append(f"{db_name} → {target_db}")
+
+        except Exception as e:
+            errors.append(f"{db_name}: {e}")
+
+    # Report final status
+    if errors and not imported:
+        result = "failed"
+        error_log = "; ".join(errors)
+    else:
+        result = "completed"
+        error_log = "; ".join(errors) if errors else None
+
+    status_data = {
+        "job_id": job_id,
+        "result": result,
+        "files_total": total,
+        "files_processed": len(imported),
+    }
+    if error_log:
+        status_data["error_log"] = error_log[:10000]
+    if imported:
+        status_data["output_log"] = f"Imported: {', '.join(imported)}"
+
+    api_request(config, "/api/agent/status", method="POST", data=status_data)
 
 
 def execute_restore_mysql(config, task):
@@ -803,6 +1072,11 @@ def execute_task(config, task):
         execute_restore_mysql(config, task)
         return
 
+    # Handle PostgreSQL database restore
+    if task_type == "restore_pg":
+        execute_restore_pg(config, task)
+        return
+
     # Execute pre-backup plugins
     plugin_results = {}
     if task_type == "backup" and plugins:
@@ -1005,6 +1279,15 @@ def execute_task(config, task):
             "databases": mysql_result.get("databases", []),
             "per_database": mysql_result.get("per_database", True),
             "compress": mysql_result.get("compress", True),
+        }
+
+    # Report backed-up databases from pg_dump plugin
+    if result == "completed" and task_type == "backup" and plugin_results.get("pg_dump"):
+        pg_result = plugin_results["pg_dump"]
+        status_data["databases_backed_up"] = {
+            "databases": pg_result.get("databases", []),
+            "per_database": True,
+            "compress": pg_result.get("compress", True),
         }
 
     status_response = api_request(config, "/api/agent/status", method="POST", data=status_data)

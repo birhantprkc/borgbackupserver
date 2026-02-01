@@ -2007,28 +2007,32 @@ FLUSH PRIVILEGES;</pre>
 <?php elseif ($tab === 'restore'): ?>
     <?php
     $mysqlPluginEnabled = false;
+    $pgPluginEnabled = false;
     $mysqlConfigs = [];
+    $pgConfigs = [];
     foreach ($agentPlugins as $ap) {
-        if ($ap['slug'] === 'mysql_dump' && $ap['agent_enabled']) {
-            $mysqlPluginEnabled = true;
-            break;
-        }
+        if ($ap['slug'] === 'mysql_dump' && $ap['agent_enabled']) $mysqlPluginEnabled = true;
+        if ($ap['slug'] === 'pg_dump' && $ap['agent_enabled']) $pgPluginEnabled = true;
     }
-    if ($mysqlPluginEnabled && !empty($pluginConfigs)) {
+    if (!empty($pluginConfigs)) {
         foreach ($pluginConfigs as $pc) {
-            if ($pc['slug'] === 'mysql_dump') {
-                $mysqlConfigs[] = $pc;
-            }
+            if ($pc['slug'] === 'mysql_dump' && $mysqlPluginEnabled) $mysqlConfigs[] = $pc;
+            if ($pc['slug'] === 'pg_dump' && $pgPluginEnabled) $pgConfigs[] = $pc;
         }
     }
-    $mysqlUser = 'your_user';
+    $dbPluginEnabled = $mysqlPluginEnabled || $pgPluginEnabled;
+    $allDbConfigs = array_merge($mysqlConfigs, $pgConfigs);
+    $defaultDbUser = 'your_user';
     if (!empty($mysqlConfigs)) {
         $firstCfg = json_decode($mysqlConfigs[0]['config'] ?? '{}', true);
-        if (!empty($firstCfg['user'])) $mysqlUser = $firstCfg['user'];
+        if (!empty($firstCfg['user'])) $defaultDbUser = $firstCfg['user'];
+    } elseif (!empty($pgConfigs)) {
+        $firstCfg = json_decode($pgConfigs[0]['config'] ?? '{}', true);
+        if (!empty($firstCfg['user'])) $defaultDbUser = $firstCfg['user'];
     }
     ?>
 
-    <?php if ($mysqlPluginEnabled): ?>
+    <?php if ($dbPluginEnabled): ?>
     <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
         <h5 class="mb-0">Restore:</h5>
         <div class="btn-group" role="group" id="restore-mode-toggle">
@@ -2041,14 +2045,25 @@ FLUSH PRIVILEGES;</pre>
         </div>
         <div id="db-connection-picker" class="align-items-center gap-2" style="display:none;">
             <span class="text-muted small">use connection:</span>
-            <?php if (empty($mysqlConfigs)): ?>
-                <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>No MySQL connection configured</span>
+            <?php if (empty($allDbConfigs)): ?>
+                <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>No database connection configured</span>
                 <a href="?tab=plugins" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-circle me-1"></i>Add Connection</a>
             <?php else: ?>
                 <select class="form-select form-select-sm" id="db-config-id" style="width:auto;">
-                    <?php foreach ($mysqlConfigs as $mc): ?>
-                        <option value="<?= $mc['id'] ?>"><?= htmlspecialchars($mc['name']) ?></option>
-                    <?php endforeach; ?>
+                    <?php if (!empty($mysqlConfigs)): ?>
+                        <optgroup label="MySQL">
+                        <?php foreach ($mysqlConfigs as $mc): ?>
+                            <option value="mysql:<?= $mc['id'] ?>"><?= htmlspecialchars($mc['name']) ?></option>
+                        <?php endforeach; ?>
+                        </optgroup>
+                    <?php endif; ?>
+                    <?php if (!empty($pgConfigs)): ?>
+                        <optgroup label="PostgreSQL">
+                        <?php foreach ($pgConfigs as $pc): ?>
+                            <option value="pg:<?= $pc['id'] ?>"><?= htmlspecialchars($pc['name']) ?></option>
+                        <?php endforeach; ?>
+                        </optgroup>
+                    <?php endif; ?>
                 </select>
             <?php endif; ?>
         </div>
@@ -2198,7 +2213,7 @@ FLUSH PRIVILEGES;</pre>
     </div><!-- end files-restore-section -->
 
     <!-- Database Restore Section (hidden by default) -->
-    <?php if ($mysqlPluginEnabled): ?>
+    <?php if ($dbPluginEnabled): ?>
     <div id="db-restore-section" style="display:none;">
         <div class="row g-2 align-items-end mb-3">
             <div class="col-md-6">
@@ -2263,12 +2278,12 @@ FLUSH PRIVILEGES;</pre>
                 <div class="alert alert-warning small py-2 px-3 mb-0">
                     <i class="bi bi-shield-exclamation me-1"></i>
                     If you don't already have it set up, the database restore requires a user with write permissions such as below:
-                    <code class="d-block mt-1" style="font-size:0.8em;">GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER, CREATE, INSERT, DROP, ALTER, INDEX, REFERENCES ON *.* TO '<span id="db-restore-grant-user"><?= htmlspecialchars($mysqlUser) ?></span>'@'localhost'; FLUSH PRIVILEGES;</code>
+                    <code class="d-block mt-1" id="db-restore-grant-code" style="font-size:0.8em;">GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER, CREATE, INSERT, DROP, ALTER, INDEX, REFERENCES ON *.* TO '<span id="db-restore-grant-user"><?= htmlspecialchars($defaultDbUser) ?></span>'@'localhost'; FLUSH PRIVILEGES;</code>
                 </div>
             </div>
         </div>
 
-        <form id="db-restore-form" method="POST" action="/clients/<?= $agent['id'] ?>/restore-mysql" style="display:none;">
+        <form id="db-restore-form" method="POST" action="/clients/<?= $agent['id'] ?>/restore-mysql" data-mysql-action="/clients/<?= $agent['id'] ?>/restore-mysql" data-pg-action="/clients/<?= $agent['id'] ?>/restore-pg" style="display:none;">
             <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
             <input type="hidden" name="archive_id" id="db-restore-archive-id">
             <input type="hidden" name="plugin_config_id" id="db-restore-config-id">
@@ -2278,11 +2293,17 @@ FLUSH PRIVILEGES;</pre>
     <?php endif; ?>
 
     <script>window.RESTORE_AGENT_ID = <?= $agent['id'] ?>;</script>
-    <script>window.MYSQL_PLUGIN_ENABLED = <?= $mysqlPluginEnabled ? 'true' : 'false' ?>;</script>
-    <script>window.MYSQL_CONFIG_AVAILABLE = <?= !empty($mysqlConfigs) ? 'true' : 'false' ?>;</script>
-    <script>window.MYSQL_CONFIG_USERS = <?= json_encode(array_combine(
-        array_column($mysqlConfigs, 'id'),
-        array_map(function($mc) { $c = json_decode($mc['config'] ?? '{}', true); return $c['user'] ?? 'backup_user'; }, $mysqlConfigs)
+    <script>window.DB_PLUGIN_ENABLED = <?= $dbPluginEnabled ? 'true' : 'false' ?>;</script>
+    <script>window.DB_CONFIG_AVAILABLE = <?= !empty($allDbConfigs) ? 'true' : 'false' ?>;</script>
+    <script>window.DB_CONFIG_USERS = <?= json_encode(array_merge(
+        array_combine(
+            array_map(function($mc) { return 'mysql:' . $mc['id']; }, $mysqlConfigs),
+            array_map(function($mc) { $c = json_decode($mc['config'] ?? '{}', true); return $c['user'] ?? 'backup_user'; }, $mysqlConfigs)
+        ),
+        array_combine(
+            array_map(function($pc) { return 'pg:' . $pc['id']; }, $pgConfigs),
+            array_map(function($pc) { $c = json_decode($pc['config'] ?? '{}', true); return $c['user'] ?? 'backup_user'; }, $pgConfigs)
+        )
     )) ?>;</script>
     <?php
     if (!isset($scripts)) $scripts = [];

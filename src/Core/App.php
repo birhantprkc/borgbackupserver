@@ -147,6 +147,7 @@ class App
         $this->router->map('GET', '/clients/[i:id]/catalog/search-all', 'ClientController@catalogSearchAll');
         $this->router->map('POST', '/clients/[i:id]/restore', 'ClientController@restoreSubmit');
         $this->router->map('POST', '/clients/[i:id]/restore-mysql', 'ClientController@restoreMysqlSubmit');
+        $this->router->map('POST', '/clients/[i:id]/restore-pg', 'ClientController@restorePgSubmit');
         $this->router->map('GET', '/clients/[i:id]/archive/[i:archive_id]/databases', 'ClientController@archiveDatabases');
         $this->router->map('POST', '/clients/[i:id]/download', 'ClientController@download');
     }

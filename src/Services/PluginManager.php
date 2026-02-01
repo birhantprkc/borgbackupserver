@@ -392,6 +392,65 @@ class PluginManager
                     'default' => '--single-transaction --quick --routines --triggers --events',
                 ],
             ],
+            'pg_dump' => [
+                'host' => [
+                    'type' => 'text',
+                    'label' => 'PostgreSQL Host',
+                    'default' => 'localhost',
+                ],
+                'port' => [
+                    'type' => 'number',
+                    'label' => 'Port',
+                    'default' => 5432,
+                ],
+                'user' => [
+                    'type' => 'text',
+                    'label' => 'Username',
+                    'required' => true,
+                    'default' => 'bbs_backup',
+                ],
+                'password' => [
+                    'type' => 'text',
+                    'label' => 'Password',
+                    'required' => true,
+                    'generate' => true,
+                    'sensitive' => true,
+                ],
+                'databases' => [
+                    'type' => 'text',
+                    'label' => 'Databases',
+                    'default' => '*',
+                    'help' => 'Use * for all databases, or a comma-separated list of specific names.',
+                ],
+                'dump_dir' => [
+                    'type' => 'text',
+                    'label' => 'Dump Directory',
+                    'default' => '/home/bbs/pgdump',
+                    'required' => true,
+                    'help' => 'Local directory where dumps are saved. Automatically included in backup directories.',
+                ],
+                'compress' => [
+                    'type' => 'checkbox',
+                    'label' => 'Compress dumps (gzip)',
+                    'default' => true,
+                ],
+                'cleanup_after' => [
+                    'type' => 'checkbox',
+                    'label' => 'Delete dumps after backup completes',
+                    'default' => true,
+                ],
+                'exclude_databases' => [
+                    'type' => 'tags',
+                    'label' => 'Exclude Databases',
+                    'default' => ['template0', 'template1', 'postgres'],
+                    'help' => 'Comma-separated list of databases to skip when using * above.',
+                ],
+                'extra_options' => [
+                    'type' => 'text',
+                    'label' => 'Extra pg_dump Options',
+                    'default' => '--no-owner --no-privileges',
+                ],
+            ],
         ];
 
         return $schemas[$slug] ?? [];
@@ -412,6 +471,15 @@ class PluginManager
                 . "       CREATE, INSERT, DROP, ALTER, INDEX, REFERENCES\n"
                 . "       ON *.* TO 'backup_user'@'localhost';\n"
                 . "FLUSH PRIVILEGES;",
+            'pg_dump' => "-- Backup only (read-only):\n"
+                . "CREATE ROLE backup_user WITH LOGIN PASSWORD 'strong_password';\n"
+                . "GRANT CONNECT ON DATABASE mydb TO backup_user;\n"
+                . "GRANT USAGE ON SCHEMA public TO backup_user;\n"
+                . "GRANT SELECT ON ALL TABLES IN SCHEMA public TO backup_user;\n"
+                . "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO backup_user;\n\n"
+                . "-- For database restore via GUI (requires additional privileges):\n"
+                . "ALTER ROLE backup_user CREATEDB;\n"
+                . "GRANT ALL PRIVILEGES ON DATABASE mydb TO backup_user;",
         ];
 
         return $help[$slug] ?? '';

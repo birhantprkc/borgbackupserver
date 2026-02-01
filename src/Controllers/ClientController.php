@@ -824,6 +824,103 @@ class ClientController extends Controller
     }
 
     /**
+     * Submit a PostgreSQL database restore job.
+     * POST /clients/{id}/restore-pg
+     */
+    public function restorePgSubmit(int $id): void
+    {
+        $this->requireAuth();
+        $this->verifyCsrf();
+
+        $agent = $this->getAgent($id);
+        if (!$agent) {
+            $this->flash('danger', 'Client not found.');
+            $this->redirect('/clients');
+        }
+
+        $archive_id = (int) ($_POST['archive_id'] ?? 0);
+        $databases = $_POST['databases'] ?? [];
+        $pluginConfigId = (int) ($_POST['plugin_config_id'] ?? 0);
+
+        if (!$archive_id || empty($databases)) {
+            $this->flash('danger', 'Select an archive and at least one database to restore.');
+            $this->redirect("/clients/{$id}?tab=restore");
+        }
+
+        if ($pluginConfigId) {
+            $pluginManager = new \BBS\Services\PluginManager();
+            $configCheck = $pluginManager->getPluginConfig($pluginConfigId);
+            if (!$configCheck || $configCheck['agent_id'] != $id || $configCheck['slug'] !== 'pg_dump') {
+                $this->flash('danger', 'Invalid PostgreSQL connection selected.');
+                $this->redirect("/clients/{$id}?tab=restore");
+            }
+        }
+
+        $archive = $this->db->fetchOne("
+            SELECT ar.*, r.path as repo_path, r.passphrase_encrypted
+            FROM archives ar
+            JOIN repositories r ON r.id = ar.repository_id
+            WHERE ar.id = ? AND r.agent_id = ?
+        ", [$archive_id, $id]);
+
+        if (!$archive || empty($archive['databases_backed_up'])) {
+            $this->flash('danger', 'Archive not found or has no database backup info.');
+            $this->redirect("/clients/{$id}?tab=restore");
+        }
+
+        $pluginManager = new \BBS\Services\PluginManager();
+        $enabledPlugins = $pluginManager->getEnabledAgentPlugins($id);
+        $pgEnabled = false;
+        foreach ($enabledPlugins as $p) {
+            if ($p['slug'] === 'pg_dump') {
+                $pgEnabled = true;
+                break;
+            }
+        }
+        if (!$pgEnabled) {
+            $this->flash('danger', 'PostgreSQL plugin is not enabled for this client.');
+            $this->redirect("/clients/{$id}?tab=restore");
+        }
+
+        $restoreDatabases = [];
+        foreach ($databases as $entry) {
+            $dbName = $entry['name'] ?? '';
+            $mode = $entry['mode'] ?? 'replace';
+            if ($dbName && in_array($mode, ['replace', 'rename'])) {
+                $restoreDatabases[] = ['database' => $dbName, 'mode' => $mode];
+            }
+        }
+
+        if (empty($restoreDatabases)) {
+            $this->flash('danger', 'No valid databases selected.');
+            $this->redirect("/clients/{$id}?tab=restore");
+        }
+
+        $jobId = $this->db->insert('backup_jobs', [
+            'agent_id' => $id,
+            'backup_plan_id' => null,
+            'repository_id' => $archive['repository_id'],
+            'task_type' => 'restore_pg',
+            'status' => 'queued',
+            'queued_at' => date('Y-m-d H:i:s'),
+            'restore_archive_id' => $archive_id,
+            'restore_databases' => json_encode($restoreDatabases),
+            'plugin_config_id' => $pluginConfigId ?: null,
+        ]);
+
+        $dbNames = array_column($restoreDatabases, 'database');
+        $this->db->insert('server_log', [
+            'agent_id' => $id,
+            'backup_job_id' => $jobId,
+            'level' => 'info',
+            'message' => "PostgreSQL restore queued: " . implode(', ', $dbNames) . " from archive {$archive['archive_name']}",
+        ]);
+
+        $this->flash('success', 'PostgreSQL restore job queued. It will run when a slot is available.');
+        $this->redirect("/clients/{$id}?tab=restore");
+    }
+
+    /**
      * POST /clients/{id}/download
      * Extracts selected paths from a borg archive on the server and streams as tar.gz.
      */

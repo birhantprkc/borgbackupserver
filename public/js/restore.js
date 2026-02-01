@@ -511,7 +511,7 @@
     // ================================================================
     // Database Restore Mode
     // ================================================================
-    if (window.MYSQL_PLUGIN_ENABLED) {
+    if (window.DB_PLUGIN_ENABLED) {
         const modeToggle = document.getElementById('restore-mode-toggle');
         const filesSection = document.getElementById('files-restore-section');
         const dbSection = document.getElementById('db-restore-section');
@@ -529,15 +529,39 @@
         let dbRestoreMode = 'files';
         let dbPerDatabase = true;
 
-        // Update grant username when connection changes
-        function updateGrantUser() {
+        // Parse connection picker value: "mysql:123" or "pg:456"
+        function parseConfigValue() {
+            if (!dbConfigId) return { type: 'mysql', id: '' };
+            const val = dbConfigId.value || '';
+            const parts = val.split(':');
+            return { type: parts[0] || 'mysql', id: parts[1] || '' };
+        }
+
+        // Update grant text and form action when connection changes
+        function updateConnectionInfo() {
+            const { type, id } = parseConfigValue();
             const grantSpan = document.getElementById('db-restore-grant-user');
-            if (!grantSpan || !dbConfigId || !window.MYSQL_CONFIG_USERS) return;
-            grantSpan.textContent = window.MYSQL_CONFIG_USERS[dbConfigId.value] || 'backup_user';
+            const grantCode = document.getElementById('db-restore-grant-code');
+            const form = document.getElementById('db-restore-form');
+            const user = (window.DB_CONFIG_USERS && window.DB_CONFIG_USERS[dbConfigId.value]) || 'backup_user';
+
+            if (grantSpan) grantSpan.textContent = user;
+
+            if (grantCode) {
+                if (type === 'pg') {
+                    grantCode.textContent = 'ALTER ROLE ' + user + ' CREATEDB; GRANT ALL PRIVILEGES ON DATABASE mydb TO ' + user + ';';
+                } else {
+                    grantCode.innerHTML = "GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER, CREATE, INSERT, DROP, ALTER, INDEX, REFERENCES ON *.* TO '" + '<span id="db-restore-grant-user">' + user + '</span>' + "'@'localhost'; FLUSH PRIVILEGES;";
+                }
+            }
+
+            if (form) {
+                form.action = form.dataset[type === 'pg' ? 'pgAction' : 'mysqlAction'] || form.action;
+            }
         }
         if (dbConfigId) {
-            dbConfigId.addEventListener('change', updateGrantUser);
-            updateGrantUser();
+            dbConfigId.addEventListener('change', updateConnectionInfo);
+            updateConnectionInfo();
         }
 
         // Mode toggle
@@ -636,7 +660,7 @@
         function updateDbSelection() {
             const checked = dbTableBody.querySelectorAll('.db-select-cb:checked');
             dbSelectedCount.textContent = checked.length;
-            dbRestoreBtn.disabled = checked.length === 0 || !window.MYSQL_CONFIG_AVAILABLE;
+            dbRestoreBtn.disabled = checked.length === 0 || !window.DB_CONFIG_AVAILABLE;
         }
 
         // Submit DB restore
@@ -653,7 +677,12 @@
             fieldsContainer.innerHTML = '';
             document.getElementById('db-restore-archive-id').value = dbArchiveSelect.value;
             const configIdField = document.getElementById('db-restore-config-id');
-            if (configIdField && dbConfigId) configIdField.value = dbConfigId.value || '';
+            if (configIdField && dbConfigId) {
+                const { id } = parseConfigValue();
+                configIdField.value = id;
+            }
+            // Update form action based on selected connection type
+            updateConnectionInfo();
 
             checked.forEach(function(cb, i) {
                 const dbName = cb.dataset.db;
