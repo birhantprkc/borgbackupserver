@@ -343,12 +343,14 @@ class PluginManager
                     'type' => 'text',
                     'label' => 'Username',
                     'required' => true,
-                    'help' => 'A least-privilege user with SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER grants.',
+                    'default' => 'bbs_backup',
                 ],
                 'password' => [
-                    'type' => 'password',
+                    'type' => 'text',
                     'label' => 'Password',
                     'required' => true,
+                    'generate' => true,
+                    'sensitive' => true,
                 ],
                 'databases' => [
                     'type' => 'text',

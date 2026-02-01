@@ -1826,10 +1826,10 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                 </div>
                             <?php else: ?>
                                 <label class="form-label small fw-semibold mb-1"><?= htmlspecialchars($def['label']) ?></label>
-                                <input type="<?= $def['type'] === 'password' ? 'password' : ($def['type'] === 'number' ? 'number' : 'text') ?>"
+                                <input type="<?= $def['type'] === 'number' ? 'number' : 'text' ?>"
                                        class="form-control form-control-sm" name="<?= $fieldName ?>"
-                                       value="<?= $def['type'] === 'password' ? '' : htmlspecialchars($val) ?>"
-                                       <?= $def['type'] === 'password' ? 'placeholder="(unchanged if empty)"' : '' ?>>
+                                       value="<?= !empty($def['sensitive']) ? '' : htmlspecialchars($val) ?>"
+                                       <?= !empty($def['sensitive']) ? 'placeholder="(unchanged if empty)"' : '' ?>>
                             <?php endif; ?>
                             <?php if (!empty($def['help'])): ?>
                                 <div class="form-text small"><?= htmlspecialchars($def['help']) ?></div>
@@ -1847,49 +1847,80 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
             <div class="collapse mt-3" id="newPluginConfig<?= $plugin['id'] ?>">
                 <div class="border rounded p-3 bg-light">
                     <h6 class="mb-3">New <?= htmlspecialchars($plugin['name']) ?> Configuration</h6>
-                    <form method="POST" action="/clients/<?= $agent['id'] ?>/plugin-configs">
+                    <form method="POST" action="/clients/<?= $agent['id'] ?>/plugin-configs" id="newConfigForm<?= $plugin['id'] ?>">
                         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                         <input type="hidden" name="plugin_id" value="<?= $plugin['id'] ?>">
-                        <div class="mb-2">
-                            <label class="form-label small fw-semibold">Configuration Name <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control form-control-sm" name="name" placeholder="e.g. Production DB" required>
-                        </div>
-                        <?php foreach ($schema as $field => $def):
-                            $default = $def['default'] ?? '';
-                            $fieldVal = is_array($default) ? implode(', ', $default) : $default;
-                            $fieldName = "plugin_config[{$field}]";
-                        ?>
-                        <div class="mb-2">
-                            <?php if ($def['type'] === 'checkbox'): ?>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="<?= $fieldName ?>" value="1"
-                                           id="newCfg<?= $plugin['id'] ?>_<?= $field ?>"
-                                           <?= $default ? 'checked' : '' ?>>
-                                    <label class="form-check-label small" for="newCfg<?= $plugin['id'] ?>_<?= $field ?>">
-                                        <?= htmlspecialchars($def['label']) ?>
-                                    </label>
+                        <div class="row">
+                            <div class="<?= $plugin['slug'] === 'mysql_dump' ? 'col-lg-6' : 'col-12' ?>">
+                                <div class="mb-2">
+                                    <label class="form-label small fw-semibold">Configuration Name <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control form-control-sm" name="name" placeholder="e.g. Production DB" required>
                                 </div>
-                            <?php else: ?>
-                                <label class="form-label small fw-semibold mb-1"><?= htmlspecialchars($def['label']) ?>
-                                    <?php if ($def['required'] ?? false): ?><span class="text-danger">*</span><?php endif; ?>
-                                </label>
-                                <input type="<?= $def['type'] === 'password' ? 'password' : ($def['type'] === 'number' ? 'number' : 'text') ?>"
-                                       class="form-control form-control-sm" name="<?= $fieldName ?>"
-                                       value="<?= htmlspecialchars($fieldVal) ?>">
-                            <?php endif; ?>
-                            <?php if (!empty($def['help'])): ?>
-                                <div class="form-text small"><?= htmlspecialchars($def['help']) ?></div>
+                                <?php
+                                $randomPass = substr(str_shuffle('abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'), 0, 20);
+                                foreach ($schema as $field => $def):
+                                    $default = $def['default'] ?? '';
+                                    if (!empty($def['generate']) && $field === 'password') $default = $randomPass;
+                                    $fieldVal = is_array($default) ? implode(', ', $default) : $default;
+                                    $fieldName = "plugin_config[{$field}]";
+                                ?>
+                                <div class="mb-2">
+                                    <?php if ($def['type'] === 'checkbox'): ?>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="<?= $fieldName ?>" value="1"
+                                                   id="newCfg<?= $plugin['id'] ?>_<?= $field ?>"
+                                                   <?= $default ? 'checked' : '' ?>>
+                                            <label class="form-check-label small" for="newCfg<?= $plugin['id'] ?>_<?= $field ?>">
+                                                <?= htmlspecialchars($def['label']) ?>
+                                            </label>
+                                        </div>
+                                    <?php else: ?>
+                                        <label class="form-label small fw-semibold mb-1"><?= htmlspecialchars($def['label']) ?>
+                                            <?php if ($def['required'] ?? false): ?><span class="text-danger">*</span><?php endif; ?>
+                                        </label>
+                                        <input type="<?= $def['type'] === 'number' ? 'number' : 'text' ?>"
+                                               class="form-control form-control-sm" name="<?= $fieldName ?>"
+                                               value="<?= htmlspecialchars($fieldVal) ?>"
+                                               <?= $field === 'user' && $plugin['slug'] === 'mysql_dump' ? 'id="newMysqlUser"' : '' ?>
+                                               <?= $field === 'password' && $plugin['slug'] === 'mysql_dump' ? 'id="newMysqlPass"' : '' ?>>
+                                    <?php endif; ?>
+                                    <?php if (!empty($def['help'])): ?>
+                                        <div class="form-text small"><?= htmlspecialchars($def['help']) ?></div>
+                                    <?php endif; ?>
+                                </div>
+                                <?php endforeach; ?>
+                                <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-plus-circle me-1"></i> Create Configuration</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary ms-1" data-bs-toggle="collapse" data-bs-target="#newPluginConfig<?= $plugin['id'] ?>">Cancel</button>
+                            </div>
+                            <?php if ($plugin['slug'] === 'mysql_dump'): ?>
+                            <div class="col-lg-6 mt-3 mt-lg-0">
+                                <div class="card border-0 bg-white shadow-sm h-100">
+                                    <div class="card-header bg-white fw-semibold small py-2">
+                                        <i class="bi bi-terminal me-1"></i> MySQL Setup Instructions
+                                    </div>
+                                    <div class="card-body small">
+                                        <p class="text-muted mb-2">If you already have a MySQL user you'd like to use, enter the credentials on the left. Otherwise, run one of the commands below on the client to create a dedicated backup user.</p>
+                                        <div class="mb-3">
+                                            <strong>Backup Only</strong>
+                                            <span class="text-muted">(read-only, recommended)</span>
+                                            <pre class="bg-light border rounded p-2 mt-1 mb-0" style="font-size:0.78rem;white-space:pre-wrap;" id="mysqlBackupOnlySql">CREATE USER '<span id="sqlUser1">bbs_backup</span>'@'localhost' IDENTIFIED BY '<span id="sqlPass1"><?= htmlspecialchars($randomPass) ?></span>';
+GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER ON *.* TO '<span id="sqlUser1b">bbs_backup</span>'@'localhost';
+FLUSH PRIVILEGES;</pre>
+                                        </div>
+                                        <div>
+                                            <strong>Backup + Restore</strong>
+                                            <span class="text-muted">(if you want to restore databases from the GUI)</span>
+                                            <pre class="bg-light border rounded p-2 mt-1 mb-0" style="font-size:0.78rem;white-space:pre-wrap;" id="mysqlBackupRestoreSql">CREATE USER '<span id="sqlUser2">bbs_backup</span>'@'localhost' IDENTIFIED BY '<span id="sqlPass2"><?= htmlspecialchars($randomPass) ?></span>';
+GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER,
+      CREATE, INSERT, DROP, ALTER, INDEX, REFERENCES
+      ON *.* TO '<span id="sqlUser2b">bbs_backup</span>'@'localhost';
+FLUSH PRIVILEGES;</pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                             <?php endif; ?>
                         </div>
-                        <?php endforeach; ?>
-                        <?php if ($helpSql): ?>
-                        <div class="alert alert-info small mt-2">
-                            <strong>Setup hint:</strong>
-                            <pre class="mb-0 mt-1" style="font-size: 0.8rem;"><?= htmlspecialchars($helpSql) ?></pre>
-                        </div>
-                        <?php endif; ?>
-                        <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-plus-circle me-1"></i> Create Configuration</button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary ms-1" data-bs-toggle="collapse" data-bs-target="#newPluginConfig<?= $plugin['id'] ?>">Cancel</button>
                     </form>
                 </div>
             </div>
@@ -1943,6 +1974,31 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
             }
         }, 60000);
     }
+
+    // Live-update MySQL setup instructions as user/password fields change
+    (function() {
+        const userField = document.getElementById('newMysqlUser');
+        const passField = document.getElementById('newMysqlPass');
+        if (!userField || !passField) return;
+
+        function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#039;'); }
+
+        function update() {
+            const u = esc(userField.value || 'bbs_backup');
+            const p = esc(passField.value || 'PASSWORD');
+            ['sqlUser1','sqlUser1b','sqlUser2','sqlUser2b'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = userField.value || 'bbs_backup';
+            });
+            ['sqlPass1','sqlPass2'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = passField.value || 'PASSWORD';
+            });
+        }
+
+        userField.addEventListener('input', update);
+        passField.addEventListener('input', update);
+    })();
     </script>
 
 <?php elseif ($tab === 'restore'): ?>
