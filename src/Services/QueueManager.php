@@ -395,7 +395,7 @@ class QueueManager
                 $configData = json_decode($c['config'] ?? '{}', true) ?: [];
                 // Decrypt password
                 if (!empty($configData['password'])) {
-                    $configData['password'] = \BBS\Core\Encryption::decrypt($configData['password']);
+                    $configData['password'] = Encryption::decrypt($configData['password']);
                 }
                 $mysqlConfig = $configData;
                 break;
