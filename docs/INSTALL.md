@@ -255,7 +255,7 @@ crontab -e
 Add this line:
 
 ```
-* * * * * php /var/www/bbs/scheduler.php >> /var/log/bbs-scheduler.log 2>&1
+* * * * * /usr/bin/php /var/www/bbs/scheduler.php >> /var/log/bbs-scheduler.log 2>&1
 ```
 
 Verify it's running after a minute:

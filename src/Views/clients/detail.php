@@ -44,7 +44,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                         <i class="bi bi-pencil"></i>
                     </button>
                 </div>
-                <div class="text-muted mt-1 client-header-info d-flex flex-wrap gap-1">
+                <div class="text-muted mt-1 client-header-info d-flex flex-wrap gap-3" style="font-size:.85rem;">
                     <?php if ($agent['hostname']): ?>
                         <span><i class="bi bi-hdd-network me-1"></i><?= htmlspecialchars($agent['hostname']) ?></span>
                         <?php if ($agent['ip_address'] ?? null): ?>
