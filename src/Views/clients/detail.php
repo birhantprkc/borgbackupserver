@@ -1763,7 +1763,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     ?>
     <div class="card mb-4">
         <div class="card-header d-flex justify-content-between align-items-center">
-            <span class="fw-semibold"><?= htmlspecialchars($plugin['name']) ?> Configurations</span>
+            <span class="fw-semibold"><i class="bi bi-database me-1<?= $plugin['slug'] === 'mysql_dump' ? ' text-primary' : ($plugin['slug'] === 'pg_dump' ? ' text-info' : '') ?>"></i><?= htmlspecialchars($plugin['name']) ?> Configurations</span>
             <button type="button" class="btn btn-sm btn-success" data-bs-toggle="collapse" data-bs-target="#newPluginConfig<?= $plugin['id'] ?>">
                 <i class="bi bi-plus-circle me-1"></i> Add Configuration
             </button>
