@@ -33,8 +33,8 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
 ?>
 <div class="card border-0 shadow-sm mb-4 card-no-outline">
     <div class="card-body pb-2">
-        <div class="mb-3">
-            <div class="w-100">
+        <div class="d-flex justify-content-between align-items-start mb-3">
+            <div class="flex-fill">
                 <div class="d-flex flex-wrap align-items-center gap-2">
                     <h3 class="mb-0">
                         <i class="bi bi-display me-2 text-primary"></i><?= htmlspecialchars($agent['name']) ?>
@@ -52,9 +52,6 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     <?php endif; ?>
                     <?php if ($agent['os_info']): ?>
                         <span class="d-none d-md-inline"><i class="bi bi-cpu me-1"></i><?= htmlspecialchars($agent['os_info']) ?></span>
-                    <?php endif; ?>
-                    <?php if ($agent['owner_name']): ?>
-                        <span><i class="bi bi-person me-1"></i><?= htmlspecialchars($agent['owner_name']) ?></span>
                     <?php endif; ?>
                     <span>
                     <?php if ($agent['agent_version']): ?>
@@ -81,6 +78,9 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     <?php endif; ?>
                     </span>
                 </div>
+            </div>
+            <div class="text-end text-muted small d-none d-md-block text-nowrap ms-3">
+                <i class="bi bi-person me-1"></i>Owner: <strong><?= htmlspecialchars($agent['owner_name'] ?? 'Admin') ?></strong>
             </div>
         </div>
 
