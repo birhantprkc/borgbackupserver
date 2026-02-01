@@ -172,5 +172,15 @@ else
     echo "  Warning: .env not found, skipping"
 fi
 
+# Restart PHP-FPM to clear OPcache (CLI opcache_reset won't affect FPM)
+PHP_FPM=$(systemctl list-units --type=service --no-legend 2>/dev/null | grep -oP 'php[0-9.]+-fpm\.service' | head -1 || true)
+if [ -n "$PHP_FPM" ]; then
+    echo "  Restarting $PHP_FPM..."
+    systemctl restart "$PHP_FPM"
+else
+    # Try generic service name
+    systemctl restart php-fpm 2>/dev/null || true
+fi
+
 echo ""
 echo "=== Update complete ==="
