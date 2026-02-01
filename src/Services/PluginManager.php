@@ -451,6 +451,29 @@ class PluginManager
                     'default' => '--no-owner --no-privileges',
                 ],
             ],
+            'shell_hook' => [
+                'pre_script' => [
+                    'type' => 'text',
+                    'label' => 'Pre-Backup Script Path',
+                    'help' => 'Absolute path to script on the client (e.g. /home/bbs/hooks/pre-backup.sh). Runs before borg starts. Leave empty to skip.',
+                ],
+                'post_script' => [
+                    'type' => 'text',
+                    'label' => 'Post-Backup Script Path',
+                    'help' => 'Absolute path to script on the client (e.g. /home/bbs/hooks/post-backup.sh). Runs after borg completes. Leave empty to skip.',
+                ],
+                'abort_on_failure' => [
+                    'type' => 'checkbox',
+                    'label' => 'Abort backup if pre-script fails',
+                    'default' => true,
+                ],
+                'timeout' => [
+                    'type' => 'number',
+                    'label' => 'Script Timeout (seconds)',
+                    'default' => 300,
+                    'help' => 'Maximum time each script is allowed to run before being killed.',
+                ],
+            ],
         ];
 
         return $schemas[$slug] ?? [];

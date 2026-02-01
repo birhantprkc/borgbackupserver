@@ -19,7 +19,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.6.0"
+AGENT_VERSION = "1.7.0"
 CONFIG_PATH = "/etc/bbs-agent/config.ini"
 LOG_PATH = "/var/log/bbs-agent.log"
 SSH_KEY_PATH = "/etc/bbs-agent/ssh_key"
@@ -430,6 +430,22 @@ def _plugin_summary(slug, config, result):
         total_size = sum(os.path.getsize(f) for f in dump_files if os.path.exists(f))
         size_str = _format_size(total_size)
         return f"PostgreSQL dump: {len(dump_files)} database(s) ({', '.join(db_names)}) dumped to {dump_dir} ({size_str})"
+    if slug == "shell_hook":
+        parts = []
+        pre = result.get("pre_script", "")
+        if pre:
+            code = result.get("pre_exit_code", "?")
+            parts.append(f"pre-script: {pre} (exit {code})")
+        post = result.get("post_script", "")
+        if post:
+            parts.append(f"post-script: {post} (pending)")
+        output = result.get("pre_output", "").strip()
+        if output:
+            # Truncate for summary
+            if len(output) > 200:
+                output = output[:200] + "..."
+            parts.append(f"output: {output}")
+        return f"Shell hook: {' | '.join(parts)}" if parts else None
     return None
 
 
@@ -450,11 +466,14 @@ def cleanup_plugins(plugins, plugin_results, config=None, job_id=None):
         func = globals().get(f"cleanup_plugin_{slug}")
         if func:
             try:
-                func(cfg, plugin_results.get(slug, {}))
-                if config and job_id and cfg.get("cleanup_after", True):
-                    dump_dir = plugin_results.get(slug, {}).get("dump_dir", "")
-                    if dump_dir:
-                        log_to_server(config, job_id, f"Plugin cleanup: removed dump files from {dump_dir}")
+                cleanup_result = func(cfg, plugin_results.get(slug, {}))
+                if config and job_id:
+                    if cfg.get("cleanup_after", True):
+                        dump_dir = plugin_results.get(slug, {}).get("dump_dir", "")
+                        if dump_dir:
+                            log_to_server(config, job_id, f"Plugin cleanup: removed dump files from {dump_dir}")
+                    if slug == "shell_hook" and cleanup_result:
+                        log_to_server(config, job_id, f"Shell hook post-script: {cleanup_result}")
             except Exception as e:
                 logger.warning(f"Plugin cleanup for {slug} failed: {e}")
                 if config and job_id:
@@ -724,6 +743,126 @@ def test_plugin_pg_dump(config):
         if parts and parts[0].strip():
             dbs.append(parts[0].strip())
     return f"Connection successful. Found {len(dbs)} database(s): {', '.join(dbs[:10])}"
+
+
+def execute_plugin_shell_hook(config):
+    """Run pre-backup shell script hook."""
+    pre_script = config.get("pre_script", "").strip()
+    post_script = config.get("post_script", "").strip()
+    timeout = int(config.get("timeout", 300))
+    abort_on_failure = config.get("abort_on_failure", True)
+
+    result = {
+        "pre_script": pre_script,
+        "post_script": post_script,
+        "pre_output": "",
+        "pre_exit_code": None,
+    }
+
+    if not pre_script:
+        logger.info("Shell hook: no pre-script configured, skipping")
+        return result
+
+    if not os.path.isfile(pre_script):
+        msg = f"Pre-script not found: {pre_script}"
+        if abort_on_failure:
+            raise Exception(msg)
+        logger.warning(msg)
+        return result
+
+    if not os.access(pre_script, os.X_OK):
+        msg = f"Pre-script not executable: {pre_script}"
+        if abort_on_failure:
+            raise Exception(msg)
+        logger.warning(msg)
+        return result
+
+    logger.info(f"Shell hook: running pre-script {pre_script}")
+    try:
+        proc = subprocess.run(
+            [pre_script],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=timeout,
+            text=True,
+        )
+        output = proc.stdout[:10240] if proc.stdout else ""
+        result["pre_output"] = output
+        result["pre_exit_code"] = proc.returncode
+
+        if proc.returncode != 0:
+            msg = f"Pre-script exited with code {proc.returncode}: {output}"
+            if abort_on_failure:
+                raise Exception(msg)
+            logger.warning(msg)
+        else:
+            logger.info(f"Pre-script completed successfully (exit 0)")
+    except subprocess.TimeoutExpired:
+        msg = f"Pre-script timed out after {timeout}s: {pre_script}"
+        if abort_on_failure:
+            raise Exception(msg)
+        logger.warning(msg)
+
+    return result
+
+
+def cleanup_plugin_shell_hook(config, plugin_result):
+    """Run post-backup shell script hook."""
+    post_script = config.get("post_script", "").strip()
+    timeout = int(config.get("timeout", 300))
+
+    if not post_script:
+        return None
+
+    if not os.path.isfile(post_script):
+        logger.warning(f"Post-script not found: {post_script}")
+        return f"{post_script} not found"
+
+    if not os.access(post_script, os.X_OK):
+        logger.warning(f"Post-script not executable: {post_script}")
+        return f"{post_script} not executable"
+
+    logger.info(f"Shell hook: running post-script {post_script}")
+    try:
+        proc = subprocess.run(
+            [post_script],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=timeout,
+            text=True,
+        )
+        output = proc.stdout[:10240] if proc.stdout else ""
+        if proc.returncode != 0:
+            logger.warning(f"Post-script exited with code {proc.returncode}: {output}")
+            return f"{post_script} exited {proc.returncode}: {output[:500]}"
+        else:
+            logger.info(f"Post-script completed successfully (exit 0)")
+            return f"{post_script} completed (exit 0)" + (f": {output[:500]}" if output.strip() else "")
+    except subprocess.TimeoutExpired:
+        logger.warning(f"Post-script timed out after {timeout}s: {post_script}")
+        return f"{post_script} timed out after {timeout}s"
+
+
+def test_plugin_shell_hook(config):
+    """Test that configured shell hook scripts exist and are executable."""
+    pre_script = config.get("pre_script", "").strip()
+    post_script = config.get("post_script", "").strip()
+    results = []
+
+    if not pre_script and not post_script:
+        raise Exception("No scripts configured. Set at least a pre-script or post-script path.")
+
+    for label, path in [("Pre-script", pre_script), ("Post-script", post_script)]:
+        if not path:
+            results.append(f"{label}: not configured (skipped)")
+            continue
+        if not os.path.isfile(path):
+            raise Exception(f"{label} not found: {path}")
+        if not os.access(path, os.X_OK):
+            raise Exception(f"{label} not executable: {path} — run: chmod +x {path}")
+        results.append(f"{label}: {path} ✓")
+
+    return " | ".join(results)
 
 
 def execute_restore_pg(config, task):

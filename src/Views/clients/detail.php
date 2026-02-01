@@ -1750,6 +1750,10 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                             <div class="card-body d-flex align-items-start gap-3 p-3">
                                 <?php if ($logo): ?>
                                     <img src="<?= $logo ?>" alt="" style="width:48px;height:48px;object-fit:contain;flex-shrink:0;" class="mt-1">
+                                <?php elseif ($plugin['slug'] === 'shell_hook'): ?>
+                                    <div class="d-flex align-items-center justify-content-center rounded-circle mt-1" style="width:48px;height:48px;flex-shrink:0;background-color:rgba(13,110,253,0.1);">
+                                        <i class="bi bi-terminal text-primary" style="font-size:1.5rem;"></i>
+                                    </div>
                                 <?php else: ?>
                                     <i class="bi bi-database" style="font-size:2.5rem;flex-shrink:0;" class="mt-1 text-secondary"></i>
                                 <?php endif; ?>
@@ -1784,7 +1788,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     ?>
     <div class="card mb-4">
         <div class="card-header d-flex justify-content-between align-items-center">
-            <span class="fw-semibold"><i class="bi bi-database me-1<?= $plugin['slug'] === 'mysql_dump' ? ' text-primary' : ($plugin['slug'] === 'pg_dump' ? ' text-info' : '') ?>"></i><?= htmlspecialchars($plugin['name']) ?> Configurations</span>
+            <span class="fw-semibold"><i class="bi <?= $plugin['slug'] === 'shell_hook' ? 'bi-terminal' : 'bi-database' ?> me-1<?= $plugin['slug'] === 'mysql_dump' ? ' text-primary' : ($plugin['slug'] === 'pg_dump' ? ' text-info' : ($plugin['slug'] === 'shell_hook' ? ' text-primary' : '')) ?>"></i><?= htmlspecialchars($plugin['name']) ?> Configurations</span>
             <button type="button" class="btn btn-sm btn-success" data-bs-toggle="collapse" data-bs-target="#newPluginConfig<?= $plugin['id'] ?>">
                 <i class="bi bi-plus-circle me-1"></i> Add Configuration
             </button>
@@ -1801,12 +1805,13 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 if (!empty($cfgData['host'])) $summaryParts[] = $cfgData['host'] . (!empty($cfgData['port']) && $cfgData['port'] != $defaultPort ? ':' . $cfgData['port'] : '');
                 if (!empty($cfgData['user'])) $summaryParts[] = 'user: ' . $cfgData['user'];
                 if (!empty($cfgData['databases'])) $summaryParts[] = 'db: ' . $cfgData['databases'];
-                $dbIcon = $plugin['slug'] === 'mysql_dump' ? 'text-primary' : ($plugin['slug'] === 'pg_dump' ? 'text-info' : 'text-secondary');
+                $cfgIcon = $plugin['slug'] === 'shell_hook' ? 'bi-terminal' : 'bi-database';
+                $dbIcon = $plugin['slug'] === 'mysql_dump' ? 'text-primary' : ($plugin['slug'] === 'pg_dump' ? 'text-info' : ($plugin['slug'] === 'shell_hook' ? 'text-primary' : 'text-secondary'));
             ?>
             <div class="border rounded p-3 mb-3">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
-                        <h6 class="mb-1"><i class="bi bi-database me-1 <?= $dbIcon ?>"></i><?= htmlspecialchars($cfg['name']) ?></h6>
+                        <h6 class="mb-1"><i class="bi <?= $cfgIcon ?> me-1 <?= $dbIcon ?>"></i><?= htmlspecialchars($cfg['name']) ?></h6>
                         <small class="text-muted"><?= htmlspecialchars(implode(' | ', $summaryParts)) ?></small>
                     </div>
                     <div class="d-flex gap-1">
@@ -1874,7 +1879,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                         <input type="hidden" name="plugin_id" value="<?= $plugin['id'] ?>">
                         <div class="row">
-                            <div class="<?= in_array($plugin['slug'], ['mysql_dump', 'pg_dump']) ? 'col-lg-6' : 'col-12' ?>">
+                            <div class="<?= in_array($plugin['slug'], ['mysql_dump', 'pg_dump', 'shell_hook']) ? 'col-lg-6' : 'col-12' ?>">
                                 <div class="mb-2">
                                     <label class="form-label small fw-semibold">Configuration Name <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control form-control-sm" name="name" placeholder="e.g. Production DB" required>
@@ -1979,6 +1984,30 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO <span id="pg
 ALTER ROLE <span id="pgUser2f">bbs_backup</span> CREATEDB;
 GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;</pre>
                                         </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <?php endif; ?>
+                            <?php if ($plugin['slug'] === 'shell_hook'): ?>
+                            <div class="col-lg-6 mt-3 mt-lg-0">
+                                <div class="alert alert-warning small mb-3">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>
+                                    <strong>Use at your own risk.</strong> Scripts run with the agent's system permissions.
+                                    BBS does not validate script contents. Ensure your scripts are tested and trusted
+                                    before enabling them in backup plans.
+                                </div>
+                                <div class="card border-0 bg-white shadow-sm">
+                                    <div class="card-header bg-white fw-semibold small py-2">
+                                        <i class="bi bi-terminal me-1"></i> Script Requirements
+                                    </div>
+                                    <div class="card-body small">
+                                        <ul class="mb-0">
+                                            <li>Scripts must be executable (<code>chmod +x script.sh</code>)</li>
+                                            <li>Use absolute paths (e.g. <code>/home/bbs/hooks/pre-backup.sh</code>)</li>
+                                            <li>Scripts should exit 0 on success, non-zero on failure</li>
+                                            <li>stdout and stderr are captured in the activity log</li>
+                                            <li>Scripts are killed if they exceed the configured timeout</li>
+                                        </ul>
                                     </div>
                                 </div>
                             </div>

@@ -286,7 +286,8 @@ CREATE TABLE backup_plan_plugins (
 
 INSERT INTO plugins (slug, name, description, plugin_type) VALUES
 ('mysql_dump', 'MySQL Backup/Restore', 'Performs mysqldump before backup and optionally restores databases back to the MySQL server.', 'pre_backup'),
-('pg_dump', 'PostgreSQL Backup/Restore', 'Performs pg_dump before backup and optionally restores databases back to the PostgreSQL server.', 'pre_backup');
+('pg_dump', 'PostgreSQL Backup/Restore', 'Performs pg_dump before backup and optionally restores databases back to the PostgreSQL server.', 'pre_backup'),
+('shell_hook', 'Shell Script Hook', 'Runs custom shell scripts on the client before and/or after backup. Useful for application quiescing, cache clearing, notifications, or custom integrations.', 'pre_backup');
 
 -- --------------------------------------------------------
 -- Backup Templates
