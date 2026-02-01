@@ -663,18 +663,6 @@ class ClientController extends Controller
             $this->redirect("/clients/{$id}?tab=restore");
         }
 
-        // Check if repo already has an active job (borg can't run concurrent ops)
-        $repoBusy = $this->db->fetchOne("
-            SELECT id FROM backup_jobs
-            WHERE repository_id = ?
-              AND status IN ('queued', 'sent', 'running')
-        ", [$archive['repository_id']]);
-
-        if ($repoBusy) {
-            $this->flash('warning', 'A job is already active for this repository. Wait for it to complete before starting a restore.');
-            $this->redirect("/clients/{$id}?tab=restore");
-            return;
-        }
 
         // Create restore job
         $jobId = $this->db->insert('backup_jobs', [
@@ -784,18 +772,6 @@ class ClientController extends Controller
             $this->redirect("/clients/{$id}?tab=restore");
         }
 
-        // Check if repo already has an active job
-        $repoBusy = $this->db->fetchOne("
-            SELECT id FROM backup_jobs
-            WHERE repository_id = ?
-              AND status IN ('queued', 'sent', 'running')
-        ", [$archive['repository_id']]);
-
-        if ($repoBusy) {
-            $this->flash('warning', 'A job is already active for this repository. Wait for it to complete.');
-            $this->redirect("/clients/{$id}?tab=restore");
-            return;
-        }
 
         // Build restore_databases JSON: [{database: name, mode: replace|rename}, ...]
         $restoreDatabases = [];
