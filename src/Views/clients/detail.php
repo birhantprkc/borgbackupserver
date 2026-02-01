@@ -35,7 +35,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     <div class="card-body pb-2">
         <div class="d-flex justify-content-between align-items-start mb-3">
             <div>
-                <div class="d-flex align-items-center gap-2">
+                <div class="d-flex flex-wrap align-items-center gap-2">
                     <h3 class="mb-0">
                         <i class="bi bi-display me-2 text-primary"></i><?= htmlspecialchars($agent['name']) ?>
                     </h3>
@@ -43,8 +43,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     <button class="btn btn-sm btn-outline-secondary border-0" data-bs-toggle="collapse" data-bs-target="#edit-client" title="Edit client">
                         <i class="bi bi-pencil"></i>
                     </button>
-                </div>
-                <div class="text-muted mt-1 client-header-info d-flex flex-wrap gap-3" style="font-size:.85rem;">
+                    <span class="text-muted client-header-info d-flex flex-wrap gap-3 align-items-center" style="font-size:.8rem;">
                     <?php if ($agent['hostname']): ?>
                         <span><i class="bi bi-hdd-network me-1"></i><?= htmlspecialchars($agent['hostname']) ?></span>
                         <?php if ($agent['ip_address'] ?? null): ?>
