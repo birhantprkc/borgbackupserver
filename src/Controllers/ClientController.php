@@ -83,41 +83,40 @@ class ClientController extends Controller
             ", array_merge([$latestVersion], $params))['cnt'];
         }
 
-        // 7-day backup activity chart (same pattern as Dashboard)
+        // 7-day backup activity chart — group by user's local date
         $utcTz = new \DateTimeZone('UTC');
         $userTz = new \DateTimeZone($_SESSION['timezone'] ?? 'UTC');
-        $backupsByDay = $this->db->fetchAll("
-            SELECT DATE(bj.completed_at) as day,
-                   SUM(bj.status = 'completed') as completed,
-                   SUM(bj.status = 'failed') as failed
+        $recentJobs = $this->db->fetchAll("
+            SELECT bj.completed_at, bj.status
             FROM backup_jobs bj
             JOIN agents a ON a.id = bj.agent_id
             WHERE bj.completed_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
               AND bj.status IN ('completed', 'failed')
               {$jobScope}
-            GROUP BY day ORDER BY day
         ", $jobParams);
 
-        // Fill in missing days — iterate in UTC, convert label to user TZ
+        // Convert each timestamp to user's local date, then tally
+        $byDay = [];
+        foreach ($recentJobs as $job) {
+            $dt = new \DateTime($job['completed_at'], $utcTz);
+            $dt->setTimezone($userTz);
+            $dayKey = $dt->format('Y-m-d');
+            if (!isset($byDay[$dayKey])) $byDay[$dayKey] = ['completed' => 0, 'failed' => 0];
+            $byDay[$dayKey][$job['status']]++;
+        }
+
+        // Build 7-day series anchored to "today" in user's timezone
         $chartActivity = [];
-        $now = new \DateTime('now', $utcTz);
+        $today = new \DateTime('today', $userTz);
         for ($i = 6; $i >= 0; $i--) {
-            $dayDt = clone $now;
-            $dayDt->modify("-{$i} days");
-            $dayKey = $dayDt->format('Y-m-d'); // UTC key to match DB
-            $localDt = clone $dayDt;
-            $localDt->setTimezone($userTz);
-            $label = $localDt->format('D'); // User's timezone for display
-            $completed = 0;
-            $failed = 0;
-            foreach ($backupsByDay as $row) {
-                if ($row['day'] === $dayKey) {
-                    $completed = (int) $row['completed'];
-                    $failed = (int) $row['failed'];
-                    break;
-                }
-            }
-            $chartActivity[] = ['label' => $label, 'completed' => $completed, 'failed' => $failed];
+            $dt = clone $today;
+            $dt->modify("-{$i} days");
+            $dayKey = $dt->format('Y-m-d');
+            $chartActivity[] = [
+                'label' => $dt->format('D'),
+                'completed' => $byDay[$dayKey]['completed'] ?? 0,
+                'failed' => $byDay[$dayKey]['failed'] ?? 0,
+            ];
         }
 
         // Storage by client (top 5 + other)
