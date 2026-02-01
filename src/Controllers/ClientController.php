@@ -525,6 +525,7 @@ class ClientController extends Controller
             WHERE fc.archive_id = ? AND fp.agent_id = ?
               AND fp.path LIKE ?
               AND LOCATE('/', SUBSTRING(fp.path, ?)) = 0
+              AND fc.status != 'D'
             ORDER BY fp.file_name
         ", [$archive_id, $id, $likePath, $prefixLen + 1]);
 
