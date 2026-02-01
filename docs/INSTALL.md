@@ -24,7 +24,7 @@ The installer will prompt you for your server's hostname (e.g. `backups.example.
 For LAN installs without SSL:
 
 ```bash
-sudo bash bbs-install --hostname 192.168.1.100 --no-ssl
+curl -sO https://raw.githubusercontent.com/marcpope/borgbackupserver/main/bin/bbs-install && sudo bash bbs-install --no-ssl
 ```
 
 The script installs all dependencies, configures Apache, sets up the database, and opens the setup wizard in your browser.
