@@ -2115,6 +2115,11 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     <!-- Database Restore Section (hidden by default) -->
     <?php if ($mysqlPluginEnabled): ?>
     <div id="db-restore-section" style="display:none;">
+        <div class="alert alert-warning small py-2 px-3 mb-3">
+            <i class="bi bi-shield-exclamation me-1"></i>
+            <strong>Note:</strong> Database restore requires additional MySQL privileges. Your backup user needs:
+            <code class="d-block mt-1" style="font-size:0.8em;">GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER, CREATE, INSERT, DROP, ALTER, INDEX, REFERENCES ON *.* TO 'your_user'@'localhost';</code>
+        </div>
         <div class="row g-2 align-items-end mb-3">
             <div class="col-md-6">
                 <label class="form-label fw-semibold mb-1 small">Archive</label>
