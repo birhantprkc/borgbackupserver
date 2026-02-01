@@ -330,7 +330,7 @@ class ClientController extends Controller
                 AVG(CASE WHEN status = 'completed' THEN duration_seconds END) as avg_duration
             FROM (
                 SELECT status, duration_seconds FROM backup_jobs
-                WHERE agent_id = ? AND status IN ('completed','failed')
+                WHERE agent_id = ? AND task_type = 'backup' AND status IN ('completed','failed')
                 ORDER BY completed_at DESC LIMIT 30
             ) recent
         ", [$id]);
@@ -344,7 +344,7 @@ class ClientController extends Controller
             SELECT DATE_FORMAT(completed_at, '%b %d %H:%i') as label,
                    duration_seconds, status, task_type
             FROM backup_jobs
-            WHERE agent_id = ? AND status IN ('completed','failed') AND completed_at IS NOT NULL
+            WHERE agent_id = ? AND task_type = 'backup' AND status IN ('completed','failed') AND completed_at IS NOT NULL
             ORDER BY completed_at DESC LIMIT 30
         ", [$id]);
 
