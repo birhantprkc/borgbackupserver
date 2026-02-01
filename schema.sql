@@ -285,8 +285,8 @@ CREATE TABLE backup_plan_plugins (
 ) ENGINE=InnoDB;
 
 INSERT INTO plugins (slug, name, description, plugin_type) VALUES
-('mysql_dump', 'MySQL Database Dump', 'Dumps MySQL/MariaDB databases to a local directory before backup. Supports per-database dumps with optional cleanup after backup completion.', 'pre_backup'),
-('pg_dump', 'PostgreSQL Database Dump', 'Dumps PostgreSQL databases to a local directory before backup. Supports per-database dumps with optional cleanup after backup completion.', 'pre_backup');
+('mysql_dump', 'MySQL Backup/Restore', 'Performs mysqldump before backup and optionally restores databases back to the MySQL server.', 'pre_backup'),
+('pg_dump', 'PostgreSQL Backup/Restore', 'Performs pg_dump before backup and optionally restores databases back to the PostgreSQL server.', 'pre_backup');
 
 -- --------------------------------------------------------
 -- Backup Templates
