@@ -1727,31 +1727,53 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     <h5 class="mb-3"><i class="bi bi-plug me-1"></i> Plugins</h5>
 
     <!-- Enable/Disable Plugins -->
-    <div class="card mb-4">
-        <div class="card-header fw-semibold">Available Plugins</div>
-        <div class="card-body">
-            <form method="POST" action="/clients/<?= $agent['id'] ?>/plugins">
-                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                <p class="text-muted small mb-3">Enable plugins to add pre-backup tasks (e.g. database dumps) for this client.</p>
-                <?php if (empty($allPlugins)): ?>
-                    <p class="text-muted">No plugins available.</p>
-                <?php else: ?>
-                    <?php foreach ($allPlugins as $plugin): ?>
-                    <div class="form-check mb-2">
-                        <input type="checkbox" class="form-check-input" name="plugins[]"
-                               value="<?= $plugin['id'] ?>" id="enablePlugin<?= $plugin['id'] ?>"
-                               <?php foreach ($agentPlugins as $ap): if ($ap['id'] == $plugin['id'] && $ap['agent_enabled']): ?>checked<?php endif; endforeach; ?>>
-                        <label class="form-check-label" for="enablePlugin<?= $plugin['id'] ?>">
-                            <strong><?= htmlspecialchars($plugin['name']) ?></strong>
-                            <span class="text-muted ms-1">&mdash; <?= htmlspecialchars($plugin['description']) ?></span>
-                        </label>
-                    </div>
-                    <?php endforeach; ?>
-                    <button type="submit" class="btn btn-sm btn-primary mt-2"><i class="bi bi-check-lg me-1"></i> Save</button>
-                <?php endif; ?>
-            </form>
-        </div>
-    </div>
+    <form method="POST" action="/clients/<?= $agent['id'] ?>/plugins">
+        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+        <?php if (empty($allPlugins)): ?>
+            <p class="text-muted">No plugins available.</p>
+        <?php else: ?>
+            <?php
+            $pluginLogos = [
+                'mysql_dump' => '/images/mysql.png',
+                'pg_dump' => '/images/postgresql.svg',
+            ];
+            ?>
+            <div class="row g-3 mb-4">
+            <?php foreach ($allPlugins as $plugin):
+                $isEnabled = false;
+                foreach ($agentPlugins as $ap) { if ($ap['id'] == $plugin['id'] && $ap['agent_enabled']) { $isEnabled = true; break; } }
+                $logo = $pluginLogos[$plugin['slug']] ?? null;
+            ?>
+                <div class="col-md-6">
+                    <label for="enablePlugin<?= $plugin['id'] ?>" class="d-block h-100" style="cursor:pointer;">
+                        <div class="card h-100 border-2 <?= $isEnabled ? 'border-primary' : 'border-light' ?>" id="pluginCard<?= $plugin['id'] ?>">
+                            <div class="card-body d-flex align-items-start gap-3 p-3">
+                                <?php if ($logo): ?>
+                                    <img src="<?= $logo ?>" alt="" style="width:48px;height:48px;object-fit:contain;flex-shrink:0;" class="mt-1">
+                                <?php else: ?>
+                                    <i class="bi bi-database" style="font-size:2.5rem;flex-shrink:0;" class="mt-1 text-secondary"></i>
+                                <?php endif; ?>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <h6 class="mb-0 fw-bold"><?= htmlspecialchars($plugin['name']) ?></h6>
+                                        <div class="form-check form-switch mb-0">
+                                            <input type="checkbox" class="form-check-input" role="switch" name="plugins[]"
+                                                   value="<?= $plugin['id'] ?>" id="enablePlugin<?= $plugin['id'] ?>"
+                                                   <?= $isEnabled ? 'checked' : '' ?>
+                                                   onchange="document.getElementById('pluginCard<?= $plugin['id'] ?>').classList.toggle('border-primary', this.checked); document.getElementById('pluginCard<?= $plugin['id'] ?>').classList.toggle('border-light', !this.checked);">
+                                        </div>
+                                    </div>
+                                    <p class="text-muted small mb-0"><?= htmlspecialchars($plugin['description']) ?></p>
+                                </div>
+                            </div>
+                        </div>
+                    </label>
+                </div>
+            <?php endforeach; ?>
+            </div>
+            <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-check-lg me-1"></i> Save</button>
+        <?php endif; ?>
+    </form>
 
     <!-- Plugin Configurations -->
     <?php
