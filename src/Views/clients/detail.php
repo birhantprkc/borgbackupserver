@@ -1948,10 +1948,20 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
 <?php elseif ($tab === 'restore'): ?>
     <?php
     $mysqlPluginEnabled = false;
+    $mysqlUser = 'your_user';
     foreach ($agentPlugins as $ap) {
         if ($ap['slug'] === 'mysql_dump' && $ap['agent_enabled']) {
             $mysqlPluginEnabled = true;
             break;
+        }
+    }
+    if ($mysqlPluginEnabled && !empty($pluginConfigs)) {
+        foreach ($pluginConfigs as $pc) {
+            if ($pc['slug'] === 'mysql_dump') {
+                $cfg = json_decode($pc['config'] ?? '{}', true);
+                if (!empty($cfg['user'])) $mysqlUser = $cfg['user'];
+                break;
+            }
         }
     }
     ?>
@@ -2118,7 +2128,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         <div class="alert alert-warning small py-2 px-3 mb-3">
             <i class="bi bi-shield-exclamation me-1"></i>
             <strong>Note:</strong> Database restore requires additional MySQL privileges. Your backup user needs:
-            <code class="d-block mt-1" style="font-size:0.8em;">GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER, CREATE, INSERT, DROP, ALTER, INDEX, REFERENCES ON *.* TO 'your_user'@'localhost';</code>
+            <code class="d-block mt-1" style="font-size:0.8em;">GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER, CREATE, INSERT, DROP, ALTER, INDEX, REFERENCES ON *.* TO '<?= htmlspecialchars($mysqlUser) ?>'@'localhost';</code>
         </div>
         <div class="row g-2 align-items-end mb-3">
             <div class="col-md-6">
