@@ -16,8 +16,7 @@
 Run the automated installer on a fresh Ubuntu 22.04+ server:
 
 ```bash
-curl -sO https://raw.githubusercontent.com/marcpope/borgbackupserver/main/bin/bbs-install
-sudo bash bbs-install
+curl -sO https://raw.githubusercontent.com/marcpope/borgbackupserver/main/bin/bbs-install && sudo bash bbs-install
 ```
 
 The installer will prompt you for your server's hostname (e.g. `backups.example.com` or an IP address).
