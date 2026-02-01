@@ -1776,14 +1776,16 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
             <?php foreach ($configs as $cfg):
                 $cfgData = json_decode($cfg['config'], true) ?: [];
                 $summaryParts = [];
-                if (!empty($cfgData['host'])) $summaryParts[] = $cfgData['host'] . (!empty($cfgData['port']) && $cfgData['port'] != 3306 ? ':' . $cfgData['port'] : '');
+                $defaultPort = $plugin['slug'] === 'pg_dump' ? 5432 : 3306;
+                if (!empty($cfgData['host'])) $summaryParts[] = $cfgData['host'] . (!empty($cfgData['port']) && $cfgData['port'] != $defaultPort ? ':' . $cfgData['port'] : '');
                 if (!empty($cfgData['user'])) $summaryParts[] = 'user: ' . $cfgData['user'];
                 if (!empty($cfgData['databases'])) $summaryParts[] = 'db: ' . $cfgData['databases'];
+                $dbIcon = $plugin['slug'] === 'mysql_dump' ? 'text-primary' : ($plugin['slug'] === 'pg_dump' ? 'text-info' : 'text-secondary');
             ?>
             <div class="border rounded p-3 mb-3">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
-                        <h6 class="mb-1"><?= htmlspecialchars($cfg['name']) ?></h6>
+                        <h6 class="mb-1"><i class="bi bi-database me-1 <?= $dbIcon ?>"></i><?= htmlspecialchars($cfg['name']) ?></h6>
                         <small class="text-muted"><?= htmlspecialchars(implode(' | ', $summaryParts)) ?></small>
                     </div>
                     <div class="d-flex gap-1">
