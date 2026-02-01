@@ -1841,7 +1841,13 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     <h5 class="mb-3">Restore Files</h5>
 
     <?php if (empty($archives)): ?>
-        <div class="alert alert-info">No archives available yet. Run a backup first.</div>
+        <div class="card border-0 shadow-sm mb-4" style="border:2px dashed #ccc !important;background:#fafafa;">
+            <div class="card-body d-flex flex-column align-items-center justify-content-center text-muted py-5">
+                <i class="bi bi-clock-history" style="font-size:2rem;"></i>
+                <div class="mt-2 fw-semibold">No archives available yet. Run a backup first.</div>
+                <a href="?tab=schedules" class="btn btn-sm btn-outline-primary mt-3"><i class="bi bi-calendar-event me-1"></i>Go to Schedules</a>
+            </div>
+        </div>
     <?php else: ?>
 
     <!-- Control Bar -->
