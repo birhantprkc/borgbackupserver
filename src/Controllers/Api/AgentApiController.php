@@ -157,6 +157,16 @@ class AgentApiController extends Controller
 
         $this->db->update('backup_jobs', $data, 'id = ?', [$jobId]);
 
+        // Allow agent to send log messages (e.g. plugin activity)
+        if (!empty($input['log_message'])) {
+            $this->db->insert('server_log', [
+                'agent_id' => $agent['id'],
+                'backup_job_id' => $jobId,
+                'level' => $input['log_level'] ?? 'info',
+                'message' => substr($input['log_message'], 0, 2000),
+            ]);
+        }
+
         $this->json(['status' => 'ok']);
     }
 

@@ -19,7 +19,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.4.1"
+AGENT_VERSION = "1.4.2"
 CONFIG_PATH = "/etc/bbs-agent/config.ini"
 LOG_PATH = "/var/log/bbs-agent.log"
 SSH_KEY_PATH = "/etc/bbs-agent/ssh_key"
@@ -378,7 +378,19 @@ def execute_update_agent(config, task):
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
 
-def execute_plugins(plugins):
+def log_to_server(config, job_id, message, level="info"):
+    """Send a log message to the server for display in the job activity log."""
+    try:
+        api_request(config, "/api/agent/progress", method="POST", data={
+            "job_id": job_id,
+            "log_message": message,
+            "log_level": level,
+        })
+    except Exception:
+        pass  # Don't fail the job over a log message
+
+
+def execute_plugins(plugins, config=None, job_id=None):
     """Execute pre-backup plugins. Returns dict of results keyed by slug."""
     results = {}
     for plugin in plugins:
@@ -393,10 +405,37 @@ def execute_plugins(plugins):
         result = func(cfg)
         results[slug] = result
         logger.info(f"Plugin {slug} completed")
+
+        # Send plugin summary to server log
+        if config and job_id:
+            summary = _plugin_summary(slug, cfg, result)
+            if summary:
+                log_to_server(config, job_id, summary)
     return results
 
 
-def cleanup_plugins(plugins, plugin_results):
+def _plugin_summary(slug, config, result):
+    """Build a human-readable summary of what a plugin did."""
+    if slug == "mysql_dump":
+        dump_files = result.get("dump_files", [])
+        dump_dir = result.get("dump_dir", "")
+        db_names = [os.path.basename(f).split(".")[0] for f in dump_files]
+        total_size = sum(os.path.getsize(f) for f in dump_files if os.path.exists(f))
+        size_str = _format_size(total_size)
+        return f"MySQL dump: {len(dump_files)} database(s) ({', '.join(db_names)}) dumped to {dump_dir} ({size_str})"
+    return None
+
+
+def _format_size(bytes_val):
+    """Format bytes into human-readable size."""
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        if bytes_val < 1024:
+            return f"{bytes_val:.1f} {unit}" if unit != 'B' else f"{bytes_val} {unit}"
+        bytes_val /= 1024
+    return f"{bytes_val:.1f} PB"
+
+
+def cleanup_plugins(plugins, plugin_results, config=None, job_id=None):
     """Run post-backup cleanup for plugins."""
     for plugin in plugins:
         slug = plugin.get("slug", "")
@@ -405,8 +444,14 @@ def cleanup_plugins(plugins, plugin_results):
         if func:
             try:
                 func(cfg, plugin_results.get(slug, {}))
+                if config and job_id and cfg.get("cleanup_after", True):
+                    dump_dir = plugin_results.get(slug, {}).get("dump_dir", "")
+                    if dump_dir:
+                        log_to_server(config, job_id, f"Plugin cleanup: removed dump files from {dump_dir}")
             except Exception as e:
                 logger.warning(f"Plugin cleanup for {slug} failed: {e}")
+                if config and job_id:
+                    log_to_server(config, job_id, f"Plugin cleanup for {slug} failed: {e}", "warning")
 
 
 def execute_plugin_mysql_dump(config):
@@ -588,7 +633,7 @@ def execute_task(config, task):
     if task_type == "backup" and plugins:
         try:
             logger.info(f"Running {len(plugins)} pre-backup plugin(s)")
-            plugin_results = execute_plugins(plugins)
+            plugin_results = execute_plugins(plugins, config, job_id)
         except Exception as e:
             logger.error(f"Pre-backup plugin failed: {e}")
             api_request(config, "/api/agent/status", method="POST", data={
@@ -782,7 +827,7 @@ def execute_task(config, task):
 
     # Run post-backup plugin cleanup
     if result == "completed" and task_type == "backup" and plugins and plugin_results:
-        cleanup_plugins(plugins, plugin_results)
+        cleanup_plugins(plugins, plugin_results, config, job_id)
 
     # Send file catalog after successful backup
     if result == "completed" and task_type == "backup" and catalog_entries and status_response:
