@@ -4,6 +4,7 @@ Borg Backup Server Agent
 Polls the BBS server for tasks, executes borg commands, reports progress/status.
 """
 
+import datetime
 import json
 import logging
 import os
@@ -18,7 +19,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.4.0"
+AGENT_VERSION = "1.4.1"
 CONFIG_PATH = "/etc/bbs-agent/config.ini"
 LOG_PATH = "/var/log/bbs-agent.log"
 SSH_KEY_PATH = "/etc/bbs-agent/ssh_key"
@@ -682,10 +683,21 @@ def execute_task(config, task):
 
                 elif msg_type == "file_status" and task_type == "backup":
                     # Collect file entries for catalog
+                    fpath = entry.get("path", "")
+                    fsize = 0
+                    fmtime = None
+                    if fpath:
+                        try:
+                            st = os.stat("/" + fpath if not fpath.startswith("/") else fpath)
+                            fsize = st.st_size
+                            fmtime = datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+                        except OSError:
+                            pass
                     catalog_entries.append({
-                        "path": entry.get("path", ""),
+                        "path": fpath,
                         "status": entry.get("status", "U")[0].upper(),
-                        "size": 0,  # borg doesn't include size in file_status
+                        "size": fsize,
+                        "mtime": fmtime,
                     })
 
                 elif msg_type == "log_message":
