@@ -39,11 +39,11 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     <h3 class="mb-0">
                         <i class="bi bi-display me-2 text-primary"></i><?= htmlspecialchars($agent['name']) ?>
                     </h3>
-                    <span class="badge bg-<?= $statusClass ?> fs-6" id="agent-status-badge"><?= ucfirst($agent['status']) ?></span>
+                    <span class="badge bg-<?= $statusClass ?>" id="agent-status-badge"><?= ucfirst($agent['status']) ?></span>
                     <button class="btn btn-sm btn-outline-secondary border-0" data-bs-toggle="collapse" data-bs-target="#edit-client" title="Edit client">
                         <i class="bi bi-pencil"></i>
                     </button>
-                    <span class="text-muted client-header-info d-flex flex-wrap gap-3 align-items-center ms-auto" style="font-size:.8rem;">
+                    <span class="text-muted client-header-info d-flex flex-wrap gap-3 align-items-center" style="font-size:.8rem;">
                     <?php if ($agent['hostname']): ?>
                         <span><i class="bi bi-hdd-network me-1"></i><?= htmlspecialchars($agent['hostname']) ?></span>
                         <?php if ($agent['ip_address'] ?? null): ?>
