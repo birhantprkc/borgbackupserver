@@ -132,6 +132,11 @@ class AgentApiController extends Controller
             $this->json(['error' => 'Job not found'], 404);
         }
 
+        // Don't overwrite terminal statuses (completed/failed) with 'running'
+        if (in_array($job['status'], ['completed', 'failed', 'cancelled'])) {
+            $this->json(['status' => 'ok']);
+        }
+
         $data = ['status' => 'running'];
         if (isset($input['files_total']))     $data['files_total'] = (int) $input['files_total'];
         if (isset($input['files_processed'])) $data['files_processed'] = (int) $input['files_processed'];
@@ -214,7 +219,9 @@ class AgentApiController extends Controller
         $rowsAffected = $this->db->update('backup_jobs', $data, 'id = ?', [$jobId]);
 
         // Debug: verify the update took effect
-        $verify = $this->db->fetchOne("SELECT `status` FROM backup_jobs WHERE id = ?", [$jobId]);
+        $verify = $this->db->fetchOne("SELECT `status`, `completed_at` FROM backup_jobs WHERE id = ?", [$jobId]);
+        $debugMsg = date('Y-m-d H:i:s') . " STATUS UPDATE: job #{$jobId} rows={$rowsAffected} expected={$result} got={$verify['status']} data=" . json_encode($data) . "\n";
+        @file_put_contents('/var/www/bbs/storage/logs/status-debug.log', $debugMsg, FILE_APPEND);
         if ($verify && $verify['status'] !== $result) {
             error_log("BBS STATUS BUG: job #{$jobId} update returned {$rowsAffected} rows, expected status={$result} but got status={$verify['status']}. Data: " . json_encode($data));
         }

@@ -211,6 +211,7 @@ class QueueController extends Controller
             'restore_archive_id' => $job['restore_archive_id'],
             'restore_paths' => $job['restore_paths'],
             'restore_destination' => $job['restore_destination'],
+            'restore_databases' => $job['restore_databases'],
         ]);
 
         $this->db->insert('server_log', [
