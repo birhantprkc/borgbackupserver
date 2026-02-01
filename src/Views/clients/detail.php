@@ -2044,9 +2044,6 @@ FLUSH PRIVILEGES;</pre>
             <?php if (empty($mysqlConfigs)): ?>
                 <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>No MySQL connection configured</span>
                 <a href="?tab=plugins" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-circle me-1"></i>Add Connection</a>
-            <?php elseif (count($mysqlConfigs) === 1): ?>
-                <span class="badge bg-secondary fw-normal"><i class="bi bi-database me-1"></i><?= htmlspecialchars($mysqlConfigs[0]['name']) ?></span>
-                <input type="hidden" id="db-config-id" value="<?= $mysqlConfigs[0]['id'] ?>">
             <?php else: ?>
                 <select class="form-select form-select-sm" id="db-config-id" style="width:auto;">
                     <?php foreach ($mysqlConfigs as $mc): ?>
