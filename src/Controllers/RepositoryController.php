@@ -188,7 +188,7 @@ class RepositoryController extends Controller
             if (!empty($storagePath) && str_starts_with(realpath($localPath), realpath($storagePath))) {
                 $output = [];
                 $retval = 0;
-                exec('rm -rf ' . escapeshellarg($localPath) . ' 2>&1', $output, $retval);
+                exec('sudo /usr/local/bin/bbs-ssh-helper delete-storage ' . escapeshellarg($localPath) . ' 2>&1', $output, $retval);
                 $diskDeleted = ($retval === 0);
                 if (!$diskDeleted) {
                     $this->db->insert('server_log', [
