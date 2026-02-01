@@ -35,9 +35,25 @@ class UpdateService
 
     public function isUpdateAvailable(): bool
     {
+        $this->checkIfStale();
         $latest = $this->getSetting('latest_version', '');
         if (empty($latest)) return false;
         return version_compare($latest, $this->getCurrentVersion(), '>');
+    }
+
+    /**
+     * Auto-check for updates if last check was more than 24 hours ago.
+     */
+    public function checkIfStale(): void
+    {
+        $lastCheck = $this->getSetting('last_update_check', '');
+        if (!empty($lastCheck)) {
+            $lastTime = strtotime($lastCheck);
+            if ($lastTime !== false && (time() - $lastTime) < 86400) {
+                return;
+            }
+        }
+        $this->checkForUpdate();
     }
 
     public function checkForUpdate(): array

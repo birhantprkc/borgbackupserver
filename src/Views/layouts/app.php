@@ -33,7 +33,8 @@
                     <?php endif; ?>
                 </a>
                 <?php
-                $upgradeAvailable = (new \BBS\Services\UpdateService())->isUpdateAvailable();
+                $isAdmin = (($_SESSION['user_role'] ?? '') === 'admin');
+                $upgradeAvailable = $isAdmin ? (new \BBS\Services\UpdateService())->isUpdateAvailable() : false;
                 if ($upgradeAvailable): ?>
                 <a href="/settings?tab=updates" class="badge bg-warning text-dark text-decoration-none me-2 me-md-3 py-2 px-2 d-none d-sm-inline-block">
                     <i class="bi bi-cloud-arrow-down me-1"></i> Upgrade
