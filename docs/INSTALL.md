@@ -1,5 +1,16 @@
 # Borg Backup Server — Installation Guide
 
+## Recommended Setup
+
+| Component | Requirement |
+|-----------|-------------|
+| **Operating System** | Ubuntu 22.04 Server or higher |
+| **RAM** | 4 GB recommended, 8 GB for larger deployments |
+| **Storage** | For large deployments with many agents and millions of files, see [MySQL Storage Requirements](MySQL-Storage-Requirements.md) |
+| **Storage Partition** | If using a dedicated storage device, mount it at `/var/bbs/home` for best results. This is where all borg repositories are stored. |
+
+---
+
 ## Quick Install (Recommended)
 
 Run the automated installer on a fresh Ubuntu 22.04+ server:
