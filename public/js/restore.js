@@ -545,7 +545,7 @@
                 if (dbRestoreMode === 'database') {
                     filesSection.style.display = 'none';
                     dbSection.style.display = '';
-                    if (dbConnectionPicker) dbConnectionPicker.style.display = '';
+                    if (dbConnectionPicker) dbConnectionPicker.style.display = 'flex';
                 } else {
                     filesSection.style.display = '';
                     dbSection.style.display = 'none';

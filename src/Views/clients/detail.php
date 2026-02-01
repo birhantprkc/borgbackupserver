@@ -2039,8 +2039,8 @@ FLUSH PRIVILEGES;</pre>
                 <i class="bi bi-database me-1"></i>Database
             </button>
         </div>
-        <div id="db-connection-picker" style="display:none;" class="d-flex align-items-center gap-2">
-            <span class="text-muted small">using</span>
+        <div id="db-connection-picker" class="align-items-center gap-2" style="display:none;">
+            <span class="text-muted small">use connection:</span>
             <?php if (empty($mysqlConfigs)): ?>
                 <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>No MySQL connection configured</span>
                 <a href="?tab=plugins" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-circle me-1"></i>Add Connection</a>
@@ -2213,9 +2213,17 @@ FLUSH PRIVILEGES;</pre>
                             $currentRepo = $ar['repo_name'];
                             echo '<optgroup label="' . htmlspecialchars($currentRepo) . '">';
                         endif;
+                        $dbLabel = '';
+                        if (!empty($ar['databases_backed_up'])) {
+                            $dbMeta = json_decode($ar['databases_backed_up'], true);
+                            if (!empty($dbMeta['databases'])) {
+                                $n = count($dbMeta['databases']);
+                                $dbLabel = " ({$n} " . ($n === 1 ? 'database' : 'databases') . ')';
+                            }
+                        }
                     ?>
                         <option value="<?= $ar['id'] ?>">
-                            <?= \BBS\Core\TimeHelper::format($ar['created_at'], 'l, M j, Y \a\t g:i A') ?>
+                            <?= \BBS\Core\TimeHelper::format($ar['created_at'], 'l, M j, Y \a\t g:i A') ?><?= $dbLabel ?>
                         </option>
                     <?php endforeach; ?>
                     <?php if ($currentRepo !== null) echo '</optgroup>'; ?>
