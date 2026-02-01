@@ -16,8 +16,11 @@
 Run the automated installer on a fresh Ubuntu 22.04+ server:
 
 ```bash
-curl -sO https://raw.githubusercontent.com/marcpope/borgbackupserver/main/bin/bbs-install && sudo bash bbs-install --hostname backups.example.com
+curl -sO https://raw.githubusercontent.com/marcpope/borgbackupserver/main/bin/bbs-install
+sudo bash bbs-install --hostname backups.example.com
 ```
+
+> Replace `backups.example.com` with your server's domain name or IP address. If you omit `--hostname`, the installer will prompt you for it.
 
 For LAN installs without SSL:
 
