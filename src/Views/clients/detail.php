@@ -1744,7 +1744,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 foreach ($agentPlugins as $ap) { if ($ap['id'] == $plugin['id'] && $ap['agent_enabled']) { $isEnabled = true; break; } }
                 $logo = $pluginLogos[$plugin['slug']] ?? null;
             ?>
-                <div class="col-md-6">
+                <div class="col-md-4">
                     <label for="enablePlugin<?= $plugin['id'] ?>" class="d-block h-100" style="cursor:pointer;">
                         <div class="card h-100 border-2 <?= $isEnabled ? 'border-primary' : 'border-light' ?>" id="pluginCard<?= $plugin['id'] ?>">
                             <div class="card-body d-flex align-items-start gap-3 p-3">
