@@ -1882,7 +1882,9 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                                class="form-control form-control-sm" name="<?= $fieldName ?>"
                                                value="<?= htmlspecialchars($fieldVal) ?>"
                                                <?= $field === 'user' && $plugin['slug'] === 'mysql_dump' ? 'id="newMysqlUser"' : '' ?>
-                                               <?= $field === 'password' && $plugin['slug'] === 'mysql_dump' ? 'id="newMysqlPass"' : '' ?>>
+                                               <?= $field === 'user' && $plugin['slug'] === 'pg_dump' ? 'id="newPgUser"' : '' ?>
+                                               <?= $field === 'password' && $plugin['slug'] === 'mysql_dump' ? 'id="newMysqlPass"' : '' ?>
+                                               <?= $field === 'password' && $plugin['slug'] === 'pg_dump' ? 'id="newPgPass"' : '' ?>>
                                     <?php endif; ?>
                                     <?php if (!empty($def['help'])): ?>
                                         <div class="form-text small"><?= htmlspecialchars($def['help']) ?></div>
@@ -1918,6 +1920,41 @@ GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER,
       CREATE, INSERT, DROP, ALTER, INDEX, REFERENCES
       ON *.* TO '<span id="sqlUser2b">bbs_backup</span>'@'localhost';
 FLUSH PRIVILEGES;</pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <?php endif; ?>
+                            <?php if ($plugin['slug'] === 'pg_dump'): ?>
+                            <div class="col-lg-6 mt-3 mt-lg-0">
+                                <div class="card border-0 bg-white shadow-sm h-100">
+                                    <div class="card-header bg-white fw-semibold small py-2">
+                                        <i class="bi bi-terminal me-1"></i> PostgreSQL Setup Instructions
+                                    </div>
+                                    <div class="card-body small">
+                                        <div class="alert alert-info small py-2 px-3 mb-3">
+                                            <i class="bi bi-info-circle me-1"></i>
+                                            On the client machine with PostgreSQL, you'll need to create a dedicated role so that Borg Backup Server can perform database backups (and optionally restore them). Run one of the command blocks below in your <code>psql</code> terminal depending on the desired functionality.
+                                        </div>
+                                        <div class="mb-3">
+                                            <strong>Backup Only</strong>
+                                            <span class="text-muted">(read-only, recommended)</span>
+                                            <pre class="bg-light border rounded p-2 mt-1 mb-0" style="font-size:0.78rem;white-space:pre-wrap;">CREATE ROLE <span id="pgUser1">bbs_backup</span> WITH LOGIN PASSWORD '<span id="pgPass1"><?= htmlspecialchars($randomPass) ?></span>';
+GRANT CONNECT ON DATABASE mydb TO <span id="pgUser1b">bbs_backup</span>;
+GRANT USAGE ON SCHEMA public TO <span id="pgUser1c">bbs_backup</span>;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO <span id="pgUser1d">bbs_backup</span>;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO <span id="pgUser1e">bbs_backup</span>;</pre>
+                                        </div>
+                                        <div>
+                                            <strong>Backup + Restore</strong>
+                                            <span class="text-muted">(if you want to restore databases from the GUI)</span>
+                                            <pre class="bg-light border rounded p-2 mt-1 mb-0" style="font-size:0.78rem;white-space:pre-wrap;">CREATE ROLE <span id="pgUser2">bbs_backup</span> WITH LOGIN PASSWORD '<span id="pgPass2"><?= htmlspecialchars($randomPass) ?></span>';
+GRANT CONNECT ON DATABASE mydb TO <span id="pgUser2b">bbs_backup</span>;
+GRANT USAGE ON SCHEMA public TO <span id="pgUser2c">bbs_backup</span>;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO <span id="pgUser2d">bbs_backup</span>;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO <span id="pgUser2e">bbs_backup</span>;
+ALTER ROLE <span id="pgUser2f">bbs_backup</span> CREATEDB;
+GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;</pre>
                                         </div>
                                     </div>
                                 </div>
@@ -1994,6 +2031,27 @@ FLUSH PRIVILEGES;</pre>
                 if (el) el.textContent = userField.value || 'bbs_backup';
             });
             ['sqlPass1','sqlPass2'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = passField.value || 'PASSWORD';
+            });
+        }
+
+        userField.addEventListener('input', update);
+        passField.addEventListener('input', update);
+    })();
+
+    // Live-update PostgreSQL setup instructions as user/password fields change
+    (function() {
+        const userField = document.getElementById('newPgUser');
+        const passField = document.getElementById('newPgPass');
+        if (!userField || !passField) return;
+
+        function update() {
+            ['pgUser1','pgUser1b','pgUser1c','pgUser1d','pgUser1e','pgUser2','pgUser2b','pgUser2c','pgUser2d','pgUser2e','pgUser2f','pgUser2g'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = userField.value || 'bbs_backup';
+            });
+            ['pgPass1','pgPass2'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = passField.value || 'PASSWORD';
             });
