@@ -72,4 +72,26 @@ class ProfileController extends Controller
 
         $this->redirect('/profile');
     }
+
+    /**
+     * POST /profile/detect-timezone — browser-detected fallback.
+     * Only sets session timezone if not already set; never overwrites user preference.
+     */
+    public function detectTimezone(): void
+    {
+        $this->requireAuth();
+
+        if (!empty($_SESSION['timezone'])) {
+            http_response_code(204);
+            exit;
+        }
+
+        $tz = trim($_POST['timezone'] ?? '');
+        if ($tz && in_array($tz, timezone_identifiers_list())) {
+            $_SESSION['timezone'] = $tz;
+        }
+
+        http_response_code(204);
+        exit;
+    }
 }

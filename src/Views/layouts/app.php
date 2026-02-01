@@ -172,5 +172,15 @@
         <script src="<?= $script ?>"></script>
         <?php endforeach; ?>
     <?php endif; ?>
+    <?php if (empty($_SESSION['timezone'])): ?>
+    <script>
+    (function(){
+        try {
+            var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            if (tz) fetch('/profile/detect-timezone', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'timezone='+encodeURIComponent(tz)});
+        } catch(e){}
+    })();
+    </script>
+    <?php endif; ?>
 </body>
 </html>

@@ -119,6 +119,7 @@ class App
         // Profile
         $this->router->map('GET', '/profile', 'ProfileController@index');
         $this->router->map('POST', '/profile', 'ProfileController@update');
+        $this->router->map('POST', '/profile/detect-timezone', 'ProfileController@detectTimezone');
 
         // Agent API
         $this->router->map('POST', '/api/agent/register', 'Api\\AgentApiController@register');
