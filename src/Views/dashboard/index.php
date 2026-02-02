@@ -738,13 +738,32 @@ function renderUpcoming(schedules, csrfToken) {
     el.innerHTML = html;
 }
 
+function timeAgo(str) {
+    if (!str) return '';
+    const then = new Date((str).replace(' ','T')+'Z').getTime();
+    const diff = Math.floor((Date.now() - then) / 1000);
+    if (diff < 0) return 'just now';
+    if (diff < 60) return diff + 's ago';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return Math.floor(diff / 86400) + 'd ago';
+}
+
+function statusIcon(status) {
+    const map = {
+        completed: '<i class="bi bi-check-circle-fill text-success"></i>',
+        failed: '<i class="bi bi-x-circle-fill text-danger"></i>',
+        cancelled: '<i class="bi bi-slash-circle-fill text-secondary"></i>'
+    };
+    return map[status] || '<i class="bi bi-exclamation-triangle-fill text-warning"></i>';
+}
+
 function renderRecentJobs(jobs) {
     const el = document.getElementById('recent-jobs');
     if (!jobs || !jobs.length) { el.innerHTML = '<div class="p-4 text-muted text-center">No completed jobs yet</div>'; return; }
     let html = '<div class="table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>Client</th><th>Task</th><th class="d-th-md">Plan</th><th class="d-th-md">Repo</th><th>Completed</th><th class="d-th-md">Duration</th><th>Status</th></tr></thead><tbody class="small">';
     jobs.forEach(j => {
-        const badge = { completed: 'success', failed: 'danger', cancelled: 'secondary' }[j.status] || 'warning';
-        html += '<tr style="cursor:pointer" onclick="window.location=\'/queue/'+j.id+'\'"><td>'+esc(j.agent_name)+'</td><td>'+esc(j.task_type?.[0]?.toUpperCase()+j.task_type?.slice(1))+'</td><td class="d-table-cell-md">'+esc(j.plan_name||'--')+'</td><td class="d-table-cell-md">'+esc(j.repo_name||'--')+'</td><td>'+fmtDate(j.completed_at)+'</td><td class="d-table-cell-md text-nowrap">'+fmtDur(j.duration_seconds)+'</td><td><span class="badge bg-'+badge+'">'+esc(j.status)+'</span></td></tr>';
+        html += '<tr style="cursor:pointer" onclick="window.location=\'/queue/'+j.id+'\'"><td>'+esc(j.agent_name)+'</td><td>'+esc(j.task_type?.[0]?.toUpperCase()+j.task_type?.slice(1))+'</td><td class="d-table-cell-md">'+esc(j.plan_name||'--')+'</td><td class="d-table-cell-md">'+esc(j.repo_name||'--')+'</td><td title="'+esc(fmtDate(j.completed_at))+'">'+timeAgo(j.completed_at)+'</td><td class="d-table-cell-md text-nowrap">'+fmtDur(j.duration_seconds)+'</td><td class="text-center">'+statusIcon(j.status)+'</td></tr>';
     });
     html += '</tbody></table></div>';
     el.innerHTML = html;
@@ -753,12 +772,23 @@ function renderRecentJobs(jobs) {
 function renderLogs(logs) {
     const el = document.getElementById('server-log');
     if (!logs || !logs.length) { el.innerHTML = '<div class="p-4 text-muted text-center">No log entries</div>'; return; }
-    let html = '<div class="table-responsive"><table class="table table-hover mb-0 small"><thead class="table-light"><tr><th>Time</th><th class="d-th-md">Client</th><th>Level</th><th>Message</th></tr></thead><tbody>';
+    // Desktop table
+    let html = '<div class="table-responsive d-none d-md-block"><table class="table table-hover mb-0 small"><thead class="table-light"><tr><th>Time</th><th>Client</th><th>Level</th><th>Message</th></tr></thead><tbody>';
     logs.forEach(l => {
         const badge = { error: 'danger', warning: 'warning' }[l.level] || 'info';
-        html += '<tr><td class="text-nowrap">'+fmtDate(l.created_at)+'</td><td class="d-table-cell-md text-nowrap">'+esc(l.agent_name||'--')+'</td><td><span class="badge bg-'+badge+'">'+esc(l.level)+'</span></td><td>'+esc(l.message)+'</td></tr>';
+        html += '<tr><td class="text-nowrap">'+fmtDate(l.created_at)+'</td><td class="text-nowrap">'+esc(l.agent_name||'--')+'</td><td><span class="badge bg-'+badge+'">'+esc(l.level)+'</span></td><td>'+esc(l.message)+'</td></tr>';
     });
     html += '</tbody></table></div>';
+    // Mobile list
+    html += '<div class="d-md-none">';
+    logs.forEach((l, i) => {
+        const badge = { error: 'danger', warning: 'warning' }[l.level] || 'info';
+        html += '<div class="px-3 py-2'+(i > 0 ? ' border-top' : '')+'">';
+        html += '<div class="d-flex align-items-center gap-2 small"><span class="badge bg-'+badge+'">'+esc(l.level)+'</span><span class="text-muted">'+fmtDate(l.created_at)+'</span>';
+        if (l.agent_name) html += '<span class="text-muted">&middot; '+esc(l.agent_name)+'</span>';
+        html += '</div><div class="small mt-1" style="word-break:break-word;">'+esc(l.message)+'</div></div>';
+    });
+    html += '</div>';
     el.innerHTML = html;
 }
 
