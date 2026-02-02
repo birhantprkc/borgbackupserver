@@ -320,6 +320,8 @@
     $allBorgAgents = $borgService->getAllAgentVersions();
     $outdatedBorgAgents = !empty($targetBorgVersion) ? $borgService->getOutdatedAgents($targetBorgVersion) : [];
     $aboveAgents = !empty($targetBorgVersion) ? $borgService->getAgentsAboveVersion($targetBorgVersion) : [];
+    $serverBorgVersion = $borgService->getServerBorgVersion();
+    $serverBorgMatch = !empty($targetBorgVersion) && $serverBorgVersion === $targetBorgVersion;
 ?>
 <div class="row g-4">
     <div class="col-lg-6">
@@ -328,6 +330,22 @@
                 <i class="bi bi-box-seam me-1"></i> Borg Version Management
             </div>
             <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <span class="small">
+                            <i class="bi bi-server me-1"></i> Server borg:
+                            <?php if ($serverBorgVersion): ?>
+                                <?php if (!empty($targetBorgVersion)): ?>
+                                    <span class="badge <?= $serverBorgMatch ? 'bg-success' : 'bg-warning text-dark' ?>">v<?= htmlspecialchars($serverBorgVersion) ?></span>
+                                <?php else: ?>
+                                    <span class="badge bg-secondary">v<?= htmlspecialchars($serverBorgVersion) ?></span>
+                                <?php endif; ?>
+                            <?php else: ?>
+                                <span class="badge bg-danger">not installed</span>
+                            <?php endif; ?>
+                        </span>
+                    </div>
+                </div>
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <div>
                         <?php if (!empty($lastBorgCheck)): ?>

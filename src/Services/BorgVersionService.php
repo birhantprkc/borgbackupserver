@@ -344,6 +344,86 @@ class BorgVersionService
         return $above;
     }
 
+    /**
+     * Detect the server's currently installed borg version.
+     */
+    public function getServerBorgVersion(): ?string
+    {
+        $output = @shell_exec('borg --version 2>/dev/null');
+        if ($output === null || $output === false) {
+            return null;
+        }
+        // Output is like "borg 1.2.0" or "borg 1.4.3"
+        $output = trim($output);
+        $version = preg_replace('/^borg\s+/', '', $output);
+        return $version ?: null;
+    }
+
+    /**
+     * Detect the server's platform info for binary matching.
+     */
+    public function getServerPlatformInfo(): array
+    {
+        $arch = trim(shell_exec('uname -m 2>/dev/null') ?: 'x86_64');
+        // Normalize: aarch64 → arm64
+        if ($arch === 'aarch64') {
+            $arch = 'arm64';
+        }
+
+        $glibc = null;
+        $lddOutput = @shell_exec('ldd --version 2>&1 | head -1');
+        if ($lddOutput && preg_match('/(\d+)\.(\d+)/', $lddOutput, $m)) {
+            $glibc = 'glibc' . $m[1] . $m[2];
+        }
+
+        return [
+            'platform' => 'linux',
+            'architecture' => $arch,
+            'glibc_version' => $glibc,
+        ];
+    }
+
+    /**
+     * Update the server's borg binary to the target version.
+     * Uses bbs-ssh-helper update-borg command (runs as root via sudo).
+     */
+    public function updateServerBorg(string $version): array
+    {
+        $platform = $this->getServerPlatformInfo();
+        $asset = $this->getAssetForPlatform(
+            $version,
+            $platform['platform'],
+            $platform['architecture'],
+            $platform['glibc_version']
+        );
+
+        if (!$asset) {
+            return ['success' => false, 'error' => 'No matching binary found for server platform (' . $platform['architecture'] . '/' . ($platform['glibc_version'] ?? 'unknown glibc') . ')'];
+        }
+
+        $downloadUrl = $asset['download_url'];
+        if (empty($downloadUrl)) {
+            return ['success' => false, 'error' => 'No download URL for matching asset'];
+        }
+
+        // Use bbs-ssh-helper to download and install (needs root for /usr/local/bin)
+        $cmd = 'sudo /usr/local/bin/bbs-ssh-helper update-borg '
+            . escapeshellarg($downloadUrl) . ' '
+            . escapeshellarg($version) . ' 2>&1';
+
+        $output = [];
+        $exitCode = 0;
+        exec($cmd, $output, $exitCode);
+
+        $outputStr = implode("\n", $output);
+
+        if ($exitCode !== 0) {
+            return ['success' => false, 'error' => 'Install failed (exit ' . $exitCode . '): ' . $outputStr];
+        }
+
+        return ['success' => true, 'output' => $outputStr];
+    }
+
     private function getSetting(string $key, string $default = ''): string
     {
         $row = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = ?", [$key]);

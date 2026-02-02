@@ -439,7 +439,20 @@ class SettingsController extends Controller
         }
 
         $service->setTargetVersion($version);
-        $this->flash('success', "Target borg version set to v{$version}.");
+
+        // Also update the server's borg binary
+        $serverVersion = $service->getServerBorgVersion();
+        if ($serverVersion !== $version) {
+            $result = $service->updateServerBorg($version);
+            if ($result['success']) {
+                $this->flash('success', "Target borg version set to v{$version}. Server borg updated successfully.");
+            } else {
+                $this->flash('warning', "Target borg version set to v{$version}, but server borg update failed: {$result['error']}");
+            }
+        } else {
+            $this->flash('success', "Target borg version set to v{$version}. Server already at this version.");
+        }
+
         $this->redirect('/settings?tab=borg-versions');
     }
 

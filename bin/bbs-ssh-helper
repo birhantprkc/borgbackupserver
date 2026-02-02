@@ -187,6 +187,56 @@ case "$ACTION" in
         echo "OK"
         ;;
 
+    update-borg)
+        # Download and install a borg binary to /usr/local/bin/borg
+        # Usage: bbs-ssh-helper update-borg <download_url> <expected_version>
+        DOWNLOAD_URL="${2:-}"
+        EXPECTED_VERSION="${3:-}"
+
+        if [ -z "$DOWNLOAD_URL" ] || [ -z "$EXPECTED_VERSION" ]; then
+            echo "Usage: bbs-ssh-helper update-borg <download_url> <expected_version>"
+            exit 1
+        fi
+
+        # Safety: only allow downloads from GitHub
+        if [[ ! "$DOWNLOAD_URL" =~ ^https://github\.com/borgbackup/borg/releases/ ]]; then
+            echo "Error: download URL must be from github.com/borgbackup/borg/releases"
+            exit 1
+        fi
+
+        BORG_PATH="/usr/local/bin/borg"
+        BORG_TMP="/usr/local/bin/borg.tmp"
+
+        # Download binary
+        if ! curl -sL -o "$BORG_TMP" "$DOWNLOAD_URL"; then
+            rm -f "$BORG_TMP"
+            echo "Error: failed to download from $DOWNLOAD_URL"
+            exit 1
+        fi
+
+        chmod 755 "$BORG_TMP"
+
+        # Verify it runs and outputs expected version
+        ACTUAL=$("$BORG_TMP" --version 2>/dev/null || true)
+        ACTUAL_VER=$(echo "$ACTUAL" | sed 's/^borg //')
+
+        if [ "$ACTUAL_VER" != "$EXPECTED_VERSION" ]; then
+            rm -f "$BORG_TMP"
+            echo "Error: version mismatch — expected $EXPECTED_VERSION, got $ACTUAL_VER"
+            exit 1
+        fi
+
+        # Backup old binary if it exists at this path
+        if [ -f "$BORG_PATH" ]; then
+            cp "$BORG_PATH" "${BORG_PATH}.bak"
+        fi
+
+        # Atomic replace
+        mv "$BORG_TMP" "$BORG_PATH"
+        echo "Installed borg $EXPECTED_VERSION to $BORG_PATH"
+        echo "OK"
+        ;;
+
     delete-storage)
         STORAGE_DIR="${2:-}"
 
