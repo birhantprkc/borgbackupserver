@@ -2193,27 +2193,31 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
             <div class="restore-db-controls col-md-3" id="db-connection-col" style="display:none;">
                 <label class="form-label fw-semibold mb-1 small">Connector</label>
                 <?php if (empty($allDbConfigs)): ?>
-                    <div>
-                        <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>None configured</span>
-                        <a href="?tab=plugins" class="btn btn-sm btn-outline-primary ms-1"><i class="bi bi-plus-circle me-1"></i>Add</a>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="bi bi-plug"></i></span>
+                        <span class="form-control form-control-sm text-muted">None configured</span>
+                        <a href="?tab=plugins" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-circle me-1"></i>Add</a>
                     </div>
                 <?php else: ?>
-                    <select class="form-select form-select-sm" id="db-config-id">
-                        <?php if (!empty($mysqlConfigs)): ?>
-                            <optgroup label="MySQL">
-                            <?php foreach ($mysqlConfigs as $mc): ?>
-                                <option value="mysql:<?= $mc['id'] ?>"><?= htmlspecialchars($mc['name']) ?></option>
-                            <?php endforeach; ?>
-                            </optgroup>
-                        <?php endif; ?>
-                        <?php if (!empty($pgConfigs)): ?>
-                            <optgroup label="PostgreSQL">
-                            <?php foreach ($pgConfigs as $pc): ?>
-                                <option value="pg:<?= $pc['id'] ?>"><?= htmlspecialchars($pc['name']) ?></option>
-                            <?php endforeach; ?>
-                            </optgroup>
-                        <?php endif; ?>
-                    </select>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="bi bi-plug"></i></span>
+                        <select class="form-select form-select-sm" id="db-config-id">
+                            <?php if (!empty($mysqlConfigs)): ?>
+                                <optgroup label="MySQL">
+                                <?php foreach ($mysqlConfigs as $mc): ?>
+                                    <option value="mysql:<?= $mc['id'] ?>"><?= htmlspecialchars($mc['name']) ?></option>
+                                <?php endforeach; ?>
+                                </optgroup>
+                            <?php endif; ?>
+                            <?php if (!empty($pgConfigs)): ?>
+                                <optgroup label="PostgreSQL">
+                                <?php foreach ($pgConfigs as $pc): ?>
+                                    <option value="pg:<?= $pc['id'] ?>"><?= htmlspecialchars($pc['name']) ?></option>
+                                <?php endforeach; ?>
+                                </optgroup>
+                            <?php endif; ?>
+                        </select>
+                    </div>
                 <?php endif; ?>
             </div>
             <?php endif; ?>
@@ -2221,6 +2225,8 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
             <?php if ($dbPluginEnabled): ?>
             <div class="restore-db-controls col-md-6" id="db-archive-col" style="display:none;">
                 <label class="form-label fw-semibold mb-1 small">Archive</label>
+                <div class="input-group input-group-sm">
+                <span class="input-group-text"><i class="bi bi-calendar-event"></i></span>
                 <select class="form-select form-select-sm" id="db-archive-select">
                     <option value="">Choose a restore point...</option>
                     <?php
@@ -2243,11 +2249,14 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
                     <?php endforeach; ?>
                     <?php if ($currentRepo !== null) echo '</optgroup>'; ?>
                 </select>
+                </div>
             </div>
             <?php endif; ?>
             <!-- Files mode: Archive + Search -->
             <div class="restore-files-controls <?= $dbPluginEnabled ? 'col-md-4' : 'col-md-5' ?>" id="files-archive-col">
                 <label class="form-label fw-semibold mb-1 small">Archive</label>
+                <div class="input-group input-group-sm">
+                <span class="input-group-text"><i class="bi bi-calendar-event"></i></span>
                 <select class="form-select form-select-sm" id="archive-select">
                     <option value="">Choose a restore point...</option>
                     <?php
@@ -2265,6 +2274,7 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
                     <?php endforeach; ?>
                     <?php if ($currentRepo !== null) echo '</optgroup>'; ?>
                 </select>
+                </div>
             </div>
             <div class="restore-files-controls col-md-5" id="files-search-col">
                 <label class="form-label fw-semibold mb-1 small">Search</label>
