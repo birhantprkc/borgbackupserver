@@ -59,11 +59,13 @@ class AgentApiController extends Controller
         $input = $this->getJsonInput();
 
         $data = [];
-        if (!empty($input['hostname']))      $data['hostname'] = substr($input['hostname'], 0, 255);
-        if (!empty($input['ip_address']))     $data['ip_address'] = substr($input['ip_address'], 0, 45);
-        if (!empty($input['os_info']))        $data['os_info'] = substr($input['os_info'], 0, 255);
-        if (!empty($input['borg_version']))   $data['borg_version'] = substr($input['borg_version'], 0, 20);
-        if (!empty($input['agent_version']))  $data['agent_version'] = substr($input['agent_version'], 0, 20);
+        if (!empty($input['hostname']))             $data['hostname'] = substr($input['hostname'], 0, 255);
+        if (!empty($input['ip_address']))           $data['ip_address'] = substr($input['ip_address'], 0, 45);
+        if (!empty($input['os_info']))              $data['os_info'] = substr($input['os_info'], 0, 255);
+        if (!empty($input['borg_version']))         $data['borg_version'] = substr($input['borg_version'], 0, 20);
+        if (!empty($input['agent_version']))        $data['agent_version'] = substr($input['agent_version'], 0, 20);
+        if (!empty($input['borg_install_method']))  $data['borg_install_method'] = substr($input['borg_install_method'], 0, 20);
+        if (!empty($input['borg_binary_path']))     $data['borg_binary_path'] = substr($input['borg_binary_path'], 0, 255);
         $data['status'] = 'online';
 
         if (!empty($data)) {
@@ -479,11 +481,13 @@ class AgentApiController extends Controller
         $input = $this->getJsonInput();
 
         $data = [];
-        if (!empty($input['os_info']))       $data['os_info'] = substr($input['os_info'], 0, 255);
-        if (!empty($input['borg_version']))  $data['borg_version'] = substr($input['borg_version'], 0, 20);
-        if (!empty($input['agent_version'])) $data['agent_version'] = substr($input['agent_version'], 0, 20);
-        if (!empty($input['hostname']))      $data['hostname'] = substr($input['hostname'], 0, 255);
-        if (!empty($input['ip_address']))    $data['ip_address'] = substr($input['ip_address'], 0, 45);
+        if (!empty($input['os_info']))              $data['os_info'] = substr($input['os_info'], 0, 255);
+        if (!empty($input['borg_version']))         $data['borg_version'] = substr($input['borg_version'], 0, 20);
+        if (!empty($input['agent_version']))        $data['agent_version'] = substr($input['agent_version'], 0, 20);
+        if (!empty($input['hostname']))             $data['hostname'] = substr($input['hostname'], 0, 255);
+        if (!empty($input['ip_address']))           $data['ip_address'] = substr($input['ip_address'], 0, 45);
+        if (!empty($input['borg_install_method']))  $data['borg_install_method'] = substr($input['borg_install_method'], 0, 20);
+        if (!empty($input['borg_binary_path']))     $data['borg_binary_path'] = substr($input['borg_binary_path'], 0, 255);
 
         if (!empty($data)) {
             $this->db->update('agents', $data, 'id = ?', [$agent['id']]);

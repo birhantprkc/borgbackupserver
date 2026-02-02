@@ -126,6 +126,9 @@ class App
         $this->router->map('POST', '/settings/upgrade-agents', 'SettingsController@upgradeAgents');
         $this->router->map('GET', '/api/agent-updates', 'SettingsController@agentUpdatesJson');
         $this->router->map('GET', '/api/templates/[i:id]', 'SettingsController@templateJson');
+        $this->router->map('POST', '/settings/borg-versions/sync', 'SettingsController@syncBorgVersions');
+        $this->router->map('POST', '/settings/borg-versions/set-target', 'SettingsController@setTargetBorgVersion');
+        $this->router->map('POST', '/settings/borg-versions/update-all', 'SettingsController@updateBorgBulk');
 
         // Users (admin)
         $this->router->map('GET', '/users', 'UserController@index');

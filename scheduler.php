@@ -363,3 +363,16 @@ if (!$lastCheckTime || strtotime($lastCheckTime) < time() - 3600) {
         echo date('Y-m-d H:i:s') . " Update available: v{$result['version']} (current: v{$result['current']})\n";
     }
 }
+
+// Step 8: Sync available borg versions from GitHub (daily)
+$lastBorgCheck = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'last_borg_version_check'");
+$lastBorgCheckTime = $lastBorgCheck['value'] ?? null;
+if (!$lastBorgCheckTime || strtotime($lastBorgCheckTime) < time() - 86400) {
+    $borgVersionService = new \BBS\Services\BorgVersionService();
+    $syncResult = $borgVersionService->syncVersionsFromGitHub();
+    if (isset($syncResult['added'])) {
+        echo date('Y-m-d H:i:s') . " Borg version sync: {$syncResult['added']} new versions added\n";
+    } elseif (isset($syncResult['error'])) {
+        echo date('Y-m-d H:i:s') . " Borg version sync failed: {$syncResult['error']}\n";
+    }
+}

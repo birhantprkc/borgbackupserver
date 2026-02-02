@@ -63,6 +63,8 @@ CREATE TABLE agents (
     api_key VARCHAR(64) NOT NULL UNIQUE,
     os_info VARCHAR(255) DEFAULT NULL,
     borg_version VARCHAR(20) DEFAULT NULL,
+    borg_install_method ENUM('package','binary','pip','unknown') DEFAULT 'unknown',
+    borg_binary_path VARCHAR(255) DEFAULT NULL,
     agent_version VARCHAR(20) DEFAULT NULL,
     ssh_unix_user VARCHAR(100) DEFAULT NULL,
     ssh_public_key TEXT DEFAULT NULL,
@@ -87,6 +89,8 @@ CREATE TABLE repositories (
     passphrase_encrypted TEXT DEFAULT NULL,
     size_bytes BIGINT NOT NULL DEFAULT 0,
     archive_count INT NOT NULL DEFAULT 0,
+    borg_version_created VARCHAR(20) DEFAULT NULL,
+    borg_version_last VARCHAR(20) DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
 );
@@ -232,7 +236,10 @@ INSERT INTO settings (`key`, `value`) VALUES
     ('email_on_agent_offline', '1'),
     ('email_on_storage_low', '1'),
     ('email_on_missed_schedule', '0'),
-    ('force_2fa', '0');
+    ('force_2fa', '0'),
+    ('target_borg_version', ''),
+    ('last_borg_version_check', ''),
+    ('fallback_to_pip', '1');
 
 -- --------------------------------------------------------
 -- Notifications
@@ -336,3 +343,31 @@ INSERT INTO backup_templates (name, description, directories, excludes) VALUES
 ('File Server', 'General purpose file/NAS server', '/home\n/srv\n/opt\n/var/shared', '*.tmp\n*.cache\nThumbs.db\n.DS_Store'),
 ('Docker Host', 'Docker/container host', '/opt\n/srv\n/home\n/etc\n/var/lib/docker/volumes', '*.tmp\n*.log\n/var/lib/docker/overlay2'),
 ('Minimal (System Config)', 'Essential system configuration only', '/etc\n/root\n/home\n/var/spool/cron', '*.tmp\n*.log\n*.cache');
+
+-- --------------------------------------------------------
+-- Borg Version Management
+-- --------------------------------------------------------
+
+CREATE TABLE borg_versions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    version VARCHAR(20) NOT NULL UNIQUE,
+    release_tag VARCHAR(30) NOT NULL,
+    release_date DATE NOT NULL,
+    is_prerelease TINYINT(1) NOT NULL DEFAULT 0,
+    release_notes TEXT DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_version (version)
+) ENGINE=InnoDB;
+
+CREATE TABLE borg_version_assets (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    borg_version_id INT NOT NULL,
+    platform VARCHAR(20) NOT NULL,
+    architecture VARCHAR(20) NOT NULL,
+    glibc_version VARCHAR(20) DEFAULT NULL,
+    asset_name VARCHAR(100) NOT NULL,
+    download_url VARCHAR(500) NOT NULL,
+    file_size BIGINT DEFAULT NULL,
+    FOREIGN KEY (borg_version_id) REFERENCES borg_versions(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_asset (borg_version_id, platform, architecture, glibc_version)
+) ENGINE=InnoDB;

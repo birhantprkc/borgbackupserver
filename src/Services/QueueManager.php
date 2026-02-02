@@ -171,7 +171,7 @@ class QueueManager
             } elseif ($job['task_type'] === 'restore_pg') {
                 $taskPayload = $this->buildRestorePgPayload($job);
             } elseif ($job['task_type'] === 'update_borg') {
-                $taskPayload = ['task' => 'update_borg', 'job_id' => $job['id']];
+                $taskPayload = $this->buildBorgUpdatePayload($job);
             } elseif ($job['task_type'] === 'update_agent') {
                 $taskPayload = ['task' => 'update_agent', 'job_id' => $job['id']];
             } elseif ($job['task_type'] === 'plugin_test') {
@@ -293,7 +293,7 @@ class QueueManager
                     $tasks[] = $payload;
                 }
             } elseif ($job['task_type'] === 'update_borg') {
-                $tasks[] = ['task' => 'update_borg', 'job_id' => $job['id']];
+                $tasks[] = $this->buildBorgUpdatePayload($job);
             } elseif ($job['task_type'] === 'update_agent') {
                 $tasks[] = ['task' => 'update_agent', 'job_id' => $job['id']];
             } elseif ($job['task_type'] === 'plugin_test') {
@@ -514,5 +514,60 @@ class QueueManager
                 'compress' => $compress,
             ],
         ];
+    }
+
+    /**
+     * Build an update_borg task payload with download URL and version info.
+     */
+    private function buildBorgUpdatePayload(array $job): array
+    {
+        $borgService = new BorgVersionService();
+        $targetVersion = $borgService->getTargetVersion();
+
+        $payload = [
+            'task' => 'update_borg',
+            'job_id' => $job['id'],
+            'target_version' => $targetVersion,
+            'download_url' => null,
+            'install_method' => 'pip',
+            'binary_path' => '/usr/local/bin/borg',
+            'fallback_to_pip' => $borgService->isFallbackToPipEnabled(),
+        ];
+
+        if (empty($targetVersion)) {
+            return $payload;
+        }
+
+        // Get agent info for platform matching
+        $agent = $this->db->fetchOne("SELECT os_info FROM agents WHERE id = ?", [$job['agent_id']]);
+        if ($agent && !empty($agent['os_info'])) {
+            $osInfo = $agent['os_info'];
+
+            // Parse platform from os_info (e.g., "Linux 5.15.0 x86_64")
+            $platform = 'linux';
+            if (stripos($osInfo, 'Darwin') !== false) {
+                $platform = 'macos';
+            } elseif (stripos($osInfo, 'FreeBSD') !== false) {
+                $platform = 'freebsd';
+            }
+
+            // Parse architecture
+            $arch = 'x86_64';
+            if (preg_match('/\b(aarch64|arm64)\b/i', $osInfo)) {
+                $arch = 'arm64';
+            }
+
+            // Try to find matching binary asset
+            // Note: glibc detection happens agent-side; use null here and let the agent
+            // report glibc via system info. For now, try the best match we have.
+            $asset = $borgService->getAssetForPlatform($targetVersion, $platform, $arch, null);
+
+            if ($asset) {
+                $payload['download_url'] = $asset['download_url'];
+                $payload['install_method'] = 'binary';
+            }
+        }
+
+        return $payload;
     }
 }

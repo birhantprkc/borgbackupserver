@@ -19,7 +19,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.7.3"
+AGENT_VERSION = "1.8.0"
 CONFIG_PATH = "/etc/bbs-agent/config.ini"
 LOG_PATH = "/var/log/bbs-agent.log"
 SSH_KEY_PATH = "/etc/bbs-agent/ssh_key"
@@ -114,10 +114,61 @@ def get_system_info():
     except FileNotFoundError:
         pass
 
-    # Get borg version
+    # Platform and architecture info (for borg binary matching)
+    info["platform"] = platform.system().lower()  # linux, darwin, freebsd
+    arch = platform.machine()
+    if arch in ("aarch64", "arm64"):
+        info["architecture"] = "arm64"
+    elif arch in ("x86_64", "amd64"):
+        info["architecture"] = "x86_64"
+    else:
+        info["architecture"] = arch
+
+    # Detect glibc version on Linux (for binary compatibility matching)
+    if info["platform"] == "linux":
+        try:
+            import ctypes
+            libc = ctypes.CDLL("libc.so.6")
+            gnu_get_libc_version = libc.gnu_get_libc_version
+            gnu_get_libc_version.restype = ctypes.c_char_p
+            glibc_ver = gnu_get_libc_version().decode("utf-8")
+            # Convert "2.31" → "glibc231"
+            info["glibc_version"] = "glibc" + glibc_ver.replace(".", "")
+        except Exception:
+            info["glibc_version"] = None
+
+    # Get borg version and detect installation method
+    borg_path = None
+    for candidate in ["/usr/local/bin/borg", "/usr/bin/borg", "/opt/homebrew/bin/borg"]:
+        if os.path.exists(candidate):
+            borg_path = candidate
+            break
+    if not borg_path:
+        try:
+            which_result = subprocess.run(
+                ["which", "borg"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5
+            )
+            if which_result.returncode == 0:
+                borg_path = which_result.stdout.decode("utf-8", errors="replace").strip()
+        except Exception:
+            pass
+
+    if borg_path:
+        info["borg_binary_path"] = borg_path
+        # Detect install method based on path
+        if "/usr/local/bin" in borg_path:
+            info["borg_install_method"] = "binary"
+        elif "site-packages" in borg_path or ".local/bin" in borg_path:
+            info["borg_install_method"] = "pip"
+        else:
+            info["borg_install_method"] = "package"
+    else:
+        info["borg_install_method"] = "unknown"
+
     try:
+        borg_cmd = borg_path if borg_path else "borg"
         result = subprocess.run(
-            ["borg", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10
+            [borg_cmd, "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10
         )
         if result.returncode == 0:
             info["borg_version"] = result.stdout.decode("utf-8", errors="replace").strip().replace("borg ", "")
@@ -219,9 +270,15 @@ def count_files(directories):
 
 
 def execute_update_borg(config, task):
-    """Update borg on this system using the OS package manager."""
+    """Update borg via binary download from GitHub, with pip fallback."""
     job_id = task.get("job_id")
-    logger.info(f"Executing borg update job #{job_id}")
+    target_version = task.get("target_version", "")
+    download_url = task.get("download_url")
+    install_method = task.get("install_method", "binary")
+    binary_path = task.get("binary_path", "/usr/local/bin/borg")
+    fallback_to_pip = task.get("fallback_to_pip", True)
+
+    logger.info(f"Executing borg update job #{job_id} to v{target_version} via {install_method}")
 
     # Report running
     api_request(config, "/api/agent/progress", method="POST", data={
@@ -229,60 +286,29 @@ def execute_update_borg(config, task):
     })
 
     error_output = ""
+    update_output = ""
     result = "failed"
 
     try:
-        # Detect package manager and build update command
-        if os.path.exists("/usr/bin/apt-get"):
-            cmd = ["apt-get", "install", "-y", "--only-upgrade", "borgbackup"]
-            pre_cmd = ["apt-get", "update", "-qq"]
-        elif os.path.exists("/usr/bin/dnf"):
-            cmd = ["dnf", "upgrade", "-y", "borgbackup"]
-            pre_cmd = None
-        elif os.path.exists("/usr/bin/yum"):
-            cmd = ["yum", "update", "-y", "borgbackup"]
-            pre_cmd = None
-        elif os.path.exists("/usr/bin/pacman"):
-            cmd = ["pacman", "-Sy", "--noconfirm", "borg"]
-            pre_cmd = None
-        elif os.path.exists("/usr/local/bin/brew") or os.path.exists("/opt/homebrew/bin/brew"):
-            cmd = ["brew", "upgrade", "borgbackup"]
-            pre_cmd = None
-        elif os.path.exists("/usr/bin/pip3"):
-            cmd = ["pip3", "install", "--upgrade", "borgbackup"]
-            pre_cmd = None
+        if install_method == "binary" and download_url:
+            result, update_output, error_output = _install_borg_binary(
+                download_url, binary_path, target_version
+            )
+            # If binary install failed, try pip fallback
+            if result == "failed" and fallback_to_pip:
+                logger.warning(f"Binary install failed ({error_output}), falling back to pip")
+                result, update_output, error_output = _install_borg_pip(target_version)
+
+        elif install_method == "pip" or fallback_to_pip:
+            result, update_output, error_output = _install_borg_pip(target_version)
+
+        elif not download_url and not target_version:
+            # Legacy task from older server — use package manager fallback
+            result, update_output, error_output = _install_borg_package_manager()
+
         else:
-            error_output = "No supported package manager found"
-            api_request(config, "/api/agent/status", method="POST", data={
-                "job_id": job_id, "result": "failed",
-                "error_log": error_output,
-            })
-            return
+            error_output = "No download URL provided and pip fallback disabled"
 
-        # Run pre-command (e.g. apt update)
-        if pre_cmd:
-            logger.info(f"Running: {' '.join(pre_cmd)}")
-            subprocess.run(pre_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120)
-
-        # Run update
-        logger.info(f"Running: {' '.join(cmd)}")
-        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=600)
-
-        stdout_text = proc.stdout.decode("utf-8", errors="replace").strip()
-        stderr_text = proc.stderr.decode("utf-8", errors="replace").strip()
-
-        if proc.returncode == 0:
-            result = "completed"
-            # Capture output so the server can show what happened
-            update_output = stdout_text or stderr_text or "Update completed (no output)"
-            logger.info(f"Borg update completed successfully: {update_output[:200]}")
-        else:
-            error_output = stderr_text or stdout_text or f"Exit code {proc.returncode}"
-            logger.error(f"Borg update failed: {error_output}")
-
-    except subprocess.TimeoutExpired:
-        error_output = "Update command timed out"
-        logger.error(error_output)
     except Exception as e:
         error_output = str(e)
         logger.error(f"Borg update error: {e}")
@@ -300,6 +326,140 @@ def execute_update_borg(config, task):
         info = get_system_info()
         api_request(config, "/api/agent/info", method="POST", data=info)
         logger.info(f"Updated borg version: {info.get('borg_version', 'unknown')}")
+
+
+def _install_borg_binary(download_url, binary_path, target_version):
+    """Download a pre-compiled borg binary from GitHub and install it."""
+    logger.info(f"Downloading borg binary from {download_url}")
+
+    req = urllib.request.Request(
+        download_url,
+        headers={"User-Agent": f"bbs-agent/{AGENT_VERSION}"}
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=300) as resp:
+            binary_data = resp.read()
+    except urllib.error.HTTPError as e:
+        return "failed", "", f"Download failed: HTTP {e.code}"
+    except Exception as e:
+        return "failed", "", f"Download failed: {e}"
+
+    # Basic size check (borg binaries are typically 10MB+)
+    if len(binary_data) < 1 * 1024 * 1024:
+        return "failed", "", f"Downloaded file too small ({len(binary_data)} bytes), likely not a valid binary"
+
+    # Write to temp file
+    tmp_path = binary_path + ".tmp"
+    try:
+        os.makedirs(os.path.dirname(binary_path), exist_ok=True)
+        with open(tmp_path, "wb") as f:
+            f.write(binary_data)
+        os.chmod(tmp_path, 0o755)
+    except Exception as e:
+        return "failed", "", f"Failed to write binary: {e}"
+
+    # Test the binary
+    try:
+        test_proc = subprocess.run(
+            [tmp_path, "--version"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10
+        )
+        if test_proc.returncode != 0:
+            os.remove(tmp_path)
+            stderr = test_proc.stderr.decode("utf-8", errors="replace")
+            return "failed", "", f"Downloaded binary failed version check: {stderr}"
+
+        actual_version = test_proc.stdout.decode("utf-8", errors="replace").strip().replace("borg ", "")
+        logger.info(f"Binary version check passed: {actual_version}")
+    except Exception as e:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        return "failed", "", f"Binary test failed: {e}"
+
+    # Backup old binary and install new one
+    try:
+        backup_path = binary_path + ".bak"
+        if os.path.exists(binary_path):
+            os.rename(binary_path, backup_path)
+        os.rename(tmp_path, binary_path)
+        # Clean up backup
+        if os.path.exists(backup_path):
+            os.remove(backup_path)
+    except Exception as e:
+        # Try to restore backup
+        if os.path.exists(backup_path) and not os.path.exists(binary_path):
+            os.rename(backup_path, binary_path)
+        return "failed", "", f"Failed to install binary: {e}"
+
+    output = f"Borg updated to v{target_version} via binary install at {binary_path}"
+    logger.info(output)
+    return "completed", output, ""
+
+
+def _install_borg_pip(target_version):
+    """Install borg via pip."""
+    version_spec = f"borgbackup=={target_version}" if target_version else "borgbackup"
+    cmd = ["pip3", "install", "--upgrade", version_spec]
+    logger.info(f"Installing borg via pip: {' '.join(cmd)}")
+
+    try:
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=600)
+        stdout_text = proc.stdout.decode("utf-8", errors="replace").strip()
+        stderr_text = proc.stderr.decode("utf-8", errors="replace").strip()
+
+        if proc.returncode == 0:
+            output = f"Borg updated to v{target_version} via pip"
+            logger.info(output)
+            return "completed", output, ""
+        else:
+            error = stderr_text or stdout_text or f"Exit code {proc.returncode}"
+            logger.error(f"pip install failed: {error}")
+            return "failed", "", error
+    except subprocess.TimeoutExpired:
+        return "failed", "", "pip install timed out"
+    except Exception as e:
+        return "failed", "", str(e)
+
+
+def _install_borg_package_manager():
+    """Legacy fallback: update borg via OS package manager."""
+    if os.path.exists("/usr/bin/apt-get"):
+        cmd = ["apt-get", "install", "-y", "--only-upgrade", "borgbackup"]
+        pre_cmd = ["apt-get", "update", "-qq"]
+    elif os.path.exists("/usr/bin/dnf"):
+        cmd = ["dnf", "upgrade", "-y", "borgbackup"]
+        pre_cmd = None
+    elif os.path.exists("/usr/bin/yum"):
+        cmd = ["yum", "update", "-y", "borgbackup"]
+        pre_cmd = None
+    elif os.path.exists("/usr/bin/pacman"):
+        cmd = ["pacman", "-Sy", "--noconfirm", "borg"]
+        pre_cmd = None
+    elif os.path.exists("/usr/local/bin/brew") or os.path.exists("/opt/homebrew/bin/brew"):
+        cmd = ["brew", "upgrade", "borgbackup"]
+        pre_cmd = None
+    else:
+        return "failed", "", "No supported package manager found"
+
+    try:
+        if pre_cmd:
+            subprocess.run(pre_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120)
+
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=600)
+        stdout_text = proc.stdout.decode("utf-8", errors="replace").strip()
+        stderr_text = proc.stderr.decode("utf-8", errors="replace").strip()
+
+        if proc.returncode == 0:
+            output = stdout_text or stderr_text or "Update completed (no output)"
+            return "completed", output, ""
+        else:
+            error = stderr_text or stdout_text or f"Exit code {proc.returncode}"
+            return "failed", "", error
+    except subprocess.TimeoutExpired:
+        return "failed", "", "Update command timed out"
+    except Exception as e:
+        return "failed", "", str(e)
 
 
 def execute_update_agent(config, task):

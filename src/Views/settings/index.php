@@ -18,6 +18,11 @@
         </a>
     </li>
     <li class="nav-item">
+        <a class="nav-link <?= $activeTab === 'borg-versions' ? 'active' : '' ?>" href="/settings?tab=borg-versions">
+            <i class="bi bi-box-seam me-1"></i> Borg Versions
+        </a>
+    </li>
+    <li class="nav-item">
         <?php
         $updateService = new \BBS\Services\UpdateService();
         $updateAvailable = $updateService->isUpdateAvailable();
@@ -302,6 +307,142 @@
                 </div>
             </div>
         </form>
+    </div>
+</div>
+<?php endif; ?>
+
+<!-- Borg Versions Tab -->
+<?php if ($activeTab === 'borg-versions'):
+    $borgService = new \BBS\Services\BorgVersionService();
+    $borgVersions = $borgService->getStoredVersions();
+    $targetBorgVersion = $borgService->getTargetVersion();
+    $lastBorgCheck = $borgService->getLastCheckTime();
+    $allBorgAgents = $borgService->getAllAgentVersions();
+    $outdatedBorgAgents = !empty($targetBorgVersion) ? $borgService->getOutdatedAgents($targetBorgVersion) : [];
+    $aboveAgents = !empty($targetBorgVersion) ? $borgService->getAgentsAboveVersion($targetBorgVersion) : [];
+?>
+<div class="row g-4">
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white fw-semibold">
+                <i class="bi bi-box-seam me-1"></i> Borg Version Management
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <?php if (!empty($lastBorgCheck)): ?>
+                            <span class="text-muted small">Last synced: <?= \BBS\Core\TimeHelper::format($lastBorgCheck, 'M j, Y g:i A') ?></span>
+                        <?php else: ?>
+                            <span class="text-muted small">Not synced yet</span>
+                        <?php endif; ?>
+                    </div>
+                    <form method="POST" action="/settings/borg-versions/sync">
+                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                        <button type="submit" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-arrow-clockwise me-1"></i> Sync from GitHub
+                        </button>
+                    </form>
+                </div>
+
+                <?php if (empty($borgVersions)): ?>
+                    <div class="alert alert-info py-2 px-3 small mb-0">
+                        <i class="bi bi-info-circle me-1"></i> No versions synced yet. Click "Sync from GitHub" to fetch available borg releases.
+                    </div>
+                <?php else: ?>
+                    <form method="POST" action="/settings/borg-versions/set-target">
+                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+
+                        <?php if (!empty($aboveAgents)): ?>
+                        <div class="alert alert-warning py-2 px-3 small mb-3">
+                            <i class="bi bi-exclamation-triangle me-1"></i>
+                            <strong>Downgrade warning:</strong> <?= count($aboveAgents) ?> agent(s) are running a newer borg version than the selected target.
+                        </div>
+                        <?php endif; ?>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Target Borg Version</label>
+                            <select name="version" class="form-select">
+                                <option value="">-- No target set --</option>
+                                <?php foreach ($borgVersions as $v): ?>
+                                <option value="<?= htmlspecialchars($v['version']) ?>"
+                                    <?= $v['version'] === $targetBorgVersion ? 'selected' : '' ?>>
+                                    v<?= htmlspecialchars($v['version']) ?>
+                                    (<?= htmlspecialchars($v['release_date']) ?>)
+                                    — <?= (int)$v['asset_count'] ?> binaries
+                                </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-text">All agents will be updated to this version when you trigger updates.</div>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="bi bi-check-lg me-1"></i> Set Target Version
+                        </button>
+                    </form>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-pc-display me-1"></i> Client Borg Versions</span>
+                <?php if (!empty($targetBorgVersion) && count($outdatedBorgAgents) > 0): ?>
+                <form method="POST" action="/settings/borg-versions/update-all"
+                      data-confirm="Queue borg updates for <?= count($outdatedBorgAgents) ?> client(s) to v<?= htmlspecialchars($targetBorgVersion) ?>?">
+                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                    <button type="submit" class="btn btn-sm btn-warning">
+                        <i class="bi bi-arrow-up-circle me-1"></i> Update All (<?= count($outdatedBorgAgents) ?>)
+                    </button>
+                </form>
+                <?php endif; ?>
+            </div>
+            <div class="card-body">
+                <?php if (empty($allBorgAgents)): ?>
+                    <p class="text-muted small mb-0">No agents connected yet.</p>
+                <?php elseif (empty($targetBorgVersion)): ?>
+                    <p class="text-muted small mb-0">Set a target version first to see which clients need updates.</p>
+                    <hr>
+                    <?php foreach ($allBorgAgents as $ba): ?>
+                    <div class="d-flex justify-content-between align-items-center small py-1">
+                        <span>
+                            <i class="bi bi-pc-display me-1 text-muted"></i>
+                            <a href="/clients/<?= $ba['id'] ?>" class="text-decoration-none"><?= htmlspecialchars($ba['name']) ?></a>
+                        </span>
+                        <span class="badge bg-secondary"><?= htmlspecialchars($ba['borg_version'] ?? 'unknown') ?></span>
+                    </div>
+                    <?php endforeach; ?>
+                <?php elseif (count($outdatedBorgAgents) === 0): ?>
+                    <div class="d-flex align-items-center small">
+                        <span class="badge rounded-pill me-2" style="background-color: #e8f5e9; color: #2e7d32;">
+                            <i class="bi bi-check-circle me-1"></i>All matched
+                        </span>
+                        All <?= count($allBorgAgents) ?> client(s) at v<?= htmlspecialchars($targetBorgVersion) ?>
+                    </div>
+                <?php else: ?>
+                    <div class="mb-2 small text-muted">
+                        Target: <strong>v<?= htmlspecialchars($targetBorgVersion) ?></strong>
+                    </div>
+                    <?php foreach ($allBorgAgents as $ba):
+                        $borgVer = $ba['borg_version'] ?? 'unknown';
+                        $cleanVer = preg_replace('/^borg\s+/', '', $borgVer);
+                        $isMatch = ($cleanVer === $targetBorgVersion);
+                        $badgeClass = $isMatch ? 'bg-success' : 'bg-warning text-dark';
+                    ?>
+                    <div class="d-flex justify-content-between align-items-center small py-1">
+                        <span>
+                            <i class="bi bi-pc-display me-1 text-muted"></i>
+                            <a href="/clients/<?= $ba['id'] ?>" class="text-decoration-none"><?= htmlspecialchars($ba['name']) ?></a>
+                            <?php if ($ba['borg_install_method'] && $ba['borg_install_method'] !== 'unknown'): ?>
+                                <span class="text-muted ms-1">(<?= htmlspecialchars($ba['borg_install_method']) ?>)</span>
+                            <?php endif; ?>
+                        </span>
+                        <span class="badge <?= $badgeClass ?>"><?= htmlspecialchars($borgVer) ?></span>
+                    </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </div>
     </div>
 </div>
 <?php endif; ?>
