@@ -337,7 +337,8 @@ foreach ($serverJobs as $sj) {
             }
 
             echo date('Y-m-d H:i:s') . " Starting S3 sync for {$agent['name']}/{$repo['name']}...\n";
-            $syncResult = $s3Service->syncRepository($repo, $agent, $creds);
+            $runAsUser = $sj['ssh_unix_user'] ?? null;
+            $syncResult = $s3Service->syncRepository($repo, $agent, $creds, $runAsUser);
 
             $db->insert('server_log', [
                 'agent_id' => $sj['agent_id'],

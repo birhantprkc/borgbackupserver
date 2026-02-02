@@ -105,7 +105,7 @@ class S3SyncService
      * Sync a borg repository to S3.
      * Returns ['success' => bool, 'output' => string].
      */
-    public function syncRepository(array $repo, array $agent, array $creds): array
+    public function syncRepository(array $repo, array $agent, array $creds, ?string $runAsUser = null): array
     {
         if (empty($creds['bucket'])) {
             return ['success' => false, 'output' => 'No S3 bucket configured'];
@@ -138,6 +138,15 @@ class S3SyncService
 
         // Build environment
         $env = $this->buildRcloneEnv($creds);
+
+        // Run as the repo's unix user (repos are owned by per-agent users like bbs-3)
+        if ($runAsUser) {
+            $envPrefix = [];
+            foreach ($env as $k => $v) {
+                $envPrefix[] = "{$k}={$v}";
+            }
+            array_unshift($cmd, 'sudo', '-u', $runAsUser, 'env', ...$envPrefix);
+        }
 
         $desc = [
             0 => ['pipe', 'r'],

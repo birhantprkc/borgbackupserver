@@ -128,8 +128,8 @@ fi
 
 # Ensure borg sudoers rule exists (allows prune/compact as client users)
 BORG_SUDOERS="/etc/sudoers.d/bbs-borg"
-BORG_EXPECTED="www-data ALL=(bbs-*) NOPASSWD: /usr/bin/borg, /usr/local/bin/borg, /usr/bin/env"
-if [ ! -f "$BORG_SUDOERS" ] || ! grep -q "/usr/local/bin/borg" "$BORG_SUDOERS"; then
+BORG_EXPECTED="www-data ALL=(bbs-*) NOPASSWD: /usr/bin/borg, /usr/local/bin/borg, /usr/bin/rclone, /usr/bin/env"
+if [ ! -f "$BORG_SUDOERS" ] || ! grep -q "/usr/bin/rclone" "$BORG_SUDOERS"; then
     echo "$BORG_EXPECTED" > "$BORG_SUDOERS"
     chmod 440 "$BORG_SUDOERS"
     echo "  Updated borg sudoers rule"

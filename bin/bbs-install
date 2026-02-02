@@ -235,7 +235,7 @@ echo "www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper, $BBS_DIR/bin/
 chmod 440 /etc/sudoers.d/bbs-ssh-helper
 ok "SSH helper sudoers configured"
 
-echo "www-data ALL=(bbs-*) NOPASSWD: /usr/bin/borg, /usr/local/bin/borg, /usr/bin/env" \
+echo "www-data ALL=(bbs-*) NOPASSWD: /usr/bin/borg, /usr/local/bin/borg, /usr/bin/rclone, /usr/bin/env" \
     > /etc/sudoers.d/bbs-borg
 chmod 440 /etc/sudoers.d/bbs-borg
 ok "Borg sudoers configured"
