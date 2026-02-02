@@ -52,8 +52,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 );
 
                 // Check if database exists, create if not
-                $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$dbName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-                $pdo->exec("USE `{$dbName}`");
+                $safeName = str_replace('`', '``', $dbName);
+                $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$safeName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+                $pdo->exec("USE `{$safeName}`");
 
                 $_SESSION['setup'] = $_SESSION['setup'] ?? [];
                 $_SESSION['setup']['db_host'] = $dbHost;
