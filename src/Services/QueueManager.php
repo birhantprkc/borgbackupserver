@@ -539,11 +539,14 @@ class QueueManager
         }
 
         // Get agent info for platform matching
-        $agent = $this->db->fetchOne("SELECT os_info FROM agents WHERE id = ?", [$job['agent_id']]);
+        $agent = $this->db->fetchOne(
+            "SELECT os_info, glibc_version FROM agents WHERE id = ?",
+            [$job['agent_id']]
+        );
         if ($agent && !empty($agent['os_info'])) {
             $osInfo = $agent['os_info'];
 
-            // Parse platform from os_info (e.g., "Linux 5.15.0 x86_64")
+            // Parse platform from os_info (e.g., "Linux 5.15.0 x86_64" or "Rocky Linux 8.10 x86_64")
             $platform = 'linux';
             if (stripos($osInfo, 'Darwin') !== false) {
                 $platform = 'macos';
@@ -557,10 +560,11 @@ class QueueManager
                 $arch = 'arm64';
             }
 
+            // Use agent-reported glibc version if available
+            $agentGlibc = $agent['glibc_version'] ?? null;
+
             // Try to find matching binary asset
-            // Note: glibc detection happens agent-side; use null here and let the agent
-            // report glibc via system info. For now, try the best match we have.
-            $asset = $borgService->getAssetForPlatform($targetVersion, $platform, $arch, null);
+            $asset = $borgService->getAssetForPlatform($targetVersion, $platform, $arch, $agentGlibc);
 
             if ($asset) {
                 $payload['download_url'] = $asset['download_url'];

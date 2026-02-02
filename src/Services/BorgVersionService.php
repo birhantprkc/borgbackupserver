@@ -211,24 +211,33 @@ class BorgVersionService
             return null;
         }
 
-        if ($platform === 'linux' && $agentGlibc !== null) {
-            // Get all Linux assets for this version and arch, ordered by glibc descending
+        if ($platform === 'linux') {
+            // Get all Linux assets for this version and arch, ordered by glibc ascending
             $assets = $this->db->fetchAll(
                 "SELECT * FROM borg_version_assets
                  WHERE borg_version_id = ? AND platform = 'linux' AND architecture = ?
-                 ORDER BY glibc_version DESC",
+                 ORDER BY glibc_version ASC",
                 [$borgVersion['id'], $arch]
             );
 
-            // Pick highest glibc that is <= agent's glibc
-            foreach ($assets as $asset) {
-                if ($asset['glibc_version'] !== null && $asset['glibc_version'] <= $agentGlibc) {
-                    return $asset;
-                }
+            if (empty($assets)) {
+                return null;
             }
 
-            // If no match, return the lowest glibc available (best compatibility)
-            return !empty($assets) ? end($assets) : null;
+            if ($agentGlibc !== null) {
+                // Pick highest glibc that is <= agent's glibc
+                $best = null;
+                foreach ($assets as $asset) {
+                    if ($asset['glibc_version'] !== null && $asset['glibc_version'] <= $agentGlibc) {
+                        $best = $asset;
+                    }
+                }
+                // If no compatible binary found, return null (don't guess)
+                return $best;
+            }
+
+            // Unknown glibc — return the lowest available (most compatible)
+            return $assets[0];
         }
 
         // For macOS/FreeBSD: match platform + arch
