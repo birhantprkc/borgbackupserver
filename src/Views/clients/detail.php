@@ -2180,44 +2180,46 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
             <?php if ($dbPluginEnabled): ?>
             <div class="col-md-3">
                 <label class="form-label fw-semibold mb-1 small">Restore Type</label>
-                <div class="input-group input-group-sm">
-                    <div class="btn-group w-100" role="group" id="restore-mode-toggle">
-                        <button type="button" class="btn btn-sm btn-primary active" data-restore-mode="files">
-                            <i class="bi bi-files me-1"></i>Files
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-primary" data-restore-mode="database">
-                            <i class="bi bi-database me-1"></i>Database
-                        </button>
-                    </div>
-                    <?php if (empty($allDbConfigs)): ?>
-                        <span class="input-group-text bg-warning-subtle text-dark db-connection-picker" style="display:none;font-size:.75rem;"><i class="bi bi-exclamation-triangle me-1"></i>No connection</span>
-                    <?php else: ?>
-                        <select class="form-select form-select-sm db-connection-picker" id="db-config-id" style="display:none;">
-                            <?php if (!empty($mysqlConfigs)): ?>
-                                <optgroup label="MySQL">
-                                <?php foreach ($mysqlConfigs as $mc): ?>
-                                    <option value="mysql:<?= $mc['id'] ?>"><?= htmlspecialchars($mc['name']) ?></option>
-                                <?php endforeach; ?>
-                                </optgroup>
-                            <?php endif; ?>
-                            <?php if (!empty($pgConfigs)): ?>
-                                <optgroup label="PostgreSQL">
-                                <?php foreach ($pgConfigs as $pc): ?>
-                                    <option value="pg:<?= $pc['id'] ?>"><?= htmlspecialchars($pc['name']) ?></option>
-                                <?php endforeach; ?>
-                                </optgroup>
-                            <?php endif; ?>
-                        </select>
-                    <?php endif; ?>
+                <div class="btn-group btn-group-sm w-100" role="group" id="restore-mode-toggle">
+                    <button type="button" class="btn btn-sm btn-primary active" data-restore-mode="files">
+                        <i class="bi bi-files me-1"></i>Files
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-restore-mode="database">
+                        <i class="bi bi-database me-1"></i>Database
+                    </button>
                 </div>
+            </div>
+            <!-- DB mode: Connection -->
+            <div class="restore-db-controls col-md-3" id="db-connection-col" style="display:none;">
+                <label class="form-label fw-semibold mb-1 small">Connector</label>
                 <?php if (empty($allDbConfigs)): ?>
-                    <a href="?tab=plugins" class="btn btn-sm btn-outline-primary mt-1"><i class="bi bi-plus-circle me-1"></i>Add Connection</a>
+                    <div>
+                        <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>None configured</span>
+                        <a href="?tab=plugins" class="btn btn-sm btn-outline-primary ms-1"><i class="bi bi-plus-circle me-1"></i>Add</a>
+                    </div>
+                <?php else: ?>
+                    <select class="form-select form-select-sm" id="db-config-id">
+                        <?php if (!empty($mysqlConfigs)): ?>
+                            <optgroup label="MySQL">
+                            <?php foreach ($mysqlConfigs as $mc): ?>
+                                <option value="mysql:<?= $mc['id'] ?>"><?= htmlspecialchars($mc['name']) ?></option>
+                            <?php endforeach; ?>
+                            </optgroup>
+                        <?php endif; ?>
+                        <?php if (!empty($pgConfigs)): ?>
+                            <optgroup label="PostgreSQL">
+                            <?php foreach ($pgConfigs as $pc): ?>
+                                <option value="pg:<?= $pc['id'] ?>"><?= htmlspecialchars($pc['name']) ?></option>
+                            <?php endforeach; ?>
+                            </optgroup>
+                        <?php endif; ?>
+                    </select>
                 <?php endif; ?>
             </div>
             <?php endif; ?>
-            <!-- DB mode: Archive (hidden by default) -->
+            <!-- DB mode: Archive -->
             <?php if ($dbPluginEnabled): ?>
-            <div class="restore-db-controls col-md-9" id="db-archive-col" style="display:none;">
+            <div class="restore-db-controls col-md-6" id="db-archive-col" style="display:none;">
                 <label class="form-label fw-semibold mb-1 small">Archive</label>
                 <select class="form-select form-select-sm" id="db-archive-select">
                     <option value="">Choose a restore point...</option>

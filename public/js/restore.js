@@ -525,7 +525,6 @@
         const dbSelectedCount = document.getElementById('db-selected-count');
         const dbRestoreBtn = document.getElementById('db-restore-btn');
         const dbAllDbNote = document.getElementById('db-all-databases-note');
-        const dbConnectionPicker = document.querySelector('.db-connection-picker');
         const dbConfigId = document.getElementById('db-config-id');
 
         let dbRestoreMode = 'files';
@@ -584,13 +583,11 @@
                 if (dbRestoreMode === 'database') {
                     filesSection.style.display = 'none';
                     dbSection.style.display = '';
-                    if (dbConnectionPicker) dbConnectionPicker.style.display = '';
                     filesControls.forEach(function(el) { el.style.display = 'none'; });
                     dbControls.forEach(function(el) { el.style.display = ''; });
                 } else {
                     filesSection.style.display = '';
                     dbSection.style.display = 'none';
-                    if (dbConnectionPicker) dbConnectionPicker.style.display = 'none';
                     filesControls.forEach(function(el) { el.style.display = ''; });
                     dbControls.forEach(function(el) { el.style.display = 'none'; });
                 }
