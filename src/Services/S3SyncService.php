@@ -139,13 +139,18 @@ class S3SyncService
         // Build environment
         $env = $this->buildRcloneEnv($creds);
 
-        // Run as the repo's unix user (repos are owned by per-agent users like bbs-3)
+        // Run via bbs-ssh-helper (runs as root via sudo, then sudo -u to the repo user)
         if ($runAsUser) {
-            $envPrefix = [];
-            foreach ($env as $k => $v) {
-                $envPrefix[] = "{$k}={$v}";
+            $cmd = [
+                'sudo', '/usr/local/bin/bbs-ssh-helper', 'rclone-sync',
+                $runAsUser, $localPath, $remote,
+                $creds['endpoint'] ?? '', $creds['region'] ?? '',
+                $creds['access_key'] ?? '', $creds['secret_key'] ?? '',
+            ];
+            if (!empty($creds['bandwidth_limit'])) {
+                $cmd[] = '--bwlimit';
+                $cmd[] = $creds['bandwidth_limit'];
             }
-            array_unshift($cmd, 'sudo', '-u', $runAsUser, 'env', ...$envPrefix);
         }
 
         $desc = [
@@ -154,6 +159,7 @@ class S3SyncService
             2 => ['pipe', 'w'],
         ];
 
+        // For non-sudo runs (e.g. test connection), pass env vars directly
         $envStrings = [];
         foreach ($env as $k => $v) {
             $envStrings[$k] = $v;
