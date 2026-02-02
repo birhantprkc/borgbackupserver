@@ -206,21 +206,35 @@
     }
     // Global handler for data-confirm on forms and buttons
     document.addEventListener('submit', function(e) {
-        var msg = e.target.getAttribute('data-confirm');
+        var form = e.target;
+        var msg = form.getAttribute('data-confirm');
         if (!msg) return;
         e.preventDefault();
+        e.stopImmediatePropagation();
         var opts = {};
-        if (e.target.hasAttribute('data-confirm-danger')) opts = {danger:true, btnClass:'danger', okText:'Delete'};
-        confirmAction(msg, function() { e.target.removeAttribute('data-confirm'); e.target.submit(); }, opts);
+        if (form.hasAttribute('data-confirm-danger')) opts = {danger:true, btnClass:'danger', okText:'Delete'};
+        confirmAction(msg, function() {
+            form.removeAttribute('data-confirm');
+            form.requestSubmit ? form.requestSubmit() : form.submit();
+        }, opts);
     });
     document.addEventListener('click', function(e) {
         var btn = e.target.closest('[data-confirm]');
         if (!btn || btn.tagName === 'FORM') return;
         var msg = btn.getAttribute('data-confirm');
         e.preventDefault();
+        e.stopImmediatePropagation();
         var opts = {};
         if (btn.hasAttribute('data-confirm-danger')) opts = {danger:true, btnClass:'danger', okText:'Delete'};
-        confirmAction(msg, function() { btn.removeAttribute('data-confirm'); btn.click(); }, opts);
+        var form = btn.closest('form');
+        if (form) {
+            confirmAction(msg, function() {
+                btn.removeAttribute('data-confirm');
+                form.requestSubmit ? form.requestSubmit() : form.submit();
+            }, opts);
+        } else {
+            confirmAction(msg, function() { btn.removeAttribute('data-confirm'); btn.click(); }, opts);
+        }
     });
     function showToast(message, type) {
         var iconColors = {success:'#2ecc71',danger:'#e74c3c',warning:'#f39c12',info:'#3498db'};
