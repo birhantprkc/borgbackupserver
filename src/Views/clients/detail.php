@@ -2162,28 +2162,26 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
                         <i class="bi bi-database me-1"></i>Database
                     </button>
                 </div>
-                <div id="db-connection-picker" style="display:none;">
-                    <?php if (empty($allDbConfigs)): ?>
-                        <span class="input-group-text bg-warning-subtle text-dark" style="font-size:.75rem;"><i class="bi bi-exclamation-triangle me-1"></i>No connection</span>
-                    <?php else: ?>
-                        <select class="form-select form-select-sm" id="db-config-id">
-                            <?php if (!empty($mysqlConfigs)): ?>
-                                <optgroup label="MySQL">
-                                <?php foreach ($mysqlConfigs as $mc): ?>
-                                    <option value="mysql:<?= $mc['id'] ?>"><?= htmlspecialchars($mc['name']) ?></option>
-                                <?php endforeach; ?>
-                                </optgroup>
-                            <?php endif; ?>
-                            <?php if (!empty($pgConfigs)): ?>
-                                <optgroup label="PostgreSQL">
-                                <?php foreach ($pgConfigs as $pc): ?>
-                                    <option value="pg:<?= $pc['id'] ?>"><?= htmlspecialchars($pc['name']) ?></option>
-                                <?php endforeach; ?>
-                                </optgroup>
-                            <?php endif; ?>
-                        </select>
-                    <?php endif; ?>
-                </div>
+                <?php if (empty($allDbConfigs)): ?>
+                    <span class="input-group-text bg-warning-subtle text-dark db-connection-picker" style="display:none;font-size:.75rem;"><i class="bi bi-exclamation-triangle me-1"></i>No connection</span>
+                <?php else: ?>
+                    <select class="form-select form-select-sm db-connection-picker" id="db-config-id" style="display:none;">
+                        <?php if (!empty($mysqlConfigs)): ?>
+                            <optgroup label="MySQL">
+                            <?php foreach ($mysqlConfigs as $mc): ?>
+                                <option value="mysql:<?= $mc['id'] ?>"><?= htmlspecialchars($mc['name']) ?></option>
+                            <?php endforeach; ?>
+                            </optgroup>
+                        <?php endif; ?>
+                        <?php if (!empty($pgConfigs)): ?>
+                            <optgroup label="PostgreSQL">
+                            <?php foreach ($pgConfigs as $pc): ?>
+                                <option value="pg:<?= $pc['id'] ?>"><?= htmlspecialchars($pc['name']) ?></option>
+                            <?php endforeach; ?>
+                            </optgroup>
+                        <?php endif; ?>
+                    </select>
+                <?php endif; ?>
             </div>
             <?php if (empty($allDbConfigs)): ?>
                 <a href="?tab=plugins" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-circle me-1"></i>Add Connection</a>

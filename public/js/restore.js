@@ -525,7 +525,7 @@
         const dbSelectedCount = document.getElementById('db-selected-count');
         const dbRestoreBtn = document.getElementById('db-restore-btn');
         const dbAllDbNote = document.getElementById('db-all-databases-note');
-        const dbConnectionPicker = document.getElementById('db-connection-picker');
+        const dbConnectionPicker = document.querySelector('.db-connection-picker');
         const dbConfigId = document.getElementById('db-config-id');
 
         let dbRestoreMode = 'files';
@@ -582,7 +582,7 @@
                 if (dbRestoreMode === 'database') {
                     filesSection.style.display = 'none';
                     dbSection.style.display = '';
-                    if (dbConnectionPicker) dbConnectionPicker.style.display = 'flex';
+                    if (dbConnectionPicker) dbConnectionPicker.style.display = '';
                 } else {
                     filesSection.style.display = '';
                     dbSection.style.display = 'none';
