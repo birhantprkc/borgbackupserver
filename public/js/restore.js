@@ -629,6 +629,7 @@
                         }
 
                         dbTable.style.display = '';
+                        var backedUpAt = data.backed_up_at ? formatDate(data.backed_up_at) : '';
                         data.databases.forEach(function(dbName) {
                             const tr = document.createElement('tr');
                             const escapedName = esc(dbName);
@@ -648,7 +649,8 @@
                                             '<input type="text" class="form-control form-control-sm font-monospace" data-rename-for="' + escapedName + '" value="' + escapedName + '_copy" placeholder="New database name">' +
                                         '</div>' +
                                     '</div>' +
-                                '</td>';
+                                '</td>' +
+                                '<td class="text-end text-muted small">' + esc(backedUpAt) + '</td>';
                             dbTableBody.appendChild(tr);
                         });
 

@@ -812,7 +812,7 @@ class ClientController extends Controller
         }
 
         $archive = $this->db->fetchOne("
-            SELECT ar.databases_backed_up
+            SELECT ar.databases_backed_up, ar.created_at
             FROM archives ar
             JOIN repositories r ON r.id = ar.repository_id
             WHERE ar.id = ? AND r.agent_id = ?
@@ -828,6 +828,7 @@ class ClientController extends Controller
             'databases' => $data['databases'] ?? [],
             'per_database' => $data['per_database'] ?? true,
             'compress' => $data['compress'] ?? true,
+            'backed_up_at' => $archive['created_at'],
         ]);
     }
 
