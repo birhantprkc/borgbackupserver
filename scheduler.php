@@ -135,6 +135,54 @@ foreach ($serverJobs as $sj) {
 
     echo date('Y-m-d H:i:s') . " Executing server-side: job #{$sj['id']} ({$sj['task_type']})\n";
 
+    // S3 sync — uses rclone, not borg
+    if ($sj['task_type'] === 's3_sync') {
+        $pluginManager = $pluginManager ?? new \BBS\Services\PluginManager();
+
+        // Resolve plugin config — from job's plugin_config_id or plan plugins
+        $config = [];
+        if (!empty($sj['plugin_config_id'])) {
+            $namedConfig = $pluginManager->getPluginConfig((int) $sj['plugin_config_id']);
+            if ($namedConfig) {
+                $config = json_decode($namedConfig['config'], true) ?: [];
+            }
+        }
+
+        $s3Service = new \BBS\Services\S3SyncService();
+        $creds = $s3Service->resolveCredentials($config);
+
+        $s3Repo = $db->fetchOne("SELECT * FROM repositories WHERE id = ?", [$sj['repository_id']]);
+        $s3Agent = $db->fetchOne("SELECT * FROM agents WHERE id = ?", [$sj['agent_id']]);
+
+        if (!$s3Repo || !$s3Agent) {
+            $s3Result = 'failed';
+            $s3Error = 'Repository or agent not found';
+        } else {
+            $runAsUser = $sj['ssh_unix_user'] ?? null;
+            $syncResult = $s3Service->syncRepository($s3Repo, $s3Agent, $creds, $runAsUser);
+            $s3Result = $syncResult['success'] ? 'completed' : 'failed';
+            $s3Error = $syncResult['success'] ? null : $syncResult['output'];
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $db->update('backup_jobs', [
+            'status' => $s3Result,
+            'completed_at' => $now,
+            'duration_seconds' => max(0, strtotime($now) - strtotime($startedAt)),
+            'error_log' => $s3Error,
+        ], 'id = ?', [$sj['id']]);
+
+        $db->insert('server_log', [
+            'agent_id' => $sj['agent_id'],
+            'backup_job_id' => $sj['id'],
+            'level' => $s3Result === 'completed' ? 'info' : 'error',
+            'message' => 'S3 sync ' . ($s3Result === 'completed' ? 'completed' : 'failed: ' . $s3Error),
+        ]);
+
+        echo date('Y-m-d H:i:s') . " S3 sync job #{$sj['id']} {$s3Result}\n";
+        continue;
+    }
+
     // Build command
     if ($sj['task_type'] === 'prune') {
         $archivePrefix = $sj['backup_plan_id'] ? 'plan' . $sj['backup_plan_id'] : null;
@@ -307,7 +355,7 @@ foreach ($serverJobs as $sj) {
         }
     }
 
-    // S3 offsite sync — run post_backup plugins after successful prune
+    // Auto-queue S3 sync after successful prune (if plan has s3_sync plugin)
     if ($result === 'completed' && $sj['task_type'] === 'prune' && !empty($sj['backup_plan_id'])) {
         $pluginManager = $pluginManager ?? new \BBS\Services\PluginManager();
         $planPlugins = $pluginManager->getPlanPlugins((int) $sj['backup_plan_id']);
@@ -317,37 +365,23 @@ foreach ($serverJobs as $sj) {
                 continue;
             }
 
-            // Resolve config from named plugin_config if available, else inline
-            $config = json_decode($pp['config'], true) ?: [];
-            if (!empty($pp['plugin_config_id'])) {
-                $namedConfig = $pluginManager->getPluginConfig((int) $pp['plugin_config_id']);
-                if ($namedConfig) {
-                    $config = json_decode($namedConfig['config'], true) ?: [];
-                }
-            }
-
-            $s3Service = new \BBS\Services\S3SyncService();
-            $creds = $s3Service->resolveCredentials($config);
-
-            $repo = $db->fetchOne("SELECT * FROM repositories WHERE id = ?", [$sj['repository_id']]);
-            $agent = $db->fetchOne("SELECT * FROM agents WHERE id = ?", [$sj['agent_id']]);
-
-            if (!$repo || !$agent) {
-                continue;
-            }
-
-            echo date('Y-m-d H:i:s') . " Starting S3 sync for {$agent['name']}/{$repo['name']}...\n";
-            $runAsUser = $sj['ssh_unix_user'] ?? null;
-            $syncResult = $s3Service->syncRepository($repo, $agent, $creds, $runAsUser);
+            $s3JobId = $db->insert('backup_jobs', [
+                'backup_plan_id' => $sj['backup_plan_id'],
+                'agent_id' => $sj['agent_id'],
+                'repository_id' => $sj['repository_id'],
+                'task_type' => 's3_sync',
+                'plugin_config_id' => $pp['plugin_config_id'] ?: null,
+                'status' => 'queued',
+            ]);
 
             $db->insert('server_log', [
                 'agent_id' => $sj['agent_id'],
-                'backup_job_id' => $sj['id'],
-                'level' => $syncResult['success'] ? 'info' : 'error',
-                'message' => 'S3 sync: ' . ($syncResult['success'] ? 'completed' : 'failed — ' . $syncResult['output']),
+                'backup_job_id' => $s3JobId,
+                'level' => 'info',
+                'message' => "S3 sync queued (job #{$s3JobId}) after prune job #{$sj['id']}",
             ]);
 
-            echo date('Y-m-d H:i:s') . " S3 sync " . ($syncResult['success'] ? 'completed' : 'FAILED') . " for {$agent['name']}/{$repo['name']}\n";
+            echo date('Y-m-d H:i:s') . " Queued: S3 sync job #{$s3JobId} after prune #{$sj['id']}\n";
         }
     }
 }

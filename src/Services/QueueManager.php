@@ -161,8 +161,8 @@ class QueueManager
                     'level' => 'info',
                     'message' => "Backup command: {$cmdStr}",
                 ]);
-            } elseif ($job['task_type'] === 'prune' || $job['task_type'] === 'compact') {
-                // Prune/compact run server-side — mark as sent, scheduler will execute them
+            } elseif (in_array($job['task_type'], ['prune', 'compact', 's3_sync'])) {
+                // Server-side jobs — mark as sent, scheduler will execute them
                 $taskPayload = ['task' => $job['task_type'], 'server_side' => true, 'job_id' => $job['id']];
             } elseif ($job['task_type'] === 'restore') {
                 $taskPayload = $this->buildRestorePayload($job);
@@ -231,7 +231,7 @@ class QueueManager
             LEFT JOIN repositories r ON r.id = bj.repository_id
             WHERE bj.agent_id = ?
               AND bj.status = 'sent'
-              AND bj.task_type NOT IN ('prune', 'compact')
+              AND bj.task_type NOT IN ('prune', 'compact', 's3_sync')
             ORDER BY bj.queued_at ASC
         ", [$agentId]);
 
@@ -328,7 +328,7 @@ class QueueManager
             LEFT JOIN repositories r ON r.id = bj.repository_id
             LEFT JOIN agents a ON a.id = bj.agent_id
             WHERE bj.status = 'sent'
-              AND bj.task_type IN ('prune', 'compact')
+              AND bj.task_type IN ('prune', 'compact', 's3_sync')
             ORDER BY bj.queued_at ASC
         ");
     }

@@ -29,7 +29,7 @@ function formatBytes($bytes) {
 }
 
 $isActive = in_array($job['status'], ['queued', 'sent', 'running']);
-$isServerSide = in_array($job['task_type'], ['prune', 'compact']);
+$isServerSide = in_array($job['task_type'], ['prune', 'compact', 's3_sync']);
 ?>
 
 <div class="d-flex align-items-center mb-4">
@@ -233,8 +233,9 @@ $isServerSide = in_array($job['task_type'], ['prune', 'compact']);
                                 'check' => 'shield-check',
                                 'compact' => 'arrows-collapse',
                                 'update_borg' => 'arrow-up-circle',
+                                's3_sync' => 'cloud-upload',
                                 default => 'gear',
-                            } ?> me-1"></i><?= ucfirst($job['task_type']) ?></td>
+                            } ?> me-1"></i><?= ucfirst(str_replace('_', ' ', $job['task_type'])) ?></td>
                         </tr>
                         <tr>
                             <td class="text-muted fw-semibold ps-3">Repository</td>
@@ -416,7 +417,7 @@ $isServerSide = in_array($job['task_type'], ['prune', 'compact']);
         const container = document.getElementById('progress-section');
         if (!container) return;
 
-        const isServerSide = ['prune','compact'].includes(job.task_type);
+        const isServerSide = ['prune','compact','s3_sync'].includes(job.task_type);
         const pct = (job.files_total > 0 && job.files_processed > 0) ? Math.round((job.files_processed / job.files_total) * 100) : 0;
         const isJobActive = ['queued','sent','running'].includes(job.status);
 
