@@ -262,6 +262,14 @@ class ClientController extends Controller
             $this->redirect('/clients');
         }
 
+        // Recalculate repo stats from archives (in case cached values are stale)
+        $this->db->query("
+            UPDATE repositories r SET
+                r.archive_count = (SELECT COUNT(*) FROM archives a WHERE a.repository_id = r.id),
+                r.size_bytes = COALESCE((SELECT SUM(a.deduplicated_size) FROM archives a WHERE a.repository_id = r.id), 0)
+            WHERE r.agent_id = ?
+        ", [$id]);
+
         $repositories = $this->db->fetchAll("
             SELECT r.*
             FROM repositories r
