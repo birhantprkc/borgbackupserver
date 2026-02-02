@@ -1,6 +1,6 @@
 <h5 class="mb-3">In Progress</h5>
 <div class="card border-0 shadow-sm mb-4">
-    <div class="card-body p-0">
+    <div class="card-body p-0" id="queue-in-progress">
         <?php if (empty($inProgress)): ?>
         <div class="p-4 text-muted text-center">No jobs in progress.</div>
         <?php else: ?>
@@ -71,7 +71,7 @@
 
 <h5 class="mb-3">Recently Completed</h5>
 <div class="card border-0 shadow-sm">
-    <div class="card-body p-0">
+    <div class="card-body p-0" id="queue-completed">
         <?php if (empty($completed)): ?>
         <div class="p-4 text-muted text-center">No completed jobs yet.</div>
         <?php else: ?>
@@ -188,9 +188,14 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
     }
 
     function buildCompletedRow(job) {
-        let statusHtml = statusBadge(job.status);
-        if (job.status === 'failed' && job.error_log) {
-            statusHtml += ' <i class="bi bi-info-circle text-danger ms-1" data-bs-toggle="tooltip" title="' + esc(String(job.error_log).substring(0, 200)) + '"></i>';
+        let statusHtml;
+        if (job.status === 'completed') {
+            statusHtml = '<i class="bi bi-check-circle-fill text-success"></i>';
+        } else {
+            statusHtml = '<i class="bi bi-x-circle-fill text-danger"></i>';
+            if (job.error_log) {
+                statusHtml += ' <i class="bi bi-info-circle text-danger ms-1" data-bs-toggle="tooltip" title="' + esc(String(job.error_log).substring(0, 200)) + '"></i>';
+            }
         }
 
         let actions = '<a href="/queue/' + job.id + '" class="btn btn-sm btn-outline-secondary" title="View Details"><i class="bi bi-eye"></i></a>';
@@ -216,7 +221,7 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
             .then(r => r.json())
             .then(data => {
                 // Update In Progress section
-                const ipCard = document.querySelectorAll('.card-body')[0];
+                const ipCard = document.getElementById('queue-in-progress');
                 if (data.inProgress.length === 0) {
                     ipCard.innerHTML = '<div class="p-4 text-muted text-center">No jobs in progress.</div>';
                 } else {
@@ -229,7 +234,7 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
                 }
 
                 // Update Completed section
-                const cCard = document.querySelectorAll('.card-body')[1];
+                const cCard = document.getElementById('queue-completed');
                 if (data.completed.length === 0) {
                     cCard.innerHTML = '<div class="p-4 text-muted text-center">No completed jobs yet.</div>';
                 } else {
