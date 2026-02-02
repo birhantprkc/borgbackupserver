@@ -287,109 +287,120 @@
     $upgradeResult = $_SESSION['upgrade_result'] ?? null;
     unset($_SESSION['upgrade_result']);
 ?>
+<?php
+// Agent version check
+$bundledAgentVersion = null;
+$agentPyFile = dirname(__DIR__, 3) . '/agent/bbs-agent.py';
+if (file_exists($agentPyFile)) {
+    $fh = fopen($agentPyFile, 'r');
+    if ($fh) {
+        for ($i = 0; $i < 50 && ($ln = fgets($fh)) !== false; $i++) {
+            if (preg_match('/^AGENT_VERSION\s*=\s*["\']([^"\']+)["\']/m', $ln, $mv)) {
+                $bundledAgentVersion = $mv[1];
+                break;
+            }
+        }
+        fclose($fh);
+    }
+}
+$allAgents = $bundledAgentVersion ? $this->db->fetchAll("SELECT id, name, agent_version FROM agents WHERE agent_version IS NOT NULL") : [];
+$outdatedAgents = $bundledAgentVersion ? array_filter($allAgents, fn($a) => $a['agent_version'] !== $bundledAgentVersion) : [];
+$totalAgents = count($allAgents);
+$outdatedCount = count($outdatedAgents);
+?>
 <div class="row g-4">
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-white fw-semibold">
-                <i class="bi bi-info-circle me-1"></i> Version Info
+                Borg Backup Server Version
             </div>
             <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
+                <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <div class="text-muted small">Current Version</div>
+                        <div class="text-muted small">Installed</div>
                         <div class="fs-4 fw-bold">v<?= htmlspecialchars($currentVersion) ?></div>
                     </div>
                     <div class="text-end">
                         <div class="text-muted small">Latest Release</div>
                         <?php if (!empty($latest['version'])): ?>
-                            <div class="fs-4 fw-bold">
-                                v<?= htmlspecialchars($latest['version']) ?>
-                                <?php if ($hasUpdate): ?>
-                                    <span class="badge bg-warning text-dark ms-1">Update Available</span>
-                                <?php else: ?>
-                                    <span class="badge bg-success ms-1">Up to Date</span>
-                                <?php endif; ?>
-                            </div>
+                            <div class="fs-4 fw-bold">v<?= htmlspecialchars($latest['version']) ?></div>
                         <?php else: ?>
                             <div class="text-muted">Not checked yet</div>
                         <?php endif; ?>
                     </div>
                 </div>
 
-                <?php if (!empty($latest['checked_at'])): ?>
-                    <div class="text-muted small mb-3">Last checked: <?= \BBS\Core\TimeHelper::format($latest['checked_at'], 'M j, Y g:i A') ?></div>
+                <?php if (!empty($latest['version'])): ?>
+                <div class="mt-2 mb-3">
+                    <?php if ($hasUpdate): ?>
+                        <span class="badge rounded-pill text-dark" style="background-color: #fff3cd;"><i class="bi bi-arrow-up-circle me-1"></i>Update available</span>
+                    <?php else: ?>
+                        <span class="badge rounded-pill" style="background-color: #e8f5e9; color: #2e7d32;"><i class="bi bi-check-circle me-1"></i>Up to date</span>
+                    <?php endif; ?>
+                    <?php if (!empty($latest['checked_at'])): ?>
+                        <span class="text-muted small ms-2">Checked <?= \BBS\Core\TimeHelper::format($latest['checked_at'], 'M j, Y g:i A') ?></span>
+                    <?php endif; ?>
+                </div>
+                <?php else: ?>
+                <div class="mb-3"></div>
                 <?php endif; ?>
 
                 <div class="d-flex gap-2 flex-wrap align-items-start">
                     <form method="POST" action="/settings/check-update">
                         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                        <button type="submit" class="btn btn-outline-primary">
+                        <button type="submit" class="btn btn-sm btn-outline-secondary">
                             <i class="bi bi-arrow-clockwise me-1"></i> Check for Updates
                         </button>
                     </form>
-
                     <?php if ($hasUpdate): ?>
                     <form method="POST" action="/settings/upgrade" onsubmit="return confirm('This will enable maintenance mode (pausing new backups), checkout release v<?= htmlspecialchars($latest['version']) ?>, update dependencies, and run migrations.\n\nRecommendation: Back up your database first.\n\nProceed with upgrade?')">
                         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                        <button type="submit" class="btn btn-warning">
+                        <button type="submit" class="btn btn-sm btn-primary">
                             <i class="bi bi-cloud-arrow-down me-1"></i> Upgrade to v<?= htmlspecialchars($latest['version']) ?>
                         </button>
                     </form>
                     <?php endif; ?>
-
                 </div>
+            </div>
+        </div>
 
-                <?php
-                // Agent version check
-                $bundledAgentVersion = null;
-                $agentPyFile = dirname(__DIR__, 3) . '/agent/bbs-agent.py';
-                if (file_exists($agentPyFile)) {
-                    $fh = fopen($agentPyFile, 'r');
-                    if ($fh) {
-                        for ($i = 0; $i < 50 && ($ln = fgets($fh)) !== false; $i++) {
-                            if (preg_match('/^AGENT_VERSION\s*=\s*["\']([^"\']+)["\']/m', $ln, $mv)) {
-                                $bundledAgentVersion = $mv[1];
-                                break;
-                            }
-                        }
-                        fclose($fh);
-                    }
-                }
-                if ($bundledAgentVersion):
-                    $allAgents = $this->db->fetchAll("SELECT id, name, agent_version FROM agents WHERE agent_version IS NOT NULL");
-                    $outdatedAgents = array_filter($allAgents, fn($a) => $a['agent_version'] !== $bundledAgentVersion);
-                    $totalAgents = count($allAgents);
-                    $outdatedCount = count($outdatedAgents);
-                ?>
-                <hr class="my-3">
-                <div class="fw-semibold small mb-2"><i class="bi bi-box me-1"></i> Agent Updates</div>
+        <?php if ($bundledAgentVersion): ?>
+        <div class="card border-0 shadow-sm mt-4">
+            <div class="card-header bg-white fw-semibold">
+                <i class="bi bi-incognito me-1"></i> Agent Updates
+                <span class="text-muted fw-normal small ms-2">v<?= htmlspecialchars($bundledAgentVersion) ?></span>
+            </div>
+            <div class="card-body">
                 <?php if ($totalAgents === 0): ?>
                     <p class="text-muted small mb-0">No agents connected yet.</p>
                 <?php elseif ($outdatedCount === 0): ?>
-                    <div class="alert alert-success small py-2 px-3 mb-0">
-                        <i class="bi bi-check-circle me-1"></i>
-                        All <?= $totalAgents ?> agent(s) are running the latest version (v<?= htmlspecialchars($bundledAgentVersion) ?>).
+                    <div class="d-flex align-items-center small">
+                        <span class="badge rounded-pill me-2" style="background-color: #e8f5e9; color: #2e7d32;"><i class="bi bi-check-circle me-1"></i>Up to date</span>
+                        All <?= $totalAgents ?> agent(s) running v<?= htmlspecialchars($bundledAgentVersion) ?>
                     </div>
                 <?php else: ?>
-                    <div class="alert alert-warning small py-2 px-3 mb-2">
-                        <i class="bi bi-exclamation-triangle me-1"></i>
-                        <strong><?= $outdatedCount ?></strong> of <?= $totalAgents ?> agent(s) need updating to v<?= htmlspecialchars($bundledAgentVersion) ?>.
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <div class="small">
+                            <span class="badge rounded-pill text-dark me-1" style="background-color: #fff3cd;"><?= $outdatedCount ?> outdated</span>
+                            of <?= $totalAgents ?> agent(s)
+                        </div>
+                        <form method="POST" action="/settings/upgrade-agents" onsubmit="return confirm('Queue agent updates for <?= $outdatedCount ?> client(s)?')">
+                            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                            <button type="submit" class="btn btn-sm btn-primary">
+                                <i class="bi bi-arrow-up-circle me-1"></i> Update All
+                            </button>
+                        </form>
                     </div>
-                    <div class="small text-muted mb-2">
-                        <?php foreach ($outdatedAgents as $oa): ?>
-                            <div><i class="bi bi-dash me-1"></i><?= htmlspecialchars($oa['name']) ?> <span class="text-danger">v<?= htmlspecialchars($oa['agent_version']) ?></span></div>
-                        <?php endforeach; ?>
+                    <?php foreach ($outdatedAgents as $oa): ?>
+                    <div class="d-flex justify-content-between align-items-center small py-1">
+                        <span><i class="bi bi-incognito me-1 text-muted"></i><?= htmlspecialchars($oa['name']) ?></span>
+                        <span class="text-muted">v<?= htmlspecialchars($oa['agent_version']) ?></span>
                     </div>
-                    <form method="POST" action="/settings/upgrade-agents" onsubmit="return confirm('Queue agent updates for <?= $outdatedCount ?> client(s)?')">
-                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                        <button type="submit" class="btn btn-warning btn-sm">
-                            <i class="bi bi-arrow-up-circle me-1"></i> Update All Agents
-                        </button>
-                    </form>
-                <?php endif; ?>
+                    <?php endforeach; ?>
                 <?php endif; ?>
             </div>
         </div>
+        <?php endif; ?>
     </div>
 
     <?php if (!empty($latest['notes'])): ?>
