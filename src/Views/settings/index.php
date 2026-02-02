@@ -86,6 +86,28 @@
                 </div>
             </div>
         </div>
+
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white fw-semibold">
+                    <i class="bi bi-shield-lock me-1"></i> Security
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="force_2fa" value="1"
+                                   id="force2fa" <?= ($settings['force_2fa'] ?? '0') === '1' ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-semibold" for="force2fa">
+                                Require Two-Factor Authentication for All Users
+                            </label>
+                        </div>
+                        <div class="form-text">
+                            When enabled, users without 2FA will be redirected to set it up on their next page load.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="mt-4">

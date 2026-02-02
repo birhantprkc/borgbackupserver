@@ -46,6 +46,8 @@ class App
         // Auth
         $this->router->map('GET', '/login', 'AuthController@loginForm');
         $this->router->map('POST', '/login', 'AuthController@login');
+        $this->router->map('GET', '/login/2fa', 'AuthController@twoFactorForm');
+        $this->router->map('POST', '/login/2fa', 'AuthController@twoFactorVerify');
         $this->router->map('GET', '/logout', 'AuthController@logout');
         $this->router->map('GET', '/forgot-password', 'AuthController@forgotPasswordForm');
         $this->router->map('POST', '/forgot-password', 'AuthController@forgotPassword');
@@ -135,6 +137,10 @@ class App
         $this->router->map('GET', '/profile', 'ProfileController@index');
         $this->router->map('POST', '/profile', 'ProfileController@update');
         $this->router->map('POST', '/profile/detect-timezone', 'ProfileController@detectTimezone');
+        $this->router->map('POST', '/profile/2fa/setup', 'ProfileController@twoFactorSetup');
+        $this->router->map('POST', '/profile/2fa/enable', 'ProfileController@twoFactorEnable');
+        $this->router->map('POST', '/profile/2fa/disable', 'ProfileController@twoFactorDisable');
+        $this->router->map('POST', '/profile/2fa/regenerate-codes', 'ProfileController@twoFactorRegenerateCodes');
 
         // Toasts (global live notifications)
         $this->router->map('GET', '/api/toasts', 'DashboardController@toasts');

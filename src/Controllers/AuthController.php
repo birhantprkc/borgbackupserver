@@ -4,6 +4,7 @@ namespace BBS\Controllers;
 
 use BBS\Core\Controller;
 use BBS\Services\Mailer;
+use BBS\Services\TwoFactorService;
 
 class AuthController extends Controller
 {
@@ -43,7 +44,20 @@ class AuthController extends Controller
             $this->redirect('/login');
         }
 
-        // Clear rate limit on success and regenerate session ID
+        // Password verified — check if 2FA is enabled
+        if ($user['totp_enabled'] == 1) {
+            $_SESSION['2fa_user_id'] = $user['id'];
+            $_SESSION['2fa_username'] = $user['username'];
+            $_SESSION['2fa_timestamp'] = time();
+            $this->resetRateLimit('login');
+            $this->redirect('/login/2fa');
+        }
+
+        $this->completeLogin($user);
+    }
+
+    private function completeLogin(array $user): void
+    {
         $this->resetRateLimit('login');
         session_regenerate_id(true);
 
@@ -54,7 +68,77 @@ class AuthController extends Controller
         $_SESSION['login_time'] = time();
         $_SESSION['last_activity'] = time();
 
+        unset($_SESSION['2fa_user_id'], $_SESSION['2fa_username'], $_SESSION['2fa_timestamp']);
+
         $this->redirect('/');
+    }
+
+    public function twoFactorForm(): void
+    {
+        if (empty($_SESSION['2fa_user_id'])) {
+            $this->redirect('/login');
+        }
+
+        if (empty($_SESSION['2fa_timestamp']) || (time() - $_SESSION['2fa_timestamp']) > 300) {
+            unset($_SESSION['2fa_user_id'], $_SESSION['2fa_username'], $_SESSION['2fa_timestamp']);
+            $this->flash('danger', '2FA session expired. Please log in again.');
+            $this->redirect('/login');
+        }
+
+        $flash = $this->getFlash();
+        $this->authView('auth/2fa', ['flash' => $flash, 'username' => $_SESSION['2fa_username'] ?? '']);
+    }
+
+    public function twoFactorVerify(): void
+    {
+        if (empty($_SESSION['2fa_user_id'])) {
+            $this->redirect('/login');
+        }
+
+        if (empty($_SESSION['2fa_timestamp']) || (time() - $_SESSION['2fa_timestamp']) > 300) {
+            unset($_SESSION['2fa_user_id'], $_SESSION['2fa_username'], $_SESSION['2fa_timestamp']);
+            $this->flash('danger', '2FA session expired. Please log in again.');
+            $this->redirect('/login');
+        }
+
+        if (!$this->checkRateLimit('2fa_verify', 10, 300)) {
+            $this->flash('danger', 'Too many 2FA attempts. Please wait a few minutes.');
+            $this->redirect('/login/2fa');
+        }
+
+        $userId = $_SESSION['2fa_user_id'];
+        $code = trim($_POST['code'] ?? '');
+
+        if (empty($code)) {
+            $this->flash('danger', 'Please enter your 2FA code.');
+            $this->redirect('/login/2fa');
+        }
+
+        $twoFactor = new TwoFactorService();
+        $valid = false;
+
+        $secret = $twoFactor->getUserSecret($userId);
+        if ($secret && $twoFactor->verifyTotp($secret, $code)) {
+            $valid = true;
+        }
+
+        if (!$valid && preg_match('/^[A-Z0-9]{4}-[A-Z0-9]{4}$/i', $code)) {
+            if ($twoFactor->verifyRecoveryCode($userId, strtoupper($code))) {
+                $valid = true;
+                $remaining = $twoFactor->getRemainingRecoveryCodeCount($userId);
+                if ($remaining <= 2) {
+                    $this->flash('warning', "Recovery code accepted. Only {$remaining} recovery code(s) remaining.");
+                }
+            }
+        }
+
+        if (!$valid) {
+            $this->flash('danger', 'Invalid 2FA code.');
+            $this->redirect('/login/2fa');
+        }
+
+        $user = $this->db->fetchOne("SELECT * FROM users WHERE id = ?", [$userId]);
+        $this->completeLogin($user);
     }
 
     public function logout(): void

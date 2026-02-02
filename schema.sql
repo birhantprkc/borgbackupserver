@@ -12,9 +12,22 @@ CREATE TABLE users (
     password_hash VARCHAR(255) NOT NULL,
     role ENUM('admin', 'user') NOT NULL DEFAULT 'user',
     timezone VARCHAR(50) NOT NULL DEFAULT 'America/New_York',
+    totp_secret VARCHAR(255) DEFAULT NULL,
+    totp_enabled TINYINT(1) NOT NULL DEFAULT 0,
+    totp_enabled_at DATETIME DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
+
+CREATE TABLE recovery_codes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    code_hash VARCHAR(255) NOT NULL,
+    used_at DATETIME DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user_unused (user_id, used_at)
+) ENGINE=InnoDB;
 
 CREATE TABLE rate_limits (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -218,7 +231,8 @@ INSERT INTO settings (`key`, `value`) VALUES
     ('email_on_backup_failed', '1'),
     ('email_on_agent_offline', '1'),
     ('email_on_storage_low', '1'),
-    ('email_on_missed_schedule', '0');
+    ('email_on_missed_schedule', '0'),
+    ('force_2fa', '0');
 
 -- --------------------------------------------------------
 -- Notifications

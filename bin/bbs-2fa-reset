@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+#
+# BBS 2FA Reset Tool
+# Usage: sudo bin/bbs-2fa-reset <username>
+#
+set -euo pipefail
+
+if [[ "$EUID" -ne 0 ]]; then
+    echo "Error: Must run as root (use sudo)"
+    exit 1
+fi
+
+if [[ $# -ne 1 ]]; then
+    echo "Usage: sudo bin/bbs-2fa-reset <username>"
+    echo ""
+    echo "Disables two-factor authentication for the specified user."
+    echo "Use this if a user loses access to their authenticator app and recovery codes."
+    exit 1
+fi
+
+USERNAME="$1"
+BBS_DIR="/var/www/bbs"
+
+if [[ ! -f "$BBS_DIR/config/.env" ]]; then
+    echo "Error: BBS not installed ($BBS_DIR/config/.env not found)"
+    exit 1
+fi
+
+source <(grep -E '^(DB_HOST|DB_NAME|DB_USER|DB_PASS)=' "$BBS_DIR/config/.env")
+
+echo "BBS 2FA Reset Tool"
+echo "==================="
+echo ""
+
+USER_ROW=$(mysql -h"${DB_HOST}" -u"${DB_USER}" -p"${DB_PASS}" -D"${DB_NAME}" -sN \
+    -e "SELECT id, totp_enabled FROM users WHERE username = '$(echo "$USERNAME" | sed "s/'/''/g")'" 2>/dev/null || echo "")
+
+if [[ -z "$USER_ROW" ]]; then
+    echo "Error: User '$USERNAME' not found."
+    exit 1
+fi
+
+USER_ID=$(echo "$USER_ROW" | awk '{print $1}')
+TOTP_ENABLED=$(echo "$USER_ROW" | awk '{print $2}')
+
+echo "User: $USERNAME (ID: $USER_ID)"
+
+if [[ "$TOTP_ENABLED" != "1" ]]; then
+    echo "2FA is not enabled for this user. Nothing to do."
+    exit 0
+fi
+
+echo "2FA is currently ENABLED."
+echo ""
+read -rp "Disable 2FA for user '$USERNAME'? [y/N] " confirm
+if [[ "${confirm,,}" != "y" ]]; then
+    echo "Aborted."
+    exit 0
+fi
+
+mysql -h"${DB_HOST}" -u"${DB_USER}" -p"${DB_PASS}" -D"${DB_NAME}" <<EOF
+UPDATE users SET totp_secret = NULL, totp_enabled = 0, totp_enabled_at = NULL WHERE id = $USER_ID;
+DELETE FROM recovery_codes WHERE user_id = $USER_ID;
+EOF
+
+echo ""
+echo "2FA disabled for user '$USERNAME'."
+echo "The user can now log in with just their password."

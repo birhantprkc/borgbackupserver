@@ -57,6 +57,19 @@ class Controller
             $this->redirect('/login');
         }
         $_SESSION['last_activity'] = time();
+
+        // Force 2FA: redirect users without 2FA to profile setup
+        $currentUri = $_SERVER['REQUEST_URI'] ?? '';
+        if (!str_starts_with($currentUri, '/profile') && !str_starts_with($currentUri, '/logout')) {
+            $force2fa = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'force_2fa'");
+            if ($force2fa && $force2fa['value'] === '1') {
+                $user = $this->db->fetchOne("SELECT totp_enabled FROM users WHERE id = ?", [$_SESSION['user_id']]);
+                if ($user && $user['totp_enabled'] == 0) {
+                    $this->flash('warning', 'Two-factor authentication is required. Please set it up now.');
+                    $this->redirect('/profile?tab=2fa');
+                }
+            }
+        }
     }
 
     protected function requireAdmin(): void
