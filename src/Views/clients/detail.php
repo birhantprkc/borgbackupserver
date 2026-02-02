@@ -2174,8 +2174,7 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
         </div>
     <?php else: ?>
 
-    <div id="files-restore-section">
-    <!-- Control Bar -->
+    <!-- Shared Control Bar -->
     <div class="restore-control-bar mb-3">
         <div class="row g-2 align-items-end">
             <?php if ($dbPluginEnabled): ?>
@@ -2216,7 +2215,8 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
                 <?php endif; ?>
             </div>
             <?php endif; ?>
-            <div class="<?= $dbPluginEnabled ? 'col-md-4' : 'col-md-5' ?>">
+            <!-- Files mode: Archive + Search -->
+            <div class="restore-files-controls <?= $dbPluginEnabled ? 'col-md-4' : 'col-md-5' ?>" id="files-archive-col">
                 <label class="form-label fw-semibold mb-1 small">Archive</label>
                 <select class="form-select form-select-sm" id="archive-select">
                     <option value="">Choose a restore point...</option>
@@ -2236,7 +2236,7 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
                     <?php if ($currentRepo !== null) echo '</optgroup>'; ?>
                 </select>
             </div>
-            <div class="col-md-5">
+            <div class="restore-files-controls col-md-5" id="files-search-col">
                 <label class="form-label fw-semibold mb-1 small">Search</label>
                 <div class="input-group input-group-sm">
                     <input type="text" class="form-control" id="restore-search" placeholder="e.g. nginx.conf" disabled>
@@ -2252,7 +2252,7 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
                     </ul>
                 </div>
             </div>
-            <div class="col-md-2">
+            <div class="restore-files-controls col-md-2" id="files-back-col">
                 <button class="restore-back-btn w-100" id="back-to-browse" style="display:none;">
                     <i class="bi bi-arrow-left me-1"></i> Back to Browse
                 </button>
@@ -2260,6 +2260,7 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
         </div>
     </div>
 
+    <div id="files-restore-section">
     <!-- Two-Panel Layout -->
     <div class="row g-3">
         <!-- LEFT: Browse / Search / History -->

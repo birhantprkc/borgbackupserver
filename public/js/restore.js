@@ -579,14 +579,17 @@
                 btn.classList.remove('btn-outline-primary');
                 btn.classList.add('btn-primary', 'active');
 
+                var filesControls = document.querySelectorAll('.restore-files-controls');
                 if (dbRestoreMode === 'database') {
                     filesSection.style.display = 'none';
                     dbSection.style.display = '';
                     if (dbConnectionPicker) dbConnectionPicker.style.display = '';
+                    filesControls.forEach(function(el) { el.style.display = 'none'; });
                 } else {
                     filesSection.style.display = '';
                     dbSection.style.display = 'none';
                     if (dbConnectionPicker) dbConnectionPicker.style.display = 'none';
+                    filesControls.forEach(function(el) { el.style.display = ''; });
                 }
             });
         }
