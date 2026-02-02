@@ -633,9 +633,9 @@
                             const tr = document.createElement('tr');
                             const escapedName = esc(dbName);
                             tr.innerHTML =
-                                '<td><input type="checkbox" class="form-check-input db-select-cb" data-db="' + escapedName + '"></td>' +
                                 '<td>' +
-                                    '<select class="form-select form-select-sm db-mode-select" name="dbmode_' + escapedName + '">' +
+                                    '<select class="form-select form-select-sm db-mode-select" name="dbmode_' + escapedName + '" data-db="' + escapedName + '">' +
+                                        '<option value="none">None</option>' +
                                         '<option value="replace">Replace</option>' +
                                         (dbPerDatabase ? '<option value="rename">Copy</option>' : '') +
                                     '</select>' +
@@ -652,7 +652,7 @@
                             dbTableBody.appendChild(tr);
                         });
 
-                        // Show/hide copy name input when mode changes
+                        // Show/hide copy name input and update selection when mode changes
                         dbTableBody.addEventListener('change', function(e) {
                             if (e.target.classList.contains('db-mode-select')) {
                                 const row = e.target.closest('tr');
@@ -660,6 +660,7 @@
                                 if (copyDiv) {
                                     copyDiv.style.display = e.target.value === 'rename' ? '' : 'none';
                                 }
+                                updateDbSelection();
                             }
                         });
                     })
@@ -671,29 +672,29 @@
             });
         }
 
-        // Track DB selection
-        document.getElementById('db-list-body').addEventListener('change', function(e) {
-            if (e.target.classList.contains('db-select-cb')) {
-                updateDbSelection();
-            }
-        });
+        function getSelectedDbs() {
+            var selected = [];
+            dbTableBody.querySelectorAll('.db-mode-select').forEach(function(sel) {
+                if (sel.value !== 'none') selected.push(sel);
+            });
+            return selected;
+        }
 
         function updateDbSelection() {
-            const checked = dbTableBody.querySelectorAll('.db-select-cb:checked');
-            dbSelectedCount.textContent = checked.length;
-            dbRestoreBtn.disabled = checked.length === 0 || !window.DB_CONFIG_AVAILABLE;
+            var selected = getSelectedDbs();
+            dbSelectedCount.textContent = selected.length;
+            dbRestoreBtn.disabled = selected.length === 0 || !window.DB_CONFIG_AVAILABLE;
         }
 
         // Submit DB restore
         dbRestoreBtn.addEventListener('click', function() {
-            const checked = dbTableBody.querySelectorAll('.db-select-cb:checked');
-            if (checked.length === 0) return;
+            const selected = getSelectedDbs();
+            if (selected.length === 0) return;
 
             const lines = [];
-            checked.forEach(function(cb) {
-                const dbName = cb.dataset.db;
-                const modeSelect = dbTableBody.querySelector('select[name="dbmode_' + CSS.escape(dbName) + '"]');
-                const mode = modeSelect ? modeSelect.value : 'replace';
+            selected.forEach(function(sel) {
+                const dbName = sel.dataset.db;
+                const mode = sel.value;
                 if (mode === 'rename') {
                     const renameField = dbTableBody.querySelector('input[data-rename-for="' + CSS.escape(dbName) + '"]');
                     const target = renameField ? renameField.value.trim() : dbName + '_copy';
@@ -715,10 +716,9 @@
             // Update form action based on selected connection type
             updateConnectionInfo();
 
-            checked.forEach(function(cb, i) {
-                const dbName = cb.dataset.db;
-                const modeSelect = dbTableBody.querySelector('select[name="dbmode_' + CSS.escape(dbName) + '"]');
-                const mode = modeSelect ? modeSelect.value : 'replace';
+            selected.forEach(function(sel, i) {
+                const dbName = sel.dataset.db;
+                const mode = sel.value;
 
                 const nameInput = document.createElement('input');
                 nameInput.type = 'hidden';

@@ -2400,7 +2400,6 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
             <table class="table table-sm mb-0" id="db-table" style="display:none;">
                 <thead>
                     <tr>
-                        <th style="width:40px;"></th>
                         <th style="width:130px;">Action</th>
                         <th>Database</th>
                     </tr>
