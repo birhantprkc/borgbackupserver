@@ -494,15 +494,17 @@
     restoreBtn.addEventListener('click', function() {
         const count = (currentMode === 'search-all' && selectedVersions.size > 0) ? selectedVersions.size : selectedPaths.size;
         if (count === 0) return;
-        if (!confirm('Restore ' + count + ' path(s) to the client? This may overwrite existing files.')) return;
-        fillFormAndSubmit('restore-form', 'restore-archive-id', 'restore-files-container', 'restore-dest-field');
+        confirmAction('Restore ' + count + ' path(s) to the client?\n\nThis may overwrite existing files.', function() {
+            fillFormAndSubmit('restore-form', 'restore-archive-id', 'restore-files-container', 'restore-dest-field');
+        }, { danger: true });
     });
 
     downloadBtn.addEventListener('click', function() {
         const count = (currentMode === 'search-all' && selectedVersions.size > 0) ? selectedVersions.size : selectedPaths.size;
         if (count === 0) return;
-        if (!confirm('Download ' + count + ' path(s) as a .tar.gz archive?')) return;
-        fillFormAndSubmit('download-form', 'download-archive-id', 'download-files-container', null);
+        confirmAction('Download ' + count + ' path(s) as a .tar.gz archive?', function() {
+            fillFormAndSubmit('download-form', 'download-archive-id', 'download-files-container', null);
+        });
     });
 
     // Initialize
@@ -670,9 +672,8 @@
 
             const dbNames = [];
             checked.forEach(cb => dbNames.push(cb.dataset.db));
-            if (!confirm('Restore ' + dbNames.length + ' database(s) to the client?\n\nDatabases: ' + dbNames.join(', ') + '\n\nThis may overwrite existing data.')) return;
-
-            const form = document.getElementById('db-restore-form');
+            confirmAction('Restore ' + dbNames.length + ' database(s) to the client?\n\nDatabases: ' + dbNames.join(', ') + '\n\nThis may overwrite existing data.', function() {
+                const form = document.getElementById('db-restore-form');
             const fieldsContainer = document.getElementById('db-restore-fields');
             fieldsContainer.innerHTML = '';
             document.getElementById('db-restore-archive-id').value = dbArchiveSelect.value;
@@ -702,7 +703,8 @@
                 fieldsContainer.appendChild(modeInput);
             });
 
-            form.submit();
+                form.submit();
+            }, { danger: true });
         });
     }
 })();

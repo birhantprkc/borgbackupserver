@@ -370,13 +370,14 @@ $outdatedCount = count($outdatedAgents);
             </div>
         </div>
 
+        <div id="agent-updates-card">
         <?php if ($bundledAgentVersion): ?>
         <div class="card border-0 shadow-sm mt-4">
             <div class="card-header bg-white fw-semibold">
                 <i class="bi bi-incognito me-1"></i> Agent Updates
-                <span class="text-muted fw-normal small ms-2">v<?= htmlspecialchars($bundledAgentVersion) ?></span>
+                <span class="text-muted fw-normal small ms-2" id="agent-bundled-ver">v<?= htmlspecialchars($bundledAgentVersion) ?></span>
             </div>
-            <div class="card-body">
+            <div class="card-body" id="agent-updates-body">
                 <?php if ($totalAgents === 0): ?>
                     <p class="text-muted small mb-0">No agents connected yet.</p>
                 <?php elseif ($outdatedCount === 0): ?>
@@ -407,6 +408,7 @@ $outdatedCount = count($outdatedAgents);
             </div>
         </div>
         <?php endif; ?>
+        </div>
     </div>
 
     <?php if (!empty($latest['notes'])): ?>
@@ -489,4 +491,45 @@ document.getElementById('btnTestSmtp')?.addEventListener('click', function() {
             result.className = 'ms-2 small text-danger fw-semibold';
         });
 });
+
+// AJAX refresh for Agent Updates section
+(function() {
+    var container = document.getElementById('agent-updates-body');
+    if (!container) return;
+    var csrfToken = '<?= $this->csrfToken() ?>';
+    setInterval(function() {
+        // Only refresh if updates tab is active
+        if (!document.getElementById('agent-updates-card') || document.getElementById('agent-updates-card').offsetParent === null) return;
+        fetch('/api/agent-updates')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (!data.bundled_version) return;
+                var verEl = document.getElementById('agent-bundled-ver');
+                if (verEl) verEl.textContent = 'v' + data.bundled_version;
+                var html = '';
+                if (data.total === 0) {
+                    html = '<p class="text-muted small mb-0">No agents connected yet.</p>';
+                } else if (data.outdated.length === 0) {
+                    html = '<div class="d-flex align-items-center small">'
+                         + '<span class="badge rounded-pill me-2" style="background-color: #e8f5e9; color: #2e7d32;"><i class="bi bi-check-circle me-1"></i>Up to date</span>'
+                         + 'All ' + data.total + ' agent(s) running v' + data.bundled_version
+                         + '</div>';
+                } else {
+                    html = '<div class="d-flex align-items-center justify-content-between mb-3">'
+                         + '<div class="small"><span class="badge rounded-pill text-dark me-1" style="background-color: #fff3cd;">' + data.outdated.length + ' outdated</span> of ' + data.total + ' agent(s)</div>'
+                         + '<form method="POST" action="/settings/upgrade-agents" data-confirm="Queue agent updates for ' + data.outdated.length + ' client(s)?">'
+                         + '<input type="hidden" name="csrf_token" value="' + csrfToken + '">'
+                         + '<button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-arrow-up-circle me-1"></i> Update All</button>'
+                         + '</form></div>';
+                    data.outdated.forEach(function(a) {
+                        html += '<div class="d-flex justify-content-between align-items-center small py-1">'
+                              + '<span><i class="bi bi-incognito me-1 text-muted"></i>' + a.name.replace(/</g, '&lt;') + '</span>'
+                              + '<span class="text-muted">v' + a.agent_version.replace(/</g, '&lt;') + '</span></div>';
+                    });
+                }
+                container.innerHTML = html;
+            })
+            .catch(function() {});
+    }, 10000);
+})();
 </script>

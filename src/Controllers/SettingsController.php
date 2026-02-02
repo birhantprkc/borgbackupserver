@@ -135,6 +135,40 @@ class SettingsController extends Controller
         $this->redirect('/settings?tab=templates');
     }
 
+    public function agentUpdatesJson(): void
+    {
+        $this->requireAdmin();
+
+        $bundledAgentVersion = null;
+        $agentFile = dirname(__DIR__, 2) . '/agent/bbs-agent.py';
+        if (file_exists($agentFile)) {
+            $fh = fopen($agentFile, 'r');
+            if ($fh) {
+                for ($i = 0; $i < 50 && ($line = fgets($fh)) !== false; $i++) {
+                    if (preg_match('/^AGENT_VERSION\s*=\s*["\']([^"\']+)["\']/m', $line, $mv)) {
+                        $bundledAgentVersion = $mv[1];
+                        break;
+                    }
+                }
+                fclose($fh);
+            }
+        }
+
+        if (!$bundledAgentVersion) {
+            $this->json(['bundled_version' => null, 'total' => 0, 'outdated' => []]);
+            return;
+        }
+
+        $allAgents = $this->db->fetchAll("SELECT id, name, agent_version FROM agents WHERE agent_version IS NOT NULL");
+        $outdated = array_values(array_filter($allAgents, fn($a) => $a['agent_version'] !== $bundledAgentVersion));
+
+        $this->json([
+            'bundled_version' => $bundledAgentVersion,
+            'total' => count($allAgents),
+            'outdated' => $outdated
+        ]);
+    }
+
     public function testSmtp(): void
     {
         $this->requireAdmin();
