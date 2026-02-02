@@ -35,9 +35,36 @@
                 <?php
                 $isAdmin = (($_SESSION['user_role'] ?? '') === 'admin');
                 $upgradeAvailable = $isAdmin ? (new \BBS\Services\UpdateService())->isUpdateAvailable() : false;
+                $agentUpgradeCount = 0;
+                if ($isAdmin && !$upgradeAvailable) {
+                    $bundledAgentVer = null;
+                    $agentFile = dirname(__DIR__, 2) . '/agent/bbs-agent.py';
+                    if (file_exists($agentFile)) {
+                        $h = fopen($agentFile, 'r');
+                        if ($h) {
+                            for ($i = 0; $i < 50 && ($ln = fgets($h)) !== false; $i++) {
+                                if (preg_match('/^AGENT_VERSION\s*=\s*["\']([^"\']+)["\']/m', $ln, $mv)) {
+                                    $bundledAgentVer = $mv[1]; break;
+                                }
+                            }
+                            fclose($h);
+                        }
+                    }
+                    if ($bundledAgentVer) {
+                        $db = \BBS\Core\Database::getInstance();
+                        $agentUpgradeCount = (int)$db->fetchOne(
+                            "SELECT COUNT(*) as cnt FROM agents WHERE agent_version IS NOT NULL AND agent_version != ?",
+                            [$bundledAgentVer]
+                        )['cnt'];
+                    }
+                }
                 if ($upgradeAvailable): ?>
                 <a href="/settings?tab=updates" class="badge bg-warning text-dark text-decoration-none me-2 me-md-3 py-2 px-2 d-none d-sm-inline-block">
                     <i class="bi bi-cloud-arrow-down me-1"></i> Upgrade
+                </a>
+                <?php elseif ($agentUpgradeCount > 0): ?>
+                <a href="/settings?tab=updates" class="badge bg-info text-white text-decoration-none me-2 me-md-3 py-2 px-2 d-none d-sm-inline-block">
+                    <i class="bi bi-box-seam me-1"></i> Upgrade Agents
                 </a>
                 <?php endif; ?>
                 <div class="dropdown">
@@ -50,6 +77,8 @@
                         <li><a class="dropdown-item" href="/notifications"><i class="bi bi-bell me-1"></i> Notifications<?php if ($notifCount > 0): ?> <span class="badge bg-danger"><?= $notifCount ?></span><?php endif; ?></a></li>
                         <?php if ($upgradeAvailable ?? false): ?>
                         <li><a class="dropdown-item" href="/settings?tab=updates"><i class="bi bi-cloud-arrow-down me-1"></i> Upgrade Available</a></li>
+                        <?php elseif (($agentUpgradeCount ?? 0) > 0): ?>
+                        <li><a class="dropdown-item" href="/settings?tab=updates"><i class="bi bi-box-seam me-1"></i> Upgrade Agents (<?= $agentUpgradeCount ?>)</a></li>
                         <?php endif; ?>
                         <li><a class="dropdown-item" href="/profile"><i class="bi bi-person me-1"></i> Profile</a></li>
                         <li><a class="dropdown-item" href="/settings"><i class="bi bi-gear me-1"></i> Settings</a></li>
