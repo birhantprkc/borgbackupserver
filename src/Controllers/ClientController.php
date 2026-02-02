@@ -823,12 +823,54 @@ class ClientController extends Controller
         }
 
         $data = $archive['databases_backed_up'] ? json_decode($archive['databases_backed_up'], true) : null;
+        $databases = $data['databases'] ?? [];
+        $compress = $data['compress'] ?? true;
+
+        // Look up dump file mtimes from the file catalog
+        $mtimes = [];
+        if (!empty($databases)) {
+            $dumpDir = $data['dump_dir'] ?? null;
+            if (!$dumpDir) {
+                // Try to find dump_dir from plugin configs for this agent
+                $pluginManager = new \BBS\Services\PluginManager();
+                $configs = $pluginManager->getAgentPluginConfigs($id);
+                foreach ($configs as $c) {
+                    if (in_array($c['slug'], ['mysql_dump', 'pg_dump'])) {
+                        $cfgData = json_decode($c['config_data'] ?? '{}', true);
+                        if (!empty($cfgData['dump_dir'])) {
+                            $dumpDir = rtrim($cfgData['dump_dir'], '/');
+                            break;
+                        }
+                    }
+                }
+            }
+            if ($dumpDir) {
+                $patterns = [];
+                foreach ($databases as $db) {
+                    $ext = $compress ? '.sql.gz' : '.sql';
+                    $patterns[] = $dumpDir . '/' . $db . $ext;
+                }
+                $placeholders = implode(',', array_fill(0, count($patterns), '?'));
+                $rows = $this->db->fetchAll("
+                    SELECT fp.path, fc.mtime
+                    FROM file_catalog fc
+                    JOIN file_paths fp ON fp.id = fc.file_path_id
+                    WHERE fc.archive_id = ? AND fp.agent_id = ? AND fp.path IN ({$placeholders})
+                ", array_merge([$archive_id, $id], $patterns));
+                foreach ($rows as $row) {
+                    $basename = basename($row['path']);
+                    $dbName = preg_replace('/\\.sql(\\.gz)?$/', '', $basename);
+                    $mtimes[$dbName] = $row['mtime'];
+                }
+            }
+        }
 
         $this->json([
-            'databases' => $data['databases'] ?? [],
+            'databases' => $databases,
             'per_database' => $data['per_database'] ?? true,
-            'compress' => $data['compress'] ?? true,
+            'compress' => $compress,
             'backed_up_at' => $archive['created_at'],
+            'mtimes' => $mtimes,
         ]);
     }
 
