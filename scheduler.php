@@ -344,8 +344,14 @@ if (!empty($storagePath) && is_dir($storagePath)) {
     }
 }
 
-// Step 6: Cleanup old resolved notifications
+// Step 6: Cleanup old resolved notifications and server logs
 $notificationService->cleanup();
+
+// Purge server_log entries older than 30 days
+$purged = $db->delete('server_log', 'created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)');
+if ($purged > 0) {
+    echo date('Y-m-d H:i:s') . " Purged {$purged} server log entries older than 30 days\n";
+}
 
 // Step 7: Check for updates (hourly)
 $lastCheck = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'last_update_check'");
