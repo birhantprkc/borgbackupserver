@@ -166,21 +166,21 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
     function showToast(message, type) {
-        var colors = {success:'#2e7d32',danger:'#c62828',warning:'#f57f17',info:'#1565c0'};
+        var iconColors = {success:'#2ecc71',danger:'#e74c3c',warning:'#f39c12',info:'#3498db'};
         var icons = {success:'bi-check-circle-fill',danger:'bi-x-circle-fill',warning:'bi-exclamation-triangle-fill',info:'bi-info-circle-fill'};
-        var color = colors[type] || colors.info;
+        var iconColor = iconColors[type] || iconColors.info;
         var icon = icons[type] || icons.info;
         var el = document.createElement('div');
         el.className = 'toast show';
         el.setAttribute('role', 'alert');
-        el.style.cssText = 'max-width:380px;border-left:4px solid '+color+';background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.12);border-radius:6px;overflow:hidden;';
+        el.style.cssText = 'max-width:400px;background:#2c3e50;color:#fff;box-shadow:0 8px 32px rgba(0,0,0,.3);border-radius:8px;overflow:hidden;';
         el.innerHTML = '<div class="d-flex align-items-center p-3">' +
-            '<i class="bi '+icon+' me-2 flex-shrink-0" style="color:'+color+';font-size:1.1rem;"></i>' +
+            '<i class="bi '+icon+' me-2 flex-shrink-0" style="color:'+iconColor+';font-size:1.25rem;"></i>' +
             '<div class="small flex-grow-1" style="line-height:1.4;">'+message.replace(/</g,'&lt;')+'</div>' +
-            '<button type="button" class="btn-close ms-2 flex-shrink-0" style="font-size:.65rem;" onclick="this.closest(\'.toast\').remove()"></button>' +
+            '<button type="button" class="btn-close btn-close-white ms-2 flex-shrink-0" style="font-size:.6rem;" onclick="this.closest(\'.toast\').remove()"></button>' +
             '</div>';
         document.getElementById('toastContainer').appendChild(el);
-        setTimeout(function(){ if(el.parentNode) el.style.transition='opacity .3s';el.style.opacity='0';setTimeout(function(){if(el.parentNode)el.remove();},300); }, 6000);
+        setTimeout(function(){ if(el.parentNode) el.style.transition='opacity .4s';el.style.opacity='0';setTimeout(function(){if(el.parentNode)el.remove();},400); }, 6000);
     }
     <?php if (!empty($_SESSION['user_id'])): ?>
     (function(){

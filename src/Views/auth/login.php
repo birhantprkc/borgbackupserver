@@ -21,6 +21,7 @@
                 <button type="submit" class="btn btn-success btn-lg">
                     <i class="bi bi-lock-fill me-1"></i> Sign in
                 </button>
+                <a href="/forgot-password" class="text-muted small">Forgot password?</a>
             </div>
         </form>
     </div>

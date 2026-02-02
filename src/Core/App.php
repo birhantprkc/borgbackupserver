@@ -47,6 +47,10 @@ class App
         $this->router->map('GET', '/login', 'AuthController@loginForm');
         $this->router->map('POST', '/login', 'AuthController@login');
         $this->router->map('GET', '/logout', 'AuthController@logout');
+        $this->router->map('GET', '/forgot-password', 'AuthController@forgotPasswordForm');
+        $this->router->map('POST', '/forgot-password', 'AuthController@forgotPassword');
+        $this->router->map('GET', '/reset-password/[:token]', 'AuthController@resetPasswordForm');
+        $this->router->map('POST', '/reset-password', 'AuthController@resetPassword');
 
         // Dashboard
         $this->router->map('GET', '/', 'DashboardController@index');

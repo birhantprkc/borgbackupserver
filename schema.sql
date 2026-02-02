@@ -25,6 +25,15 @@ CREATE TABLE rate_limits (
     INDEX idx_ip_endpoint (ip_address, endpoint)
 );
 
+CREATE TABLE password_resets (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    token VARCHAR(64) NOT NULL UNIQUE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 -- Default admin user (password: admin)
 INSERT INTO users (username, email, password_hash, role) VALUES
 ('admin', 'admin@borgbackupserver.com', '$2y$12$OMFE1ma3aKDFjEYAP24eTuIznogvlOD2k3Emh0Hmvdckirgu73U2m', 'admin');
