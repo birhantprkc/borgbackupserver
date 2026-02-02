@@ -540,35 +540,38 @@ class QueueManager
 
         // Get agent info for platform matching
         $agent = $this->db->fetchOne(
-            "SELECT os_info, glibc_version FROM agents WHERE id = ?",
+            "SELECT os_info, platform, architecture, glibc_version FROM agents WHERE id = ?",
             [$job['agent_id']]
         );
-        if ($agent && !empty($agent['os_info'])) {
-            $osInfo = $agent['os_info'];
+        if ($agent) {
+            // Use stored platform/arch if available, fall back to parsing os_info
+            $platform = $agent['platform'] ?? null;
+            $arch = $agent['architecture'] ?? null;
 
-            // Parse platform from os_info (e.g., "Linux 5.15.0 x86_64" or "Rocky Linux 8.10 x86_64")
-            $platform = 'linux';
-            if (stripos($osInfo, 'Darwin') !== false) {
-                $platform = 'macos';
-            } elseif (stripos($osInfo, 'FreeBSD') !== false) {
-                $platform = 'freebsd';
+            if (!$platform && !empty($agent['os_info'])) {
+                $osInfo = $agent['os_info'];
+                $platform = 'linux';
+                if (stripos($osInfo, 'Darwin') !== false) {
+                    $platform = 'macos';
+                } elseif (stripos($osInfo, 'FreeBSD') !== false) {
+                    $platform = 'freebsd';
+                }
+            }
+            if (!$arch && !empty($agent['os_info'])) {
+                $arch = 'x86_64';
+                if (preg_match('/\b(aarch64|arm64)\b/i', $agent['os_info'])) {
+                    $arch = 'arm64';
+                }
             }
 
-            // Parse architecture
-            $arch = 'x86_64';
-            if (preg_match('/\b(aarch64|arm64)\b/i', $osInfo)) {
-                $arch = 'arm64';
-            }
+            if ($platform && $arch) {
+                $agentGlibc = $agent['glibc_version'] ?? null;
+                $asset = $borgService->getAssetForPlatform($targetVersion, $platform, $arch, $agentGlibc);
 
-            // Use agent-reported glibc version if available
-            $agentGlibc = $agent['glibc_version'] ?? null;
-
-            // Try to find matching binary asset
-            $asset = $borgService->getAssetForPlatform($targetVersion, $platform, $arch, $agentGlibc);
-
-            if ($asset) {
-                $payload['download_url'] = $asset['download_url'];
-                $payload['install_method'] = 'binary';
+                if ($asset) {
+                    $payload['download_url'] = $asset['download_url'];
+                    $payload['install_method'] = 'binary';
+                }
             }
         }
 

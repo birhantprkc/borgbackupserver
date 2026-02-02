@@ -322,6 +322,19 @@
     $aboveAgents = !empty($targetBorgVersion) ? $borgService->getAgentsAboveVersion($targetBorgVersion) : [];
     $serverBorgVersion = $borgService->getServerBorgVersion();
     $serverBorgMatch = !empty($targetBorgVersion) && $serverBorgVersion === $targetBorgVersion;
+
+    // Compute max compatible borg version per agent and fleet-wide
+    $agentMaxVersions = [];
+    $fleetMaxVersion = null;
+    foreach ($allBorgAgents as $ba) {
+        $maxVer = $borgService->getMaxCompatibleVersion($ba);
+        $agentMaxVersions[$ba['id']] = $maxVer;
+        if ($maxVer !== null) {
+            if ($fleetMaxVersion === null || version_compare($maxVer, $fleetMaxVersion, '<')) {
+                $fleetMaxVersion = $maxVer;
+            }
+        }
+    }
 ?>
 <div class="row g-4">
     <div class="col-lg-6">
@@ -390,7 +403,12 @@
                                 </option>
                                 <?php endforeach; ?>
                             </select>
-                            <div class="form-text">All agents will be updated to this version when you trigger updates.</div>
+                            <div class="form-text">
+                                All agents will be updated to this version when you trigger updates.
+                                <?php if ($fleetMaxVersion && count($allBorgAgents) > 0): ?>
+                                    <br><i class="bi bi-info-circle me-1"></i>Max version all clients can run: <strong>v<?= htmlspecialchars($fleetMaxVersion) ?></strong>
+                                <?php endif; ?>
+                            </div>
                         </div>
                         <button type="submit" class="btn btn-primary btn-sm">
                             <i class="bi bi-check-lg me-1"></i> Set Target Version
@@ -445,14 +463,20 @@
                         $borgVer = $ba['borg_version'] ?? 'unknown';
                         $cleanVer = preg_replace('/^borg\s+/', '', $borgVer);
                         $isMatch = ($cleanVer === $targetBorgVersion);
-                        $badgeClass = $isMatch ? 'bg-success' : 'bg-warning text-dark';
+                        $maxVer = $agentMaxVersions[$ba['id']] ?? null;
+                        $cantRunTarget = !$isMatch && $maxVer !== null && version_compare($maxVer, $targetBorgVersion, '<');
+                        $badgeClass = $isMatch ? 'bg-success' : ($cantRunTarget ? 'bg-danger' : 'bg-warning text-dark');
                     ?>
                     <div class="d-flex justify-content-between align-items-center small py-1">
                         <span>
                             <i class="bi bi-pc-display me-1 text-muted"></i>
                             <a href="/clients/<?= $ba['id'] ?>" class="text-decoration-none"><?= htmlspecialchars($ba['name']) ?></a>
-                            <?php if ($ba['borg_install_method'] && $ba['borg_install_method'] !== 'unknown'): ?>
-                                <span class="text-muted ms-1">(<?= htmlspecialchars($ba['borg_install_method']) ?>)</span>
+                            <?php if ($cantRunTarget): ?>
+                                <span class="text-danger ms-1" title="glibc <?= htmlspecialchars($ba['glibc_version'] ?? 'unknown') ?>">
+                                    <i class="bi bi-exclamation-triangle-fill"></i> max v<?= htmlspecialchars($maxVer) ?>
+                                </span>
+                            <?php elseif ($maxVer === null && !$isMatch && ($ba['glibc_version'] ?? null)): ?>
+                                <span class="text-danger ms-1"><i class="bi bi-exclamation-triangle-fill"></i> no compatible binary</span>
                             <?php endif; ?>
                         </span>
                         <span class="badge <?= $badgeClass ?>"><?= htmlspecialchars($borgVer) ?></span>

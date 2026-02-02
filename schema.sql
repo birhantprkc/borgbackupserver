@@ -66,6 +66,8 @@ CREATE TABLE agents (
     borg_install_method ENUM('package','binary','pip','unknown') DEFAULT 'unknown',
     borg_binary_path VARCHAR(255) DEFAULT NULL,
     glibc_version VARCHAR(20) DEFAULT NULL,
+    platform VARCHAR(20) DEFAULT NULL,
+    architecture VARCHAR(20) DEFAULT NULL,
     agent_version VARCHAR(20) DEFAULT NULL,
     ssh_unix_user VARCHAR(100) DEFAULT NULL,
     ssh_public_key TEXT DEFAULT NULL,

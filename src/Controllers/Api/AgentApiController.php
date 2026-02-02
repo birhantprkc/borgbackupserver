@@ -67,6 +67,8 @@ class AgentApiController extends Controller
         if (!empty($input['borg_install_method']))  $data['borg_install_method'] = substr($input['borg_install_method'], 0, 20);
         if (!empty($input['borg_binary_path']))     $data['borg_binary_path'] = substr($input['borg_binary_path'], 0, 255);
         if (!empty($input['glibc_version']))        $data['glibc_version'] = substr($input['glibc_version'], 0, 20);
+        if (!empty($input['platform']))             $data['platform'] = substr($input['platform'], 0, 20);
+        if (!empty($input['architecture']))         $data['architecture'] = substr($input['architecture'], 0, 20);
         $data['status'] = 'online';
 
         if (!empty($data)) {
@@ -490,6 +492,8 @@ class AgentApiController extends Controller
         if (!empty($input['borg_install_method']))  $data['borg_install_method'] = substr($input['borg_install_method'], 0, 20);
         if (!empty($input['borg_binary_path']))     $data['borg_binary_path'] = substr($input['borg_binary_path'], 0, 255);
         if (!empty($input['glibc_version']))        $data['glibc_version'] = substr($input['glibc_version'], 0, 20);
+        if (!empty($input['platform']))             $data['platform'] = substr($input['platform'], 0, 20);
+        if (!empty($input['architecture']))         $data['architecture'] = substr($input['architecture'], 0, 20);
 
         if (!empty($data)) {
             $this->db->update('agents', $data, 'id = ?', [$agent['id']]);

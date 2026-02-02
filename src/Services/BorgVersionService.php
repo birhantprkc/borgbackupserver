@@ -325,11 +325,51 @@ class BorgVersionService
     public function getAllAgentVersions(): array
     {
         return $this->db->fetchAll(
-            "SELECT id, name, hostname, borg_version, borg_install_method, borg_binary_path, status
+            "SELECT id, name, hostname, borg_version, borg_install_method, borg_binary_path, glibc_version, platform, architecture, status
              FROM agents
              WHERE status != 'setup'
              ORDER BY name"
         );
+    }
+
+    /**
+     * Find the highest borg version that has a compatible binary for a given agent's platform/arch/glibc.
+     * Returns null if no compatible version exists or if agent info is incomplete.
+     */
+    public function getMaxCompatibleVersion(array $agent): ?string
+    {
+        $platform = $agent['platform'] ?? null;
+        $arch = $agent['architecture'] ?? null;
+        $glibc = $agent['glibc_version'] ?? null;
+
+        if (!$platform || !$arch) {
+            return null;
+        }
+
+        if ($platform === 'linux' && $glibc) {
+            // Find the highest version that has a linux binary with glibc <= agent's glibc
+            $row = $this->db->fetchOne(
+                "SELECT bv.version FROM borg_versions bv
+                 JOIN borg_version_assets bva ON bva.borg_version_id = bv.id
+                 WHERE bva.platform = 'linux' AND bva.architecture = ?
+                   AND bva.glibc_version IS NOT NULL AND bva.glibc_version <= ?
+                 ORDER BY bv.version DESC
+                 LIMIT 1",
+                [$arch, $glibc]
+            );
+            return $row['version'] ?? null;
+        }
+
+        // macOS/FreeBSD — just find latest version with a matching asset
+        $row = $this->db->fetchOne(
+            "SELECT bv.version FROM borg_versions bv
+             JOIN borg_version_assets bva ON bva.borg_version_id = bv.id
+             WHERE bva.platform = ? AND bva.architecture = ?
+             ORDER BY bv.version DESC
+             LIMIT 1",
+            [$platform, $arch]
+        );
+        return $row['version'] ?? null;
     }
 
     /**
