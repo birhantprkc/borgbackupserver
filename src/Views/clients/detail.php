@@ -2175,8 +2175,8 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
     <?php else: ?>
 
     <!-- Shared Control Bar -->
-    <div class="restore-control-bar mb-3">
-        <div class="row g-2 align-items-end">
+    <div class="restore-control-bar">
+        <div class="row gx-2 align-items-end">
             <?php if ($dbPluginEnabled): ?>
             <div class="col-md-3">
                 <label class="form-label fw-semibold mb-1 small">Restore Type</label>
