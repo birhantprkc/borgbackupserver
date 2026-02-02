@@ -177,11 +177,22 @@ class S3SyncService
         fclose($pipes[2]);
         $exitCode = proc_close($proc);
 
-        $output = trim($stdout . "\n" . $stderr);
+        $fullOutput = trim($stdout . "\n" . $stderr);
+
+        // Extract just the final stats line (e.g. "65.046M / 65.046 MBytes, 100%, 26.503 MBytes/s, ETA 0s")
+        $summary = '';
+        if ($exitCode === 0 && !empty($fullOutput)) {
+            $lines = array_filter(array_map('trim', explode("\n", $fullOutput)));
+            $lastLine = end($lines);
+            // Strip rclone log prefix (e.g. "2026/02/02 23:44:04 INFO : ")
+            $summary = preg_replace('/^\d{4}\/\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2}\s+\w+\s+:\s+/', '', $lastLine);
+        }
 
         return [
             'success' => $exitCode === 0,
-            'output' => $output ?: ($exitCode === 0 ? 'Sync completed' : "rclone exited with code {$exitCode}"),
+            'output' => $exitCode === 0
+                ? ($summary ?: 'Sync completed')
+                : ($fullOutput ?: "rclone exited with code {$exitCode}"),
         ];
     }
 
