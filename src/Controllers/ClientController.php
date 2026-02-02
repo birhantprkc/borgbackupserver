@@ -894,13 +894,17 @@ class ClientController extends Controller
         }
 
 
-        // Build restore_databases JSON: [{database: name, mode: replace|rename}, ...]
+        // Build restore_databases JSON: [{database: name, mode: replace|rename, target_name: ...}, ...]
         $restoreDatabases = [];
         foreach ($databases as $entry) {
             $dbName = $entry['name'] ?? '';
             $mode = $entry['mode'] ?? 'replace';
             if ($dbName && in_array($mode, ['replace', 'rename'])) {
-                $restoreDatabases[] = ['database' => $dbName, 'mode' => $mode];
+                $item = ['database' => $dbName, 'mode' => $mode];
+                if ($mode === 'rename' && !empty($entry['target_name'])) {
+                    $item['target_name'] = preg_replace('/[^a-zA-Z0-9_]/', '', $entry['target_name']);
+                }
+                $restoreDatabases[] = $item;
             }
         }
 
@@ -997,7 +1001,11 @@ class ClientController extends Controller
             $dbName = $entry['name'] ?? '';
             $mode = $entry['mode'] ?? 'replace';
             if ($dbName && in_array($mode, ['replace', 'rename'])) {
-                $restoreDatabases[] = ['database' => $dbName, 'mode' => $mode];
+                $item = ['database' => $dbName, 'mode' => $mode];
+                if ($mode === 'rename' && !empty($entry['target_name'])) {
+                    $item['target_name'] = preg_replace('/[^a-zA-Z0-9_]/', '', $entry['target_name']);
+                }
+                $restoreDatabases[] = $item;
             }
         }
 

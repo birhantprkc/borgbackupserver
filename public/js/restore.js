@@ -628,20 +628,35 @@
                         dbTable.style.display = '';
                         data.databases.forEach(function(dbName) {
                             const tr = document.createElement('tr');
+                            const escapedName = esc(dbName);
                             tr.innerHTML =
-                                '<td><input type="checkbox" class="form-check-input db-select-cb" data-db="' + esc(dbName) + '"></td>' +
-                                '<td class="font-monospace">' + esc(dbName) + '</td>' +
+                                '<td><input type="checkbox" class="form-check-input db-select-cb" data-db="' + escapedName + '"></td>' +
+                                '<td class="font-monospace">' + escapedName + '</td>' +
                                 '<td>' +
                                     '<div class="btn-group btn-group-sm" role="group">' +
-                                        '<input type="radio" class="btn-check" name="dbmode_' + esc(dbName) + '" id="dbmode_replace_' + esc(dbName) + '" value="replace" checked>' +
-                                        '<label class="btn btn-outline-warning" for="dbmode_replace_' + esc(dbName) + '">Replace</label>' +
+                                        '<input type="radio" class="btn-check" name="dbmode_' + escapedName + '" id="dbmode_replace_' + escapedName + '" value="replace" checked>' +
+                                        '<label class="btn btn-outline-warning" for="dbmode_replace_' + escapedName + '">Replace</label>' +
                                         (dbPerDatabase ?
-                                            '<input type="radio" class="btn-check" name="dbmode_' + esc(dbName) + '" id="dbmode_rename_' + esc(dbName) + '" value="rename">' +
-                                            '<label class="btn btn-outline-info" for="dbmode_rename_' + esc(dbName) + '">Rename (_copy)</label>'
+                                            '<input type="radio" class="btn-check" name="dbmode_' + escapedName + '" id="dbmode_rename_' + escapedName + '" value="rename">' +
+                                            '<label class="btn btn-outline-info" for="dbmode_rename_' + escapedName + '">Rename</label>'
                                         : '') +
+                                    '</div>' +
+                                    '<div class="db-rename-input mt-1" style="display:none;">' +
+                                        '<input type="text" class="form-control form-control-sm font-monospace" data-rename-for="' + escapedName + '" value="' + escapedName + '_copy">' +
                                     '</div>' +
                                 '</td>';
                             dbTableBody.appendChild(tr);
+                        });
+
+                        // Show/hide rename input when mode changes
+                        dbTableBody.addEventListener('change', function(e) {
+                            if (e.target.name && e.target.name.startsWith('dbmode_')) {
+                                const row = e.target.closest('tr');
+                                const renameDiv = row.querySelector('.db-rename-input');
+                                if (renameDiv) {
+                                    renameDiv.style.display = e.target.value === 'rename' ? '' : 'none';
+                                }
+                            }
                         });
                     })
                     .catch(function() {
@@ -701,6 +716,15 @@
                 modeInput.name = 'databases[' + i + '][mode]';
                 modeInput.value = mode;
                 fieldsContainer.appendChild(modeInput);
+
+                if (mode === 'rename') {
+                    const renameField = dbTableBody.querySelector('input[data-rename-for="' + CSS.escape(dbName) + '"]');
+                    const targetInput = document.createElement('input');
+                    targetInput.type = 'hidden';
+                    targetInput.name = 'databases[' + i + '][target_name]';
+                    targetInput.value = renameField ? renameField.value.trim() : dbName + '_copy';
+                    fieldsContainer.appendChild(targetInput);
+                }
             });
 
                 form.submit();

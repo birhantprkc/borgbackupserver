@@ -925,7 +925,7 @@ def execute_restore_pg(config, task):
     for i, db_entry in enumerate(databases):
         db_name = db_entry.get("database")
         mode = db_entry.get("mode", "replace")
-        target_db = f"{db_name}_copy" if mode == "rename" else db_name
+        target_db = db_entry.get("target_name", f"{db_name}_copy") if mode == "rename" else db_name
 
         # Find the dump file
         if compress:
@@ -1065,7 +1065,7 @@ def execute_restore_mysql(config, task):
     for i, db_entry in enumerate(databases):
         db_name = db_entry.get("database")
         mode = db_entry.get("mode", "replace")  # replace or rename
-        target_db = f"{db_name}_copy" if mode == "rename" else db_name
+        target_db = db_entry.get("target_name", f"{db_name}_copy") if mode == "rename" else db_name
 
         # Find the dump file
         if per_database:
