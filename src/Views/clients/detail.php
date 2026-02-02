@@ -45,17 +45,18 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     <button class="btn btn-sm btn-outline-secondary border-0" data-bs-toggle="collapse" data-bs-target="#edit-client" title="Edit client">
                         <i class="bi bi-pencil"></i>
                     </button>
-                    <span class="text-muted client-header-info d-flex flex-wrap gap-3 align-items-center" style="font-size:.8rem;">
+                </div>
+                <div class="text-muted d-flex flex-wrap gap-3 align-items-center" style="font-size:.8rem;">
                     <?php if ($agent['hostname']): ?>
                         <span><i class="bi bi-hdd-network me-1"></i><?= htmlspecialchars($agent['hostname']) ?></span>
                         <?php if ($agent['ip_address'] ?? null): ?>
-                            <span class="d-none d-sm-inline ms-1"><i class="bi bi-globe me-1"></i><?= htmlspecialchars($agent['ip_address']) ?></span>
+                            <span class="d-none d-sm-inline"><i class="bi bi-globe me-1"></i><?= htmlspecialchars($agent['ip_address']) ?></span>
                         <?php endif; ?>
                     <?php endif; ?>
                     <?php if ($agent['os_info']): ?>
                         <span class="d-none d-md-inline"><i class="bi bi-cpu me-1"></i><?= htmlspecialchars($agent['os_info']) ?></span>
                     <?php endif; ?>
-                    <span id="agent-version-wrapper">
+                    <span id="agent-version-wrapper" class="d-inline">
                     <?php if ($agent['agent_version']): ?>
                         <?php if ($agentNeedsUpdate): ?>
                             <form method="POST" action="/clients/<?= $agent['id'] ?>/update-agent" class="d-inline">
@@ -68,9 +69,8 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                             <i class="bi bi-box me-1"></i>Agent v<?= htmlspecialchars($agent['agent_version']) ?>
                         <?php endif; ?>
                     <?php endif; ?>
-                    </span>
-                    <?php if ($agent['borg_version']): ?>
-                        <span class="ms-2">
+                    </span><?php if ($agent['borg_version']): ?>
+                        <span>
                             <form method="POST" action="/clients/<?= $agent['id'] ?>/update-borg" class="d-inline">
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                 <button type="submit" class="btn btn-link text-muted p-0 text-decoration-none" style="font-size: inherit;" title="Update Borg on this client" data-confirm="Queue a borg update on this client?">
@@ -210,7 +210,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     </li>
     <li class="nav-item">
         <a class="nav-link <?= $tab === 'schedules' ? 'active' : '' ?>" href="?tab=schedules">
-            <i class="bi bi-calendar-event me-1"></i><span class="tab-label">Schedule</span>
+            <i class="bi bi-calendar-event me-1"></i><span class="tab-label">Plans</span>
         </a>
     </li>
     <li class="nav-item">

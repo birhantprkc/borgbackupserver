@@ -236,7 +236,7 @@
                         </div>
                     </div>
                     <!-- Col 3: Donut + Legend -->
-                    <div class="col-12 col-lg-6 d-flex align-items-center mt-2 mt-lg-0 justify-content-center justify-content-lg-start">
+                    <div class="col-12 col-lg-6 d-flex align-items-center mt-3 mt-lg-0 pt-3 pt-lg-0 border-top border-lg-0 justify-content-center justify-content-lg-start">
                         <div style="width:80px;flex-shrink:0;">
                             <svg viewBox="0 0 120 120" style="width:100%;height:auto;transform:rotate(-90deg);">
                                 <circle cx="60" cy="60" r="<?= $r ?>" fill="none" stroke="#e9ecef" stroke-width="14"/>
@@ -312,7 +312,7 @@
                     </div>
                     <?php endif; ?>
                     <?php if (!empty($mysqlStats)): ?>
-                    <div class="col-md-7<?= !empty($mysqlStorage) && $mysqlStorage['disk_total'] > 0 ? ' border-start' : '' ?>">
+                    <div class="col-md-7 mt-3 mt-md-0 pt-3 pt-md-0 border-top border-top-0-md<?= !empty($mysqlStorage) && $mysqlStorage['disk_total'] > 0 ? ' border-md-start' : '' ?>">
                         <div class="d-flex align-items-center mb-2">
                             <i class="bi bi-table me-1 text-muted"></i>
                             <span class="fw-semibold small">Database Records</span>
@@ -531,11 +531,11 @@
                                 $d = $job['duration_seconds'] ?? 0;
                                 $durStr = $d >= 3600 ? floor($d / 3600) . 'h ' . floor(($d % 3600) / 60) . 'm'
                                     : ($d >= 60 ? floor($d / 60) . 'm ' . ($d % 60) . 's' : ($d > 0 ? $d . 's' : '--'));
-                                $sBadge = match($job['status']) {
-                                    'completed' => 'success',
-                                    'failed' => 'danger',
-                                    'cancelled' => 'secondary',
-                                    default => 'warning',
+                                $sIcon = match($job['status']) {
+                                    'completed' => '<i class="bi bi-check-circle-fill text-success"></i>',
+                                    'failed' => '<i class="bi bi-x-circle-fill text-danger"></i>',
+                                    'cancelled' => '<i class="bi bi-slash-circle-fill text-secondary"></i>',
+                                    default => '<i class="bi bi-exclamation-triangle-fill text-warning"></i>',
                                 };
                             ?>
                             <tr style="cursor: pointer;" onclick="window.location='/queue/<?= $job['id'] ?>'">
@@ -543,9 +543,9 @@
                                 <td><?= ucfirst($job['task_type']) ?></td>
                                 <td class="d-table-cell-md"><?= htmlspecialchars($job['plan_name'] ?? '--') ?></td>
                                 <td class="d-table-cell-md"><?= htmlspecialchars($job['repo_name'] ?? '--') ?></td>
-                                <td><?= \BBS\Core\TimeHelper::format($job['completed_at'], 'M j, g:i A') ?></td>
+                                <td title="<?= \BBS\Core\TimeHelper::format($job['completed_at'], 'M j, Y g:i A') ?>"><?= \BBS\Core\TimeHelper::ago($job['completed_at']) ?></td>
                                 <td class="d-table-cell-md text-nowrap"><?= $durStr ?></td>
-                                <td><span class="badge bg-<?= $sBadge ?>"><?= $job['status'] ?></span></td>
+                                <td class="text-center"><?= $sIcon ?></td>
                             </tr>
                             <?php endforeach; ?>
                         </tbody>
@@ -569,12 +569,13 @@
                 <?php if (empty($recentLogs)): ?>
                     <div class="p-4 text-muted text-center">No log entries</div>
                 <?php else: ?>
-                <div class="table-responsive">
+                <!-- Desktop table -->
+                <div class="table-responsive d-none d-md-block">
                     <table class="table table-hover mb-0 small">
                         <thead class="table-light">
                             <tr>
                                 <th>Time</th>
-                                <th class="d-th-md">Client</th>
+                                <th>Client</th>
                                 <th>Level</th>
                                 <th>Message</th>
                             </tr>
@@ -583,7 +584,7 @@
                             <?php foreach ($recentLogs as $log): ?>
                             <tr>
                                 <td class="text-nowrap"><?= \BBS\Core\TimeHelper::format($log['created_at'], 'M j, g:i A') ?></td>
-                                <td class="d-table-cell-md text-nowrap"><?= htmlspecialchars($log['agent_name'] ?? '--') ?></td>
+                                <td class="text-nowrap"><?= htmlspecialchars($log['agent_name'] ?? '--') ?></td>
                                 <td>
                                     <?php
                                     $levelClass = match($log['level']) {
@@ -599,6 +600,28 @@
                             <?php endforeach; ?>
                         </tbody>
                     </table>
+                </div>
+                <!-- Mobile list -->
+                <div class="d-md-none">
+                    <?php foreach ($recentLogs as $i => $log): ?>
+                    <div class="px-3 py-2<?= $i > 0 ? ' border-top' : '' ?>">
+                        <div class="d-flex align-items-center gap-2 small">
+                            <?php
+                            $levelClass = match($log['level']) {
+                                'error' => 'danger',
+                                'warning' => 'warning',
+                                default => 'info',
+                            };
+                            ?>
+                            <span class="badge bg-<?= $levelClass ?>"><?= $log['level'] ?></span>
+                            <span class="text-muted"><?= \BBS\Core\TimeHelper::format($log['created_at'], 'M j, g:i A') ?></span>
+                            <?php if ($log['agent_name'] ?? null): ?>
+                                <span class="text-muted">&middot; <?= htmlspecialchars($log['agent_name']) ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <div class="small mt-1" style="word-break:break-word;"><?= htmlspecialchars($log['message']) ?></div>
+                    </div>
+                    <?php endforeach; ?>
                 </div>
                 <?php endif; ?>
             </div>

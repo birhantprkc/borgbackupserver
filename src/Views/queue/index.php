@@ -92,7 +92,7 @@
                 <tbody>
                     <?php foreach ($completed as $job): ?>
                     <tr style="cursor: pointer;" onclick="window.location='/queue/<?= $job['id'] ?>'">
-                        <td class="small"><?= \BBS\Core\TimeHelper::format($job['completed_at'], 'M j, g:i A') ?></td>
+                        <td class="small" title="<?= \BBS\Core\TimeHelper::format($job['completed_at'], 'M j, Y g:i A') ?>"><?= \BBS\Core\TimeHelper::ago($job['completed_at']) ?></td>
                         <td><?= htmlspecialchars($job['agent_name']) ?></td>
                         <td><?= $job['task_type'] ?></td>
                         <td class="d-table-cell-md"><?= number_format($job['files_total'] ?? 0) ?></td>
@@ -103,12 +103,14 @@
                             echo $d >= 60 ? floor($d / 60) . 'm ' . ($d % 60) . 's' : $d . 's';
                             ?>
                         </td>
-                        <td>
-                            <span class="badge bg-<?= $job['status'] === 'completed' ? 'success' : 'danger' ?>">
-                                <?= $job['status'] ?>
-                            </span>
-                            <?php if ($job['status'] === 'failed' && !empty($job['error_log'])): ?>
-                                <i class="bi bi-info-circle text-danger ms-1" data-bs-toggle="tooltip" title="<?= htmlspecialchars(substr($job['error_log'], 0, 200)) ?>"></i>
+                        <td class="text-center">
+                            <?php if ($job['status'] === 'completed'): ?>
+                                <i class="bi bi-check-circle-fill text-success"></i>
+                            <?php else: ?>
+                                <i class="bi bi-x-circle-fill text-danger"></i>
+                                <?php if (!empty($job['error_log'])): ?>
+                                    <i class="bi bi-info-circle text-danger ms-1" data-bs-toggle="tooltip" title="<?= htmlspecialchars(substr($job['error_log'], 0, 200)) ?>"></i>
+                                <?php endif; ?>
                             <?php endif; ?>
                         </td>
                         <td class="text-nowrap" onclick="event.stopPropagation()">
