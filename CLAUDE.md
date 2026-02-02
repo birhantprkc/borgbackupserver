@@ -37,11 +37,14 @@ Software is installed at `/var/www/bbs/` on all servers. Config lives at `/var/w
 - **Repo:** `marcpope/borgbackupserver` on GitHub
 - **Commit and push:** Commit to `main`, push to origin. Always use descriptive commit messages.
 - **Releases:** Tagged as `vX.Y.Z-beta` (e.g., `v0.8.8-beta`). To create a release:
-  1. Bump `VERSION` file and `AGENT_VERSION` in `agent/bbs-agent.py`
+  1. Bump `VERSION` file (only bump `AGENT_VERSION` in `agent/bbs-agent.py` if agent code changed)
   2. Commit the version bump
   3. Tag: `git tag vX.Y.Z-beta`
   4. Push: `git push origin main --tags`
-  5. Production servers pull the latest tag via `bbs-update` (without the `main` argument)
+  5. **Create a GitHub Release** (required for the update checker to see it):
+     `gh release create vX.Y.Z-beta --title "vX.Y.Z-beta" --prerelease --notes "Release notes here"`
+     The server's "Check for Updates" uses the GitHub Releases API — tags alone are NOT sufficient.
+  6. Production servers pull the latest tag via `bbs-update` (without the `main` argument)
 
 ## Patterns & Conventions
 - **Auth:** `$this->requireAuth()`, `$this->verifyCsrf()`, agent ownership check
