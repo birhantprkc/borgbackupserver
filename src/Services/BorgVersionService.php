@@ -66,6 +66,12 @@ class BorgVersionService
                 continue;
             }
 
+            // Skip borg 2.x — incompatible repo format, no migration path yet
+            if (version_compare($version, '2.0.0', '>=')) {
+                $skipped++;
+                continue;
+            }
+
             // Skip if already stored
             $existing = $this->db->fetchOne(
                 "SELECT id FROM borg_versions WHERE version = ?",
@@ -260,7 +266,7 @@ class BorgVersionService
             "SELECT v.*, COUNT(a.id) as asset_count
              FROM borg_versions v
              LEFT JOIN borg_version_assets a ON a.borg_version_id = v.id
-             WHERE v.is_prerelease = 0
+             WHERE v.is_prerelease = 0 AND v.version < '2.0.0'
              GROUP BY v.id
              ORDER BY v.release_date DESC, v.version DESC"
         );

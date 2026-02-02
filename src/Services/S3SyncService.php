@@ -1,0 +1,228 @@
+<?php
+
+namespace BBS\Services;
+
+use BBS\Core\Database;
+
+class S3SyncService
+{
+    private Database $db;
+
+    public function __construct()
+    {
+        $this->db = Database::getInstance();
+    }
+
+    /**
+     * Resolve S3 credentials from plugin config.
+     * If credential_source is 'global', loads from settings table.
+     * If 'custom', uses the config values directly.
+     */
+    public function resolveCredentials(array $config): array
+    {
+        $source = $config['credential_source'] ?? 'global';
+
+        if ($source === 'global') {
+            $settings = [];
+            $rows = $this->db->fetchAll("SELECT `key`, `value` FROM settings WHERE `key` LIKE 's3_%'");
+            foreach ($rows as $row) {
+                // Strip 's3_' prefix to get field name
+                $field = substr($row['key'], 3);
+                $settings[$field] = $row['value'];
+            }
+
+            // Decrypt secret_key from global settings
+            if (!empty($settings['secret_key'])) {
+                try {
+                    $settings['secret_key'] = Encryption::decrypt($settings['secret_key']);
+                } catch (\Exception $e) {
+                    // May already be plaintext
+                }
+            }
+
+            // Allow per-config overrides for path_prefix and bandwidth_limit
+            return [
+                'endpoint' => $settings['endpoint'] ?? '',
+                'region' => $settings['region'] ?? '',
+                'bucket' => $settings['bucket'] ?? '',
+                'access_key' => $settings['access_key'] ?? '',
+                'secret_key' => $settings['secret_key'] ?? '',
+                'path_prefix' => $config['path_prefix'] ?? $settings['path_prefix'] ?? '',
+                'bandwidth_limit' => $config['bandwidth_limit'] ?? '',
+            ];
+        }
+
+        // Custom credentials — decrypt sensitive fields
+        $secretKey = $config['secret_key'] ?? '';
+        if (!empty($secretKey)) {
+            try {
+                $secretKey = Encryption::decrypt($secretKey);
+            } catch (\Exception $e) {
+                // May already be plaintext
+            }
+        }
+
+        $accessKey = $config['access_key'] ?? '';
+        if (!empty($accessKey)) {
+            try {
+                $accessKey = Encryption::decrypt($accessKey);
+            } catch (\Exception $e) {
+                // May already be plaintext
+            }
+        }
+
+        return [
+            'endpoint' => $config['endpoint'] ?? '',
+            'region' => $config['region'] ?? 'us-east-1',
+            'bucket' => $config['bucket'] ?? '',
+            'access_key' => $accessKey,
+            'secret_key' => $secretKey,
+            'path_prefix' => $config['path_prefix'] ?? '',
+            'bandwidth_limit' => $config['bandwidth_limit'] ?? '',
+        ];
+    }
+
+    /**
+     * Build environment variables for rclone (env-based config, no rclone.conf needed).
+     */
+    public function buildRcloneEnv(array $creds): array
+    {
+        $env = [
+            'RCLONE_CONFIG_S3_TYPE' => 's3',
+            'RCLONE_CONFIG_S3_PROVIDER' => 'Other',
+            'RCLONE_CONFIG_S3_ACCESS_KEY_ID' => $creds['access_key'],
+            'RCLONE_CONFIG_S3_SECRET_ACCESS_KEY' => $creds['secret_key'],
+            'RCLONE_CONFIG_S3_ENDPOINT' => $creds['endpoint'],
+            'RCLONE_CONFIG_S3_REGION' => $creds['region'],
+        ];
+
+        return $env;
+    }
+
+    /**
+     * Sync a borg repository to S3.
+     * Returns ['success' => bool, 'output' => string].
+     */
+    public function syncRepository(array $repo, array $agent, array $creds): array
+    {
+        if (empty($creds['bucket'])) {
+            return ['success' => false, 'output' => 'No S3 bucket configured'];
+        }
+
+        if (!$this->isRcloneInstalled()) {
+            return ['success' => false, 'output' => 'rclone is not installed on this server'];
+        }
+
+        // Build remote path: bucket/prefix/agent-name/repo-name/
+        $agentName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $agent['name'] ?? 'unknown');
+        $repoName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $repo['name'] ?? 'unknown');
+        $prefix = trim($creds['path_prefix'], '/');
+        $remotePath = $prefix ? "{$prefix}/{$agentName}/{$repoName}" : "{$agentName}/{$repoName}";
+        $remote = "S3:{$creds['bucket']}/{$remotePath}/";
+
+        // Get local repo path
+        $localPath = \BBS\Services\BorgCommandBuilder::getLocalRepoPath($repo);
+        if (empty($localPath) || !is_dir($localPath)) {
+            return ['success' => false, 'output' => "Local repo path not found: {$localPath}"];
+        }
+
+        // Build rclone command
+        $cmd = ['rclone', 'sync', $localPath, $remote, '--transfers', '4', '--checkers', '8'];
+
+        if (!empty($creds['bandwidth_limit'])) {
+            $cmd[] = '--bwlimit';
+            $cmd[] = $creds['bandwidth_limit'];
+        }
+
+        // Build environment
+        $env = $this->buildRcloneEnv($creds);
+
+        $desc = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+
+        $envStrings = [];
+        foreach ($env as $k => $v) {
+            $envStrings[$k] = $v;
+        }
+
+        $proc = proc_open($cmd, $desc, $pipes, null, array_merge($_SERVER, $envStrings));
+        if (!is_resource($proc)) {
+            return ['success' => false, 'output' => 'Failed to start rclone process'];
+        }
+
+        fclose($pipes[0]);
+        $stdout = stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($proc);
+
+        $output = trim($stdout . "\n" . $stderr);
+
+        return [
+            'success' => $exitCode === 0,
+            'output' => $output ?: ($exitCode === 0 ? 'Sync completed' : "rclone exited with code {$exitCode}"),
+        ];
+    }
+
+    /**
+     * Test S3 connection by listing the bucket root.
+     */
+    public function testConnection(array $creds): array
+    {
+        if (empty($creds['bucket'])) {
+            return ['success' => false, 'error' => 'No bucket configured'];
+        }
+
+        if (!$this->isRcloneInstalled()) {
+            return ['success' => false, 'error' => 'rclone is not installed on this server. Install with: apt install rclone'];
+        }
+
+        $remote = "S3:{$creds['bucket']}/";
+        $cmd = ['rclone', 'lsd', $remote, '--max-depth', '1'];
+
+        $env = $this->buildRcloneEnv($creds);
+
+        $desc = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+
+        $envStrings = [];
+        foreach ($env as $k => $v) {
+            $envStrings[$k] = $v;
+        }
+
+        $proc = proc_open($cmd, $desc, $pipes, null, array_merge($_SERVER, $envStrings));
+        if (!is_resource($proc)) {
+            return ['success' => false, 'error' => 'Failed to start rclone process'];
+        }
+
+        fclose($pipes[0]);
+        $stdout = stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($proc);
+
+        if ($exitCode !== 0) {
+            $error = trim($stderr) ?: trim($stdout) ?: "rclone exited with code {$exitCode}";
+            return ['success' => false, 'error' => $error];
+        }
+
+        return ['success' => true];
+    }
+
+    /**
+     * Check if rclone is installed.
+     */
+    public function isRcloneInstalled(): bool
+    {
+        $output = @shell_exec('which rclone 2>/dev/null');
+        return !empty(trim($output ?? ''));
+    }
+}

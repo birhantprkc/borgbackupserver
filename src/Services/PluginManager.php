@@ -106,15 +106,25 @@ class PluginManager
         foreach ($enabledPlugins as $pluginId) {
             $config = $pluginConfigs[$pluginId] ?? [];
 
-            // Encrypt password fields; preserve existing if empty
-            if (!empty($config['password'])) {
-                $config['password'] = Encryption::encrypt($config['password']);
-            } elseif (isset($existingByPlugin[$pluginId]['password'])) {
-                $config['password'] = $existingByPlugin[$pluginId]['password'];
-            }
-
             // Convert comma-separated strings to arrays for tag fields
             $schema = $this->getPluginSchema($this->getPluginSlug($pluginId));
+
+            // Encrypt sensitive fields; preserve existing if empty
+            foreach ($schema as $field => $def) {
+                if (!empty($def['sensitive'])) {
+                    if (!empty($config[$field])) {
+                        $config[$field] = Encryption::encrypt($config[$field]);
+                    } elseif (isset($existingByPlugin[$pluginId][$field])) {
+                        $config[$field] = $existingByPlugin[$pluginId][$field];
+                    }
+                }
+            }
+            // Legacy password handling
+            if (!empty($config['password']) && empty($schema['password']['sensitive'])) {
+                $config['password'] = Encryption::encrypt($config['password']);
+            } elseif (empty($config['password']) && isset($existingByPlugin[$pluginId]['password'])) {
+                $config['password'] = $existingByPlugin[$pluginId]['password'];
+            }
             foreach ($schema as $field => $def) {
                 if (($def['type'] ?? '') === 'tags' && isset($config[$field]) && is_string($config[$field])) {
                     $config[$field] = array_map('trim', explode(',', $config[$field]));
@@ -242,8 +252,15 @@ class PluginManager
         $existing = $this->getPluginConfig($configId);
         if (!$existing) return;
 
-        // Preserve encrypted password if new value is empty
+        // Preserve encrypted sensitive fields if new value is empty
         $existingConfig = json_decode($existing['config'], true) ?: [];
+        $schema = $this->getPluginSchema($existing['slug']);
+        foreach ($schema as $field => $def) {
+            if (!empty($def['sensitive']) && empty($config[$field]) && !empty($existingConfig[$field])) {
+                $config[$field] = $existingConfig[$field];
+            }
+        }
+        // Legacy password field
         if (empty($config['password']) && !empty($existingConfig['password'])) {
             $config['password'] = $existingConfig['password'];
         }
@@ -273,6 +290,16 @@ class PluginManager
         if (!$pc) return [];
 
         $config = json_decode($pc['config'], true) ?: [];
+        $schema = $this->getPluginSchema($pc['slug']);
+        foreach ($schema as $field => $def) {
+            if (!empty($def['sensitive']) && !empty($config[$field])) {
+                try {
+                    $config[$field] = Encryption::decrypt($config[$field]);
+                } catch (\Exception $e) {
+                    // May already be plaintext
+                }
+            }
+        }
         if (!empty($config['password'])) {
             try {
                 $config['password'] = Encryption::decrypt($config['password']);
@@ -291,8 +318,14 @@ class PluginManager
     {
         $schema = $this->getPluginSchema($slug);
 
-        // Encrypt password if it's a new plaintext value
-        if (!empty($config['password']) && !$passwordPreserved) {
+        // Encrypt sensitive fields if they are new plaintext values
+        foreach ($schema as $field => $def) {
+            if (!empty($def['sensitive']) && !empty($config[$field]) && !$passwordPreserved) {
+                $config[$field] = Encryption::encrypt($config[$field]);
+            }
+        }
+        // Legacy: also handle 'password' field specifically
+        if (!empty($config['password']) && !$passwordPreserved && empty($schema['password']['sensitive'])) {
             $config['password'] = Encryption::encrypt($config['password']);
         }
 
@@ -446,6 +479,58 @@ class PluginManager
                     'default' => '--no-owner --no-privileges',
                 ],
             ],
+            's3_sync' => [
+                'credential_source' => [
+                    'type' => 'select',
+                    'label' => 'S3 Credentials',
+                    'options' => ['global' => 'Use Global S3 Settings', 'custom' => 'Custom Credentials'],
+                    'default' => 'global',
+                ],
+                'endpoint' => [
+                    'type' => 'text',
+                    'label' => 'S3 Endpoint URL',
+                    'help' => 'e.g. s3.amazonaws.com, s3.us-west-1.wasabisys.com, s3.eu-central-003.backblazeb2.com',
+                    'show_when' => ['credential_source' => 'custom'],
+                ],
+                'region' => [
+                    'type' => 'text',
+                    'label' => 'Region',
+                    'default' => 'us-east-1',
+                    'show_when' => ['credential_source' => 'custom'],
+                ],
+                'bucket' => [
+                    'type' => 'text',
+                    'label' => 'Bucket Name',
+                    'required' => true,
+                    'show_when' => ['credential_source' => 'custom'],
+                ],
+                'access_key' => [
+                    'type' => 'text',
+                    'label' => 'Access Key ID',
+                    'required' => true,
+                    'sensitive' => true,
+                    'show_when' => ['credential_source' => 'custom'],
+                ],
+                'secret_key' => [
+                    'type' => 'text',
+                    'label' => 'Secret Access Key',
+                    'required' => true,
+                    'sensitive' => true,
+                    'show_when' => ['credential_source' => 'custom'],
+                ],
+                'path_prefix' => [
+                    'type' => 'text',
+                    'label' => 'Path Prefix',
+                    'default' => '',
+                    'help' => 'Optional subfolder in bucket. Repo syncs to: bucket/prefix/agent-name/repo-name/',
+                ],
+                'bandwidth_limit' => [
+                    'type' => 'text',
+                    'label' => 'Bandwidth Limit',
+                    'default' => '',
+                    'help' => 'e.g. 50M for 50 MB/s. Leave empty for unlimited.',
+                ],
+            ],
             'shell_hook' => [
                 'pre_script' => [
                     'type' => 'text',
@@ -489,6 +574,13 @@ class PluginManager
                 . "       CREATE, INSERT, DROP, ALTER, INDEX, REFERENCES\n"
                 . "       ON *.* TO 'backup_user'@'localhost';\n"
                 . "FLUSH PRIVILEGES;",
+            's3_sync' => "Requirements:\n"
+                . "  apt install rclone\n\n"
+                . "rclone must be installed on the BBS server.\n"
+                . "This plugin syncs borg repositories to S3-compatible storage\n"
+                . "(AWS S3, Backblaze B2, Wasabi, MinIO, etc.) after prune completes.\n\n"
+                . "Configure global S3 credentials in Settings → Offsite Storage,\n"
+                . "or use custom credentials per configuration.",
             'pg_dump' => "-- Backup only (read-only):\n"
                 . "CREATE ROLE backup_user WITH LOGIN PASSWORD 'strong_password';\n"
                 . "GRANT CONNECT ON DATABASE mydb TO backup_user;\n"

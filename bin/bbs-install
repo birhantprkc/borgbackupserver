@@ -146,7 +146,7 @@ PACKAGES=(
     apache2 libapache2-mod-php
     php php-mysql php-mbstring php-xml php-curl php-memcached
     mysql-server borgbackup composer git openssh-server
-    memcached certbot python3-certbot-apache
+    memcached certbot python3-certbot-apache rclone
     dnsutils  # for dig
 )
 

@@ -242,7 +242,13 @@ INSERT INTO settings (`key`, `value`) VALUES
     ('force_2fa', '0'),
     ('target_borg_version', ''),
     ('last_borg_version_check', ''),
-    ('fallback_to_pip', '1');
+    ('fallback_to_pip', '1'),
+    ('s3_endpoint', ''),
+    ('s3_region', ''),
+    ('s3_bucket', ''),
+    ('s3_access_key', ''),
+    ('s3_secret_key', ''),
+    ('s3_path_prefix', '');
 
 -- --------------------------------------------------------
 -- Notifications
@@ -320,7 +326,8 @@ CREATE TABLE backup_plan_plugins (
 INSERT INTO plugins (slug, name, description, plugin_type) VALUES
 ('mysql_dump', 'MySQL Backup/Restore', 'Performs mysqldump before backup and optionally restores databases back to the MySQL server.', 'pre_backup'),
 ('pg_dump', 'PostgreSQL Backup/Restore', 'Performs pg_dump before backup and optionally restores databases back to the PostgreSQL server.', 'pre_backup'),
-('shell_hook', 'Shell Script Hook', 'Runs custom shell scripts on the client before and/or after backup. Useful for application quiescing, cache clearing, notifications, or custom integrations.', 'pre_backup');
+('shell_hook', 'Shell Script Hook', 'Runs custom shell scripts on the client before and/or after backup. Useful for application quiescing, cache clearing, notifications, or custom integrations.', 'pre_backup'),
+('s3_sync', 'S3 Offsite Sync', 'Sync repositories to S3-compatible storage after prune', 'post_backup');
 
 -- --------------------------------------------------------
 -- Backup Templates

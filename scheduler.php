@@ -306,6 +306,49 @@ foreach ($serverJobs as $sj) {
             }
         }
     }
+
+    // S3 offsite sync — run post_backup plugins after successful prune
+    if ($result === 'completed' && $sj['task_type'] === 'prune' && !empty($sj['backup_plan_id'])) {
+        $pluginManager = $pluginManager ?? new \BBS\Services\PluginManager();
+        $planPlugins = $pluginManager->getPlanPlugins((int) $sj['backup_plan_id']);
+
+        foreach ($planPlugins as $pp) {
+            if ($pp['slug'] !== 's3_sync' || !$pp['enabled']) {
+                continue;
+            }
+
+            // Resolve config from named plugin_config if available, else inline
+            $config = json_decode($pp['config'], true) ?: [];
+            if (!empty($pp['plugin_config_id'])) {
+                $namedConfig = $pluginManager->getPluginConfig((int) $pp['plugin_config_id']);
+                if ($namedConfig) {
+                    $config = json_decode($namedConfig['config'], true) ?: [];
+                }
+            }
+
+            $s3Service = new \BBS\Services\S3SyncService();
+            $creds = $s3Service->resolveCredentials($config);
+
+            $repo = $db->fetchOne("SELECT * FROM repositories WHERE id = ?", [$sj['repository_id']]);
+            $agent = $db->fetchOne("SELECT * FROM agents WHERE id = ?", [$sj['agent_id']]);
+
+            if (!$repo || !$agent) {
+                continue;
+            }
+
+            echo date('Y-m-d H:i:s') . " Starting S3 sync for {$agent['name']}/{$repo['name']}...\n";
+            $syncResult = $s3Service->syncRepository($repo, $agent, $creds);
+
+            $db->insert('server_log', [
+                'agent_id' => $sj['agent_id'],
+                'backup_job_id' => $sj['id'],
+                'level' => $syncResult['success'] ? 'info' : 'error',
+                'message' => 'S3 sync: ' . ($syncResult['success'] ? 'completed' : 'failed — ' . $syncResult['output']),
+            ]);
+
+            echo date('Y-m-d H:i:s') . " S3 sync " . ($syncResult['success'] ? 'completed' : 'FAILED') . " for {$agent['name']}/{$repo['name']}\n";
+        }
+    }
 }
 
 // Step 5: Update repository sizes from actual disk usage (every 5 minutes)

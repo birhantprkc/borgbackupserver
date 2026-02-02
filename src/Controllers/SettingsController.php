@@ -523,4 +523,58 @@ class SettingsController extends Controller
 
         $this->json($template);
     }
+
+    /**
+     * POST /settings/offsite-storage — save global S3 settings.
+     */
+    public function saveOffsiteStorage(): void
+    {
+        $this->requireAdmin();
+        $this->verifyCsrf();
+
+        $fields = ['s3_endpoint', 's3_region', 's3_bucket', 's3_path_prefix'];
+        foreach ($fields as $key) {
+            if (isset($_POST[$key])) {
+                $existing = $this->db->fetchOne("SELECT `key` FROM settings WHERE `key` = ?", [$key]);
+                if ($existing) {
+                    $this->db->update('settings', ['value' => $_POST[$key]], "`key` = ?", [$key]);
+                } else {
+                    $this->db->insert('settings', ['key' => $key, 'value' => $_POST[$key]]);
+                }
+            }
+        }
+
+        // Encrypt and save sensitive fields only if non-empty (preserve existing otherwise)
+        $sensitiveFields = ['s3_access_key', 's3_secret_key'];
+        foreach ($sensitiveFields as $key) {
+            $value = $_POST[$key] ?? '';
+            if (!empty($value)) {
+                $encrypted = \BBS\Services\Encryption::encrypt($value);
+                $existing = $this->db->fetchOne("SELECT `key` FROM settings WHERE `key` = ?", [$key]);
+                if ($existing) {
+                    $this->db->update('settings', ['value' => $encrypted], "`key` = ?", [$key]);
+                } else {
+                    $this->db->insert('settings', ['key' => $key, 'value' => $encrypted]);
+                }
+            }
+        }
+
+        $this->flash('success', 'S3 settings saved.');
+        $this->redirect('/settings?tab=offsite');
+    }
+
+    /**
+     * POST /settings/offsite-storage/test — test S3 connection with saved credentials.
+     */
+    public function testOffsiteStorage(): void
+    {
+        $this->requireAdmin();
+        $this->verifyCsrf();
+
+        $s3Service = new \BBS\Services\S3SyncService();
+        $creds = $s3Service->resolveCredentials(['credential_source' => 'global']);
+        $result = $s3Service->testConnection($creds);
+
+        $this->json($result);
+    }
 }

@@ -1849,7 +1849,12 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                             if (is_array($val)) $val = implode(', ', $val);
                             $fieldName = "plugin_config[{$field}]";
                         ?>
-                        <div class="mb-2">
+                        <div class="mb-2<?php if (!empty($def['show_when'])): ?> plugin-show-when<?php endif; ?>"
+                             <?php if (!empty($def['show_when'])): ?>
+                                 <?php foreach ($def['show_when'] as $swField => $swVal): ?>
+                                     data-show-field="<?= htmlspecialchars($swField) ?>" data-show-value="<?= htmlspecialchars($swVal) ?>"
+                                 <?php endforeach; ?>
+                             <?php endif; ?>>
                             <?php if ($def['type'] === 'checkbox'): ?>
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox" name="<?= $fieldName ?>" value="1"
@@ -1859,6 +1864,13 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                         <?= htmlspecialchars($def['label']) ?>
                                     </label>
                                 </div>
+                            <?php elseif ($def['type'] === 'select'): ?>
+                                <label class="form-label small fw-semibold mb-1"><?= htmlspecialchars($def['label']) ?></label>
+                                <select class="form-select form-select-sm plugin-select-trigger" name="<?= $fieldName ?>" data-field="<?= $field ?>">
+                                    <?php foreach ($def['options'] as $optVal => $optLabel): ?>
+                                        <option value="<?= htmlspecialchars($optVal) ?>" <?= $val === $optVal ? 'selected' : '' ?>><?= htmlspecialchars($optLabel) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
                             <?php else: ?>
                                 <label class="form-label small fw-semibold mb-1"><?= htmlspecialchars($def['label']) ?></label>
                                 <input type="<?= $def['type'] === 'number' ? 'number' : 'text' ?>"
@@ -1899,7 +1911,12 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                     $fieldVal = is_array($default) ? implode(', ', $default) : $default;
                                     $fieldName = "plugin_config[{$field}]";
                                 ?>
-                                <div class="mb-2">
+                                <div class="mb-2<?php if (!empty($def['show_when'])): ?> plugin-show-when<?php endif; ?>"
+                                     <?php if (!empty($def['show_when'])): ?>
+                                         <?php foreach ($def['show_when'] as $swField => $swVal): ?>
+                                             data-show-field="<?= htmlspecialchars($swField) ?>" data-show-value="<?= htmlspecialchars($swVal) ?>"
+                                         <?php endforeach; ?>
+                                     <?php endif; ?>>
                                     <?php if ($def['type'] === 'checkbox'): ?>
                                         <div class="form-check">
                                             <input class="form-check-input" type="checkbox" name="<?= $fieldName ?>" value="1"
@@ -1909,6 +1926,13 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                                 <?= htmlspecialchars($def['label']) ?>
                                             </label>
                                         </div>
+                                    <?php elseif ($def['type'] === 'select'): ?>
+                                        <label class="form-label small fw-semibold mb-1"><?= htmlspecialchars($def['label']) ?></label>
+                                        <select class="form-select form-select-sm plugin-select-trigger" name="<?= $fieldName ?>" data-field="<?= $field ?>">
+                                            <?php foreach ($def['options'] as $optVal => $optLabel): ?>
+                                                <option value="<?= htmlspecialchars($optVal) ?>" <?= $fieldVal === $optVal ? 'selected' : '' ?>><?= htmlspecialchars($optLabel) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
                                     <?php else: ?>
                                         <label class="form-label small fw-semibold mb-1"><?= htmlspecialchars($def['label']) ?>
                                             <?php if ($def['required'] ?? false): ?><span class="text-danger">*</span><?php endif; ?>
@@ -2644,5 +2668,40 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
     }
 
     setInterval(pollStatus, 30000);
+})();
+
+// Plugin show_when conditional field visibility
+(function() {
+    function updateShowWhen(form) {
+        form.querySelectorAll('.plugin-show-when').forEach(function(el) {
+            var field = el.getAttribute('data-show-field');
+            var value = el.getAttribute('data-show-value');
+            var select = form.querySelector('select[data-field="' + field + '"]');
+            if (select) {
+                el.style.display = (select.value === value) ? '' : 'none';
+            }
+        });
+    }
+
+    document.querySelectorAll('.plugin-select-trigger').forEach(function(sel) {
+        var form = sel.closest('form');
+        if (form) {
+            updateShowWhen(form);
+            sel.addEventListener('change', function() { updateShowWhen(form); });
+        }
+    });
+
+    // Also handle dynamically shown forms (collapse show events)
+    document.addEventListener('shown.bs.collapse', function(e) {
+        var form = e.target.querySelector('form') || e.target.closest('form');
+        if (form) {
+            form.querySelectorAll('.plugin-select-trigger').forEach(function(sel) {
+                updateShowWhen(form);
+                sel.removeEventListener('change', sel._showWhenHandler);
+                sel._showWhenHandler = function() { updateShowWhen(form); };
+                sel.addEventListener('change', sel._showWhenHandler);
+            });
+        }
+    });
 })();
 </script>

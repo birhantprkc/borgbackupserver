@@ -23,6 +23,11 @@
         </a>
     </li>
     <li class="nav-item">
+        <a class="nav-link <?= $activeTab === 'offsite' ? 'active' : '' ?>" href="/settings?tab=offsite">
+            <i class="bi bi-cloud-arrow-up me-1"></i> Offsite Storage
+        </a>
+    </li>
+    <li class="nav-item">
         <?php
         $updateService = new \BBS\Services\UpdateService();
         $updateAvailable = $updateService->isUpdateAvailable();
@@ -414,6 +419,12 @@
                             <i class="bi bi-check-lg me-1"></i> Set Target Version
                         </button>
                     </form>
+
+                    <div class="alert alert-light border py-2 px-3 small mt-3 mb-0">
+                        <i class="bi bi-info-circle me-1"></i>
+                        <strong>Compatibility note:</strong> If a client's OS is too old for the latest borg binary, an older 1.x version will still work fine.
+                        All borg 1.x versions share the same repository format, so the server and clients can safely run different 1.x versions.
+                    </div>
                 <?php endif; ?>
             </div>
         </div>
@@ -487,6 +498,133 @@
         </div>
     </div>
 </div>
+<?php endif; ?>
+
+<!-- Offsite Storage Tab -->
+<?php if ($activeTab === 'offsite'): ?>
+<form method="POST" action="/settings/offsite-storage">
+    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white fw-semibold">
+                    <i class="bi bi-cloud-arrow-up me-1"></i> Global S3 Settings
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">Configure S3-compatible storage for offsite repository sync. These credentials can be shared by all backup plans using the S3 Sync plugin with "Use Global S3 Settings".</p>
+
+                    <?php
+                    $s3Service = new \BBS\Services\S3SyncService();
+                    $rcloneInstalled = $s3Service->isRcloneInstalled();
+                    ?>
+                    <?php if (!$rcloneInstalled): ?>
+                    <div class="alert alert-warning py-2 px-3 small mb-3">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        <strong>rclone not installed.</strong> S3 sync requires rclone. Install with: <code>apt install rclone</code>
+                    </div>
+                    <?php endif; ?>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">S3 Endpoint URL</label>
+                        <input type="text" class="form-control" name="s3_endpoint" value="<?= htmlspecialchars($settings['s3_endpoint'] ?? '') ?>" placeholder="e.g. s3.amazonaws.com">
+                        <div class="form-text">For AWS use <code>s3.amazonaws.com</code>. For Wasabi: <code>s3.us-west-1.wasabisys.com</code>. For Backblaze B2: <code>s3.us-west-002.backblazeb2.com</code>.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Region</label>
+                        <input type="text" class="form-control" name="s3_region" value="<?= htmlspecialchars($settings['s3_region'] ?? '') ?>" placeholder="us-east-1">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Bucket Name</label>
+                        <input type="text" class="form-control" name="s3_bucket" value="<?= htmlspecialchars($settings['s3_bucket'] ?? '') ?>" placeholder="my-backup-bucket">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Access Key ID</label>
+                        <input type="text" class="form-control" name="s3_access_key" value="" placeholder="<?= !empty($settings['s3_access_key']) ? '(unchanged if empty)' : '' ?>">
+                        <?php if (!empty($settings['s3_access_key'])): ?>
+                            <div class="form-text">A value is saved. Leave empty to keep it unchanged.</div>
+                        <?php endif; ?>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Secret Access Key</label>
+                        <input type="password" class="form-control" name="s3_secret_key" value="" placeholder="<?= !empty($settings['s3_secret_key']) ? '(unchanged if empty)' : '' ?>">
+                        <?php if (!empty($settings['s3_secret_key'])): ?>
+                            <div class="form-text">A value is saved. Leave empty to keep it unchanged.</div>
+                        <?php endif; ?>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Path Prefix</label>
+                        <input type="text" class="form-control" name="s3_path_prefix" value="<?= htmlspecialchars($settings['s3_path_prefix'] ?? '') ?>" placeholder="Optional subfolder in bucket">
+                        <div class="form-text">Repos sync to: <code>bucket/prefix/agent-name/repo-name/</code></div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-warning">
+                            <i class="bi bi-check-lg me-1"></i> Save S3 Settings
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="btnTestS3">
+                            <i class="bi bi-plug me-1"></i> Test Connection
+                        </button>
+                        <span id="s3TestResult" class="d-flex align-items-center ms-2 small"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white fw-semibold">
+                    <i class="bi bi-info-circle me-1"></i> How It Works
+                </div>
+                <div class="card-body">
+                    <ol class="small mb-0">
+                        <li class="mb-2">Configure your S3 credentials here (or use custom credentials per-config on the Plugins tab).</li>
+                        <li class="mb-2">Enable the <strong>S3 Offsite Sync</strong> plugin on your client's Plugins tab.</li>
+                        <li class="mb-2">Create a named config (e.g. "Production S3") and choose "Use Global S3 Settings" or enter custom credentials.</li>
+                        <li class="mb-2">Attach the config to a backup plan.</li>
+                        <li class="mb-2">After each prune/compact cycle, the server automatically syncs the borg repository to S3 using <code>rclone sync</code>.</li>
+                        <li class="mb-2">Only changed segments are uploaded — borg's append-only data format makes this naturally efficient.</li>
+                    </ol>
+                    <hr>
+                    <div class="small text-muted">
+                        <strong>Supported providers:</strong> AWS S3, Backblaze B2, Wasabi, MinIO, DigitalOcean Spaces, and any S3-compatible endpoint.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<script>
+document.getElementById('btnTestS3')?.addEventListener('click', function() {
+    var btn = this;
+    var result = document.getElementById('s3TestResult');
+    btn.disabled = true;
+    result.textContent = 'Testing...';
+    result.className = 'd-flex align-items-center ms-2 small text-muted';
+    fetch('/settings/offsite-storage/test', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'csrf_token=' + encodeURIComponent(document.querySelector('input[name=csrf_token]').value)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        btn.disabled = false;
+        if (data.success) {
+            result.textContent = 'Connection successful!';
+            result.className = 'd-flex align-items-center ms-2 small text-success fw-semibold';
+        } else {
+            result.textContent = 'Failed: ' + data.error;
+            result.className = 'd-flex align-items-center ms-2 small text-danger fw-semibold';
+        }
+    })
+    .catch(function() {
+        btn.disabled = false;
+        result.textContent = 'Request failed.';
+        result.className = 'd-flex align-items-center ms-2 small text-danger fw-semibold';
+    });
+});
+</script>
 <?php endif; ?>
 
 <!-- Updates Tab -->
