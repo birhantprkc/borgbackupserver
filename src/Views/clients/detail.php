@@ -2215,6 +2215,34 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
                 <?php endif; ?>
             </div>
             <?php endif; ?>
+            <!-- DB mode: Archive (hidden by default) -->
+            <?php if ($dbPluginEnabled): ?>
+            <div class="restore-db-controls col-md-9" id="db-archive-col" style="display:none;">
+                <label class="form-label fw-semibold mb-1 small">Archive</label>
+                <select class="form-select form-select-sm" id="db-archive-select">
+                    <option value="">Choose a restore point...</option>
+                    <?php
+                    $currentRepo = null;
+                    foreach ($archives as $ar):
+                        if (empty($ar['databases_backed_up'])) continue;
+                        $dbMeta = json_decode($ar['databases_backed_up'], true);
+                        if (empty($dbMeta['databases'])) continue;
+                        if ($ar['repo_name'] !== $currentRepo):
+                            if ($currentRepo !== null) echo '</optgroup>';
+                            $currentRepo = $ar['repo_name'];
+                            echo '<optgroup label="' . htmlspecialchars($currentRepo) . '">';
+                        endif;
+                        $n = count($dbMeta['databases']);
+                        $dbLabel = " ({$n} " . ($n === 1 ? 'database' : 'databases') . ')';
+                    ?>
+                        <option value="<?= $ar['id'] ?>">
+                            <?= \BBS\Core\TimeHelper::format($ar['created_at'], 'l, M j, Y \a\t g:i A') ?><?= $dbLabel ?>
+                        </option>
+                    <?php endforeach; ?>
+                    <?php if ($currentRepo !== null) echo '</optgroup>'; ?>
+                </select>
+            </div>
+            <?php endif; ?>
             <!-- Files mode: Archive + Search -->
             <div class="restore-files-controls <?= $dbPluginEnabled ? 'col-md-4' : 'col-md-5' ?>" id="files-archive-col">
                 <label class="form-label fw-semibold mb-1 small">Archive</label>
@@ -2346,36 +2374,6 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
     <!-- Database Restore Section (hidden by default) -->
     <?php if ($dbPluginEnabled): ?>
     <div id="db-restore-section" style="display:none;">
-        <div class="row g-2 align-items-end mb-3">
-            <div class="col-md-6">
-                <label class="form-label fw-semibold mb-1 small">Archive</label>
-                <select class="form-select form-select-sm" id="db-archive-select">
-                    <option value="">Choose a restore point...</option>
-                    <?php
-                    $currentRepo = null;
-                    foreach ($archives as $ar):
-                        // Skip archives without database metadata
-                        if (empty($ar['databases_backed_up'])) continue;
-                        $dbMeta = json_decode($ar['databases_backed_up'], true);
-                        if (empty($dbMeta['databases'])) continue;
-
-                        if ($ar['repo_name'] !== $currentRepo):
-                            if ($currentRepo !== null) echo '</optgroup>';
-                            $currentRepo = $ar['repo_name'];
-                            echo '<optgroup label="' . htmlspecialchars($currentRepo) . '">';
-                        endif;
-                        $n = count($dbMeta['databases']);
-                        $dbLabel = " ({$n} " . ($n === 1 ? 'database' : 'databases') . ')';
-                    ?>
-                        <option value="<?= $ar['id'] ?>">
-                            <?= \BBS\Core\TimeHelper::format($ar['created_at'], 'l, M j, Y \a\t g:i A') ?><?= $dbLabel ?>
-                        </option>
-                    <?php endforeach; ?>
-                    <?php if ($currentRepo !== null) echo '</optgroup>'; ?>
-                </select>
-            </div>
-        </div>
-
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-primary text-white py-2">
                 <i class="bi bi-database me-1"></i> Databases to Restore (<span id="db-selected-count">0</span>)

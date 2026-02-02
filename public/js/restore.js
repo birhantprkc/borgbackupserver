@@ -580,16 +580,19 @@
                 btn.classList.add('btn-primary', 'active');
 
                 var filesControls = document.querySelectorAll('.restore-files-controls');
+                var dbControls = document.querySelectorAll('.restore-db-controls');
                 if (dbRestoreMode === 'database') {
                     filesSection.style.display = 'none';
                     dbSection.style.display = '';
                     if (dbConnectionPicker) dbConnectionPicker.style.display = '';
                     filesControls.forEach(function(el) { el.style.display = 'none'; });
+                    dbControls.forEach(function(el) { el.style.display = ''; });
                 } else {
                     filesSection.style.display = '';
                     dbSection.style.display = 'none';
                     if (dbConnectionPicker) dbConnectionPicker.style.display = 'none';
                     filesControls.forEach(function(el) { el.style.display = ''; });
+                    dbControls.forEach(function(el) { el.style.display = 'none'; });
                 }
             });
         }
