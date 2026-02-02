@@ -2302,7 +2302,7 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
 
     <div id="files-restore-section" class="mt-3">
     <!-- Two-Panel Layout -->
-    <div class="row g-3">
+    <div class="row gx-3">
         <!-- LEFT: Browse / Search / History -->
         <div class="col-lg-7">
             <!-- Browse Panel -->
