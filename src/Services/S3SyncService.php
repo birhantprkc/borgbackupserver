@@ -31,12 +31,14 @@ class S3SyncService
                 $settings[$field] = $row['value'];
             }
 
-            // Decrypt secret_key from global settings
-            if (!empty($settings['secret_key'])) {
-                try {
-                    $settings['secret_key'] = Encryption::decrypt($settings['secret_key']);
-                } catch (\Exception $e) {
-                    // May already be plaintext
+            // Decrypt sensitive fields from global settings
+            foreach (['access_key', 'secret_key'] as $sensitive) {
+                if (!empty($settings[$sensitive])) {
+                    try {
+                        $settings[$sensitive] = Encryption::decrypt($settings[$sensitive]);
+                    } catch (\Exception $e) {
+                        // May already be plaintext
+                    }
                 }
             }
 
