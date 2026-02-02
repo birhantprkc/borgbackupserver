@@ -140,7 +140,7 @@ class BorgVersionService
             return self::LEGACY_ASSET_MAP[$assetName];
         }
 
-        // 1.4.x Linux: borg-linux-glibc235-x86_64[-gh]
+        // 1.4.x Linux with arch: borg-linux-glibc235-x86_64[-gh]
         if (preg_match('/^borg-linux-(glibc\d+)-([a-z0-9_]+?)(-gh)?$/', $assetName, $m)) {
             return [
                 'platform' => 'linux',
@@ -149,7 +149,16 @@ class BorgVersionService
             ];
         }
 
-        // 1.4.x macOS: borg-macos-14-arm64[-gh]
+        // 1.4.0 early Linux (no arch): borg-linux-glibc228 — assume x86_64
+        if (preg_match('/^borg-linux-(glibc\d+)$/', $assetName, $m)) {
+            return [
+                'platform' => 'linux',
+                'architecture' => 'x86_64',
+                'glibc_version' => $m[1],
+            ];
+        }
+
+        // 1.4.x macOS with arch: borg-macos-14-arm64[-gh]
         if (preg_match('/^borg-macos-\d+-([a-z0-9_]+?)(-gh)?$/', $assetName, $m)) {
             return [
                 'platform' => 'macos',
@@ -158,11 +167,29 @@ class BorgVersionService
             ];
         }
 
-        // 1.4.x FreeBSD: borg-freebsd-14-x86_64[-gh]
+        // 1.4.0 early macOS (no arch): borg-macos1012 — assume x86_64
+        if (preg_match('/^borg-macos\d+$/', $assetName)) {
+            return [
+                'platform' => 'macos',
+                'architecture' => 'x86_64',
+                'glibc_version' => null,
+            ];
+        }
+
+        // 1.4.x FreeBSD with arch: borg-freebsd-14-x86_64[-gh]
         if (preg_match('/^borg-freebsd-\d+-([a-z0-9_]+?)(-gh)?$/', $assetName, $m)) {
             return [
                 'platform' => 'freebsd',
                 'architecture' => $m[1],
+                'glibc_version' => null,
+            ];
+        }
+
+        // 1.4.0 early FreeBSD (no arch): borg-freebsd14 — assume x86_64
+        if (preg_match('/^borg-freebsd\d+$/', $assetName)) {
+            return [
+                'platform' => 'freebsd',
+                'architecture' => 'x86_64',
                 'glibc_version' => null,
             ];
         }
