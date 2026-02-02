@@ -135,6 +135,84 @@ class SettingsController extends Controller
         $this->redirect('/settings?tab=templates');
     }
 
+    public function testSmtp(): void
+    {
+        $this->requireAdmin();
+        $this->verifyCsrf();
+
+        $settings = [];
+        $rows = $this->db->fetchAll("SELECT `key`, `value` FROM settings WHERE `key` LIKE 'smtp_%'");
+        foreach ($rows as $row) {
+            $settings[$row['key']] = $row['value'];
+        }
+
+        $host = $settings['smtp_host'] ?? '';
+        $port = (int) ($settings['smtp_port'] ?? 587);
+        $user = $settings['smtp_user'] ?? '';
+        $pass = $settings['smtp_pass'] ?? '';
+        $from = $settings['smtp_from'] ?? '';
+
+        if (empty($host)) {
+            $this->json(['success' => false, 'error' => 'SMTP host is not configured.']);
+            return;
+        }
+
+        try {
+            $socket = @fsockopen($host, $port, $errno, $errstr, 10);
+            if (!$socket) {
+                $this->json(['success' => false, 'error' => "Connection failed: {$errstr}"]);
+                return;
+            }
+
+            $this->smtpRead($socket);
+            $this->smtpCmd($socket, "EHLO " . gethostname());
+
+            if ($port === 587) {
+                $this->smtpCmd($socket, "STARTTLS");
+                if (!stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT)) {
+                    fclose($socket);
+                    $this->json(['success' => false, 'error' => 'TLS negotiation failed.']);
+                    return;
+                }
+                $this->smtpCmd($socket, "EHLO " . gethostname());
+            }
+
+            if ($user) {
+                $this->smtpCmd($socket, "AUTH LOGIN");
+                $this->smtpCmd($socket, base64_encode($user));
+                $resp = $this->smtpCmd($socket, base64_encode($pass));
+                if (strpos($resp, '235') === false) {
+                    fclose($socket);
+                    $this->json(['success' => false, 'error' => 'Authentication failed: ' . trim($resp)]);
+                    return;
+                }
+            }
+
+            $this->smtpCmd($socket, "QUIT");
+            fclose($socket);
+
+            $this->json(['success' => true]);
+        } catch (\Exception $e) {
+            $this->json(['success' => false, 'error' => $e->getMessage()]);
+        }
+    }
+
+    private function smtpCmd($socket, string $cmd): string
+    {
+        fwrite($socket, $cmd . "\r\n");
+        return $this->smtpRead($socket);
+    }
+
+    private function smtpRead($socket): string
+    {
+        $response = '';
+        while ($line = fgets($socket, 515)) {
+            $response .= $line;
+            if (isset($line[3]) && $line[3] === ' ') break;
+        }
+        return $response;
+    }
+
     public function checkUpdate(): void
     {
         $this->requireAdmin();

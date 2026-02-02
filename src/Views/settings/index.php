@@ -149,6 +149,12 @@
                         <label class="form-label fw-semibold">From Address</label>
                         <input type="email" class="form-control" name="smtp_from" value="<?= htmlspecialchars($settings['smtp_from'] ?? '') ?>">
                     </div>
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnTestSmtp">
+                            <i class="bi bi-envelope-check me-1"></i> Test SMTP Connection
+                        </button>
+                        <span id="smtpTestResult" class="ms-2 small"></span>
+                    </div>
                     <hr>
                     <label class="form-label fw-semibold">Email me when:</label>
                     <div class="form-check mb-2">
@@ -457,3 +463,30 @@ $outdatedCount = count($outdatedAgents);
 </div>
 <?php endif; ?>
 <?php endif; ?>
+
+<script>
+document.getElementById('btnTestSmtp')?.addEventListener('click', function() {
+    var btn = this;
+    var result = document.getElementById('smtpTestResult');
+    btn.disabled = true;
+    result.textContent = 'Testing...';
+    result.className = 'ms-2 small text-muted';
+    fetch('/settings/test-smtp', {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: 'csrf_token=' + encodeURIComponent(document.querySelector('input[name=csrf_token]').value)})
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            btn.disabled = false;
+            if (data.success) {
+                result.textContent = 'Connected and authenticated successfully!';
+                result.className = 'ms-2 small text-success fw-semibold';
+            } else {
+                result.textContent = 'Failed: ' + data.error;
+                result.className = 'ms-2 small text-danger fw-semibold';
+            }
+        })
+        .catch(function() {
+            btn.disabled = false;
+            result.textContent = 'Request failed.';
+            result.className = 'ms-2 small text-danger fw-semibold';
+        });
+});
+</script>

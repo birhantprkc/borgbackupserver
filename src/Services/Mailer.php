@@ -27,7 +27,7 @@ class Mailer
         $this->port = (int) ($settings['smtp_port'] ?? 587);
         $this->username = $settings['smtp_user'] ?? '';
         $this->password = $settings['smtp_pass'] ?? '';
-        $this->fromEmail = $settings['smtp_from_email'] ?? '';
+        $this->fromEmail = $settings['smtp_from'] ?? $settings['smtp_from_email'] ?? '';
         $this->fromName = $settings['smtp_from_name'] ?? 'Borg Backup Server';
         $this->enabled = !empty($this->host) && !empty($this->fromEmail);
     }
@@ -74,11 +74,14 @@ class Mailer
             $this->sendCommand($socket, "RCPT TO:<{$to}>");
             $this->sendCommand($socket, "DATA");
 
+            $contentType = (stripos($body, '<') !== false && stripos($body, '>') !== false)
+                ? 'text/html' : 'text/plain';
+
             $headers = "From: {$this->fromName} <{$this->fromEmail}>\r\n"
                      . "To: {$to}\r\n"
                      . "Subject: {$subject}\r\n"
                      . "MIME-Version: 1.0\r\n"
-                     . "Content-Type: text/plain; charset=UTF-8\r\n"
+                     . "Content-Type: {$contentType}; charset=UTF-8\r\n"
                      . "Date: " . date('r') . "\r\n";
 
             fwrite($socket, $headers . "\r\n" . $body . "\r\n.\r\n");
