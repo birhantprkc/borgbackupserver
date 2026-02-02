@@ -689,9 +689,20 @@
             const checked = dbTableBody.querySelectorAll('.db-select-cb:checked');
             if (checked.length === 0) return;
 
-            const dbNames = [];
-            checked.forEach(cb => dbNames.push(cb.dataset.db));
-            confirmAction('Restore ' + dbNames.length + ' database(s) to the client?\n\nDatabases: ' + dbNames.join(', ') + '\n\nThis may overwrite existing data.', function() {
+            const lines = [];
+            checked.forEach(function(cb) {
+                const dbName = cb.dataset.db;
+                const modeSelect = dbTableBody.querySelector('select[name="dbmode_' + CSS.escape(dbName) + '"]');
+                const mode = modeSelect ? modeSelect.value : 'replace';
+                if (mode === 'rename') {
+                    const renameField = dbTableBody.querySelector('input[data-rename-for="' + CSS.escape(dbName) + '"]');
+                    const target = renameField ? renameField.value.trim() : dbName + '_copy';
+                    lines.push('Copy ' + dbName + ' \u2192 ' + target);
+                } else {
+                    lines.push('Replace ' + dbName);
+                }
+            });
+            confirmAction('Perform the following on the client?\n\n' + lines.join('\n') + '\n\nThis may overwrite existing data.', function() {
                 const form = document.getElementById('db-restore-form');
             const fieldsContainer = document.getElementById('db-restore-fields');
             fieldsContainer.innerHTML = '';
