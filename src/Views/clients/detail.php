@@ -1792,13 +1792,13 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     <div class="card mb-4">
         <div class="card-header d-flex justify-content-between align-items-center">
             <span class="fw-semibold"><i class="bi <?= $plugin['slug'] === 'shell_hook' ? 'bi-terminal' : 'bi-database' ?> me-1<?= $plugin['slug'] === 'mysql_dump' ? ' text-primary' : ($plugin['slug'] === 'pg_dump' ? ' text-info' : ($plugin['slug'] === 'shell_hook' ? ' text-primary' : '')) ?>"></i><?= htmlspecialchars($plugin['name']) ?> Configurations</span>
-            <button type="button" class="btn btn-sm btn-success" data-bs-toggle="collapse" data-bs-target="#newPluginConfig<?= $plugin['id'] ?>">
-                <i class="bi bi-plus-circle me-1"></i> Add Configuration
+            <button type="button" class="btn btn-sm btn-success" data-bs-toggle="collapse" data-bs-target="#newPluginConfig<?= $plugin['id'] ?>" title="Add Configuration">
+                <i class="bi bi-plus-circle"></i>
             </button>
         </div>
         <div class="card-body">
             <?php if (empty($configs)): ?>
-                <p class="text-muted mb-0">No configurations yet. Click "Add Configuration" to create one.</p>
+                <p class="text-muted mb-0">No configurations yet. Click <i class="bi bi-plus-circle"></i> to create one.</p>
             <?php endif; ?>
 
             <?php foreach ($configs as $cfg):
@@ -1811,23 +1811,27 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 $cfgIcon = $plugin['slug'] === 'shell_hook' ? 'bi-terminal' : 'bi-database';
                 $dbIcon = $plugin['slug'] === 'mysql_dump' ? 'text-primary' : ($plugin['slug'] === 'pg_dump' ? 'text-info' : ($plugin['slug'] === 'shell_hook' ? 'text-primary' : 'text-secondary'));
             ?>
-            <div class="border rounded p-3 mb-3">
+            <div class="border rounded p-3 mb-3" style="cursor:pointer;" onclick="var el=document.getElementById('editConfig<?= $cfg['id'] ?>');if(!el.classList.contains('show')){new bootstrap.Collapse(el).show();}">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
                         <h6 class="mb-1"><i class="bi <?= $cfgIcon ?> me-1 <?= $dbIcon ?>"></i><?= htmlspecialchars($cfg['name']) ?></h6>
                         <small class="text-muted"><?= htmlspecialchars(implode(' | ', $summaryParts)) ?></small>
                     </div>
-                    <div class="d-flex gap-1">
-                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="testPluginConfig(<?= $agent['id'] ?>, <?= $cfg['id'] ?>)">
-                            <i class="bi bi-lightning me-1"></i> Test
+                    <div class="dropdown" onclick="event.stopPropagation();">
+                        <button class="btn btn-sm btn-outline-secondary border-0" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-three-dots-vertical"></i>
                         </button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#editConfig<?= $cfg['id'] ?>">
-                            <i class="bi bi-pencil"></i>
-                        </button>
-                        <form method="POST" action="/clients/<?= $agent['id'] ?>/plugin-configs/<?= $cfg['id'] ?>/delete" class="d-inline" data-confirm="Delete this configuration?" data-confirm-danger>
-                            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
-                        </form>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="#" onclick="event.preventDefault();testPluginConfig(<?= $agent['id'] ?>, <?= $cfg['id'] ?>)"><i class="bi bi-lightning me-2"></i>Test</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="event.preventDefault();new bootstrap.Collapse(document.getElementById('editConfig<?= $cfg['id'] ?>')).toggle();"><i class="bi bi-pencil me-2"></i>Edit</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <form method="POST" action="/clients/<?= $agent['id'] ?>/plugin-configs/<?= $cfg['id'] ?>/delete" data-confirm="Delete this configuration?" data-confirm-danger>
+                                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                    <button type="submit" class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Delete</button>
+                                </form>
+                            </li>
+                        </ul>
                     </div>
                 </div>
                 <div id="test-result-<?= $cfg['id'] ?>" class="mt-2"></div>
