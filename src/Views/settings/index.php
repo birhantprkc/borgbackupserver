@@ -540,14 +540,14 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Access Key ID</label>
-                        <input type="text" class="form-control" name="s3_access_key" value="" autocomplete="off" placeholder="<?= !empty($settings['s3_access_key']) ? '(unchanged if empty)' : '' ?>">
+                        <input type="text" class="form-control" name="s3_access_key" id="s3_access_key" value="" autocomplete="new-password" placeholder="<?= !empty($settings['s3_access_key']) ? '(unchanged if empty)' : '' ?>">
                         <?php if (!empty($settings['s3_access_key'])): ?>
                             <div class="form-text">A value is saved. Leave empty to keep it unchanged.</div>
                         <?php endif; ?>
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Secret Access Key</label>
-                        <input type="password" class="form-control" name="s3_secret_key" value="" autocomplete="off" placeholder="<?= !empty($settings['s3_secret_key']) ? '(unchanged if empty)' : '' ?>">
+                        <input type="text" class="form-control" name="s3_secret_key" id="s3_secret_key" value="" autocomplete="new-password" placeholder="<?= !empty($settings['s3_secret_key']) ? '(unchanged if empty)' : '' ?>">
                         <?php if (!empty($settings['s3_secret_key'])): ?>
                             <div class="form-text">A value is saved. Leave empty to keep it unchanged.</div>
                         <?php endif; ?>
