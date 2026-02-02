@@ -218,7 +218,8 @@ case "$ACTION" in
 
         # Verify it runs and outputs expected version
         ACTUAL=$("$BORG_TMP" --version 2>/dev/null || true)
-        ACTUAL_VER=$(echo "$ACTUAL" | sed 's/^borg //')
+        # Output may be "borg 1.4.3" or "borg.tmp 1.4.3" — extract version number
+        ACTUAL_VER=$(echo "$ACTUAL" | grep -oP '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
 
         if [ "$ACTUAL_VER" != "$EXPECTED_VERSION" ]; then
             rm -f "$BORG_TMP"
