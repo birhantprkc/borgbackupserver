@@ -102,9 +102,12 @@ class AgentApiController extends Controller
         // Get tasks assigned to this agent
         $tasks = $queueManager->getTasksForAgent($agent['id']);
 
+        $pollInterval = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'agent_poll_interval'");
+
         $this->json([
             'status' => 'ok',
             'tasks' => $tasks,
+            'poll_interval' => (int) ($pollInterval['value'] ?? 30),
         ]);
     }
 

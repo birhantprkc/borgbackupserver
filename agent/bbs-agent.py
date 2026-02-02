@@ -19,7 +19,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.7.2"
+AGENT_VERSION = "1.7.3"
 CONFIG_PATH = "/etc/bbs-agent/config.ini"
 LOG_PATH = "/var/log/bbs-agent.log"
 SSH_KEY_PATH = "/etc/bbs-agent/ssh_key"
@@ -1501,6 +1501,10 @@ def main():
         try:
             # Poll for tasks
             result = api_request(config, "/api/agent/tasks")
+
+            # Update poll interval if server sends one
+            if result and "poll_interval" in result:
+                config["poll_interval"] = int(result["poll_interval"])
 
             if result and result.get("tasks"):
                 for task in result["tasks"]:
