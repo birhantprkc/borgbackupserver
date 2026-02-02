@@ -30,6 +30,70 @@ class DashboardController extends Controller
         exit;
     }
 
+    /**
+     * GET /api/toasts — global live event toasts (polled every 8s).
+     */
+    public function toasts(): void
+    {
+        $this->requireAuth();
+        $since = $_GET['since'] ?? date('Y-m-d H:i:s', strtotime('-10 seconds'));
+
+        $isAdmin = $this->isAdmin();
+        $userId = $_SESSION['user_id'] ?? 0;
+        $jobScope = $isAdmin ? '' : 'AND a.user_id = ?';
+        $jobParams = $isAdmin ? [$since, $since] : [$since, $since, $userId];
+
+        $jobs = $this->db->fetchAll("
+            SELECT bj.id, bj.status, bj.task_type, a.name as agent_name
+            FROM backup_jobs bj
+            JOIN agents a ON a.id = bj.agent_id
+            WHERE (
+                (bj.status = 'running' AND bj.started_at > ?) OR
+                (bj.status IN ('completed', 'failed') AND bj.completed_at > ?)
+            )
+            {$jobScope}
+            ORDER BY bj.id DESC LIMIT 10
+        ", $jobParams);
+
+        $errParams = $isAdmin ? [$since] : [$since, $userId];
+        $errors = $this->db->fetchAll("
+            SELECT sl.message, a.name as agent_name
+            FROM server_log sl
+            LEFT JOIN agents a ON a.id = sl.agent_id
+            WHERE sl.level = 'error' AND sl.created_at > ?
+            " . ($isAdmin ? '' : 'AND (a.user_id = ? OR sl.agent_id IS NULL)') . "
+            ORDER BY sl.id DESC LIMIT 5
+        ", $errParams);
+
+        $toasts = [];
+        foreach ($jobs as $job) {
+            $label = match($job['task_type']) {
+                'backup' => 'Backup',
+                'restore', 'restore_mysql', 'restore_pg' => 'Restore',
+                'update_agent' => 'Agent Update',
+                'update_borg' => 'Borg Update',
+                'plugin_test' => 'Plugin Test',
+                'prune' => 'Prune',
+                'compact' => 'Compact',
+                default => ucfirst($job['task_type']),
+            };
+            if ($job['status'] === 'running') {
+                $toasts[] = ['message' => "{$job['agent_name']}: {$label} started", 'type' => 'info'];
+            } elseif ($job['status'] === 'completed') {
+                $toasts[] = ['message' => "{$job['agent_name']}: {$label} completed", 'type' => 'success'];
+            } elseif ($job['status'] === 'failed') {
+                $toasts[] = ['message' => "{$job['agent_name']}: {$label} failed", 'type' => 'danger'];
+            }
+        }
+        foreach ($errors as $err) {
+            $name = $err['agent_name'] ?? 'System';
+            $msg = strlen($err['message']) > 100 ? substr($err['message'], 0, 100) . '...' : $err['message'];
+            $toasts[] = ['message' => "{$name}: {$msg}", 'type' => 'danger'];
+        }
+
+        $this->json(['toasts' => $toasts, 'server_time' => date('Y-m-d H:i:s')]);
+    }
+
     private function getDashboardData(): array
     {
         // User-scoping: admins see all, users see only their agents

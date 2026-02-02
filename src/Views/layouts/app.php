@@ -125,14 +125,7 @@
             </div>
             <?php endif; ?>
 
-            <!-- Flash messages -->
             <?php $flash = $flash ?? $this->getFlash(); ?>
-            <?php if ($flash): ?>
-            <div class="alert alert-<?= $flash['type'] ?> alert-dismissible fade show m-3 m-md-4 mb-0" role="alert">
-                <?= htmlspecialchars($flash['message']) ?>
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-            <?php endif; ?>
 
             <!-- Page content -->
             <div class="p-3 p-md-4">
@@ -167,7 +160,52 @@
         <?php endif; ?>
     </nav>
 
+    <!-- Toast container -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer" style="z-index:1090;"></div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    function showToast(message, type) {
+        var colors = {success:'#2e7d32',danger:'#c62828',warning:'#f57f17',info:'#1565c0'};
+        var icons = {success:'bi-check-circle-fill',danger:'bi-x-circle-fill',warning:'bi-exclamation-triangle-fill',info:'bi-info-circle-fill'};
+        var color = colors[type] || colors.info;
+        var icon = icons[type] || icons.info;
+        var el = document.createElement('div');
+        el.className = 'toast show';
+        el.setAttribute('role', 'alert');
+        el.style.cssText = 'max-width:380px;border-left:4px solid '+color+';background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.12);border-radius:6px;overflow:hidden;';
+        el.innerHTML = '<div class="d-flex align-items-center p-3">' +
+            '<i class="bi '+icon+' me-2 flex-shrink-0" style="color:'+color+';font-size:1.1rem;"></i>' +
+            '<div class="small flex-grow-1" style="line-height:1.4;">'+message.replace(/</g,'&lt;')+'</div>' +
+            '<button type="button" class="btn-close ms-2 flex-shrink-0" style="font-size:.65rem;" onclick="this.closest(\'.toast\').remove()"></button>' +
+            '</div>';
+        document.getElementById('toastContainer').appendChild(el);
+        setTimeout(function(){ if(el.parentNode) el.style.transition='opacity .3s';el.style.opacity='0';setTimeout(function(){if(el.parentNode)el.remove();},300); }, 6000);
+    }
+    <?php if (!empty($_SESSION['user_id'])): ?>
+    (function(){
+        var lastCheck = new Date().toISOString().slice(0,19).replace('T',' ');
+        var seen = {};
+        setInterval(function(){
+            fetch('/api/toasts?since='+encodeURIComponent(lastCheck),{credentials:'same-origin'})
+                .then(function(r){return r.ok?r.json():null;})
+                .then(function(data){
+                    if(!data)return;
+                    lastCheck=data.server_time;
+                    (data.toasts||[]).forEach(function(t){
+                        var key=t.type+':'+t.message;
+                        if(!seen[key]){seen[key]=1;showToast(t.message,t.type);}
+                    });
+                    if(Object.keys(seen).length>200)seen={};
+                })
+                .catch(function(){});
+        }, 8000);
+    })();
+    <?php endif; ?>
+    </script>
+    <?php if ($flash): ?>
+    <script>document.addEventListener('DOMContentLoaded', function(){ showToast(<?= json_encode($flash['message']) ?>, <?= json_encode($flash['type']) ?>); });</script>
+    <?php endif; ?>
     <?php if (isset($scripts)): ?>
         <?php foreach ($scripts as $script): ?>
         <script src="<?= $script ?>"></script>

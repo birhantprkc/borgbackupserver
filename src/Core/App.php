@@ -130,6 +130,9 @@ class App
         $this->router->map('POST', '/profile', 'ProfileController@update');
         $this->router->map('POST', '/profile/detect-timezone', 'ProfileController@detectTimezone');
 
+        // Toasts (global live notifications)
+        $this->router->map('GET', '/api/toasts', 'DashboardController@toasts');
+
         // Agent API
         $this->router->map('POST', '/api/agent/register', 'Api\\AgentApiController@register');
         $this->router->map('GET', '/api/agent/tasks', 'Api\\AgentApiController@tasks');
