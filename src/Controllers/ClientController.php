@@ -401,12 +401,114 @@ class ClientController extends Controller
             ? \BBS\Core\TimeHelper::ago($agent['last_heartbeat'])
             : 'Never';
 
+        // Recalculate repo stats
+        $this->db->query("
+            UPDATE repositories r SET
+                r.archive_count = (SELECT COUNT(*) FROM archives a WHERE a.repository_id = r.id),
+                r.size_bytes = COALESCE((SELECT SUM(a.deduplicated_size) FROM archives a WHERE a.repository_id = r.id), 0)
+            WHERE r.agent_id = ?
+        ", [$id]);
+
+        $repositories = $this->db->fetchAll("SELECT name, size_bytes, archive_count FROM repositories WHERE agent_id = ? ORDER BY id DESC", [$id]);
+        $totalSize = array_sum(array_column($repositories, 'size_bytes'));
+        $totalArchives = array_sum(array_column($repositories, 'archive_count'));
+
+        $plans = $this->db->fetchAll("
+            SELECT bp.id, bp.name, s.enabled as schedule_enabled, s.id as schedule_id
+            FROM backup_plans bp LEFT JOIN schedules s ON s.backup_plan_id = bp.id
+            WHERE bp.agent_id = ?
+        ", [$id]);
+
+        $lastJob = $this->db->fetchOne("
+            SELECT status, completed_at FROM backup_jobs
+            WHERE agent_id = ? AND status IN ('completed','failed')
+            ORDER BY completed_at DESC LIMIT 1
+        ", [$id]);
+
+        $nextBackup = $this->db->fetchOne("
+            SELECT s.next_run, bp.name as plan_name
+            FROM schedules s JOIN backup_plans bp ON bp.id = s.backup_plan_id
+            WHERE bp.agent_id = ? AND s.enabled = 1 AND s.next_run IS NOT NULL
+            ORDER BY s.next_run ASC LIMIT 1
+        ", [$id]);
+
+        $jobStats = $this->db->fetchOne("
+            SELECT COUNT(*) as total, SUM(status = 'completed') as completed, SUM(status = 'failed') as failed,
+                   AVG(CASE WHEN status = 'completed' THEN duration_seconds END) as avg_duration
+            FROM (SELECT status, duration_seconds FROM backup_jobs
+                  WHERE agent_id = ? AND task_type = 'backup' AND status IN ('completed','failed')
+                  ORDER BY completed_at DESC LIMIT 30) recent
+        ", [$id]);
+
+        $recentErrors = $this->db->fetchOne(
+            "SELECT COUNT(*) as cnt FROM backup_jobs WHERE agent_id = ? AND status = 'failed' AND completed_at > DATE_SUB(NOW(), INTERVAL 7 DAY)",
+            [$id]
+        );
+
+        // Format size
+        $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB'
+            : ($totalSize >= 1048576 ? round($totalSize / 1048576, 1) . ' MB'
+            : ($totalSize >= 1024 ? round($totalSize / 1024, 1) . ' KB'
+            : ($totalSize > 0 ? $totalSize . ' B' : '0')));
+
+        // Format next backup
+        $nextRunLabel = '--';
+        $nextRunSub = 'No schedule';
+        $pausedCount = 0;
+        $totalSchedules = 0;
+        foreach ($plans as $p) {
+            if ($p['schedule_id'] ?? null) {
+                $totalSchedules++;
+                if (!($p['schedule_enabled'] ?? false)) $pausedCount++;
+            }
+        }
+        if ($nextBackup && $nextBackup['next_run']) {
+            $nextDiff = strtotime($nextBackup['next_run']) - time();
+            if ($nextDiff < 0) $nextRunLabel = 'Overdue';
+            elseif ($nextDiff < 3600) $nextRunLabel = floor($nextDiff / 60) . 'm';
+            elseif ($nextDiff < 86400) $nextRunLabel = floor($nextDiff / 3600) . 'h ' . floor(($nextDiff % 3600) / 60) . 'm';
+            else $nextRunLabel = floor($nextDiff / 86400) . 'd ' . floor(($nextDiff % 86400) / 3600) . 'h';
+            $nextRunSub = $nextBackup['plan_name'];
+        } elseif ($pausedCount > 0) {
+            $nextRunLabel = 'No Jobs';
+            $nextRunSub = $pausedCount . ' Paused Schedule' . ($pausedCount > 1 ? 's' : '');
+        }
+
+        // Format avg duration
+        $avgDuration = (int) ($jobStats['avg_duration'] ?? 0);
+        $avgDurLabel = $avgDuration >= 60 ? floor($avgDuration / 60) . 'm ' . ($avgDuration % 60) . 's' : $avgDuration . 's';
+
+        // Format last backup
+        $lastBackupLabel = $lastJob ? \BBS\Core\TimeHelper::format($lastJob['completed_at'], 'M j g:ia') : '--';
+        $lastBackupStatus = $lastJob ? $lastJob['status'] : null;
+
+        $successRate = ($jobStats['total'] ?? 0) > 0
+            ? round(($jobStats['completed'] / $jobStats['total']) * 100) : 0;
+
         header('Content-Type: application/json');
         echo json_encode([
             'status' => $agent['status'],
             'last_heartbeat' => $agent['last_heartbeat'],
             'seen_ago' => $seenAgo,
             'agent_version' => $agent['agent_version'],
+            'repos_count' => count($repositories),
+            'total_archives' => $totalArchives,
+            'size_display' => $sizeDisplay,
+            'plans_count' => count($plans),
+            'last_backup_label' => $lastBackupLabel,
+            'last_backup_status' => $lastBackupStatus,
+            'next_run_label' => $nextRunLabel,
+            'next_run_sub' => $nextRunSub,
+            'avg_duration' => $avgDurLabel,
+            'success_rate' => $successRate,
+            'completed_jobs' => (int) ($jobStats['completed'] ?? 0),
+            'total_jobs' => (int) ($jobStats['total'] ?? 0),
+            'recent_errors' => (int) ($recentErrors['cnt'] ?? 0),
+            'repositories' => array_map(fn($r) => [
+                'name' => $r['name'],
+                'size_bytes' => (int) $r['size_bytes'],
+                'archive_count' => (int) $r['archive_count'],
+            ], $repositories),
         ]);
     }
 

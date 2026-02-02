@@ -104,7 +104,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                         <i class="bi bi-archive"></i>
                     </div>
                     <div>
-                        <div class="fw-bold"><?= count($repositories) ?></div>
+                        <div class="fw-bold" id="stat-repos"><?= count($repositories) ?></div>
                         <div class="text-muted" style="font-size: 0.7rem;">Repos</div>
                     </div>
                 </div>
@@ -115,7 +115,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                         <i class="bi bi-stack"></i>
                     </div>
                     <div>
-                        <div class="fw-bold"><?= $totalArchives ?></div>
+                        <div class="fw-bold" id="stat-archives"><?= $totalArchives ?></div>
                         <div class="text-muted" style="font-size: 0.7rem;">Archives</div>
                     </div>
                 </div>
@@ -126,7 +126,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                         <i class="bi bi-hdd"></i>
                     </div>
                     <div>
-                        <div class="fw-bold"><?= $sizeDisplay ?></div>
+                        <div class="fw-bold" id="stat-size"><?= $sizeDisplay ?></div>
                         <div class="text-muted" style="font-size: 0.7rem;">Size</div>
                     </div>
                 </div>
@@ -137,18 +137,18 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                         <i class="bi bi-clipboard-check"></i>
                     </div>
                     <div>
-                        <div class="fw-bold"><?= count($plans) ?></div>
+                        <div class="fw-bold" id="stat-plans"><?= count($plans) ?></div>
                         <div class="text-muted" style="font-size: 0.7rem;">Plans</div>
                     </div>
                 </div>
             </div>
             <div class="col-6 col-sm-4 col-lg-2">
                 <div class="d-flex align-items-center p-2 rounded bg-light">
-                    <div class="stat-icon-sm bg-<?= $lastBackupColor ?> bg-opacity-10 text-<?= $lastBackupColor ?> rounded-2 p-2 me-2">
+                    <div class="stat-icon-sm bg-<?= $lastBackupColor ?> bg-opacity-10 text-<?= $lastBackupColor ?> rounded-2 p-2 me-2" id="stat-lastbackup-icon">
                         <i class="bi bi-<?= $lastBackupIcon ?>"></i>
                     </div>
                     <div>
-                        <div class="fw-bold" style="font-size: 0.85rem;"><?= $lastBackupLabel ?></div>
+                        <div class="fw-bold" style="font-size: 0.85rem;" id="stat-lastbackup"><?= $lastBackupLabel ?></div>
                         <div class="text-muted" style="font-size: 0.7rem;">Last Backup</div>
                     </div>
                 </div>
@@ -311,8 +311,8 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     </div>
                     <div>
                         <div class="text-muted small">Next Backup</div>
-                        <div class="fs-4 fw-bold"><?= $nextRunLabel ?></div>
-                        <div class="text-muted small"><?= $nextRunSub ?></div>
+                        <div class="fs-4 fw-bold" id="metric-next-run"><?= $nextRunLabel ?></div>
+                        <div class="text-muted small" id="metric-next-sub"><?= $nextRunSub ?></div>
                     </div>
                 </div>
             </div>
@@ -325,36 +325,36 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     </div>
                     <div>
                         <div class="text-muted small">Avg Duration</div>
-                        <div class="fs-4 fw-bold"><?= $avgDurLabel ?></div>
+                        <div class="fs-4 fw-bold" id="metric-avg-dur"><?= $avgDurLabel ?></div>
                         <div class="text-muted small">last 30 jobs</div>
                     </div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card border-0 shadow-sm h-100" style="background-color: rgba(<?= $successColor === 'success' ? '25,135,84' : ($successColor === 'warning' ? '255,193,7' : '220,53,69') ?>,0.05);">
+            <div class="card border-0 shadow-sm h-100" id="metric-success-card" style="background-color: rgba(<?= $successColor === 'success' ? '25,135,84' : ($successColor === 'warning' ? '255,193,7' : '220,53,69') ?>,0.05);">
                 <div class="card-body d-flex align-items-center">
-                    <div class="stat-icon bg-<?= $successColor ?> bg-opacity-10 text-<?= $successColor ?> rounded-3 p-3 me-3">
+                    <div class="stat-icon bg-<?= $successColor ?> bg-opacity-10 text-<?= $successColor ?> rounded-3 p-3 me-3" id="metric-success-icon">
                         <i class="bi bi-check2-all fs-3"></i>
                     </div>
                     <div>
                         <div class="text-muted small">Success Rate</div>
-                        <div class="fs-4 fw-bold"><?= $successRate ?>%</div>
-                        <div class="text-muted small"><?= $jobStats['completed'] ?? 0 ?>/<?= $jobStats['total'] ?? 0 ?> jobs</div>
+                        <div class="fs-4 fw-bold" id="metric-success-rate"><?= $successRate ?>%</div>
+                        <div class="text-muted small" id="metric-success-detail"><?= $jobStats['completed'] ?? 0 ?>/<?= $jobStats['total'] ?? 0 ?> jobs</div>
                     </div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
             <?php $errColor = $recentErrors > 0 ? 'danger' : 'success'; ?>
-            <div class="card border-0 shadow-sm h-100" style="background-color: rgba(<?= $errColor === 'danger' ? '220,53,69' : '25,135,84' ?>,0.05);">
+            <div class="card border-0 shadow-sm h-100" id="metric-errors-card" style="background-color: rgba(<?= $errColor === 'danger' ? '220,53,69' : '25,135,84' ?>,0.05);">
                 <div class="card-body d-flex align-items-center">
-                    <div class="stat-icon bg-<?= $errColor ?> bg-opacity-10 text-<?= $errColor ?> rounded-3 p-3 me-3">
+                    <div class="stat-icon bg-<?= $errColor ?> bg-opacity-10 text-<?= $errColor ?> rounded-3 p-3 me-3" id="metric-errors-icon">
                         <i class="bi bi-exclamation-triangle fs-3"></i>
                     </div>
                     <div>
                         <div class="text-muted small">Errors (7d)</div>
-                        <div class="fs-4 fw-bold"><?= $recentErrors ?></div>
+                        <div class="fs-4 fw-bold" id="metric-errors"><?= $recentErrors ?></div>
                         <div class="text-muted small">failed jobs</div>
                     </div>
                 </div>
@@ -394,7 +394,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                         <div style="position: relative; height: 180px;">
                             <canvas id="storageChart"></canvas>
                         </div>
-                        <div class="mt-3">
+                        <div class="mt-3" id="storage-legend">
                             <?php foreach ($repositories as $repo): ?>
                             <div class="d-flex justify-content-between small mb-1">
                                 <span><i class="bi bi-circle-fill me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> <?= htmlspecialchars($repo['name']) ?></span>
@@ -2508,6 +2508,15 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
     let previousStatus = initialStatus;
     const statusMap = { online: 'success', offline: 'secondary', error: 'danger', setup: 'warning' };
 
+    function fmtBytes(b) {
+        if (b >= 1073741824) return (b / 1073741824).toFixed(1) + ' GB';
+        if (b >= 1048576) return (b / 1048576).toFixed(1) + ' MB';
+        if (b >= 1024) return (b / 1024).toFixed(1) + ' KB';
+        return b > 0 ? b + ' B' : '0';
+    }
+
+    function setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
+
     function pollStatus() {
         fetch('/clients/' + agentId + '/json', { credentials: 'same-origin' })
             .then(r => r.json())
@@ -2521,8 +2530,7 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
                 }
 
                 // Update last seen
-                const seen = document.getElementById('agent-last-seen');
-                if (seen) seen.textContent = data.seen_ago;
+                setText('agent-last-seen', data.seen_ago);
 
                 const icon = document.getElementById('agent-last-seen-icon');
                 if (icon) {
@@ -2551,11 +2559,64 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
                     }
                 }
 
+                // Header stat cards
+                setText('stat-repos', data.repos_count);
+                setText('stat-archives', data.total_archives);
+                setText('stat-size', data.size_display);
+                setText('stat-plans', data.plans_count);
+                setText('stat-lastbackup', data.last_backup_label);
+
+                // Last backup icon color
+                const lbIcon = document.getElementById('stat-lastbackup-icon');
+                if (lbIcon && data.last_backup_status) {
+                    const lbColor = data.last_backup_status === 'completed' ? 'success' : 'danger';
+                    lbIcon.className = 'stat-icon-sm bg-' + lbColor + ' bg-opacity-10 text-' + lbColor + ' rounded-2 p-2 me-2';
+                    lbIcon.innerHTML = '<i class="bi bi-' + (data.last_backup_status === 'completed' ? 'check-circle-fill' : 'x-circle-fill') + '"></i>';
+                }
+
+                // Status tab metrics (text only, no form replacement)
+                setText('metric-next-run', data.next_run_label);
+                setText('metric-next-sub', data.next_run_sub);
+                setText('metric-avg-dur', data.avg_duration);
+                setText('metric-success-rate', data.success_rate + '%');
+                setText('metric-success-detail', data.completed_jobs + '/' + data.total_jobs + ' jobs');
+                setText('metric-errors', data.recent_errors);
+
+                // Success rate color
+                const sColor = data.success_rate >= 90 ? 'success' : (data.success_rate >= 70 ? 'warning' : 'danger');
+                const sRgb = sColor === 'success' ? '25,135,84' : (sColor === 'warning' ? '255,193,7' : '220,53,69');
+                const sCard = document.getElementById('metric-success-card');
+                if (sCard) sCard.style.backgroundColor = 'rgba(' + sRgb + ',0.05)';
+                const sIcon = document.getElementById('metric-success-icon');
+                if (sIcon) sIcon.className = 'stat-icon bg-' + sColor + ' bg-opacity-10 text-' + sColor + ' rounded-3 p-3 me-3';
+
+                // Errors color
+                const eColor = data.recent_errors > 0 ? 'danger' : 'success';
+                const eRgb = eColor === 'danger' ? '220,53,69' : '25,135,84';
+                const eCard = document.getElementById('metric-errors-card');
+                if (eCard) eCard.style.backgroundColor = 'rgba(' + eRgb + ',0.05)';
+                const eIcon = document.getElementById('metric-errors-icon');
+                if (eIcon) eIcon.className = 'stat-icon bg-' + eColor + ' bg-opacity-10 text-' + eColor + ' rounded-3 p-3 me-3';
+
+                // Storage chart legend (safe — no forms in here)
+                const legend = document.getElementById('storage-legend');
+                if (legend && data.repositories) {
+                    const colors = ['#0d6efd', '#198754', '#ffc107', '#0dcaf0', '#6f42c1', '#fd7e14', '#d63384', '#20c997'];
+                    let html = '';
+                    data.repositories.forEach(function(r, i) {
+                        const name = r.name.replace(/</g, '&lt;');
+                        html += '<div class="d-flex justify-content-between small mb-1">' +
+                            '<span><i class="bi bi-circle-fill me-1" style="font-size: 0.5rem; vertical-align: middle; color:' + colors[i % colors.length] + '"></i> ' + name + '</span>' +
+                            '<span class="fw-semibold">' + fmtBytes(r.size_bytes) + ' <span class="text-muted">(' + r.archive_count + ' archives)</span></span></div>';
+                    });
+                    legend.innerHTML = html;
+                }
+
                 previousStatus = data.status;
             })
             .catch(() => {});
     }
 
-    setInterval(pollStatus, 10000);
+    setInterval(pollStatus, 30000);
 })();
 </script>
