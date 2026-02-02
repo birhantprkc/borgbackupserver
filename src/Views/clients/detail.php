@@ -2386,41 +2386,39 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
     <!-- Database Restore Section (hidden by default) -->
     <?php if ($dbPluginEnabled): ?>
     <div id="db-restore-section" class="mt-3" style="display:none;">
-        <div class="card border-0 shadow-sm">
-            <div class="restore-panel-header" style="background: linear-gradient(135deg, #4a90d9 0%, #357abd 100%);">
-                <i class="bi bi-database me-1"></i> Databases to Restore (<span id="db-selected-count">0</span>)
+        <div class="restore-panel-header" style="background: linear-gradient(135deg, #4a90d9 0%, #357abd 100%);">
+            <i class="bi bi-database me-1"></i> Databases to Restore (<span id="db-selected-count">0</span>)
+        </div>
+        <div class="restore-panel-body p-0" style="height:auto;" id="db-list-body">
+            <div class="p-4 text-muted text-center" id="db-no-data">
+                <i class="bi bi-database d-block mb-2" style="font-size:2rem;opacity:0.3;"></i>
+                Select an archive to see available databases
             </div>
-            <div class="card-body p-0" id="db-list-body">
-                <div class="p-4 text-muted text-center" id="db-no-data">
-                    <i class="bi bi-database d-block mb-2" style="font-size:2rem;opacity:0.3;"></i>
-                    Select an archive to see available databases
-                </div>
-                <div id="db-loading" style="display:none;" class="p-4 text-center">
-                    <div class="spinner-border spinner-border-sm me-1"></div> Loading databases...
-                </div>
-                <table class="table table-sm mb-0" id="db-table" style="display:none;">
-                    <thead>
-                        <tr>
-                            <th style="width:40px;"></th>
-                            <th style="width:130px;">Action</th>
-                            <th>Database</th>
-                        </tr>
-                    </thead>
-                    <tbody id="db-table-body"></tbody>
-                </table>
+            <div id="db-loading" style="display:none;" class="p-4 text-center">
+                <div class="spinner-border spinner-border-sm me-1"></div> Loading databases...
             </div>
-            <div class="card-footer">
-                <div id="db-all-databases-note" class="alert alert-info small mb-2 py-1 px-2" style="display:none;">
-                    <i class="bi bi-info-circle me-1"></i> This backup used a single combined dump file. Copy mode is not available.
-                </div>
-                <button class="btn btn-success mb-3" id="db-restore-btn" disabled>
-                    <i class="bi bi-arrow-counterclockwise me-1"></i> Restore Selected Databases
-                </button>
-                <div class="alert alert-warning small py-2 px-3 mb-0">
-                    <i class="bi bi-shield-exclamation me-1"></i>
-                    If you don't already have it set up, the database restore requires a user with write permissions such as below:
-                    <code class="d-block mt-1" id="db-restore-grant-code" style="font-size:0.8em;">GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER, CREATE, INSERT, DROP, ALTER, INDEX, REFERENCES ON *.* TO '<span id="db-restore-grant-user"><?= htmlspecialchars($defaultDbUser) ?></span>'@'localhost'; FLUSH PRIVILEGES;</code>
-                </div>
+            <table class="table table-sm mb-0" id="db-table" style="display:none;">
+                <thead>
+                    <tr>
+                        <th style="width:40px;"></th>
+                        <th style="width:130px;">Action</th>
+                        <th>Database</th>
+                    </tr>
+                </thead>
+                <tbody id="db-table-body"></tbody>
+            </table>
+        </div>
+        <div class="p-3" style="border:1px solid rgba(0,0,0,0.08);border-top:none;border-radius:0 0 8px 8px;">
+            <div id="db-all-databases-note" class="alert alert-info small mb-2 py-1 px-2" style="display:none;">
+                <i class="bi bi-info-circle me-1"></i> This backup used a single combined dump file. Copy mode is not available.
+            </div>
+            <button class="btn btn-success mb-3" id="db-restore-btn" disabled>
+                <i class="bi bi-arrow-counterclockwise me-1"></i> Restore Selected Databases
+            </button>
+            <div class="alert alert-warning small py-2 px-3 mb-0">
+                <i class="bi bi-shield-exclamation me-1"></i>
+                If you don't already have it set up, the database restore requires a user with write permissions such as below:
+                <code class="d-block mt-1" id="db-restore-grant-code" style="font-size:0.8em;">GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER, CREATE, INSERT, DROP, ALTER, INDEX, REFERENCES ON *.* TO '<span id="db-restore-grant-user"><?= htmlspecialchars($defaultDbUser) ?></span>'@'localhost'; FLUSH PRIVILEGES;</code>
             </div>
         </div>
 
