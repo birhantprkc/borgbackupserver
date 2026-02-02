@@ -314,14 +314,26 @@
                     <?php if (!empty($mysqlStats)): ?>
                     <div class="col-md-7 mt-3 mt-md-0 pt-3 pt-md-0 border-top border-top-0-md<?= !empty($mysqlStorage) && $mysqlStorage['disk_total'] > 0 ? ' border-md-start' : '' ?>">
                         <div class="d-flex align-items-center mb-2">
-                            <i class="bi bi-table me-1 text-muted"></i>
-                            <span class="fw-semibold small">Database Records</span>
+                            <i class="bi bi-bar-chart me-1 text-muted"></i>
+                            <span class="fw-semibold small">Overview</span>
                         </div>
                         <div class="row g-2 text-center" style="font-size:.7rem;">
                             <div class="col-4">
                                 <div class="rounded py-1" style="background:#f0f4ff;">
-                                    <div class="fw-bold text-primary" style="font-size:1rem;" id="stat-total-rows"><?= number_format($mysqlStats['total_rows']) ?></div>
-                                    <div class="text-muted">Total Rows</div>
+                                    <div class="fw-bold text-primary" style="font-size:1rem;" id="stat-clients"><?= number_format($mysqlStats['clients']) ?></div>
+                                    <div class="text-muted">Clients</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="rounded py-1" style="background:#fef0f0;">
+                                    <div class="fw-bold text-danger" style="font-size:1rem;" id="stat-repos"><?= number_format($mysqlStats['repositories']) ?></div>
+                                    <div class="text-muted">Repos</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="rounded py-1" style="background:#f5f0ff;">
+                                    <div class="fw-bold" style="font-size:1rem;color:#6f42c1;" id="stat-plans"><?= number_format($mysqlStats['backup_plans']) ?></div>
+                                    <div class="text-muted">Plans</div>
                                 </div>
                             </div>
                             <div class="col-4">
@@ -337,21 +349,9 @@
                                 </div>
                             </div>
                             <div class="col-4">
-                                <div class="rounded py-1" style="background:#f5f0ff;">
-                                    <div class="fw-bold" style="font-size:1rem;color:#6f42c1;" id="stat-paths"><?= number_format($mysqlStats['unique_paths']) ?></div>
-                                    <div class="text-muted">File Paths</div>
-                                </div>
-                            </div>
-                            <div class="col-4">
                                 <div class="rounded py-1" style="background:#f0faff;">
                                     <div class="fw-bold text-info" style="font-size:1rem;" id="stat-completed-jobs"><?= number_format($mysqlStats['completed_jobs']) ?></div>
                                     <div class="text-muted">Jobs Run</div>
-                                </div>
-                            </div>
-                            <div class="col-4">
-                                <div class="rounded py-1" style="background:#fef0f0;">
-                                    <div class="fw-bold text-danger" style="font-size:1rem;" id="stat-repos"><?= number_format($mysqlStats['repositories']) ?></div>
-                                    <div class="text-muted">Repos</div>
                                 </div>
                             </div>
                         </div>
@@ -826,9 +826,9 @@ setInterval(function() {
                 const ms = data.mysqlStats;
                 const fmt = n => n.toLocaleString();
                 const map = {
-                    'stat-total-rows': ms.total_rows, 'stat-archives': ms.archives,
-                    'stat-catalog': ms.catalog_files, 'stat-paths': ms.unique_paths,
-                    'stat-completed-jobs': ms.completed_jobs, 'stat-repos': ms.repositories
+                    'stat-clients': ms.clients, 'stat-repos': ms.repositories,
+                    'stat-plans': ms.backup_plans, 'stat-archives': ms.archives,
+                    'stat-catalog': ms.catalog_files, 'stat-completed-jobs': ms.completed_jobs
                 };
                 for (const [id, val] of Object.entries(map)) {
                     const el = document.getElementById(id);

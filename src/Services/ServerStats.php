@@ -156,24 +156,20 @@ class ServerStats
     {
         $db = \BBS\Core\Database::getInstance();
 
-        $totalRows = $db->fetchOne("
-            SELECT SUM(table_rows) AS total
-            FROM information_schema.TABLES
-            WHERE table_schema = DATABASE()
-        ");
+        $agents = $db->fetchOne("SELECT COUNT(*) AS cnt FROM agents");
+        $repos = $db->fetchOne("SELECT COUNT(*) AS cnt FROM repositories");
+        $plans = $db->fetchOne("SELECT COUNT(*) AS cnt FROM backup_plans");
         $archives = $db->fetchOne("SELECT COUNT(*) AS cnt FROM archives");
         $catalogFiles = $db->fetchOne("SELECT COUNT(*) AS cnt FROM file_catalog");
-        $uniquePaths = $db->fetchOne("SELECT COUNT(*) AS cnt FROM file_paths");
         $jobs = $db->fetchOne("SELECT COUNT(*) AS cnt FROM backup_jobs WHERE status = 'completed'");
-        $repos = $db->fetchOne("SELECT COUNT(*) AS cnt FROM repositories");
 
         return [
-            'total_rows' => (int) ($totalRows['total'] ?? 0),
+            'clients' => (int) ($agents['cnt'] ?? 0),
+            'repositories' => (int) ($repos['cnt'] ?? 0),
+            'backup_plans' => (int) ($plans['cnt'] ?? 0),
             'archives' => (int) ($archives['cnt'] ?? 0),
             'catalog_files' => (int) ($catalogFiles['cnt'] ?? 0),
-            'unique_paths' => (int) ($uniquePaths['cnt'] ?? 0),
             'completed_jobs' => (int) ($jobs['cnt'] ?? 0),
-            'repositories' => (int) ($repos['cnt'] ?? 0),
         ];
     }
 
