@@ -127,7 +127,6 @@
                         <th>Restore Points</th>
                         <th>Schedules</th>
                         <th>Repos</th>
-                        <th>Size</th>
                         <th>Owner</th>
                         <th>Status</th>
                     </tr>
@@ -135,7 +134,7 @@
                 <tbody>
                     <?php if (empty($agents)): ?>
                     <tr>
-                        <td colspan="8" class="text-center text-muted py-4">No clients configured. Click "Add Client" to get started.</td>
+                        <td colspan="7" class="text-center text-muted py-4">No clients configured. Click "Add Client" to get started.</td>
                     </tr>
                     <?php endif; ?>
                     <?php foreach ($agents as $agent): ?>
@@ -158,20 +157,6 @@
                         <td><?= number_format($agent['restore_points']) ?></td>
                         <td><?= $agent['schedule_count'] ?></td>
                         <td><?= $agent['repo_count'] ?></td>
-                        <td>
-                            <?php
-                            $bytes = $agent['total_size'];
-                            if ($bytes >= 1073741824) {
-                                echo round($bytes / 1073741824, 1) . ' GB';
-                            } elseif ($bytes >= 1048576) {
-                                echo round($bytes / 1048576, 1) . ' MB';
-                            } elseif ($bytes > 0) {
-                                echo round($bytes / 1024, 1) . ' KB';
-                            } else {
-                                echo '--';
-                            }
-                            ?>
-                        </td>
                         <td><?= htmlspecialchars($agent['owner_name'] ?? '--') ?></td>
                         <td>
                             <?php
@@ -203,11 +188,6 @@
                         'error' => 'danger',
                         default => 'warning',
                     };
-                    $bytes = $agent['total_size'];
-                    $sizeStr = $bytes >= 1073741824 ? round($bytes / 1073741824, 1) . ' GB'
-                        : ($bytes >= 1048576 ? round($bytes / 1048576, 1) . ' MB'
-                        : ($bytes >= 1024 ? round($bytes / 1024, 1) . ' KB'
-                        : ($bytes > 0 ? $bytes . ' B' : '--')));
                 ?>
                 <a href="/clients/<?= $agent['id'] ?>" class="list-group-item list-group-item-action py-3">
                     <div class="d-flex justify-content-between align-items-start">
@@ -224,7 +204,6 @@
                     </div>
                     <div class="d-flex gap-3 mt-2 small text-muted">
                         <span><i class="bi bi-stack me-1"></i><?= number_format($agent['restore_points']) ?> pts</span>
-                        <span><i class="bi bi-hdd me-1"></i><?= $sizeStr ?></span>
                         <span><i class="bi bi-archive me-1"></i><?= $agent['repo_count'] ?> repos</span>
                     </div>
                 </a>
