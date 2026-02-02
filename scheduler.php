@@ -161,7 +161,8 @@ foreach ($serverJobs as $sj) {
             $runAsUser = $sj['ssh_unix_user'] ?? null;
             $syncResult = $s3Service->syncRepository($s3Repo, $s3Agent, $creds, $runAsUser);
             $s3Result = $syncResult['success'] ? 'completed' : 'failed';
-            $s3Error = $syncResult['success'] ? null : $syncResult['output'];
+            $s3Output = $syncResult['output'] ?? '';
+            $s3Error = $syncResult['success'] ? null : $s3Output;
         }
 
         $now = date('Y-m-d H:i:s');
@@ -172,11 +173,14 @@ foreach ($serverJobs as $sj) {
             'error_log' => $s3Error,
         ], 'id = ?', [$sj['id']]);
 
+        $logMessage = $s3Result === 'completed'
+            ? 'S3 sync completed' . (!empty($s3Output) ? ": {$s3Output}" : '')
+            : 'S3 sync failed: ' . $s3Error;
         $db->insert('server_log', [
             'agent_id' => $sj['agent_id'],
             'backup_job_id' => $sj['id'],
             'level' => $s3Result === 'completed' ? 'info' : 'error',
-            'message' => 'S3 sync ' . ($s3Result === 'completed' ? 'completed' : 'failed: ' . $s3Error),
+            'message' => $logMessage,
         ]);
 
         echo date('Y-m-d H:i:s') . " S3 sync job #{$sj['id']} {$s3Result}\n";
