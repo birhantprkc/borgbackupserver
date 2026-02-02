@@ -2149,10 +2149,10 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
     }
     ?>
 
-    <?php if ($dbPluginEnabled): ?>
-    <div class="mb-3">
-        <div class="fw-bold mb-2">Please select the type of restore to perform:</div>
-        <div class="d-flex align-items-center gap-2 flex-wrap">
+    <?php if (empty($archives)): ?>
+        <?php if ($dbPluginEnabled): ?>
+        <div class="mb-3">
+            <label class="form-label fw-semibold mb-1 small">Restore Type</label>
             <div class="input-group input-group-sm" style="width:auto;">
                 <div class="btn-group" role="group" id="restore-mode-toggle">
                     <button type="button" class="btn btn-sm btn-primary active" data-restore-mode="files">
@@ -2162,37 +2162,9 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
                         <i class="bi bi-database me-1"></i>Database
                     </button>
                 </div>
-                <?php if (empty($allDbConfigs)): ?>
-                    <span class="input-group-text bg-warning-subtle text-dark db-connection-picker" style="display:none;font-size:.75rem;"><i class="bi bi-exclamation-triangle me-1"></i>No connection</span>
-                <?php else: ?>
-                    <select class="form-select form-select-sm db-connection-picker" id="db-config-id" style="display:none;">
-                        <?php if (!empty($mysqlConfigs)): ?>
-                            <optgroup label="MySQL">
-                            <?php foreach ($mysqlConfigs as $mc): ?>
-                                <option value="mysql:<?= $mc['id'] ?>"><?= htmlspecialchars($mc['name']) ?></option>
-                            <?php endforeach; ?>
-                            </optgroup>
-                        <?php endif; ?>
-                        <?php if (!empty($pgConfigs)): ?>
-                            <optgroup label="PostgreSQL">
-                            <?php foreach ($pgConfigs as $pc): ?>
-                                <option value="pg:<?= $pc['id'] ?>"><?= htmlspecialchars($pc['name']) ?></option>
-                            <?php endforeach; ?>
-                            </optgroup>
-                        <?php endif; ?>
-                    </select>
-                <?php endif; ?>
             </div>
-            <?php if (empty($allDbConfigs)): ?>
-                <a href="?tab=plugins" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-circle me-1"></i>Add Connection</a>
-            <?php endif; ?>
         </div>
-    </div>
-    <?php else: ?>
-    <div class="fw-bold mb-3">Restore Files</div>
-    <?php endif; ?>
-
-    <?php if (empty($archives)): ?>
+        <?php endif; ?>
         <div class="card border-0 shadow-sm mb-4" style="border:2px dashed #ccc !important;background:#fafafa;">
             <div class="card-body d-flex flex-column align-items-center justify-content-center text-muted py-5">
                 <i class="bi bi-clock-history" style="font-size:2rem;"></i>
@@ -2206,7 +2178,45 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
     <!-- Control Bar -->
     <div class="restore-control-bar mb-3">
         <div class="row g-2 align-items-end">
-            <div class="col-md-5">
+            <?php if ($dbPluginEnabled): ?>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold mb-1 small">Restore Type</label>
+                <div class="input-group input-group-sm">
+                    <div class="btn-group w-100" role="group" id="restore-mode-toggle">
+                        <button type="button" class="btn btn-sm btn-primary active" data-restore-mode="files">
+                            <i class="bi bi-files me-1"></i>Files
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary" data-restore-mode="database">
+                            <i class="bi bi-database me-1"></i>Database
+                        </button>
+                    </div>
+                    <?php if (empty($allDbConfigs)): ?>
+                        <span class="input-group-text bg-warning-subtle text-dark db-connection-picker" style="display:none;font-size:.75rem;"><i class="bi bi-exclamation-triangle me-1"></i>No connection</span>
+                    <?php else: ?>
+                        <select class="form-select form-select-sm db-connection-picker" id="db-config-id" style="display:none;">
+                            <?php if (!empty($mysqlConfigs)): ?>
+                                <optgroup label="MySQL">
+                                <?php foreach ($mysqlConfigs as $mc): ?>
+                                    <option value="mysql:<?= $mc['id'] ?>"><?= htmlspecialchars($mc['name']) ?></option>
+                                <?php endforeach; ?>
+                                </optgroup>
+                            <?php endif; ?>
+                            <?php if (!empty($pgConfigs)): ?>
+                                <optgroup label="PostgreSQL">
+                                <?php foreach ($pgConfigs as $pc): ?>
+                                    <option value="pg:<?= $pc['id'] ?>"><?= htmlspecialchars($pc['name']) ?></option>
+                                <?php endforeach; ?>
+                                </optgroup>
+                            <?php endif; ?>
+                        </select>
+                    <?php endif; ?>
+                </div>
+                <?php if (empty($allDbConfigs)): ?>
+                    <a href="?tab=plugins" class="btn btn-sm btn-outline-primary mt-1"><i class="bi bi-plus-circle me-1"></i>Add Connection</a>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
+            <div class="<?= $dbPluginEnabled ? 'col-md-4' : 'col-md-5' ?>">
                 <label class="form-label fw-semibold mb-1 small">Archive</label>
                 <select class="form-select form-select-sm" id="archive-select">
                     <option value="">Choose a restore point...</option>
