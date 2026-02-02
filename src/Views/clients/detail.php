@@ -2402,8 +2402,8 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
                     <thead>
                         <tr>
                             <th style="width:40px;"></th>
+                            <th style="width:130px;">Action</th>
                             <th>Database</th>
-                            <th style="width:220px;">Restore Mode</th>
                         </tr>
                     </thead>
                     <tbody id="db-table-body"></tbody>
@@ -2411,7 +2411,7 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
             </div>
             <div class="card-footer">
                 <div id="db-all-databases-note" class="alert alert-info small mb-2 py-1 px-2" style="display:none;">
-                    <i class="bi bi-info-circle me-1"></i> This backup used a single combined dump file. Rename mode is not available.
+                    <i class="bi bi-info-circle me-1"></i> This backup used a single combined dump file. Copy mode is not available.
                 </div>
                 <button class="btn btn-success mb-3" id="db-restore-btn" disabled>
                     <i class="bi bi-arrow-counterclockwise me-1"></i> Restore Selected Databases

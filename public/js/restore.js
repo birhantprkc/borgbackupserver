@@ -634,30 +634,31 @@
                             const escapedName = esc(dbName);
                             tr.innerHTML =
                                 '<td><input type="checkbox" class="form-check-input db-select-cb" data-db="' + escapedName + '"></td>' +
-                                '<td class="font-monospace">' + escapedName + '</td>' +
                                 '<td>' +
-                                    '<div class="btn-group btn-group-sm" role="group">' +
-                                        '<input type="radio" class="btn-check" name="dbmode_' + escapedName + '" id="dbmode_replace_' + escapedName + '" value="replace" checked>' +
-                                        '<label class="btn btn-outline-warning" for="dbmode_replace_' + escapedName + '">Replace</label>' +
-                                        (dbPerDatabase ?
-                                            '<input type="radio" class="btn-check" name="dbmode_' + escapedName + '" id="dbmode_rename_' + escapedName + '" value="rename">' +
-                                            '<label class="btn btn-outline-info" for="dbmode_rename_' + escapedName + '">Rename</label>'
-                                        : '') +
-                                    '</div>' +
-                                    '<div class="db-rename-input mt-1" style="display:none;">' +
-                                        '<input type="text" class="form-control form-control-sm font-monospace" data-rename-for="' + escapedName + '" value="' + escapedName + '_copy">' +
+                                    '<select class="form-select form-select-sm db-mode-select" name="dbmode_' + escapedName + '">' +
+                                        '<option value="replace">Replace</option>' +
+                                        (dbPerDatabase ? '<option value="rename">Copy</option>' : '') +
+                                    '</select>' +
+                                '</td>' +
+                                '<td>' +
+                                    '<span class="font-monospace">' + escapedName + '</span>' +
+                                    '<div class="db-copy-input mt-1" style="display:none;">' +
+                                        '<div class="input-group input-group-sm">' +
+                                            '<span class="input-group-text"><i class="bi bi-arrow-right"></i></span>' +
+                                            '<input type="text" class="form-control form-control-sm font-monospace" data-rename-for="' + escapedName + '" value="' + escapedName + '_copy" placeholder="New database name">' +
+                                        '</div>' +
                                     '</div>' +
                                 '</td>';
                             dbTableBody.appendChild(tr);
                         });
 
-                        // Show/hide rename input when mode changes
+                        // Show/hide copy name input when mode changes
                         dbTableBody.addEventListener('change', function(e) {
-                            if (e.target.name && e.target.name.startsWith('dbmode_')) {
+                            if (e.target.classList.contains('db-mode-select')) {
                                 const row = e.target.closest('tr');
-                                const renameDiv = row.querySelector('.db-rename-input');
-                                if (renameDiv) {
-                                    renameDiv.style.display = e.target.value === 'rename' ? '' : 'none';
+                                const copyDiv = row.querySelector('.db-copy-input');
+                                if (copyDiv) {
+                                    copyDiv.style.display = e.target.value === 'rename' ? '' : 'none';
                                 }
                             }
                         });
@@ -705,8 +706,8 @@
 
             checked.forEach(function(cb, i) {
                 const dbName = cb.dataset.db;
-                const modeRadio = dbTableBody.querySelector('input[name="dbmode_' + CSS.escape(dbName) + '"]:checked');
-                const mode = modeRadio ? modeRadio.value : 'replace';
+                const modeSelect = dbTableBody.querySelector('select[name="dbmode_' + CSS.escape(dbName) + '"]');
+                const mode = modeSelect ? modeSelect.value : 'replace';
 
                 const nameInput = document.createElement('input');
                 nameInput.type = 'hidden';
