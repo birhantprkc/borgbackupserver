@@ -2300,7 +2300,7 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
         </div>
     </div>
 
-    <div id="files-restore-section">
+    <div id="files-restore-section" class="mt-3">
     <!-- Two-Panel Layout -->
     <div class="row g-3">
         <!-- LEFT: Browse / Search / History -->
@@ -2385,9 +2385,9 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
 
     <!-- Database Restore Section (hidden by default) -->
     <?php if ($dbPluginEnabled): ?>
-    <div id="db-restore-section" style="display:none;">
+    <div id="db-restore-section" class="mt-3" style="display:none;">
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-primary text-white py-2">
+            <div class="restore-panel-header" style="background: linear-gradient(135deg, #4a90d9 0%, #357abd 100%);">
                 <i class="bi bi-database me-1"></i> Databases to Restore (<span id="db-selected-count">0</span>)
             </div>
             <div class="card-body p-0" id="db-list-body">
