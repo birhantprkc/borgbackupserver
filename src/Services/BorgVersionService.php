@@ -79,12 +79,13 @@ class BorgVersionService
             $releaseDate = substr($release['published_at'] ?? $release['created_at'] ?? date('Y-m-d'), 0, 10);
 
             // Insert version
-            $this->db->query(
-                "INSERT INTO borg_versions (version, release_tag, release_date, is_prerelease, release_notes)
-                 VALUES (?, ?, ?, 0, ?)",
-                [$version, $tag, $releaseDate, $release['body'] ?? '']
-            );
-            $versionId = $this->db->lastInsertId();
+            $versionId = $this->db->insert('borg_versions', [
+                'version' => $version,
+                'release_tag' => $tag,
+                'release_date' => $releaseDate,
+                'is_prerelease' => 0,
+                'release_notes' => $release['body'] ?? '',
+            ]);
 
             // Process assets
             $assets = $release['assets'] ?? [];
