@@ -833,7 +833,7 @@ class ClientController extends Controller
             if (!$dumpDir) {
                 // Try to find dump_dir from plugin configs for this agent
                 $pluginManager = new \BBS\Services\PluginManager();
-                $configs = $pluginManager->getAgentPluginConfigs($id);
+                $configs = $pluginManager->getPluginConfigs($id);
                 foreach ($configs as $c) {
                     if (in_array($c['slug'], ['mysql_dump', 'pg_dump'])) {
                         $cfgData = json_decode($c['config_data'] ?? '{}', true);
