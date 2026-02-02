@@ -489,7 +489,7 @@ class PluginManager
                 'endpoint' => [
                     'type' => 'text',
                     'label' => 'S3 Endpoint URL',
-                    'help' => 'e.g. s3.amazonaws.com, s3.us-west-1.wasabisys.com, s3.eu-central-003.backblazeb2.com',
+                    'help' => 'The S3 API endpoint for your provider and region.',
                     'show_when' => ['credential_source' => 'custom'],
                 ],
                 'region' => [

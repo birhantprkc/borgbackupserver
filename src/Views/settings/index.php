@@ -528,7 +528,7 @@
                     <div class="mb-3">
                         <label class="form-label fw-semibold">S3 Endpoint URL</label>
                         <input type="text" class="form-control" name="s3_endpoint" value="<?= htmlspecialchars($settings['s3_endpoint'] ?? '') ?>" placeholder="e.g. s3.amazonaws.com">
-                        <div class="form-text">For AWS use <code>s3.amazonaws.com</code>. For Wasabi: <code>s3.us-west-1.wasabisys.com</code>. For Backblaze B2: <code>s3.us-west-002.backblazeb2.com</code>.</div>
+                        <div class="form-text">The S3 API endpoint for your provider and region. Check your provider's documentation for the correct URL.</div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Region</label>
