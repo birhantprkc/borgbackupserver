@@ -203,6 +203,76 @@ class SettingsController extends Controller
     }
 
     /**
+     * Queue agent updates for all outdated agents.
+     * POST /settings/upgrade-agents
+     */
+    public function upgradeAgents(): void
+    {
+        $this->requireAdmin();
+        $this->verifyCsrf();
+
+        // Read bundled agent version
+        $serverAgentVersion = null;
+        $agentFile = dirname(__DIR__, 2) . '/agent/bbs-agent.py';
+        if (file_exists($agentFile)) {
+            $handle = fopen($agentFile, 'r');
+            if ($handle) {
+                for ($i = 0; $i < 50 && ($line = fgets($handle)) !== false; $i++) {
+                    if (preg_match('/^AGENT_VERSION\s*=\s*["\']([^"\']+)["\']/m', $line, $m)) {
+                        $serverAgentVersion = $m[1];
+                        break;
+                    }
+                }
+                fclose($handle);
+            }
+        }
+
+        if (!$serverAgentVersion) {
+            $this->flash('danger', 'Could not determine bundled agent version.');
+            $this->redirect('/settings?tab=updates');
+        }
+
+        // Find outdated agents
+        $outdated = $this->db->fetchAll(
+            "SELECT id, name FROM agents WHERE agent_version IS NOT NULL AND agent_version != ?",
+            [$serverAgentVersion]
+        );
+
+        // Find agents that already have a pending update job
+        $pending = $this->db->fetchAll(
+            "SELECT agent_id FROM backup_jobs WHERE task_type = 'update_agent' AND status IN ('queued', 'sent', 'running')"
+        );
+        $pendingIds = array_column($pending, 'agent_id');
+
+        $queued = 0;
+        foreach ($outdated as $agent) {
+            if (in_array($agent['id'], $pendingIds)) {
+                continue;
+            }
+            $jobId = $this->db->insert('backup_jobs', [
+                'agent_id' => $agent['id'],
+                'task_type' => 'update_agent',
+                'status' => 'queued',
+            ]);
+            $this->db->insert('server_log', [
+                'agent_id' => $agent['id'],
+                'backup_job_id' => $jobId,
+                'level' => 'info',
+                'message' => "Agent update queued (bulk) to v{$serverAgentVersion}",
+            ]);
+            $queued++;
+        }
+
+        if ($queued > 0) {
+            $this->flash('success', "Queued agent updates for {$queued} client(s).");
+        } else {
+            $this->flash('info', 'No agents need updating (or updates already queued).');
+        }
+
+        $this->redirect('/settings?tab=updates');
+    }
+
+    /**
      * GET /api/templates/{id} — returns template data as JSON for form pre-fill.
      */
     public function templateJson(int $id): void

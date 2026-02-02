@@ -116,6 +116,7 @@ class App
         $this->router->map('POST', '/settings/check-update', 'SettingsController@checkUpdate');
         $this->router->map('POST', '/settings/upgrade', 'SettingsController@upgrade');
         $this->router->map('POST', '/settings/sync', 'SettingsController@sync');
+        $this->router->map('POST', '/settings/upgrade-agents', 'SettingsController@upgradeAgents');
         $this->router->map('GET', '/api/templates/[i:id]', 'SettingsController@templateJson');
 
         // Users (admin)

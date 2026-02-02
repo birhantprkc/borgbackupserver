@@ -361,6 +361,66 @@
     <?php endif; ?>
 </div>
 
+<?php
+// Agent version check
+$bundledAgentVersion = null;
+$agentPyFile = dirname(__DIR__, 2) . '/agent/bbs-agent.py';
+if (file_exists($agentPyFile)) {
+    $fh = fopen($agentPyFile, 'r');
+    if ($fh) {
+        for ($i = 0; $i < 50 && ($ln = fgets($fh)) !== false; $i++) {
+            if (preg_match('/^AGENT_VERSION\s*=\s*["\']([^"\']+)["\']/m', $ln, $mv)) {
+                $bundledAgentVersion = $mv[1];
+                break;
+            }
+        }
+        fclose($fh);
+    }
+}
+if ($bundledAgentVersion):
+    $allAgents = $this->db->fetchAll("SELECT id, name, agent_version FROM agents WHERE agent_version IS NOT NULL");
+    $outdatedAgents = array_filter($allAgents, fn($a) => $a['agent_version'] !== $bundledAgentVersion);
+    $totalAgents = count($allAgents);
+    $outdatedCount = count($outdatedAgents);
+    $upToDateCount = $totalAgents - $outdatedCount;
+?>
+<div class="row g-4 mt-1">
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white fw-semibold">
+                <i class="bi bi-box me-1"></i> Agent Updates
+            </div>
+            <div class="card-body">
+                <?php if ($totalAgents === 0): ?>
+                    <p class="text-muted mb-0">No agents connected yet.</p>
+                <?php elseif ($outdatedCount === 0): ?>
+                    <div class="alert alert-success small py-2 px-3 mb-0">
+                        <i class="bi bi-check-circle me-1"></i>
+                        All <?= $totalAgents ?> agent(s) are running the latest version (v<?= htmlspecialchars($bundledAgentVersion) ?>).
+                    </div>
+                <?php else: ?>
+                    <div class="alert alert-warning small py-2 px-3 mb-3">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        <strong><?= $outdatedCount ?></strong> of <?= $totalAgents ?> agent(s) need updating to v<?= htmlspecialchars($bundledAgentVersion) ?>.
+                    </div>
+                    <div class="small text-muted mb-3">
+                        <?php foreach ($outdatedAgents as $oa): ?>
+                            <div><i class="bi bi-dash me-1"></i><?= htmlspecialchars($oa['name']) ?> <span class="text-danger">v<?= htmlspecialchars($oa['agent_version']) ?></span></div>
+                        <?php endforeach; ?>
+                    </div>
+                    <form method="POST" action="/settings/upgrade-agents" onsubmit="return confirm('Queue agent updates for <?= $outdatedCount ?> client(s)?')">
+                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                        <button type="submit" class="btn btn-warning btn-sm">
+                            <i class="bi bi-arrow-up-circle me-1"></i> Update All Agents
+                        </button>
+                    </form>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
 <hr>
 
 <div class="row g-4">
