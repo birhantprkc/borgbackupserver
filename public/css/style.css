@@ -1,128 +1,97 @@
-/* Muted Bootstrap color overrides */
-:root {
-    --bs-primary: #5a6e8a;
-    --bs-primary-rgb: 90, 110, 138;
-    --bs-success: #6b9e7a;
-    --bs-success-rgb: 107, 158, 122;
-    --bs-danger: #c26a6a;
-    --bs-danger-rgb: 194, 106, 106;
-    --bs-warning: #c9a84c;
-    --bs-warning-rgb: 201, 168, 76;
-    --bs-info: #6a9fb5;
-    --bs-info-rgb: 106, 159, 181;
-    --bs-link-color: #5a6e8a;
-    --bs-link-hover-color: #485a70;
-}
-
+/* Muted Bootstrap color overrides — buttons and badges only */
 .btn-primary {
-    --bs-btn-bg: #5a6e8a;
-    --bs-btn-border-color: #5a6e8a;
-    --bs-btn-hover-bg: #485a70;
-    --bs-btn-hover-border-color: #485a70;
-    --bs-btn-active-bg: #3d4f63;
-    --bs-btn-active-border-color: #3d4f63;
-    --bs-btn-disabled-bg: #5a6e8a;
-    --bs-btn-disabled-border-color: #5a6e8a;
+    --bs-btn-bg: #4a6fa5;
+    --bs-btn-border-color: #4a6fa5;
+    --bs-btn-hover-bg: #3d5f8f;
+    --bs-btn-hover-border-color: #3d5f8f;
+    --bs-btn-active-bg: #345280;
+    --bs-btn-active-border-color: #345280;
+    --bs-btn-disabled-bg: #4a6fa5;
+    --bs-btn-disabled-border-color: #4a6fa5;
 }
 
 .btn-outline-primary {
-    --bs-btn-color: #5a6e8a;
-    --bs-btn-border-color: #5a6e8a;
-    --bs-btn-hover-bg: #5a6e8a;
-    --bs-btn-hover-border-color: #5a6e8a;
-    --bs-btn-active-bg: #485a70;
-    --bs-btn-active-border-color: #485a70;
+    --bs-btn-color: #4a6fa5;
+    --bs-btn-border-color: #4a6fa5;
+    --bs-btn-hover-bg: #4a6fa5;
+    --bs-btn-hover-border-color: #4a6fa5;
+    --bs-btn-active-bg: #3d5f8f;
+    --bs-btn-active-border-color: #3d5f8f;
 }
 
 .btn-success {
-    --bs-btn-bg: #6b9e7a;
-    --bs-btn-border-color: #6b9e7a;
-    --bs-btn-hover-bg: #5a8a68;
-    --bs-btn-hover-border-color: #5a8a68;
-    --bs-btn-active-bg: #4d7a5b;
-    --bs-btn-active-border-color: #4d7a5b;
-    --bs-btn-disabled-bg: #6b9e7a;
-    --bs-btn-disabled-border-color: #6b9e7a;
+    --bs-btn-bg: #4a9e6e;
+    --bs-btn-border-color: #4a9e6e;
+    --bs-btn-hover-bg: #3d8a5e;
+    --bs-btn-hover-border-color: #3d8a5e;
+    --bs-btn-active-bg: #347a52;
+    --bs-btn-active-border-color: #347a52;
+    --bs-btn-disabled-bg: #4a9e6e;
+    --bs-btn-disabled-border-color: #4a9e6e;
 }
 
 .btn-outline-success {
-    --bs-btn-color: #6b9e7a;
-    --bs-btn-border-color: #6b9e7a;
-    --bs-btn-hover-bg: #6b9e7a;
-    --bs-btn-hover-border-color: #6b9e7a;
-    --bs-btn-active-bg: #5a8a68;
-    --bs-btn-active-border-color: #5a8a68;
+    --bs-btn-color: #4a9e6e;
+    --bs-btn-border-color: #4a9e6e;
+    --bs-btn-hover-bg: #4a9e6e;
+    --bs-btn-hover-border-color: #4a9e6e;
+    --bs-btn-active-bg: #3d8a5e;
+    --bs-btn-active-border-color: #3d8a5e;
 }
 
 .btn-danger {
-    --bs-btn-bg: #c26a6a;
-    --bs-btn-border-color: #c26a6a;
-    --bs-btn-hover-bg: #a85a5a;
-    --bs-btn-hover-border-color: #a85a5a;
-    --bs-btn-active-bg: #944e4e;
-    --bs-btn-active-border-color: #944e4e;
-    --bs-btn-disabled-bg: #c26a6a;
-    --bs-btn-disabled-border-color: #c26a6a;
+    --bs-btn-bg: #c25b5b;
+    --bs-btn-border-color: #c25b5b;
+    --bs-btn-hover-bg: #aa4e4e;
+    --bs-btn-hover-border-color: #aa4e4e;
+    --bs-btn-active-bg: #964444;
+    --bs-btn-active-border-color: #964444;
+    --bs-btn-disabled-bg: #c25b5b;
+    --bs-btn-disabled-border-color: #c25b5b;
 }
 
 .btn-outline-danger {
-    --bs-btn-color: #c26a6a;
-    --bs-btn-border-color: #c26a6a;
-    --bs-btn-hover-bg: #c26a6a;
-    --bs-btn-hover-border-color: #c26a6a;
-    --bs-btn-active-bg: #a85a5a;
-    --bs-btn-active-border-color: #a85a5a;
+    --bs-btn-color: #c25b5b;
+    --bs-btn-border-color: #c25b5b;
+    --bs-btn-hover-bg: #c25b5b;
+    --bs-btn-hover-border-color: #c25b5b;
+    --bs-btn-active-bg: #aa4e4e;
+    --bs-btn-active-border-color: #aa4e4e;
 }
 
 .btn-warning {
-    --bs-btn-bg: #c9a84c;
-    --bs-btn-border-color: #c9a84c;
-    --bs-btn-hover-bg: #b3953f;
-    --bs-btn-hover-border-color: #b3953f;
-    --bs-btn-active-bg: #9e8336;
-    --bs-btn-active-border-color: #9e8336;
+    --bs-btn-bg: #d4a843;
+    --bs-btn-border-color: #d4a843;
+    --bs-btn-hover-bg: #be9638;
+    --bs-btn-hover-border-color: #be9638;
+    --bs-btn-active-bg: #a8852f;
+    --bs-btn-active-border-color: #a8852f;
     --bs-btn-color: #fff;
     --bs-btn-hover-color: #fff;
     --bs-btn-active-color: #fff;
 }
 
 .btn-outline-warning {
-    --bs-btn-color: #c9a84c;
-    --bs-btn-border-color: #c9a84c;
-    --bs-btn-hover-bg: #c9a84c;
-    --bs-btn-hover-border-color: #c9a84c;
+    --bs-btn-color: #d4a843;
+    --bs-btn-border-color: #d4a843;
+    --bs-btn-hover-bg: #d4a843;
+    --bs-btn-hover-border-color: #d4a843;
     --bs-btn-hover-color: #fff;
-    --bs-btn-active-bg: #b3953f;
-    --bs-btn-active-border-color: #b3953f;
+    --bs-btn-active-bg: #be9638;
+    --bs-btn-active-border-color: #be9638;
 }
 
 .btn-info {
-    --bs-btn-bg: #6a9fb5;
-    --bs-btn-border-color: #6a9fb5;
-    --bs-btn-hover-bg: #5a8da1;
-    --bs-btn-hover-border-color: #5a8da1;
-    --bs-btn-active-bg: #4d7d8f;
-    --bs-btn-active-border-color: #4d7d8f;
+    --bs-btn-bg: #4a9fb5;
+    --bs-btn-border-color: #4a9fb5;
+    --bs-btn-hover-bg: #3d8da1;
+    --bs-btn-hover-border-color: #3d8da1;
+    --bs-btn-active-bg: #347d8f;
+    --bs-btn-active-border-color: #347d8f;
     --bs-btn-color: #fff;
     --bs-btn-hover-color: #fff;
     --bs-btn-active-color: #fff;
 }
-
-.bg-primary { background-color: #5a6e8a !important; }
-.bg-success { background-color: #6b9e7a !important; }
-.bg-danger { background-color: #c26a6a !important; }
-.bg-warning { background-color: #c9a84c !important; }
-.bg-info { background-color: #6a9fb5 !important; }
-.text-primary { color: #5a6e8a !important; }
-.text-success { color: #6b9e7a !important; }
-.text-danger { color: #c26a6a !important; }
-.text-warning { color: #c9a84c !important; }
-.text-info { color: #6a9fb5 !important; }
-.badge.bg-success { background-color: #6b9e7a !important; }
-.badge.bg-danger { background-color: #c26a6a !important; }
-.badge.bg-warning { background-color: #c9a84c !important; color: #fff !important; }
-.badge.bg-info { background-color: #6a9fb5 !important; color: #fff !important; }
-.badge.bg-primary { background-color: #5a6e8a !important; }
 
 /* Confirm modal backdrop blur */
 .modal-backdrop.show {
