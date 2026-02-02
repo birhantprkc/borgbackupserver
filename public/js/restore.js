@@ -630,7 +630,7 @@
 
                         dbTable.style.display = '';
                         var mtimes = data.mtimes || {};
-                        var fallbackDate = data.backed_up_at ? formatDate(data.backed_up_at) : '';
+                        var fallbackDate = data.backed_up_at || '';
                         data.databases.forEach(function(dbName) {
                             const tr = document.createElement('tr');
                             const escapedName = esc(dbName);
@@ -651,7 +651,7 @@
                                         '</div>' +
                                     '</div>' +
                                 '</td>' +
-                                '<td class="text-end text-muted small">' + esc(mtimes[dbName] ? formatDate(mtimes[dbName]) : fallbackDate) + '</td>';
+                                '<td class="text-end text-muted small">' + esc(mtimes[dbName] || fallbackDate) + '</td>';
                             dbTableBody.appendChild(tr);
                         });
 

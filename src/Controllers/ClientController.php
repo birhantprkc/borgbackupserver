@@ -860,7 +860,7 @@ class ClientController extends Controller
                 foreach ($rows as $row) {
                     $basename = basename($row['path']);
                     $dbName = preg_replace('/\\.sql(\\.gz)?$/', '', $basename);
-                    $mtimes[$dbName] = $row['mtime'];
+                    $mtimes[$dbName] = $row['mtime'] ? \BBS\Core\TimeHelper::format($row['mtime'], 'M j, Y g:i A') : null;
                 }
             }
         }
@@ -869,7 +869,7 @@ class ClientController extends Controller
             'databases' => $databases,
             'per_database' => $data['per_database'] ?? true,
             'compress' => $compress,
-            'backed_up_at' => $archive['created_at'],
+            'backed_up_at' => $archive['created_at'] ? \BBS\Core\TimeHelper::format($archive['created_at'], 'M j, Y g:i A') : null,
             'mtimes' => $mtimes,
         ]);
     }
