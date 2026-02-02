@@ -365,11 +365,6 @@ class PluginManager
                     'required' => true,
                     'help' => 'Local directory where dumps are saved. Automatically included in backup directories.',
                 ],
-                'per_database' => [
-                    'type' => 'checkbox',
-                    'label' => 'One file per database',
-                    'default' => true,
-                ],
                 'compress' => [
                     'type' => 'checkbox',
                     'label' => 'Compress dumps (gzip)',
