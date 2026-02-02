@@ -1837,7 +1837,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 <div id="test-result-<?= $cfg['id'] ?>" class="mt-2"></div>
 
                 <!-- Edit form (collapsed) -->
-                <div class="collapse mt-3" id="editConfig<?= $cfg['id'] ?>">
+                <div class="collapse mt-3" id="editConfig<?= $cfg['id'] ?>" onclick="event.stopPropagation();">
                     <form method="POST" action="/clients/<?= $agent['id'] ?>/plugin-configs/<?= $cfg['id'] ?>/edit">
                         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                         <div class="mb-2">
