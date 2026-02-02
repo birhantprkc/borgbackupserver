@@ -29,7 +29,9 @@ $statusClass = match($agent['status']) {
     default => 'warning',
 };
 $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB'
-    : ($totalSize >= 1048576 ? round($totalSize / 1048576, 1) . ' MB' : '0');
+    : ($totalSize >= 1048576 ? round($totalSize / 1048576, 1) . ' MB'
+    : ($totalSize >= 1024 ? round($totalSize / 1024, 1) . ' KB'
+    : ($totalSize > 0 ? $totalSize . ' B' : '0')));
 ?>
 <div class="card border-0 shadow-sm mb-4 card-no-outline">
     <div class="card-body pb-2">
@@ -399,7 +401,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                 <span class="fw-semibold">
                                     <?php
                                     $s = $repo['size_bytes'];
-                                    echo $s >= 1073741824 ? round($s / 1073741824, 1) . ' GB' : ($s >= 1048576 ? round($s / 1048576, 1) . ' MB' : '0');
+                                    echo $s >= 1073741824 ? round($s / 1073741824, 1) . ' GB' : ($s >= 1048576 ? round($s / 1048576, 1) . ' MB' : ($s >= 1024 ? round($s / 1024, 1) . ' KB' : ($s > 0 ? $s . ' B' : '0')));
                                     ?>
                                     <span class="text-muted">(<?= $repo['archive_count'] ?> archives)</span>
                                 </span>
@@ -534,6 +536,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                             const bytes = ctx.parsed;
                             if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' GB';
                             if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
+                            if (bytes >= 1024) return (bytes / 1024).toFixed(1) + ' KB';
                             return bytes + ' B';
                         }
                     }
