@@ -201,7 +201,7 @@ class AgentApiController extends Controller
         }
 
         $now = date('Y-m-d H:i:s');
-        $startedAt = $job['started_at'] ?? $now;
+        $startedAt = $job['started_at'] ?? $job['queued_at'] ?? $now;
         $duration = strtotime($now) - strtotime($startedAt);
 
         $data = [
@@ -209,6 +209,11 @@ class AgentApiController extends Controller
             'completed_at' => $now,
             'duration_seconds' => max(0, $duration),
         ];
+
+        // If the agent never reported "running", backfill started_at
+        if (empty($job['started_at'])) {
+            $data['started_at'] = $now;
+        }
 
         if (isset($input['files_total']))     $data['files_total'] = (int) $input['files_total'];
         if (isset($input['files_processed'])) $data['files_processed'] = (int) $input['files_processed'];
