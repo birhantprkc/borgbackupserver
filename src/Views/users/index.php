@@ -69,7 +69,7 @@
                         <td class="small"><?= \BBS\Core\TimeHelper::format($user['created_at'], 'M j, Y') ?></td>
                         <td>
                             <?php if ($user['id'] != $_SESSION['user_id']): ?>
-                            <form method="POST" action="/users/<?= $user['id'] ?>/delete" class="d-inline" onsubmit="return confirm('Delete this user?')">
+                            <form method="POST" action="/users/<?= $user['id'] ?>/delete" class="d-inline" data-confirm="Delete this user?" data-confirm-danger>
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                 <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
                             </form>

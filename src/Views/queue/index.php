@@ -52,7 +52,7 @@
                             <a href="/queue/<?= $job['id'] ?>" class="btn btn-sm btn-outline-secondary" title="View Details"><i class="bi bi-eye"></i></a>
                             <?php if (in_array($job['status'], ['queued', 'sent'])): ?>
                             <form method="POST" action="/queue/<?= $job['id'] ?>/cancel" class="d-inline"
-                                  onsubmit="return confirm('Cancel this job?')">
+                                  data-confirm="Cancel this job?">
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                 <button class="btn btn-sm btn-outline-danger" title="Cancel">
                                     <i class="bi bi-x-circle"></i>
@@ -115,7 +115,7 @@
                             <a href="/queue/<?= $job['id'] ?>" class="btn btn-sm btn-outline-secondary" title="View Details"><i class="bi bi-eye"></i></a>
                             <?php if ($job['status'] === 'failed'): ?>
                             <form method="POST" action="/queue/<?= $job['id'] ?>/retry" class="d-inline"
-                                  onsubmit="return confirm('Retry this job?')">
+                                  data-confirm="Retry this job?">
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                 <button class="btn btn-sm btn-outline-warning" title="Retry">
                                     <i class="bi bi-arrow-repeat"></i>
@@ -169,7 +169,7 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
 
         let actions = '<a href="/queue/' + job.id + '" class="btn btn-sm btn-outline-secondary" title="View Details"><i class="bi bi-eye"></i></a>';
         if (job.status === 'queued' || job.status === 'sent') {
-            actions += ' <form method="POST" action="/queue/' + job.id + '/cancel" class="d-inline" onsubmit="return confirm(\'Cancel this job?\')">' +
+            actions += ' <form method="POST" action="/queue/' + job.id + '/cancel" class="d-inline" data-confirm="Cancel this job?">' +
                 '<input type="hidden" name="csrf_token" value="' + csrfToken + '">' +
                 '<button class="btn btn-sm btn-outline-danger" title="Cancel"><i class="bi bi-x-circle"></i></button></form>';
         }
@@ -193,7 +193,7 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
 
         let actions = '<a href="/queue/' + job.id + '" class="btn btn-sm btn-outline-secondary" title="View Details"><i class="bi bi-eye"></i></a>';
         if (job.status === 'failed') {
-            actions += ' <form method="POST" action="/queue/' + job.id + '/retry" class="d-inline" onsubmit="return confirm(\'Retry this job?\')">' +
+            actions += ' <form method="POST" action="/queue/' + job.id + '/retry" class="d-inline" data-confirm="Retry this job?">' +
                 '<input type="hidden" name="csrf_token" value="' + csrfToken + '">' +
                 '<button class="btn btn-sm btn-outline-warning" title="Retry"><i class="bi bi-arrow-repeat"></i></button></form>';
         }

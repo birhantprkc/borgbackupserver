@@ -160,11 +160,68 @@
         <?php endif; ?>
     </nav>
 
+    <!-- Confirm modal -->
+    <div class="modal fade" id="confirmModal" tabindex="-1" data-bs-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-body text-center p-4">
+                    <i class="bi bi-question-circle text-warning d-block mb-3" style="font-size:2.5rem;"></i>
+                    <p class="mb-0 fs-6" id="confirmMessage"></p>
+                </div>
+                <div class="modal-footer border-0 justify-content-center pb-4 pt-0">
+                    <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-success px-4" id="confirmOk">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast container -->
     <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer" style="z-index:1090;"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+    function confirmAction(message, callback, options) {
+        options = options || {};
+        var msgEl = document.getElementById('confirmMessage');
+        var okBtn = document.getElementById('confirmOk');
+        var icon = document.querySelector('#confirmModal .modal-body > i');
+        msgEl.innerHTML = message.replace(/\n/g, '<br>');
+        // Style the OK button based on type
+        okBtn.className = 'btn px-4 btn-' + (options.btnClass || 'success');
+        okBtn.textContent = options.okText || 'OK';
+        // Icon
+        if (options.danger) {
+            icon.className = 'bi bi-exclamation-triangle-fill text-danger d-block mb-3';
+        } else {
+            icon.className = 'bi bi-question-circle text-warning d-block mb-3';
+        }
+        var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('confirmModal'));
+        // Remove old listener
+        var newOk = okBtn.cloneNode(true);
+        okBtn.parentNode.replaceChild(newOk, okBtn);
+        newOk.id = 'confirmOk';
+        newOk.addEventListener('click', function() { modal.hide(); callback(); });
+        modal.show();
+    }
+    // Global handler for data-confirm on forms and buttons
+    document.addEventListener('submit', function(e) {
+        var msg = e.target.getAttribute('data-confirm');
+        if (!msg) return;
+        e.preventDefault();
+        var opts = {};
+        if (e.target.hasAttribute('data-confirm-danger')) opts = {danger:true, btnClass:'danger', okText:'Delete'};
+        confirmAction(msg, function() { e.target.removeAttribute('data-confirm'); e.target.submit(); }, opts);
+    });
+    document.addEventListener('click', function(e) {
+        var btn = e.target.closest('[data-confirm]');
+        if (!btn || btn.tagName === 'FORM') return;
+        var msg = btn.getAttribute('data-confirm');
+        e.preventDefault();
+        var opts = {};
+        if (btn.hasAttribute('data-confirm-danger')) opts = {danger:true, btnClass:'danger', okText:'Delete'};
+        confirmAction(msg, function() { btn.removeAttribute('data-confirm'); btn.click(); }, opts);
+    });
     function showToast(message, type) {
         var iconColors = {success:'#2ecc71',danger:'#e74c3c',warning:'#f39c12',info:'#3498db'};
         var icons = {success:'bi-check-circle-fill',danger:'bi-x-circle-fill',warning:'bi-exclamation-triangle-fill',info:'bi-info-circle-fill'};

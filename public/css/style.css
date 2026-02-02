@@ -1,3 +1,10 @@
+/* Confirm modal backdrop blur */
+.modal-backdrop.show {
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    background-color: rgba(0, 0, 0, 0.4);
+}
+
 /* Prevent horizontal scroll */
 html, body {
     overflow-x: hidden;

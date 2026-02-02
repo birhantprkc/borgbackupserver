@@ -360,13 +360,13 @@ $isServerSide = in_array($job['task_type'], ['prune', 'compact']);
 <!-- Actions -->
 <div id="actions-section" class="d-flex gap-2">
     <?php if (in_array($job['status'], ['queued', 'sent'])): ?>
-    <form method="POST" action="/queue/<?= $job['id'] ?>/cancel" onsubmit="return confirm('Cancel this job?')">
+    <form method="POST" action="/queue/<?= $job['id'] ?>/cancel" data-confirm="Cancel this job?">
         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
         <button class="btn btn-danger"><i class="bi bi-x-circle me-1"></i> Cancel Job</button>
     </form>
     <?php endif; ?>
     <?php if ($job['status'] === 'failed'): ?>
-    <form method="POST" action="/queue/<?= $job['id'] ?>/retry" onsubmit="return confirm('Retry this job?')">
+    <form method="POST" action="/queue/<?= $job['id'] ?>/retry" data-confirm="Retry this job?">
         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
         <button class="btn btn-warning"><i class="bi bi-arrow-repeat me-1"></i> Retry Job</button>
     </form>
@@ -503,10 +503,10 @@ $isServerSide = in_array($job['task_type'], ['prune', 'compact']);
         if (!actions) return;
         let html = '';
         if (job.status === 'queued' || job.status === 'sent') {
-            html += '<form method="POST" action="/queue/' + jobId + '/cancel" onsubmit="return confirm(\'Cancel this job?\')"><input type="hidden" name="csrf_token" value="' + csrfToken + '"><button class="btn btn-danger"><i class="bi bi-x-circle me-1"></i> Cancel Job</button></form>';
+            html += '<form method="POST" action="/queue/' + jobId + '/cancel" data-confirm="Cancel this job?"><input type="hidden" name="csrf_token" value="' + csrfToken + '"><button class="btn btn-danger"><i class="bi bi-x-circle me-1"></i> Cancel Job</button></form>';
         }
         if (job.status === 'failed') {
-            html += '<form method="POST" action="/queue/' + jobId + '/retry" onsubmit="return confirm(\'Retry this job?\')"><input type="hidden" name="csrf_token" value="' + csrfToken + '"><button class="btn btn-warning"><i class="bi bi-arrow-repeat me-1"></i> Retry Job</button></form>';
+            html += '<form method="POST" action="/queue/' + jobId + '/retry" data-confirm="Retry this job?"><input type="hidden" name="csrf_token" value="' + csrfToken + '"><button class="btn btn-warning"><i class="bi bi-arrow-repeat me-1"></i> Retry Job</button></form>';
         }
         if (['queued','sent','running'].includes(job.status)) {
             html += '<div class="text-muted small align-self-center ms-2">Job Stalled? Cancel and retry, or check the agent status on the <a href="/clients/' + job.agent_id + '">client page</a>.</div>';

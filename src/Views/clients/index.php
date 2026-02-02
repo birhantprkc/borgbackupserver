@@ -151,7 +151,7 @@
                             <?php if ($latestVersion && !empty($agent['agent_version']) && $agent['agent_version'] !== $latestVersion): ?>
                                 <form method="POST" action="/clients/<?= $agent['id'] ?>/update-agent" class="d-inline" onclick="event.stopPropagation()">
                                     <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                    <button type="submit" class="badge border-0 ms-1 bg-light text-muted" style="font-size:.65rem;cursor:pointer;" title="Queue agent upgrade to v<?= htmlspecialchars($latestVersion) ?>" onclick="return confirm('Queue agent upgrade for <?= htmlspecialchars($agent['name']) ?>?')"><i class="bi bi-arrow-up-circle me-1"></i>upgrade</button>
+                                    <button type="submit" class="badge border-0 ms-1 bg-light text-muted" style="font-size:.65rem;cursor:pointer;" title="Queue agent upgrade to v<?= htmlspecialchars($latestVersion) ?>" data-confirm="Queue agent upgrade for <?= htmlspecialchars($agent['name']) ?>?"><i class="bi bi-arrow-up-circle me-1"></i>upgrade</button>
                                 </form>
                             <?php endif; ?>
                         </td>

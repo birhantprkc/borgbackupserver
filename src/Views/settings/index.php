@@ -219,7 +219,7 @@
                             <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#edit-tpl-<?= $tpl['id'] ?>">
                                 <i class="bi bi-pencil"></i>
                             </button>
-                            <form method="POST" action="/settings/templates/<?= $tpl['id'] ?>/delete" class="d-inline" onsubmit="return confirm('Delete this template?')">
+                            <form method="POST" action="/settings/templates/<?= $tpl['id'] ?>/delete" class="d-inline" data-confirm="Delete this template?" data-confirm-danger>
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                 <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
                             </form>
@@ -359,7 +359,7 @@ $outdatedCount = count($outdatedAgents);
                         </button>
                     </form>
                     <?php if ($hasUpdate): ?>
-                    <form method="POST" action="/settings/upgrade" onsubmit="return confirm('This will enable maintenance mode (pausing new backups), checkout release v<?= htmlspecialchars($latest['version']) ?>, update dependencies, and run migrations.\n\nRecommendation: Back up your database first.\n\nProceed with upgrade?')">
+                    <form method="POST" action="/settings/upgrade" data-confirm="This will enable maintenance mode (pausing new backups), checkout release v<?= htmlspecialchars($latest['version']) ?>, update dependencies, and run migrations.&#10;&#10;Recommendation: Back up your database first.&#10;&#10;Proceed with upgrade?">
                         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                         <button type="submit" class="btn btn-sm btn-primary">
                             <i class="bi bi-cloud-arrow-down me-1"></i> Upgrade to v<?= htmlspecialchars($latest['version']) ?>
@@ -390,7 +390,7 @@ $outdatedCount = count($outdatedAgents);
                             <span class="badge rounded-pill text-dark me-1" style="background-color: #fff3cd;"><?= $outdatedCount ?> outdated</span>
                             of <?= $totalAgents ?> agent(s)
                         </div>
-                        <form method="POST" action="/settings/upgrade-agents" onsubmit="return confirm('Queue agent updates for <?= $outdatedCount ?> client(s)?')">
+                        <form method="POST" action="/settings/upgrade-agents" data-confirm="Queue agent updates for <?= $outdatedCount ?> client(s)?">
                             <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                             <button type="submit" class="btn btn-sm btn-primary">
                                 <i class="bi bi-arrow-up-circle me-1"></i> Update All
@@ -441,7 +441,7 @@ $outdatedCount = count($outdatedAgents);
                     <i class="bi bi-exclamation-triangle me-1"></i>
                     <strong>Developer Use Only:</strong> Syncs unpublished development code from the main branch. This may include incomplete features and untested changes. Only use if directed by a developer for troubleshooting purposes.
                 </div>
-                <form method="POST" action="/settings/sync" onsubmit="return confirm('This pulls the latest code from the main branch, which may include unreleased or unstable changes.\n\nUse Upgrade instead for stable releases.\n\nProceed?')">
+                <form method="POST" action="/settings/sync" data-confirm="This pulls the latest code from the main branch, which may include unreleased or unstable changes.&#10;&#10;Use Upgrade instead for stable releases.&#10;&#10;Proceed?">
                     <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                     <button type="submit" class="btn btn-outline-secondary btn-sm" title="Pulls latest from main branch (may include unreleased changes)">
                         <i class="bi bi-git me-1"></i> Sync Dev Code

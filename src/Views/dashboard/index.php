@@ -485,7 +485,7 @@
                                 <td><?= \BBS\Core\TimeHelper::format($sched['next_run'], 'M j, g:i A') ?></td>
                                 <td class="d-table-cell-md <?= $countdownClass ?>"><?= $countdown ?></td>
                                 <td class="text-nowrap" onclick="event.stopPropagation()">
-                                    <form method="POST" action="/plans/<?= $sched['plan_id'] ?>/trigger" class="d-inline" onsubmit="return confirm('Run this backup now?')">
+                                    <form method="POST" action="/plans/<?= $sched['plan_id'] ?>/trigger" class="d-inline" data-confirm="Run this backup now?">
                                         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                         <button type="submit" class="btn btn-sm btn-outline-success py-0 px-2" title="Run now">
                                             <i class="bi bi-play-fill"></i>
@@ -708,7 +708,7 @@ function renderUpcoming(schedules, csrfToken) {
         const nextTs = Math.floor(new Date((s.next_run).replace(' ','T')+'Z').getTime()/1000);
         const cd = fmtCountdown(nextTs - now);
         html += '<tr style="cursor:pointer" onclick="window.location=\'/clients/'+s.agent_id+'?tab=schedules\'"><td>'+esc(s.agent_name)+'</td><td>'+esc(s.plan_name)+'</td><td class="d-table-cell-md">'+esc(s.frequency?.[0]?.toUpperCase()+s.frequency?.slice(1))+'</td><td>'+fmtDate(s.next_run)+'</td><td class="d-table-cell-md '+cd.cls+'">'+cd.text+'</td>';
-        html += '<td class="text-nowrap" onclick="event.stopPropagation()"><form method="POST" action="/plans/'+s.plan_id+'/trigger" class="d-inline" onsubmit="return confirm(\'Run this backup now?\')"><input type="hidden" name="csrf_token" value="'+csrfToken+'"><button type="submit" class="btn btn-sm btn-outline-success py-0 px-2" title="Run now"><i class="bi bi-play-fill"></i></button></form></td>';
+        html += '<td class="text-nowrap" onclick="event.stopPropagation()"><form method="POST" action="/plans/'+s.plan_id+'/trigger" class="d-inline" data-confirm="Run this backup now?"><input type="hidden" name="csrf_token" value="'+csrfToken+'"><button type="submit" class="btn btn-sm btn-outline-success py-0 px-2" title="Run now"><i class="bi bi-play-fill"></i></button></form></td>';
         html += '</tr>';
     });
     html += '</tbody></table></div>';
