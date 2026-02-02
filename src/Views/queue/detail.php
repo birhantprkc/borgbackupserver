@@ -541,7 +541,7 @@ $isServerSide = in_array($job['task_type'], ['prune', 'compact', 's3_sync']);
                 const jobActive = ['queued','sent','running'].includes(job.status);
                 if (jobActive) {
                     isActive = true;
-                    setTimeout(poll, 5000);
+                    setTimeout(poll, 2000);
                 } else if (job.completed_at) {
                     isActive = false;
                     completedAt = new Date(job.completed_at.replace(' ','T')+'Z').getTime();
@@ -552,13 +552,13 @@ $isServerSide = in_array($job['task_type'], ['prune', 'compact', 's3_sync']);
             })
             .catch(function() {
                 // On error, retry after longer delay
-                if (isActive) setTimeout(poll, 10000);
+                if (isActive) setTimeout(poll, 5000);
             });
     }
 
     // Start polling
     if (isActive) {
-        setTimeout(poll, 5000);
+        setTimeout(poll, 2000);
     } else if (completedAt && (Date.now() - completedAt < 120000)) {
         setTimeout(poll, 5000);
     }
