@@ -38,7 +38,7 @@
                 $agentUpgradeCount = 0;
                 if ($isAdmin && !$upgradeAvailable) {
                     $bundledAgentVer = null;
-                    $agentFile = dirname(__DIR__, 2) . '/agent/bbs-agent.py';
+                    $agentFile = dirname(__DIR__, 3) . '/agent/bbs-agent.py';
                     if (file_exists($agentFile)) {
                         $h = fopen($agentFile, 'r');
                         if ($h) {
