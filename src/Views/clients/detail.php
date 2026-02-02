@@ -2205,7 +2205,7 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
         <div class="row g-2 align-items-end">
             <div class="col-md-5">
                 <label class="form-label fw-semibold mb-1 small">Archive</label>
-                <select class="form-select" id="archive-select">
+                <select class="form-select form-select-sm" id="archive-select">
                     <option value="">Choose a restore point...</option>
                     <?php
                     $currentRepo = null;
@@ -2225,13 +2225,13 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
             </div>
             <div class="col-md-5">
                 <label class="form-label fw-semibold mb-1 small">Search</label>
-                <div class="input-group">
+                <div class="input-group input-group-sm">
                     <input type="text" class="form-control" id="restore-search" placeholder="e.g. nginx.conf" disabled>
                     <button class="btn btn-outline-secondary" type="button" id="restore-search-btn" disabled>
                         <i class="bi bi-search"></i>
                     </button>
-                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="search-mode-btn" data-bs-toggle="dropdown">
-                        <i class="bi bi-funnel"></i> This Archive
+                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="search-mode-btn" data-bs-toggle="dropdown" title="Search scope">
+                        <i class="bi bi-funnel"></i>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end" id="search-mode-menu">
                         <li><a class="dropdown-item" href="#" data-mode="current"><i class="bi bi-archive me-1"></i> Search This Archive</a></li>
@@ -2335,7 +2335,7 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
         <div class="row g-2 align-items-end mb-3">
             <div class="col-md-6">
                 <label class="form-label fw-semibold mb-1 small">Archive</label>
-                <select class="form-select" id="db-archive-select">
+                <select class="form-select form-select-sm" id="db-archive-select">
                     <option value="">Choose a restore point...</option>
                     <?php
                     $currentRepo = null;

@@ -272,7 +272,7 @@
         const item = e.target.closest('[data-mode]');
         if (item) {
             searchMode = item.dataset.mode;
-            searchModeBtn.innerHTML = '<i class="bi bi-funnel"></i> ' + (searchMode === 'all' ? 'All Archives' : 'This Archive');
+            searchModeBtn.innerHTML = '<i class="bi bi-funnel' + (searchMode === 'all' ? '-fill' : '') + '"></i>';
             // Enable search even without archive selected in "all" mode
             if (searchMode === 'all') {
                 searchInput.disabled = false;
