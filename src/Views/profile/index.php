@@ -1,25 +1,27 @@
 <h5 class="mb-4">My Profile</h5>
 
-<ul class="nav nav-tabs mb-4" role="tablist">
+<!-- Tab Navigation -->
+<ul class="nav nav-pills client-tabs mb-0 flex-wrap">
     <li class="nav-item">
         <a class="nav-link <?= $tab === 'account' ? 'active' : '' ?>" href="/profile?tab=account">
-            <i class="bi bi-person me-1"></i> Account
+            <i class="bi bi-person me-1"></i><span class="tab-label">Account</span>
         </a>
     </li>
     <li class="nav-item">
         <a class="nav-link <?= $tab === 'password' ? 'active' : '' ?>" href="/profile?tab=password">
-            <i class="bi bi-key me-1"></i> Password
+            <i class="bi bi-key me-1"></i><span class="tab-label">Password</span>
         </a>
     </li>
     <li class="nav-item">
         <a class="nav-link <?= $tab === '2fa' ? 'active' : '' ?>" href="/profile?tab=2fa">
-            <i class="bi bi-shield-check me-1"></i> Two-Factor Auth
+            <i class="bi bi-shield-check me-1"></i><span class="tab-label">Two-Factor Auth</span>
             <?php if ($twoFactorEnabled): ?>
                 <span class="badge bg-success ms-1">On</span>
             <?php endif; ?>
         </a>
     </li>
 </ul>
+<div class="client-tab-content border rounded-bottom bg-white p-4 mb-4 shadow-sm">
 
 <?php if ($tab === 'account'): ?>
 <!-- Account Tab -->
@@ -304,3 +306,4 @@
     </div>
 </div>
 <?php endif; ?>
+</div><!-- /client-tab-content -->
