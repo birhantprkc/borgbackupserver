@@ -156,20 +156,52 @@ class ServerStats
     {
         $db = \BBS\Core\Database::getInstance();
 
-        $agents = $db->fetchOne("SELECT COUNT(*) AS cnt FROM agents");
-        $repos = $db->fetchOne("SELECT COUNT(*) AS cnt FROM repositories");
-        $plans = $db->fetchOne("SELECT COUNT(*) AS cnt FROM backup_plans");
-        $archives = $db->fetchOne("SELECT COUNT(*) AS cnt FROM archives");
         $catalogFiles = $db->fetchOne("SELECT COUNT(*) AS cnt FROM file_catalog");
+        $archives = $db->fetchOne("SELECT COUNT(*) AS cnt FROM archives");
         $jobs = $db->fetchOne("SELECT COUNT(*) AS cnt FROM backup_jobs WHERE status = 'completed'");
 
+        // MySQL performance stats from SHOW GLOBAL STATUS
+        $statusVars = [];
+        $rows = $db->fetchAll("SHOW GLOBAL STATUS WHERE Variable_name IN (
+            'Uptime', 'Questions', 'Threads_connected', 'Threads_running',
+            'Innodb_buffer_pool_read_requests', 'Innodb_buffer_pool_reads',
+            'Innodb_buffer_pool_pages_total', 'Innodb_buffer_pool_pages_free',
+            'Bytes_received', 'Bytes_sent', 'Slow_queries'
+        )");
+        foreach ($rows as $r) {
+            $statusVars[$r['Variable_name']] = (int) $r['Value'];
+        }
+
+        // Buffer pool size from variables
+        $bpVar = $db->fetchOne("SHOW VARIABLES LIKE 'innodb_buffer_pool_size'");
+        $bufferPoolSize = (int) ($bpVar['Value'] ?? 0);
+
+        $uptime = $statusVars['Uptime'] ?? 1;
+        $questions = $statusVars['Questions'] ?? 0;
+        $readRequests = $statusVars['Innodb_buffer_pool_read_requests'] ?? 0;
+        $diskReads = $statusVars['Innodb_buffer_pool_reads'] ?? 0;
+        $pagesTotal = $statusVars['Innodb_buffer_pool_pages_total'] ?? 1;
+        $pagesFree = $statusVars['Innodb_buffer_pool_pages_free'] ?? 0;
+
+        // Calculate metrics
+        $qps = round($questions / max($uptime, 1), 1);
+        $hitRate = $readRequests > 0
+            ? round((1 - $diskReads / $readRequests) * 100, 2)
+            : 100.0;
+        $bufferPoolUsedPct = round((($pagesTotal - $pagesFree) / max($pagesTotal, 1)) * 100, 1);
+
         return [
-            'clients' => (int) ($agents['cnt'] ?? 0),
-            'repositories' => (int) ($repos['cnt'] ?? 0),
-            'backup_plans' => (int) ($plans['cnt'] ?? 0),
-            'archives' => (int) ($archives['cnt'] ?? 0),
             'catalog_files' => (int) ($catalogFiles['cnt'] ?? 0),
+            'archives' => (int) ($archives['cnt'] ?? 0),
             'completed_jobs' => (int) ($jobs['cnt'] ?? 0),
+            'qps' => $qps,
+            'threads_connected' => $statusVars['Threads_connected'] ?? 0,
+            'threads_running' => $statusVars['Threads_running'] ?? 0,
+            'buffer_pool_size' => $bufferPoolSize,
+            'buffer_pool_used_pct' => $bufferPoolUsedPct,
+            'hit_rate' => $hitRate,
+            'uptime' => $uptime,
+            'slow_queries' => $statusVars['Slow_queries'] ?? 0,
         ];
     }
 

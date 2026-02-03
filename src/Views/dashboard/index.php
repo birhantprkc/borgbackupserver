@@ -313,45 +313,49 @@
                     <?php endif; ?>
                     <?php if (!empty($mysqlStats)): ?>
                     <div class="col-md-7 mt-3 mt-md-0 pt-3 pt-md-0 border-top border-top-0-md<?= !empty($mysqlStorage) && $mysqlStorage['disk_total'] > 0 ? ' border-md-start' : '' ?>">
-                        <div class="d-flex align-items-center mb-2">
-                            <i class="bi bi-bar-chart me-1 text-muted"></i>
-                            <span class="fw-semibold small">Overview</span>
+                        <!-- Hero: Catalog Files Tracked -->
+                        <div class="text-center mb-2">
+                            <div class="fw-bold" style="font-size:2.2rem;line-height:1;color:#e67e22;" id="stat-catalog"><?= number_format($mysqlStats['catalog_files']) ?></div>
+                            <div class="text-muted small">Files Tracked</div>
                         </div>
-                        <div class="row g-2 text-center" style="font-size:.7rem;">
-                            <div class="col-4">
-                                <div class="rounded py-1" style="background:#f0f4ff;">
-                                    <div class="fw-bold text-primary" style="font-size:1rem;" id="stat-clients"><?= number_format($mysqlStats['clients']) ?></div>
-                                    <div class="text-muted">Clients</div>
-                                </div>
+                        <!-- Supporting stats row -->
+                        <div class="d-flex justify-content-center gap-3 mb-2" style="font-size:.75rem;">
+                            <div class="text-center">
+                                <div class="fw-bold" id="stat-archives"><?= number_format($mysqlStats['archives']) ?></div>
+                                <div class="text-muted">Archives</div>
                             </div>
-                            <div class="col-4">
-                                <div class="rounded py-1" style="background:#fef0f0;">
-                                    <div class="fw-bold text-danger" style="font-size:1rem;" id="stat-repos"><?= number_format($mysqlStats['repositories']) ?></div>
-                                    <div class="text-muted">Repos</div>
-                                </div>
+                            <div class="text-center">
+                                <div class="fw-bold" id="stat-completed-jobs"><?= number_format($mysqlStats['completed_jobs']) ?></div>
+                                <div class="text-muted">Jobs Run</div>
                             </div>
-                            <div class="col-4">
-                                <div class="rounded py-1" style="background:#f5f0ff;">
-                                    <div class="fw-bold" style="font-size:1rem;color:#6f42c1;" id="stat-plans"><?= number_format($mysqlStats['backup_plans']) ?></div>
-                                    <div class="text-muted">Plans</div>
-                                </div>
+                        </div>
+                        <!-- MySQL Performance -->
+                        <div class="border-top pt-2 mt-1">
+                            <div class="d-flex align-items-center mb-1">
+                                <i class="bi bi-activity me-1 text-muted" style="font-size:.7rem;"></i>
+                                <span class="fw-semibold" style="font-size:.65rem;text-transform:uppercase;letter-spacing:.5px;color:#6c757d;">MySQL Performance</span>
                             </div>
-                            <div class="col-4">
-                                <div class="rounded py-1" style="background:#f0faf0;">
-                                    <div class="fw-bold text-success" style="font-size:1rem;" id="stat-archives"><?= number_format($mysqlStats['archives']) ?></div>
-                                    <div class="text-muted">Archives</div>
+                            <div class="row g-1 text-center" style="font-size:.7rem;">
+                                <div class="col-3">
+                                    <div class="fw-bold" style="font-size:.85rem;" id="stat-qps"><?= $mysqlStats['qps'] ?></div>
+                                    <div class="text-muted">QPS</div>
                                 </div>
-                            </div>
-                            <div class="col-4">
-                                <div class="rounded py-1" style="background:#fff8f0;">
-                                    <div class="fw-bold" style="font-size:1rem;color:#e67e22;" id="stat-catalog"><?= number_format($mysqlStats['catalog_files']) ?></div>
-                                    <div class="text-muted">Catalog</div>
+                                <div class="col-3">
+                                    <div class="fw-bold" style="font-size:.85rem;" id="stat-connections"><?= $mysqlStats['threads_connected'] ?></div>
+                                    <div class="text-muted">Connections</div>
                                 </div>
-                            </div>
-                            <div class="col-4">
-                                <div class="rounded py-1" style="background:#f0faff;">
-                                    <div class="fw-bold text-info" style="font-size:1rem;" id="stat-completed-jobs"><?= number_format($mysqlStats['completed_jobs']) ?></div>
-                                    <div class="text-muted">Jobs Run</div>
+                                <div class="col-3">
+                                    <div class="fw-bold" style="font-size:.85rem;" id="stat-hit-rate"><?= $mysqlStats['hit_rate'] ?>%</div>
+                                    <div class="text-muted">Hit Rate</div>
+                                </div>
+                                <div class="col-3">
+                                    <?php
+                                    $uptimeDays = floor($mysqlStats['uptime'] / 86400);
+                                    $uptimeHrs = floor(($mysqlStats['uptime'] % 86400) / 3600);
+                                    $uptimeStr = $uptimeDays > 0 ? "{$uptimeDays}d {$uptimeHrs}h" : "{$uptimeHrs}h";
+                                    ?>
+                                    <div class="fw-bold" style="font-size:.85rem;" id="stat-uptime"><?= $uptimeStr ?></div>
+                                    <div class="text-muted">Uptime</div>
                                 </div>
                             </div>
                         </div>
@@ -824,15 +828,26 @@ setInterval(function() {
             }
             if (data.mysqlStats) {
                 const ms = data.mysqlStats;
-                const fmt = n => n.toLocaleString();
+                const fmt = n => Number(n).toLocaleString();
                 const map = {
-                    'stat-clients': ms.clients, 'stat-repos': ms.repositories,
-                    'stat-plans': ms.backup_plans, 'stat-archives': ms.archives,
-                    'stat-catalog': ms.catalog_files, 'stat-completed-jobs': ms.completed_jobs
+                    'stat-catalog': ms.catalog_files, 'stat-archives': ms.archives,
+                    'stat-completed-jobs': ms.completed_jobs
                 };
                 for (const [id, val] of Object.entries(map)) {
                     const el = document.getElementById(id);
                     if (el) el.textContent = fmt(val);
+                }
+                // MySQL perf stats
+                const qps = document.getElementById('stat-qps');
+                if (qps) qps.textContent = ms.qps;
+                const conn = document.getElementById('stat-connections');
+                if (conn) conn.textContent = ms.threads_connected;
+                const hr = document.getElementById('stat-hit-rate');
+                if (hr) hr.textContent = ms.hit_rate + '%';
+                const up = document.getElementById('stat-uptime');
+                if (up) {
+                    const d = Math.floor(ms.uptime / 86400), h = Math.floor((ms.uptime % 86400) / 3600);
+                    up.textContent = d > 0 ? d + 'd ' + h + 'h' : h + 'h';
                 }
             }
             if (data.mysqlStorage && data.mysqlStorage.disk_total > 0) {
