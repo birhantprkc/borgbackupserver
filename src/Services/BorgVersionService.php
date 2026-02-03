@@ -595,7 +595,7 @@ class BorgVersionService
      * Get the best borg version for an agent based on current mode.
      * - Server mode: try server binaries first, fall back to official
      * - Official mode: use GitHub binaries, pip as last resort
-     * Returns ['version' => '1.4.3', 'url' => '...', 'source' => 'server|official|pip'] or null.
+     * Returns ['version' => '1.4.3', 'url' => '...', 'source' => 'server|official|pip'].
      */
     public function getBestVersionForAgent(array $agent): ?array
     {
@@ -627,8 +627,7 @@ class BorgVersionService
             ];
         }
 
-        // Last resort: pip (agent will handle installation)
-        // Return a marker that tells the agent to use pip
+        // Last resort: pip (agent will remove any existing binary first)
         return [
             'version' => 'latest',
             'url' => null,

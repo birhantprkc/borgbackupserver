@@ -19,7 +19,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.8.2"
+AGENT_VERSION = "1.8.3"
 CONFIG_PATH = "/etc/bbs-agent/config.ini"
 LOG_PATH = "/var/log/bbs-agent.log"
 SSH_KEY_PATH = "/etc/bbs-agent/ssh_key"
@@ -438,8 +438,23 @@ def _install_borg_binary(download_url, binary_path, target_version):
 
 
 def _install_borg_pip(target_version):
-    """Install borg via pip."""
-    version_spec = f"borgbackup=={target_version}" if target_version else "borgbackup"
+    """Install borg via pip. Removes any existing non-pip binary first."""
+    # Check if there's an existing binary at /usr/local/bin/borg that's not from pip
+    # (pip-installed borg is a script, not a large ELF binary)
+    existing_binary = "/usr/local/bin/borg"
+    if os.path.exists(existing_binary):
+        try:
+            # Check if it's a large binary (ELF binaries are typically 10MB+)
+            size = os.path.getsize(existing_binary)
+            if size > 5 * 1024 * 1024:  # > 5MB = likely a compiled binary, not pip
+                logger.info(f"Removing existing binary at {existing_binary} ({size} bytes) to allow pip install")
+                backup_path = existing_binary + ".bak"
+                os.rename(existing_binary, backup_path)
+                # Keep backup in case pip fails - we'll clean up on success
+        except Exception as e:
+            logger.warning(f"Could not check/remove existing binary: {e}")
+
+    version_spec = f"borgbackup=={target_version}" if target_version and target_version != "latest" else "borgbackup"
     cmd = ["pip3", "install", "--upgrade", version_spec]
     logger.info(f"Installing borg via pip: {' '.join(cmd)}")
 
@@ -449,10 +464,34 @@ def _install_borg_pip(target_version):
         stderr_text = proc.stderr.decode("utf-8", errors="replace").strip()
 
         if proc.returncode == 0:
-            output = f"Borg updated to v{target_version} via pip"
+            # Clean up backup if pip succeeded
+            backup_path = existing_binary + ".bak"
+            if os.path.exists(backup_path):
+                try:
+                    os.remove(backup_path)
+                except Exception:
+                    pass
+            # Get actual installed version
+            try:
+                result = subprocess.run(["borg", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+                if result.returncode == 0:
+                    installed_ver = result.stdout.decode().strip().replace("borg ", "")
+                    output = f"Borg updated to v{installed_ver} via pip"
+                else:
+                    output = f"Borg updated via pip"
+            except Exception:
+                output = f"Borg updated via pip"
             logger.info(output)
             return "completed", output, ""
         else:
+            # Restore backup if pip failed
+            backup_path = existing_binary + ".bak"
+            if os.path.exists(backup_path) and not os.path.exists(existing_binary):
+                try:
+                    os.rename(backup_path, existing_binary)
+                    logger.info(f"Restored backup binary after pip failure")
+                except Exception:
+                    pass
             error = stderr_text or stdout_text or f"Exit code {proc.returncode}"
             logger.error(f"pip install failed: {error}")
             return "failed", "", error
