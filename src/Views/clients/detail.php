@@ -571,7 +571,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     </script>
 
     <?php if (!empty($repositories)): ?>
-    <div id="repo-cards-grid" class="row g-3 mb-4">
+    <div id="repo-cards-grid" class="row g-3 mb-4 pb-5">
         <?php foreach ($repositories as $repo):
             $s = $repo['size_bytes'];
             $sizeLabel = $s >= 1073741824 ? round($s / 1073741824, 1) . ' GB' : ($s >= 1048576 ? round($s / 1048576, 1) . ' MB' : ($s > 0 ? round($s / 1024, 1) . ' KB' : '--'));
