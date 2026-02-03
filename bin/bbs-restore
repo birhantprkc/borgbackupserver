@@ -1,0 +1,178 @@
+#!/usr/bin/env bash
+#
+# BBS Restore — restores BBS from a backup created by bbs-backup.
+#
+# Usage:
+#   sudo /var/www/bbs/bin/bbs-restore <backup.tar.gz>
+#
+# Prerequisites:
+#   - Run bbs-install first on a fresh server to set up Apache, PHP, MySQL, etc.
+#   - The backup file must be a tar.gz created by bbs-backup.
+#
+set -euo pipefail
+
+BOLD='\033[1m'
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+info()  { echo -e "${BOLD}$1${NC}"; }
+ok()    { echo -e "  ${GREEN}✓${NC} $1"; }
+error() { echo -e "  ${RED}✗${NC} $1"; }
+
+BACKUP_FILE="${1:-}"
+BBS_DIR="/var/www/bbs"
+
+if [ -z "$BACKUP_FILE" ]; then
+    echo "Usage: sudo bbs-restore <backup.tar.gz>"
+    exit 1
+fi
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "Error: must run as root (use sudo)"
+    exit 1
+fi
+
+if [ ! -f "$BACKUP_FILE" ]; then
+    echo "Error: backup file not found: $BACKUP_FILE"
+    exit 1
+fi
+
+if [ ! -d "$BBS_DIR" ]; then
+    echo "Error: BBS is not installed at $BBS_DIR"
+    echo "Run bbs-install first, then re-run this restore script."
+    exit 1
+fi
+
+# Extract to temp dir
+TMPDIR=$(mktemp -d)
+trap 'rm -rf "$TMPDIR"' EXIT
+
+info "Extracting backup..."
+tar -xzf "$BACKUP_FILE" -C "$TMPDIR"
+
+# Verify contents
+for f in dump.sql env version; do
+    if [ ! -f "$TMPDIR/$f" ]; then
+        error "Backup is missing '$f' — not a valid bbs-backup archive"
+        exit 1
+    fi
+done
+
+BACKUP_VERSION=$(cat "$TMPDIR/version" | tr -d '[:space:]')
+CURRENT_VERSION=$(cat "$BBS_DIR/VERSION" 2>/dev/null | tr -d '[:space:]' || echo "unknown")
+
+echo ""
+info "Backup version:  $BACKUP_VERSION"
+info "Current version: $CURRENT_VERSION"
+echo ""
+
+# Step 1: Checkout matching version
+if [ "$BACKUP_VERSION" != "unknown" ] && [ "$BACKUP_VERSION" != "$CURRENT_VERSION" ]; then
+    info "[1/5] Checking out version v${BACKUP_VERSION} to match backup..."
+    git config --global --add safe.directory "$BBS_DIR" 2>/dev/null || true
+    git -C "$BBS_DIR" fetch --all --tags --force 2>/dev/null
+    if git -C "$BBS_DIR" rev-parse "v${BACKUP_VERSION}" &>/dev/null; then
+        git -C "$BBS_DIR" checkout "v${BACKUP_VERSION}" -- . 2>/dev/null || \
+            git -C "$BBS_DIR" reset --hard "v${BACKUP_VERSION}"
+        ok "Code set to v${BACKUP_VERSION}"
+    else
+        echo "  Warning: tag v${BACKUP_VERSION} not found, continuing with current code"
+    fi
+else
+    info "[1/5] Version matches, no checkout needed"
+    ok "v${BACKUP_VERSION}"
+fi
+
+# Step 2: Restore .env
+info "[2/5] Restoring config/.env..."
+if [ -f "$BBS_DIR/config/.env" ]; then
+    echo -n "  Overwrite existing .env? [y/N] "
+    read -r REPLY
+    if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
+        echo "  Skipping .env restore (keeping existing)"
+    else
+        cp "$TMPDIR/env" "$BBS_DIR/config/.env"
+        chmod 600 "$BBS_DIR/config/.env"
+        chown www-data:www-data "$BBS_DIR/config/.env"
+        ok "Restored .env"
+    fi
+else
+    cp "$TMPDIR/env" "$BBS_DIR/config/.env"
+    chmod 600 "$BBS_DIR/config/.env"
+    chown www-data:www-data "$BBS_DIR/config/.env"
+    ok "Restored .env"
+fi
+
+# Read DB credentials from the (possibly restored) .env
+ENV_FILE="$BBS_DIR/config/.env"
+DB_HOST=$(grep '^DB_HOST=' "$ENV_FILE" | cut -d= -f2-)
+DB_NAME=$(grep '^DB_NAME=' "$ENV_FILE" | cut -d= -f2-)
+DB_USER=$(grep '^DB_USER=' "$ENV_FILE" | cut -d= -f2-)
+DB_PASS=$(grep '^DB_PASS=' "$ENV_FILE" | cut -d= -f2-)
+
+if [ -z "$DB_NAME" ] || [ -z "$DB_USER" ]; then
+    error "Could not read DB credentials from .env"
+    exit 1
+fi
+
+# Step 3: Import MySQL dump
+info "[3/5] Importing MySQL database..."
+echo -n "  This will DROP and recreate all tables in '$DB_NAME'. Continue? [y/N] "
+read -r REPLY
+if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
+    echo "  Skipping database import"
+else
+    # Drop and recreate database to ensure clean state
+    mysql -h "${DB_HOST:-localhost}" -u "$DB_USER" -p"$DB_PASS" \
+        -e "DROP DATABASE IF EXISTS \`$DB_NAME\`; CREATE DATABASE \`$DB_NAME\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null
+    mysql -h "${DB_HOST:-localhost}" -u "$DB_USER" -p"$DB_PASS" \
+        "$DB_NAME" < "$TMPDIR/dump.sql" 2>/dev/null
+    ok "Database imported"
+fi
+
+# Step 4: Recreate Unix users
+info "[4/5] Recreating Unix users for SSH access..."
+
+# Get storage_path from settings
+STORAGE_PATH=$(mysql -h "${DB_HOST:-localhost}" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" \
+    -N -e "SELECT \`value\` FROM settings WHERE \`key\` = 'storage_path'" 2>/dev/null || true)
+
+if [ -z "$STORAGE_PATH" ]; then
+    echo "  Warning: no storage_path in settings, skipping user recreation"
+else
+    # Query agents with SSH users
+    AGENTS=$(mysql -h "${DB_HOST:-localhost}" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" \
+        -N -e "SELECT id, ssh_unix_user, ssh_public_key FROM agents WHERE ssh_unix_user IS NOT NULL AND ssh_public_key IS NOT NULL" 2>/dev/null || true)
+
+    if [ -z "$AGENTS" ]; then
+        echo "  No agents with SSH users found"
+    else
+        COUNT=0
+        while IFS=$'\t' read -r AGENT_ID UNIX_USER PUBLIC_KEY; do
+            [ -z "$UNIX_USER" ] && continue
+            HOME_DIR="${STORAGE_PATH%/}/${AGENT_ID}"
+            /usr/local/bin/bbs-ssh-helper create-user "$UNIX_USER" "$HOME_DIR" "$PUBLIC_KEY" >/dev/null 2>&1 || true
+            COUNT=$((COUNT + 1))
+        done <<< "$AGENTS"
+        ok "Recreated $COUNT Unix user(s)"
+    fi
+fi
+
+# Step 5: Run bbs-update to fix permissions
+info "[5/5] Running bbs-update to fix permissions..."
+"$BBS_DIR/bin/bbs-update" "$BBS_DIR" 2>&1 | sed 's/^/  /'
+
+echo ""
+info "═══════════════════════════════════════════════════"
+info "  BBS Restore Complete"
+info "═══════════════════════════════════════════════════"
+echo ""
+echo "  Restored from: $(basename "$BACKUP_FILE")"
+echo "  Version: $BACKUP_VERSION"
+echo ""
+if [ "$BACKUP_VERSION" != "$CURRENT_VERSION" ] && [ "$BACKUP_VERSION" != "unknown" ]; then
+    echo "  To upgrade to latest version, run:"
+    echo "    sudo $BBS_DIR/bin/bbs-update"
+    echo ""
+fi

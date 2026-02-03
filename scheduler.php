@@ -494,3 +494,24 @@ if (!$lastJobCleanupTime || strtotime($lastJobCleanupTime) < time() - 86400) {
         [date('Y-m-d H:i:s')]
     );
 }
+
+// Step 10: Daily BBS self-backup
+$lastSelfBackup = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'last_self_backup'");
+$lastSelfBackupTime = $lastSelfBackup['value'] ?? null;
+if (!$lastSelfBackupTime || strtotime($lastSelfBackupTime) < time() - 86400) {
+    $backupScript = __DIR__ . '/bin/bbs-backup';
+    if (is_file($backupScript)) {
+        $output = shell_exec("sudo $backupScript 2>&1");
+        if (str_contains($output ?? '', 'OK')) {
+            echo date('Y-m-d H:i:s') . " Self-backup completed\n";
+        } else {
+            echo date('Y-m-d H:i:s') . " Self-backup failed: " . trim($output ?? '') . "\n";
+        }
+    }
+
+    $db->query(
+        "INSERT INTO settings (`key`, `value`) VALUES ('last_self_backup', ?)
+         ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)",
+        [date('Y-m-d H:i:s')]
+    );
+}
