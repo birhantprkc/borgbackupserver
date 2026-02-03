@@ -252,6 +252,18 @@ ENV;
                     @mkdir('/var/bbs/cache/www-data', 0700, true);
                 }
 
+                // Auto-set target borg version from server-hosted binaries
+                $borgDir = $basePath . '/public/borg';
+                if (is_dir($borgDir)) {
+                    $dirs = array_filter(scandir($borgDir), fn($d) => $d !== '.' && $d !== '..' && is_dir($borgDir . '/' . $d));
+                    if (!empty($dirs)) {
+                        usort($dirs, 'version_compare');
+                        $latestVersion = end($dirs);
+                        $stmt = $pdo->prepare("INSERT INTO settings (`key`, `value`) VALUES ('target_borg_version', ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)");
+                        $stmt->execute([$latestVersion]);
+                    }
+                }
+
                 // Auto-login the admin user so they can proceed directly
                 $adminUser = $pdo->prepare("SELECT id, username, role, timezone FROM users WHERE username = ?");
                 $adminUser->execute([$setup['admin_username']]);
