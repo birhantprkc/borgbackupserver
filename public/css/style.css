@@ -289,15 +289,15 @@ a .stat-card {
     color: #6c757d;
 }
 
-/* Dashboard bottom tables — compact text */
+/* Dashboard bottom tables */
 .dash-table .table {
-    font-size: 0.75rem;
+    font-size: 0.85rem;
 }
 .dash-table .table th {
-    font-size: 0.7rem;
+    font-size: 0.8rem;
 }
 .dash-table .table .badge {
-    font-size: 0.65rem;
+    font-size: 0.7rem;
 }
 
 /* Badge overrides */
