@@ -489,6 +489,7 @@ class S3SyncService
         }
 
         // Stream file catalog in batches to handle millions of files
+        // Join with file_paths to get actual path strings (normalized schema)
         fwrite($fp, '  "file_catalog": [' . "\n");
 
         $batchSize = 10000;
@@ -498,9 +499,11 @@ class S3SyncService
 
         do {
             $files = $this->db->fetchAll(
-                "SELECT archive_id, path, size, mtime FROM file_catalog
-                 WHERE archive_id IN (SELECT id FROM archives WHERE repository_id = ?)
-                 ORDER BY archive_id, path
+                "SELECT fc.archive_id, fp.path, fc.file_size, fc.mtime
+                 FROM file_catalog fc
+                 JOIN file_paths fp ON fp.id = fc.file_path_id
+                 WHERE fc.archive_id IN (SELECT id FROM archives WHERE repository_id = ?)
+                 ORDER BY fc.archive_id, fp.path
                  LIMIT ? OFFSET ?",
                 [$repo['id'], $batchSize, $offset]
             );
@@ -511,7 +514,7 @@ class S3SyncService
                     $fileJson = json_encode([
                         'archive' => $archiveName,
                         'path' => $file['path'],
-                        'size' => (int) $file['size'],
+                        'size' => (int) $file['file_size'],
                         'mtime' => $file['mtime'],
                     ], JSON_UNESCAPED_SLASHES);
 
@@ -765,25 +768,62 @@ class S3SyncService
             $totalSize += $ar['deduplicated_size'] ?? 0;
         }
 
+        // Get agent_id for file_paths table
+        $repo = $this->db->fetchOne("SELECT agent_id FROM repositories WHERE id = ?", [$repoId]);
+        $agentId = $repo['agent_id'] ?? 0;
+
         // Import file catalog in batches to reduce memory pressure
+        // Uses normalized schema: file_paths stores path strings, file_catalog references by ID
         $fileCount = 0;
         $fileCatalog = $manifest['file_catalog'] ?? [];
         $batchSize = 1000;
+        $pathCache = [];  // Cache path -> id lookups within batch
 
         for ($i = 0; $i < count($fileCatalog); $i += $batchSize) {
             $batch = array_slice($fileCatalog, $i, $batchSize);
             foreach ($batch as $file) {
                 $archiveId = $archiveNameToId[$file['archive']] ?? null;
-                if ($archiveId) {
-                    $this->db->insert('file_catalog', [
-                        'archive_id' => $archiveId,
-                        'path' => $file['path'],
-                        'size' => $file['size'] ?? 0,
-                        'mtime' => $file['mtime'] ?? null,
-                    ]);
+                $path = $file['path'] ?? '';
+                if ($archiveId && $path) {
+                    // Get or create file_path_id
+                    if (isset($pathCache[$path])) {
+                        $filePathId = $pathCache[$path];
+                    } else {
+                        $existingPath = $this->db->fetchOne(
+                            "SELECT id FROM file_paths WHERE agent_id = ? AND path = ?",
+                            [$agentId, $path]
+                        );
+                        if ($existingPath) {
+                            $filePathId = $existingPath['id'];
+                        } else {
+                            $fileName = basename($path);
+                            $filePathId = $this->db->insert('file_paths', [
+                                'agent_id' => $agentId,
+                                'path' => $path,
+                                'file_name' => $fileName,
+                            ]);
+                        }
+                        $pathCache[$path] = $filePathId;
+                    }
+
+                    // Check if entry already exists (composite primary key)
+                    $existing = $this->db->fetchOne(
+                        "SELECT 1 FROM file_catalog WHERE archive_id = ? AND file_path_id = ?",
+                        [$archiveId, $filePathId]
+                    );
+                    if (!$existing) {
+                        $this->db->insert('file_catalog', [
+                            'archive_id' => $archiveId,
+                            'file_path_id' => $filePathId,
+                            'file_size' => $file['size'] ?? 0,
+                            'mtime' => $file['mtime'] ?? null,
+                        ]);
+                    }
                     $fileCount++;
                 }
             }
+            // Clear path cache between batches to manage memory
+            $pathCache = [];
         }
 
         // Update repository stats
