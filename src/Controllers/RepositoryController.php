@@ -314,4 +314,156 @@ class RepositoryController extends Controller
         $this->flash('success', "{$actionLabel} job queued for repository \"{$repo['name']}\".");
         $this->redirect("/clients/{$repo['agent_id']}?tab=repos");
     }
+
+    /**
+     * Repository detail page.
+     */
+    public function detail(int $agentId, int $id): void
+    {
+        $this->requireAuth();
+
+        $repo = $this->db->fetchOne("
+            SELECT r.*, a.name as agent_name, a.ssh_unix_user
+            FROM repositories r
+            JOIN agents a ON a.id = r.agent_id
+            WHERE r.id = ? AND r.agent_id = ?
+        ", [$id, $agentId]);
+
+        if (!$repo || !$this->canAccessAgent($agentId)) {
+            $this->flash('danger', 'Repository not found.');
+            $this->redirect('/clients');
+        }
+
+        // Get archives for this repo
+        $archives = $this->db->fetchAll("
+            SELECT * FROM archives WHERE repository_id = ? ORDER BY created_at DESC
+        ", [$id]);
+
+        // Get plans using this repo
+        $plans = $this->db->fetchAll("
+            SELECT bp.*, s.enabled as schedule_enabled
+            FROM backup_plans bp
+            LEFT JOIN schedules s ON s.backup_plan_id = bp.id
+            WHERE bp.repository_id = ?
+        ", [$id]);
+
+        // Get recent jobs for this repo
+        $recentJobs = $this->db->fetchAll("
+            SELECT * FROM backup_jobs
+            WHERE repository_id = ?
+            ORDER BY queued_at DESC LIMIT 20
+        ", [$id]);
+
+        // Check if repo has S3 sync enabled (via plan plugins)
+        $s3SyncInfo = $this->db->fetchOne("
+            SELECT bpp.plugin_config_id, pc.name as config_name,
+                   (SELECT MAX(bj.completed_at) FROM backup_jobs bj
+                    WHERE bj.repository_id = ? AND bj.task_type = 's3_sync' AND bj.status = 'completed') as last_s3_sync
+            FROM backup_plan_plugins bpp
+            JOIN plugins p ON p.id = bpp.plugin_id
+            JOIN backup_plans bp ON bp.id = bpp.backup_plan_id
+            LEFT JOIN plugin_configs pc ON pc.id = bpp.plugin_config_id
+            WHERE p.slug = 's3_sync' AND bp.repository_id = ?
+            LIMIT 1
+        ", [$id, $id]);
+
+        // Check for active jobs on this repo
+        $activeJob = $this->db->fetchOne(
+            "SELECT id, task_type, status FROM backup_jobs WHERE repository_id = ? AND status IN ('queued', 'sent', 'running')",
+            [$id]
+        );
+
+        // Get local path for display
+        $localPath = BorgCommandBuilder::getLocalRepoPath($repo);
+
+        // Calculate stats
+        $totalSize = (int) $repo['size_bytes'];
+        $archiveCount = (int) $repo['archive_count'];
+        $oldestArchive = $this->db->fetchOne("SELECT MIN(created_at) as oldest FROM archives WHERE repository_id = ?", [$id]);
+        $newestArchive = $this->db->fetchOne("SELECT MAX(created_at) as newest FROM archives WHERE repository_id = ?", [$id]);
+
+        $this->view('repositories/detail', [
+            'pageTitle' => $repo['name'],
+            'repo' => $repo,
+            'agentId' => $agentId,
+            'localPath' => $localPath,
+            'archives' => $archives,
+            'plans' => $plans,
+            'recentJobs' => $recentJobs,
+            's3SyncInfo' => $s3SyncInfo,
+            'activeJob' => $activeJob,
+            'totalSize' => $totalSize,
+            'archiveCount' => $archiveCount,
+            'oldestArchive' => $oldestArchive['oldest'] ?? null,
+            'newestArchive' => $newestArchive['newest'] ?? null,
+        ]);
+    }
+
+    /**
+     * Queue S3 restore job.
+     */
+    public function s3Restore(int $agentId, int $id): void
+    {
+        $this->requireAuth();
+        $this->verifyCsrf();
+
+        $repo = $this->db->fetchOne("
+            SELECT r.*, a.name as agent_name
+            FROM repositories r
+            JOIN agents a ON a.id = r.agent_id
+            WHERE r.id = ? AND r.agent_id = ?
+        ", [$id, $agentId]);
+
+        if (!$repo || !$this->canAccessAgent($agentId)) {
+            $this->flash('danger', 'Repository not found.');
+            $this->redirect('/clients');
+        }
+
+        // Require repo_maintenance permission for S3 restore
+        $this->requirePermission(PermissionService::REPO_MAINTENANCE, $agentId);
+
+        // Get S3 plugin config for this repo
+        $s3Config = $this->db->fetchOne("
+            SELECT bpp.plugin_config_id
+            FROM backup_plan_plugins bpp
+            JOIN plugins p ON p.id = bpp.plugin_id
+            JOIN backup_plans bp ON bp.id = bpp.backup_plan_id
+            WHERE p.slug = 's3_sync' AND bp.repository_id = ?
+            LIMIT 1
+        ", [$id]);
+
+        if (!$s3Config) {
+            $this->flash('danger', 'This repository does not have S3 sync configured.');
+            $this->redirect("/clients/{$agentId}/repo/{$id}");
+        }
+
+        // Check for active jobs on this repo
+        $activeJob = $this->db->fetchOne(
+            "SELECT id, task_type FROM backup_jobs WHERE repository_id = ? AND status IN ('queued', 'sent', 'running')",
+            [$id]
+        );
+        if ($activeJob) {
+            $this->flash('warning', "Cannot restore from S3 — repository has an active {$activeJob['task_type']} job (#" . $activeJob['id'] . ').');
+            $this->redirect("/clients/{$agentId}/repo/{$id}");
+        }
+
+        // Queue the S3 restore job
+        $jobId = $this->db->insert('backup_jobs', [
+            'agent_id' => $agentId,
+            'repository_id' => $id,
+            'task_type' => 's3_restore',
+            'plugin_config_id' => $s3Config['plugin_config_id'],
+            'status' => 'queued',
+        ]);
+
+        $this->db->insert('server_log', [
+            'agent_id' => $agentId,
+            'backup_job_id' => $jobId,
+            'level' => 'info',
+            'message' => "S3 restore job #{$jobId} queued for repository \"{$repo['name']}\"",
+        ]);
+
+        $this->flash('success', "S3 restore job queued for repository \"{$repo['name']}\".");
+        $this->redirect("/clients/{$agentId}/repo/{$id}");
+    }
 }

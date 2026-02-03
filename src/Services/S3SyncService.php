@@ -197,6 +197,108 @@ class S3SyncService
     }
 
     /**
+     * Restore a borg repository from S3.
+     * Returns ['success' => bool, 'output' => string].
+     */
+    public function restoreRepository(array $repo, array $agent, array $creds, ?string $runAsUser = null): array
+    {
+        if (empty($creds['bucket'])) {
+            return ['success' => false, 'output' => 'No S3 bucket configured'];
+        }
+
+        if (!$this->isRcloneInstalled()) {
+            return ['success' => false, 'output' => 'rclone is not installed on this server'];
+        }
+
+        // Build remote path: bucket/prefix/agent-name/repo-name/
+        $agentName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $agent['name'] ?? 'unknown');
+        $repoName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $repo['name'] ?? 'unknown');
+        $prefix = trim($creds['path_prefix'], '/');
+        $remotePath = $prefix ? "{$prefix}/{$agentName}/{$repoName}" : "{$agentName}/{$repoName}";
+        $remote = "S3:{$creds['bucket']}/{$remotePath}/";
+
+        // Get local repo path
+        $localPath = \BBS\Services\BorgCommandBuilder::getLocalRepoPath($repo);
+        if (empty($localPath)) {
+            return ['success' => false, 'output' => "Local repo path not configured"];
+        }
+
+        // Create local directory if it doesn't exist
+        if (!is_dir($localPath)) {
+            $parentDir = dirname($localPath);
+            if (!is_dir($parentDir)) {
+                mkdir($parentDir, 0755, true);
+            }
+        }
+
+        // Build rclone command - sync FROM S3 TO local (reverse of syncRepository)
+        $cmd = ['rclone', 'sync', $remote, $localPath, '--transfers', '4', '--checkers', '8'];
+
+        if (!empty($creds['bandwidth_limit'])) {
+            $cmd[] = '--bwlimit';
+            $cmd[] = $creds['bandwidth_limit'];
+        }
+
+        // Build environment
+        $env = $this->buildRcloneEnv($creds);
+
+        // Run via bbs-ssh-helper (runs as root via sudo, then sudo -u to the repo user)
+        if ($runAsUser) {
+            $cmd = [
+                'sudo', '/usr/local/bin/bbs-ssh-helper', 'rclone-restore',
+                $runAsUser, $remote, $localPath,
+                $creds['endpoint'] ?? '', $creds['region'] ?? '',
+                $creds['access_key'] ?? '', $creds['secret_key'] ?? '',
+            ];
+            if (!empty($creds['bandwidth_limit'])) {
+                $cmd[] = '--bwlimit';
+                $cmd[] = $creds['bandwidth_limit'];
+            }
+        }
+
+        $desc = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+
+        // For non-sudo runs, pass env vars directly
+        $envStrings = [];
+        foreach ($env as $k => $v) {
+            $envStrings[$k] = $v;
+        }
+
+        $proc = proc_open($cmd, $desc, $pipes, null, array_merge($_SERVER, $envStrings));
+        if (!is_resource($proc)) {
+            return ['success' => false, 'output' => 'Failed to start rclone process'];
+        }
+
+        fclose($pipes[0]);
+        $stdout = stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($proc);
+
+        $fullOutput = trim($stdout . "\n" . $stderr);
+
+        // Extract summary
+        $summary = '';
+        if ($exitCode === 0 && !empty($fullOutput)) {
+            $lines = array_filter(array_map('trim', explode("\n", $fullOutput)));
+            $lastLine = end($lines);
+            $summary = preg_replace('/^\d{4}\/\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2}\s+\w+\s+:\s+/', '', $lastLine);
+        }
+
+        return [
+            'success' => $exitCode === 0,
+            'output' => $exitCode === 0
+                ? ($summary ?: 'Restore completed')
+                : ($fullOutput ?: "rclone exited with code {$exitCode}"),
+        ];
+    }
+
+    /**
      * Test S3 connection by listing the bucket root.
      */
     public function testConnection(array $creds): array

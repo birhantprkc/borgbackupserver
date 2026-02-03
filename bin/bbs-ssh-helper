@@ -284,6 +284,64 @@ case "$ACTION" in
         exit $?
         ;;
 
+    rclone-restore)
+        # Run rclone sync FROM S3 TO local (restore)
+        # Usage: bbs-ssh-helper rclone-restore <username> <remote> <local_path> <endpoint> <region> <access_key> <secret_key> [--bwlimit LIMIT]
+        USERNAME="${2:-}"
+        REMOTE="${3:-}"
+        LOCAL_PATH="${4:-}"
+        S3_ENDPOINT="${5:-}"
+        S3_REGION="${6:-}"
+        S3_ACCESS_KEY="${7:-}"
+        S3_SECRET_KEY="${8:-}"
+        shift 8 2>/dev/null || true
+        # Remaining args are optional rclone flags (e.g. --bwlimit 50M)
+        EXTRA_ARGS=("$@")
+
+        if [ -z "$USERNAME" ] || [ -z "$LOCAL_PATH" ] || [ -z "$REMOTE" ]; then
+            echo "Usage: bbs-ssh-helper rclone-restore <username> <remote> <local_path> <endpoint> <region> <access_key> <secret_key> [rclone flags...]"
+            exit 1
+        fi
+
+        if [[ ! "$USERNAME" =~ ^bbs-[a-z0-9_-]+$ ]]; then
+            echo "Error: username must match bbs-[a-z0-9_-]+"
+            exit 1
+        fi
+
+        # Safety: local path must be under /var/bbs/
+        if [[ ! "$LOCAL_PATH" =~ ^/var/bbs/ ]]; then
+            echo "Error: local path must be under /var/bbs/"
+            exit 1
+        fi
+
+        # Create local directory if needed
+        mkdir -p "$LOCAL_PATH"
+        chown "$USERNAME":www-data "$LOCAL_PATH"
+        chmod 770 "$LOCAL_PATH"
+
+        # Run rclone as the repo-owning user with S3 config via env vars
+        # Note: sync FROM remote TO local (reverse of rclone-sync)
+        sudo -u "$USERNAME" env \
+            "RCLONE_CONFIG_S3_TYPE=s3" \
+            "RCLONE_CONFIG_S3_PROVIDER=Other" \
+            "RCLONE_CONFIG_S3_ACCESS_KEY_ID=${S3_ACCESS_KEY}" \
+            "RCLONE_CONFIG_S3_SECRET_ACCESS_KEY=${S3_SECRET_KEY}" \
+            "RCLONE_CONFIG_S3_ENDPOINT=${S3_ENDPOINT}" \
+            "RCLONE_CONFIG_S3_REGION=${S3_REGION}" \
+            rclone sync "$REMOTE" "$LOCAL_PATH" \
+            --transfers 4 --checkers 8 \
+            -v --stats-one-line --stats 5s \
+            "${EXTRA_ARGS[@]}" 2>&1
+
+        EXIT_CODE=$?
+
+        # Fix permissions after restore
+        chown -R "$USERNAME":www-data "$LOCAL_PATH"
+        chmod 770 "$LOCAL_PATH"
+
+        exit $EXIT_CODE
+        ;;
+
     get-size)
         # Get size of a directory in bytes
         # Usage: bbs-ssh-helper get-size <directory>
@@ -334,7 +392,7 @@ case "$ACTION" in
         ;;
 
     *)
-        echo "Usage: bbs-ssh-helper {create-user|create-repo-dir|borg-extract|fix-repo-perms|delete-user|rclone-sync|get-size|delete-storage} [args...]"
+        echo "Usage: bbs-ssh-helper {create-user|create-repo-dir|borg-extract|fix-repo-perms|delete-user|rclone-sync|rclone-restore|get-size|delete-storage} [args...]"
         exit 1
         ;;
 esac

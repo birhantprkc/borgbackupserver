@@ -187,6 +187,58 @@ foreach ($serverJobs as $sj) {
         continue;
     }
 
+    // S3 restore — uses rclone to download from S3
+    if ($sj['task_type'] === 's3_restore') {
+        $pluginManager = $pluginManager ?? new \BBS\Services\PluginManager();
+
+        // Resolve plugin config — from job's plugin_config_id
+        $config = [];
+        if (!empty($sj['plugin_config_id'])) {
+            $namedConfig = $pluginManager->getPluginConfig((int) $sj['plugin_config_id']);
+            if ($namedConfig) {
+                $config = json_decode($namedConfig['config'], true) ?: [];
+            }
+        }
+
+        $s3Service = new \BBS\Services\S3SyncService();
+        $creds = $s3Service->resolveCredentials($config);
+
+        $s3Repo = $db->fetchOne("SELECT * FROM repositories WHERE id = ?", [$sj['repository_id']]);
+        $s3Agent = $db->fetchOne("SELECT * FROM agents WHERE id = ?", [$sj['agent_id']]);
+
+        if (!$s3Repo || !$s3Agent) {
+            $s3Result = 'failed';
+            $s3Error = 'Repository or agent not found';
+        } else {
+            $runAsUser = $sj['ssh_unix_user'] ?? null;
+            $restoreResult = $s3Service->restoreRepository($s3Repo, $s3Agent, $creds, $runAsUser);
+            $s3Result = $restoreResult['success'] ? 'completed' : 'failed';
+            $s3Output = $restoreResult['output'] ?? '';
+            $s3Error = $restoreResult['success'] ? null : $s3Output;
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $db->update('backup_jobs', [
+            'status' => $s3Result,
+            'completed_at' => $now,
+            'duration_seconds' => max(0, strtotime($now) - strtotime($startedAt)),
+            'error_log' => $s3Error,
+        ], 'id = ?', [$sj['id']]);
+
+        $logMessage = $s3Result === 'completed'
+            ? 'S3 restore completed' . (!empty($s3Output) ? ": {$s3Output}" : '')
+            : 'S3 restore failed: ' . $s3Error;
+        $db->insert('server_log', [
+            'agent_id' => $sj['agent_id'],
+            'backup_job_id' => $sj['id'],
+            'level' => $s3Result === 'completed' ? 'info' : 'error',
+            'message' => $logMessage,
+        ]);
+
+        echo date('Y-m-d H:i:s') . " S3 restore job #{$sj['id']} {$s3Result}\n";
+        continue;
+    }
+
     // Build command
     if ($sj['task_type'] === 'prune') {
         $archivePrefix = $sj['backup_plan_id'] ? 'plan' . $sj['backup_plan_id'] : null;
