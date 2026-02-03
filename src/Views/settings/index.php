@@ -23,7 +23,7 @@ $updateAvailable = $updateService->isUpdateAvailable();
     </li>
     <li class="nav-item">
         <a class="nav-link <?= $activeTab === 'offsite' ? 'active' : '' ?>" href="/settings?tab=offsite">
-            <img src="/img/bucket.svg" alt="" class="me-1" style="width:16px;height:16px;vertical-align:-.125em;"><span class="tab-label">S3 Backups</span>
+            <img src="/images/bucket.svg" alt="" class="me-1" style="width:16px;height:16px;vertical-align:-.125em;"><span class="tab-label">S3 Backups</span>
         </a>
     </li>
     <li class="nav-item">
