@@ -11,6 +11,10 @@ class LogController extends Controller
         $this->requireAuth();
 
         $level = $_GET['level'] ?? '';
+        $page = max(1, (int) ($_GET['page'] ?? 1));
+        $perPage = 50;
+        $offset = ($page - 1) * $perPage;
+
         $where = '1=1';
         $params = [];
 
@@ -19,19 +23,31 @@ class LogController extends Controller
             $params[] = $level;
         }
 
+        // Get total count for pagination
+        $countRow = $this->db->fetchOne("
+            SELECT COUNT(*) as cnt
+            FROM server_log sl
+            WHERE {$where}
+        ", $params);
+        $total = (int) ($countRow['cnt'] ?? 0);
+        $pages = max(1, (int) ceil($total / $perPage));
+
         $logs = $this->db->fetchAll("
             SELECT sl.*, a.name as agent_name
             FROM server_log sl
             LEFT JOIN agents a ON a.id = sl.agent_id
             WHERE {$where}
             ORDER BY sl.created_at DESC
-            LIMIT 100
+            LIMIT {$perPage} OFFSET {$offset}
         ", $params);
 
         $this->view('log/index', [
             'pageTitle' => 'Log',
             'logs' => $logs,
             'currentLevel' => $level,
+            'page' => $page,
+            'pages' => $pages,
+            'total' => $total,
         ]);
     }
 }

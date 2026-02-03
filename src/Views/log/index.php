@@ -13,12 +13,13 @@
         <?php if (empty($logs)): ?>
         <div class="p-4 text-muted text-center">No log entries.</div>
         <?php else: ?>
-        <div class="table-responsive">
+        <!-- Desktop table view -->
+        <div class="table-responsive d-none d-md-block">
             <table class="table table-hover mb-0 small">
                 <thead class="table-light">
                     <tr>
-                        <th>Time</th>
-                        <th class="d-th-md">Client</th>
+                        <th style="white-space: nowrap;">Time</th>
+                        <th style="white-space: nowrap;">Client</th>
                         <th>Level</th>
                         <th>Message</th>
                     </tr>
@@ -26,8 +27,8 @@
                 <tbody>
                     <?php foreach ($logs as $log): ?>
                     <tr>
-                        <td class="small"><?= \BBS\Core\TimeHelper::format($log['created_at'], 'M j, g:i A') ?></td>
-                        <td class="d-table-cell-md"><?= htmlspecialchars($log['agent_name'] ?? '--') ?></td>
+                        <td class="small" style="white-space: nowrap;"><?= \BBS\Core\TimeHelper::format($log['created_at'], 'M j, g:i A') ?></td>
+                        <td style="white-space: nowrap;"><?= htmlspecialchars($log['agent_name'] ?? '--') ?></td>
                         <td>
                             <?php
                             $lc = match($log['level']) {
@@ -44,6 +45,66 @@
                 </tbody>
             </table>
         </div>
+        <!-- Mobile card view -->
+        <div class="d-md-none">
+            <?php foreach ($logs as $i => $log): ?>
+            <?php
+            $lc = match($log['level']) {
+                'error' => 'danger',
+                'warning' => 'warning',
+                default => 'info',
+            };
+            ?>
+            <div class="p-3 <?= $i > 0 ? 'border-top' : '' ?>">
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                    <span class="badge bg-<?= $lc ?>"><?= $log['level'] ?></span>
+                    <small class="text-muted"><?= \BBS\Core\TimeHelper::format($log['created_at'], 'M j, g:i A') ?></small>
+                </div>
+                <?php if ($log['agent_name']): ?>
+                <div class="small text-muted mb-1"><?= htmlspecialchars($log['agent_name']) ?></div>
+                <?php endif; ?>
+                <div class="small"><?= htmlspecialchars($log['message']) ?></div>
+            </div>
+            <?php endforeach; ?>
+        </div>
         <?php endif; ?>
     </div>
 </div>
+
+<?php if ($pages > 1): ?>
+<nav class="mt-3">
+    <ul class="pagination pagination-sm justify-content-center mb-0">
+        <?php
+        $levelParam = $currentLevel ? "&level={$currentLevel}" : '';
+        $maxVisible = 5;
+        $start = max(1, $page - 2);
+        $end = min($pages, $start + $maxVisible - 1);
+        if ($end - $start < $maxVisible - 1) {
+            $start = max(1, $end - $maxVisible + 1);
+        }
+        ?>
+        <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
+            <a class="page-link" href="/log?page=<?= $page - 1 ?><?= $levelParam ?>">«</a>
+        </li>
+        <?php if ($start > 1): ?>
+        <li class="page-item"><a class="page-link" href="/log?page=1<?= $levelParam ?>">1</a></li>
+        <?php if ($start > 2): ?><li class="page-item disabled"><span class="page-link">…</span></li><?php endif; ?>
+        <?php endif; ?>
+        <?php for ($p = $start; $p <= $end; $p++): ?>
+        <li class="page-item <?= $p === $page ? 'active' : '' ?>">
+            <a class="page-link" href="/log?page=<?= $p ?><?= $levelParam ?>"><?= $p ?></a>
+        </li>
+        <?php endfor; ?>
+        <?php if ($end < $pages): ?>
+        <?php if ($end < $pages - 1): ?><li class="page-item disabled"><span class="page-link">…</span></li><?php endif; ?>
+        <li class="page-item"><a class="page-link" href="/log?page=<?= $pages ?><?= $levelParam ?>"><?= $pages ?></a></li>
+        <?php endif; ?>
+        <li class="page-item <?= $page >= $pages ? 'disabled' : '' ?>">
+            <a class="page-link" href="/log?page=<?= $page + 1 ?><?= $levelParam ?>">»</a>
+        </li>
+    </ul>
+</nav>
+<div class="text-center text-muted small mt-2">
+    Showing <?= number_format(($page - 1) * 50 + 1) ?>–<?= number_format(min($page * 50, $total)) ?> of <?= number_format($total) ?> entries
+</div>
+<?php endif; ?>
