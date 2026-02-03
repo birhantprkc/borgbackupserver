@@ -14,14 +14,18 @@ A self-hosted web application for centrally managing [BorgBackup](https://borgba
 - **Real-time progress** — live progress bars during backups
 - **File-level restore** — browse archive contents in a collapsible tree, restore individual files or entire directories
 - **Download archives** — extract and download files as .tar.gz directly from the browser
-- **Flexible scheduling** — 10min to monthly intervals, multiple times per day, manual trigger
-- **Backup templates** — pre-configured directory sets for common server roles (web, database, mail, etc.)
+- **Database backups** — MySQL and PostgreSQL dump plugins with point-in-time restore
+- **Flexible scheduling** — hourly to monthly intervals, multiple plans per client, manual trigger
+- **Backup templates** — pre-configured directory sets for common server roles
 - **Retention policies** — per-plan prune settings (hourly/daily/weekly/monthly/yearly)
+- **S3 offsite sync** — mirror repositories to S3-compatible storage (AWS, Wasabi, Backblaze B2)
 - **Multi-user** — role-based access (admin sees all, users see own clients)
-- **Queue management** — concurrent job limits, cancel/retry, priority ordering
+- **Two-factor authentication** — TOTP-based 2FA with recovery codes
+- **Queue management** — concurrent job limits, cancel/retry, progress tracking
 - **Encrypted passphrases** — repository passwords encrypted at rest (AES-256-GCM)
-- **Email alerts** — SMTP notifications on backup failure
-- **Dashboard** — backup charts, server stats, active jobs, log feed with 15s auto-refresh
+- **Email alerts** — SMTP notifications on backup failure, agent offline, storage low
+- **Dashboard** — backup charts, server stats, active jobs, auto-refresh
+- **Server self-backup** — daily automated backup of BBS itself with optional S3 sync
 
 ## Screenshots
 
@@ -31,63 +35,35 @@ A self-hosted web application for centrally managing [BorgBackup](https://borgba
 
 ## Quick Start
 
-### Server
-
-Start with a fresh **Ubuntu 22.04+** server with OpenSSH server installed. The server needs enough disk space for the MySQL database plus a directory or partition dedicated to backup repository data (this can be a separate mount like `/mnt/backups`).
-
-Run the automated installer:
+Start with a fresh **Ubuntu 22.04+** server, then run:
 
 ```bash
 curl -sO https://raw.githubusercontent.com/marcpope/borgbackupserver/main/bin/bbs-install
 sudo bash bbs-install --hostname backups.example.com
 ```
 
-For **LAN-only installations** without SSL (internal IP, `.local` hostname, or no public DNS):
+The installer handles everything — packages, Apache, MySQL, SSL, and cron. When it finishes, open the URL and the setup wizard walks you through the rest.
 
-```bash
-sudo bash bbs-install --hostname 192.168.1.100 --no-ssl
-```
-
-The installer handles everything — packages, Apache, MySQL, SSL certificate, and cron. When it finishes, open the URL it prints and the **setup wizard** will walk you through database connection, admin account, and storage configuration.
-
-See [docs/INSTALL.md](docs/INSTALL.md) for manual setup or full details.
-
-### Agent
-
-From the BBS web UI, create a client, then run the install command on your endpoint:
-
-```bash
-curl -s https://your-server/get-agent | sudo bash -s -- \
-    --server https://your-server --key YOUR_API_KEY
-```
-
-See [docs/AGENT.md](docs/AGENT.md) for manual install and configuration.
+See the **[full documentation on the Wiki](https://github.com/marcpope/borgbackupserver/wiki)** for installation details, agent setup, configuration, and usage guides.
 
 ---
 
 ## Documentation
 
-| Document | Description |
-|---|---|
-| [Installation Guide](docs/INSTALL.md) | Server setup, database, web server, cron |
-| [Agent Deployment](docs/AGENT.md) | Agent install, config, service management |
-| [User Guide](docs/USER_GUIDE.md) | Using the web UI, creating plans, restoring files |
-| [API Reference](docs/API.md) | Agent API endpoints with request/response examples |
-| [MySQL Storage Requirements](docs/MySQL-Storage-Requirements.md) | File catalog sizing, MySQL tuning for large deployments |
-| [Contributing](docs/CONTRIBUTING.md) | Development setup, conventions, how to help |
+All documentation lives on the **[GitHub Wiki](https://github.com/marcpope/borgbackupserver/wiki)**:
 
----
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Backend | PHP 8.1+ (no framework) |
-| Routing | AltoRouter |
-| Database | MySQL / MariaDB |
-| Frontend | Bootstrap 5, Chart.js |
-| Agent | Python 3 (stdlib only) |
-| Backup engine | BorgBackup |
+- [System Requirements](https://github.com/marcpope/borgbackupserver/wiki/System-Requirements)
+- [Installation](https://github.com/marcpope/borgbackupserver/wiki/Installation)
+- [Getting Started](https://github.com/marcpope/borgbackupserver/wiki/Getting-Started)
+- [Agent Setup](https://github.com/marcpope/borgbackupserver/wiki/Agent-Setup)
+- [Backup Plans](https://github.com/marcpope/borgbackupserver/wiki/Backup-Plans)
+- [Restoring Files](https://github.com/marcpope/borgbackupserver/wiki/Restoring-Files)
+- [Plugins](https://github.com/marcpope/borgbackupserver/wiki/Plugins)
+- [S3 Offsite Sync](https://github.com/marcpope/borgbackupserver/wiki/S3-Offsite-Sync)
+- [Settings](https://github.com/marcpope/borgbackupserver/wiki/Settings)
+- [CLI Reference](https://github.com/marcpope/borgbackupserver/wiki/CLI-Reference)
+- [Troubleshooting](https://github.com/marcpope/borgbackupserver/wiki/Troubleshooting)
+- [Contributing](docs/CONTRIBUTING.md)
 
 ---
 
@@ -117,6 +93,19 @@ Endpoint                                 BBS Server
 - **HTTPS** for control plane (task polling, progress, status)
 - **SSH** for data plane (borg backup/restore via `borg serve`)
 - **Append-only** — agents cannot delete existing archives; pruning runs server-side
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Backend | PHP 8.1+ (no framework) |
+| Database | MySQL 8.0 |
+| Frontend | Bootstrap 5, Chart.js |
+| Agent | Python 3 (stdlib only) |
+| Backup engine | BorgBackup |
+| Offsite sync | rclone |
 
 ---
 
