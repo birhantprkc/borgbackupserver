@@ -209,13 +209,13 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link <?= $tab === 'schedules' ? 'active' : '' ?>" href="?tab=schedules">
-            <i class="bi bi-calendar-event me-1"></i><span class="tab-label">Plans</span>
+        <a class="nav-link <?= $tab === 'plugins' ? 'active' : '' ?>" href="?tab=plugins">
+            <i class="bi bi-plug me-1"></i><span class="tab-label">Plugins</span>
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link <?= $tab === 'plugins' ? 'active' : '' ?>" href="?tab=plugins">
-            <i class="bi bi-plug me-1"></i><span class="tab-label">Plugins</span>
+        <a class="nav-link <?= $tab === 'schedules' ? 'active' : '' ?>" href="?tab=schedules">
+            <i class="bi bi-calendar-event me-1"></i><span class="tab-label">Plans</span>
         </a>
     </li>
     <li class="nav-item">
