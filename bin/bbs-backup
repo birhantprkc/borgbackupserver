@@ -40,8 +40,10 @@ if [ -z "$DB_NAME" ] || [ -z "$DB_USER" ]; then
     exit 1
 fi
 
-# Create backup directory
+# Create backup directory (owned by root, readable by www-data for S3 sync)
 mkdir -p "$BACKUP_DIR"
+chown root:www-data "$BACKUP_DIR"
+chmod 750 "$BACKUP_DIR"
 
 # Work in a temp directory
 TMPDIR=$(mktemp -d)
@@ -72,6 +74,8 @@ fi
 TIMESTAMP=$(date '+%Y-%m-%d_%H%M%S')
 ARCHIVE="bbs-backup-${TIMESTAMP}.tar.gz"
 tar -czf "$BACKUP_DIR/$ARCHIVE" -C "$TMPDIR" dump.sql env version
+chown root:www-data "$BACKUP_DIR/$ARCHIVE"
+chmod 640 "$BACKUP_DIR/$ARCHIVE"
 
 SIZE=$(du -h "$BACKUP_DIR/$ARCHIVE" | cut -f1)
 echo "Backup created: $BACKUP_DIR/$ARCHIVE ($SIZE)"
