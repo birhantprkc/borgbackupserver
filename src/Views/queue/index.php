@@ -5,6 +5,24 @@
         elseif ($avgSec < 3600) $avgDur = round($avgSec / 60) . 'm';
         else $avgDur = round($avgSec / 3600, 1) . 'h';
     }
+
+    // Job type icons mapping
+    function jobTypeIcon(string $type): string {
+        return match($type) {
+            'backup' => '<i class="bi bi-box-seam text-warning me-1"></i>',
+            'prune' => '<i class="bi bi-scissors text-secondary me-1"></i>',
+            'compact' => '<i class="bi bi-arrows-collapse text-info me-1"></i>',
+            'restore' => '<i class="bi bi-cloud-download text-primary me-1"></i>',
+            'restore_mysql' => '<i class="bi bi-database text-primary me-1"></i>',
+            'restore_pg' => '<i class="bi bi-database text-primary me-1"></i>',
+            'check' => '<i class="bi bi-shield-check text-success me-1"></i>',
+            'update_borg' => '<i class="bi bi-arrow-up-square text-info me-1"></i>',
+            'update_agent' => '<i class="bi bi-arrow-up-square text-info me-1"></i>',
+            'plugin_test' => '<i class="bi bi-pencil text-secondary me-1"></i>',
+            's3_sync' => '<i class="bi bi-cloud text-muted me-1"></i>',
+            default => '<i class="bi bi-gear text-muted me-1"></i>',
+        };
+    }
 ?>
 <div class="row g-3 mb-4">
     <div class="col-xl-3 col-md-6">
@@ -99,7 +117,7 @@
                     <tr style="cursor: pointer;" onclick="window.location='/queue/<?= $job['id'] ?>'">
                         <td class="small"><?= \BBS\Core\TimeHelper::format($job['queued_at'], 'M j, g:i A') ?></td>
                         <td><?= htmlspecialchars($job['agent_name']) ?></td>
-                        <td><?= $job['task_type'] ?></td>
+                        <td class="text-nowrap"><?= jobTypeIcon($job['task_type']) ?><?= $job['task_type'] ?></td>
                         <td class="d-table-cell-md"><?= number_format($job['files_total'] ?? 0) ?></td>
                         <td>
                             <?php if (($job['files_total'] ?? 0) > 0 && $job['status'] === 'running'): ?>
@@ -170,7 +188,7 @@
                     <tr style="cursor: pointer;" onclick="window.location='/queue/<?= $job['id'] ?>'">
                         <td class="small" title="<?= \BBS\Core\TimeHelper::format($job['completed_at'], 'M j, Y g:i A') ?>"><?= \BBS\Core\TimeHelper::ago($job['completed_at']) ?></td>
                         <td><?= htmlspecialchars($job['agent_name']) ?></td>
-                        <td><?= $job['task_type'] ?></td>
+                        <td class="text-nowrap"><?= jobTypeIcon($job['task_type']) ?><?= $job['task_type'] ?></td>
                         <td class="d-table-cell-md"><?= number_format($job['files_total'] ?? 0) ?></td>
                         <td class="d-table-cell-md"><?= htmlspecialchars($job['repo_name'] ?? '--') ?></td>
                         <td class="d-table-cell-md">
@@ -237,6 +255,23 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
         return '<span class="badge bg-' + (colors[status] || 'secondary') + '">' + status + '</span>';
     }
 
+    function jobTypeIcon(type) {
+        const icons = {
+            'backup': '<i class="bi bi-box-seam text-warning me-1"></i>',
+            'prune': '<i class="bi bi-scissors text-secondary me-1"></i>',
+            'compact': '<i class="bi bi-arrows-collapse text-info me-1"></i>',
+            'restore': '<i class="bi bi-cloud-download text-primary me-1"></i>',
+            'restore_mysql': '<i class="bi bi-database text-primary me-1"></i>',
+            'restore_pg': '<i class="bi bi-database text-primary me-1"></i>',
+            'check': '<i class="bi bi-shield-check text-success me-1"></i>',
+            'update_borg': '<i class="bi bi-arrow-up-square text-info me-1"></i>',
+            'update_agent': '<i class="bi bi-arrow-up-square text-info me-1"></i>',
+            'plugin_test': '<i class="bi bi-pencil text-secondary me-1"></i>',
+            's3_sync': '<i class="bi bi-cloud text-muted me-1"></i>'
+        };
+        return icons[type] || '<i class="bi bi-gear text-muted me-1"></i>';
+    }
+
     function buildInProgressRow(job) {
         let progress = String(Number(job.files_processed || 0).toLocaleString());
         if ((job.files_total || 0) > 0 && job.status === 'running') {
@@ -255,7 +290,7 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
         return '<tr style="cursor:pointer;" onclick="window.location=\'/queue/' + job.id + '\'">' +
             '<td class="small">' + formatDate(job.queued_at) + '</td>' +
             '<td>' + esc(job.agent_name) + '</td>' +
-            '<td>' + esc(job.task_type) + '</td>' +
+            '<td class="text-nowrap">' + jobTypeIcon(job.task_type) + esc(job.task_type) + '</td>' +
             '<td class="d-table-cell-md">' + Number(job.files_total || 0).toLocaleString() + '</td>' +
             '<td>' + progress + '</td>' +
             '<td class="d-table-cell-md">' + esc(job.repo_name || '--') + '</td>' +
@@ -284,7 +319,7 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
         return '<tr style="cursor:pointer;" onclick="window.location=\'/queue/' + job.id + '\'">' +
             '<td class="small">' + formatDate(job.completed_at) + '</td>' +
             '<td>' + esc(job.agent_name) + '</td>' +
-            '<td>' + esc(job.task_type) + '</td>' +
+            '<td class="text-nowrap">' + jobTypeIcon(job.task_type) + esc(job.task_type) + '</td>' +
             '<td class="d-table-cell-md">' + Number(job.files_total || 0).toLocaleString() + '</td>' +
             '<td class="d-table-cell-md">' + esc(job.repo_name || '--') + '</td>' +
             '<td class="d-table-cell-md">' + formatDuration(job.duration_seconds) + '</td>' +
