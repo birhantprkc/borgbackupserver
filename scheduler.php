@@ -279,21 +279,48 @@ foreach ($serverJobs as $sj) {
         }
 
         // Build environment for borg list
-        $csEnv = $_ENV;
+        $csEnv = [];
         if ($passphrase) {
             $csEnv['BORG_PASSPHRASE'] = $passphrase;
         }
         $csEnv['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes';
-        $csEnv['BORG_BASE_DIR'] = '/tmp/bbs-borg-www-data';
-        $csEnv['HOME'] = '/tmp/bbs-borg-www-data';
 
         // Run borg list --json to get all archives
         $csCmd = ['borg', 'list', '--json', $csLocalPath];
+
+        // Run as the repo's unix user (same pattern as prune/compact)
+        $runAsUser = $sj['ssh_unix_user'] ?? null;
+        if ($runAsUser) {
+            // Dedicated cache dir for this user
+            $userCache = "/var/bbs/cache/{$runAsUser}";
+            if (!is_dir($userCache)) {
+                mkdir($userCache, 0700, true);
+                chown($userCache, $runAsUser);
+            }
+            $csEnv['BORG_BASE_DIR'] = $userCache;
+            $csEnv['HOME'] = $userCache;
+
+            // Prepend env vars into the command so they survive sudo's env reset
+            $envPrefix = [];
+            foreach ($csEnv as $k => $v) {
+                $envPrefix[] = $k . '=' . $v;
+            }
+            array_unshift($csCmd, 'sudo', '-u', $runAsUser, 'env', ...$envPrefix);
+        } else {
+            $csEnv['BORG_BASE_DIR'] = '/tmp/bbs-borg-www-data';
+            $csEnv['HOME'] = '/tmp/bbs-borg-www-data';
+        }
+
+        $csEnvStrings = [];
+        foreach ($csEnv as $k => $v) {
+            $csEnvStrings[$k] = $v;
+        }
+
         $csProc = proc_open($csCmd, [
             0 => ['pipe', 'r'],
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
-        ], $csPipes, null, $csEnv);
+        ], $csPipes, null, array_merge($_SERVER, $csEnvStrings));
 
         $csOutput = '';
         $csError = '';
