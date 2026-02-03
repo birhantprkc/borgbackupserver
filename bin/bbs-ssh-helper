@@ -77,9 +77,33 @@ case "$ACTION" in
             exit 1
         fi
 
+        # Check if parent needs to be created (e.g., /var/bbs/home/3/ for user's home)
+        PARENT_DIR=$(dirname "$REPO_DIR")
+        if [ ! -d "$PARENT_DIR" ]; then
+            # Parent doesn't exist - need to create and set ownership
+            # For paths like /var/bbs/home/3/reponame, the parent is the user's home
+            mkdir -p "$PARENT_DIR"
+        fi
+
+        # Create the repo directory
         mkdir -p "$REPO_DIR"
+
         # Find the bbs-* user who owns the parent directory
-        PARENT_OWNER=$(stat -c '%U' "$(dirname "$REPO_DIR")")
+        PARENT_OWNER=$(stat -c '%U' "$PARENT_DIR")
+
+        # If parent is still owned by root but looks like a user home dir (/var/bbs/home/N/),
+        # try to find the correct bbs-* user from /etc/passwd
+        if [ "$PARENT_OWNER" = "root" ] && [[ "$PARENT_DIR" =~ ^/var/bbs/home/[0-9]+$ ]]; then
+            # Look for a bbs-* user whose home is this directory
+            ACTUAL_USER=$(awk -F: -v home="$PARENT_DIR" '$6 == home && $1 ~ /^bbs-/ {print $1}' /etc/passwd)
+            if [ -n "$ACTUAL_USER" ]; then
+                PARENT_OWNER="$ACTUAL_USER"
+                # Fix the parent directory ownership
+                chown "$ACTUAL_USER":www-data "$PARENT_DIR"
+                chmod 750 "$PARENT_DIR"
+            fi
+        fi
+
         chown "$PARENT_OWNER":www-data "$REPO_DIR"
         chmod 770 "$REPO_DIR"
         echo "OK"
@@ -457,6 +481,19 @@ case "$ACTION" in
         if [[ ! "$LOCAL_PATH" =~ ^/var/bbs/ ]]; then
             echo "Error: local path must be under /var/bbs/"
             exit 1
+        fi
+
+        # Ensure parent directory exists and has correct ownership
+        # This handles cases where the user's home dir (/var/bbs/home/N/) might not exist
+        PARENT_DIR=$(dirname "$LOCAL_PATH")
+        mkdir -p "$PARENT_DIR"
+        # Fix ownership if parent is a user home dir owned by root
+        if [[ "$PARENT_DIR" =~ ^/var/bbs/home/[0-9]+$ ]]; then
+            PARENT_OWNER=$(stat -c '%U' "$PARENT_DIR")
+            if [ "$PARENT_OWNER" = "root" ]; then
+                chown "$USERNAME":www-data "$PARENT_DIR"
+                chmod 750 "$PARENT_DIR"
+            fi
         fi
 
         # Create local directory if needed
