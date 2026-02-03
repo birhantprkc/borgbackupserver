@@ -1,6 +1,6 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h5 class="mb-0">Edit User: <?= htmlspecialchars($user['username']) ?></h5>
-    <a href="/users" class="btn btn-outline-secondary">
+    <a href="/users" class="btn btn-sm btn-outline-secondary">
         <i class="bi bi-arrow-left me-1"></i> Back to Users
     </a>
 </div>
@@ -168,10 +168,10 @@ $columnLabels = [
 
     <!-- Actions -->
     <div class="d-flex gap-2">
-        <button type="submit" class="btn btn-primary">
+        <button type="submit" class="btn btn-sm btn-primary">
             <i class="bi bi-check-lg me-1"></i> Save Changes
         </button>
-        <a href="/users" class="btn btn-outline-secondary">Cancel</a>
+        <a href="/users" class="btn btn-sm btn-outline-secondary">Cancel</a>
     </div>
 </form>
 
