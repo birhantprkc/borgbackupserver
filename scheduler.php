@@ -442,6 +442,12 @@ foreach ($serverJobs as $sj) {
             continue;
         }
 
+        // Set files_total to archive count for progress bar display
+        $db->update('backup_jobs', [
+            'files_total' => $totalArchives,
+            'files_processed' => 0,
+        ], 'id = ?', [$sj['id']]);
+
         $runAsUser = $sj['ssh_unix_user'] ?? null;
         $agentId = $sj['agent_id'];
         $processedArchives = 0;
@@ -572,6 +578,11 @@ foreach ($serverJobs as $sj) {
 
             $processedArchives++;
             $archiveFileCount = count($files);
+
+            // Update progress for UI progress bar (files_processed = archives processed)
+            $db->update('backup_jobs', [
+                'files_processed' => $processedArchives,
+            ], 'id = ?', [$sj['id']]);
 
             // Log progress to server_log for UI visibility
             $db->insert('server_log', [
