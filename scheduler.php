@@ -1120,9 +1120,9 @@ if (!$lastJobCleanupTime || strtotime($lastJobCleanupTime) < time() - 86400) {
 $lastSelfBackup = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'last_self_backup'");
 $lastSelfBackupTime = $lastSelfBackup['value'] ?? null;
 if (!$lastSelfBackupTime || strtotime($lastSelfBackupTime) < time() - 86400) {
-    $backupScript = __DIR__ . '/bin/bbs-backup';
-    if (is_file($backupScript)) {
-        $output = shell_exec("sudo $backupScript 2>&1");
+    $helper = '/usr/local/bin/bbs-ssh-helper';
+    if (is_file($helper)) {
+        $output = shell_exec("sudo $helper server-backup 2>&1");
         if (str_contains($output ?? '', 'OK')) {
             echo date('Y-m-d H:i:s') . " Self-backup completed\n";
         } else {
@@ -1148,19 +1148,17 @@ if (!$lastSelfBackupTime || strtotime($lastSelfBackupTime) < time() - 86400) {
             $remotePath = $prefix ? "{$prefix}/_server-backups" : '_server-backups';
             $remote = "S3:{$creds['bucket']}/{$remotePath}/";
 
-            $env = $s3Service->buildRcloneEnv($creds);
-            $envArgs = [];
-            foreach ($env as $k => $v) {
-                $envArgs[] = escapeshellarg("$k=$v");
-            }
-            $envStr = implode(' ', $envArgs);
-
-            // rclone sync mirrors the local dir to S3 (keeps 7, removes older from S3)
-            $cmd = "env $envStr rclone sync " . escapeshellarg($backupDir) . " " . escapeshellarg($remote)
-                 . " --include 'bbs-backup-*.tar.gz' --transfers 2 -v 2>&1";
+            // Use bbs-ssh-helper for S3 sync (runs as root with proper env)
+            $cmd = "sudo $helper rclone-server-sync "
+                 . escapeshellarg($backupDir) . " "
+                 . escapeshellarg($remote) . " "
+                 . escapeshellarg($creds['endpoint']) . " "
+                 . escapeshellarg($creds['region']) . " "
+                 . escapeshellarg($creds['access_key']) . " "
+                 . escapeshellarg($creds['secret_key']) . " 2>&1";
             $syncOutput = shell_exec($cmd);
 
-            if (str_contains($syncOutput ?? '', 'ERROR')) {
+            if (str_contains($syncOutput ?? '', 'ERROR') && !str_contains($syncOutput ?? '', 'OK')) {
                 echo date('Y-m-d H:i:s') . " Server backup S3 sync failed: " . trim($syncOutput) . "\n";
             } else {
                 echo date('Y-m-d H:i:s') . " Server backups synced to S3\n";

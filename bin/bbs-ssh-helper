@@ -611,6 +611,71 @@ case "$ACTION" in
         echo "OK"
         ;;
 
+    server-backup)
+        # Run the BBS server backup script
+        # Usage: bbs-ssh-helper server-backup
+        # Creates a backup of the BBS database and config to /var/bbs/backups/
+        BACKUP_SCRIPT="/var/www/bbs/bin/bbs-backup"
+
+        if [ ! -f "$BACKUP_SCRIPT" ]; then
+            echo "Error: backup script not found at $BACKUP_SCRIPT"
+            exit 1
+        fi
+
+        # Run the backup script as root
+        "$BACKUP_SCRIPT" 2>&1
+        exit $?
+        ;;
+
+    rclone-server-sync)
+        # Sync server backups to S3
+        # Usage: bbs-ssh-helper rclone-server-sync <local_dir> <remote> <endpoint> <region> <access_key> <secret_key>
+        # Example: bbs-ssh-helper rclone-server-sync /var/bbs/backups S3:bucket/_server-backups/ s3.wasabisys.com us-east-1 ACCESS SECRET
+        LOCAL_DIR="${2:-}"
+        REMOTE="${3:-}"
+        S3_ENDPOINT="${4:-}"
+        S3_REGION="${5:-}"
+        S3_ACCESS_KEY="${6:-}"
+        S3_SECRET_KEY="${7:-}"
+
+        if [ -z "$LOCAL_DIR" ] || [ -z "$REMOTE" ] || [ -z "$S3_ENDPOINT" ] || [ -z "$S3_ACCESS_KEY" ]; then
+            echo "Usage: bbs-ssh-helper rclone-server-sync <local_dir> <remote> <endpoint> <region> <access_key> <secret_key>"
+            exit 1
+        fi
+
+        # Safety: only allow /var/bbs/backups
+        if [[ "$LOCAL_DIR" != "/var/bbs/backups" ]]; then
+            echo "Error: local_dir must be /var/bbs/backups"
+            exit 1
+        fi
+
+        # Ensure cache directory exists
+        CACHE_DIR="/var/bbs/cache/server-backup"
+        mkdir -p "$CACHE_DIR"
+
+        # Run rclone sync with S3 config via env vars
+        env \
+            "HOME=$CACHE_DIR" \
+            "XDG_CACHE_HOME=$CACHE_DIR" \
+            "XDG_CONFIG_HOME=$CACHE_DIR" \
+            "RCLONE_CONFIG=/dev/null" \
+            "RCLONE_CONFIG_S3_TYPE=s3" \
+            "RCLONE_CONFIG_S3_PROVIDER=Other" \
+            "RCLONE_CONFIG_S3_ACCESS_KEY_ID=${S3_ACCESS_KEY}" \
+            "RCLONE_CONFIG_S3_SECRET_ACCESS_KEY=${S3_SECRET_KEY}" \
+            "RCLONE_CONFIG_S3_ENDPOINT=${S3_ENDPOINT}" \
+            "RCLONE_CONFIG_S3_REGION=${S3_REGION}" \
+            rclone sync "$LOCAL_DIR" "$REMOTE" \
+            --include 'bbs-backup-*.tar.gz' \
+            --transfers 2 -v 2>&1
+
+        EXIT_CODE=$?
+        if [ $EXIT_CODE -eq 0 ]; then
+            echo "OK"
+        fi
+        exit $EXIT_CODE
+        ;;
+
     *)
         echo "Usage: bbs-ssh-helper {create-user|create-repo-dir|borg-extract|fix-repo-perms|delete-user|rclone-sync|rclone-restore|get-size|delete-storage|clear-borg-cache} [args...]"
         exit 1
