@@ -183,6 +183,37 @@ foreach ($serverJobs as $sj) {
             'message' => $logMessage,
         ]);
 
+        // Generate and upload manifest after successful sync (streams to file for large catalogs)
+        if ($s3Result === 'completed' && $s3Repo && $s3Agent) {
+            $passphrase = '';
+            if (!empty($s3Repo['passphrase_encrypted'])) {
+                try {
+                    $passphrase = \BBS\Services\Encryption::decrypt($s3Repo['passphrase_encrypted']);
+                } catch (\Exception $e) {
+                    // May already be plaintext
+                }
+            }
+
+            $manifestGenResult = $s3Service->generateManifestFile($s3Repo, $s3Agent, $passphrase);
+            if ($manifestGenResult['success']) {
+                $manifestUploadResult = $s3Service->uploadManifestFile($manifestGenResult['file'], $s3Repo, $s3Agent, $creds);
+
+                if ($manifestUploadResult['success']) {
+                    echo date('Y-m-d H:i:s') . "   Manifest uploaded ({$manifestGenResult['archives']} archives, {$manifestGenResult['files']} files)\n";
+                } else {
+                    echo date('Y-m-d H:i:s') . "   Warning: manifest upload failed: {$manifestUploadResult['output']}\n";
+                    $db->insert('server_log', [
+                        'agent_id' => $sj['agent_id'],
+                        'backup_job_id' => $sj['id'],
+                        'level' => 'warning',
+                        'message' => 'Manifest upload failed: ' . $manifestUploadResult['output'],
+                    ]);
+                }
+            } else {
+                echo date('Y-m-d H:i:s') . "   Warning: manifest generation failed\n";
+            }
+        }
+
         echo date('Y-m-d H:i:s') . " S3 sync job #{$sj['id']} {$s3Result}\n";
         continue;
     }
@@ -243,26 +274,55 @@ foreach ($serverJobs as $sj) {
 
         echo date('Y-m-d H:i:s') . " S3 restore job #{$sj['id']} {$s3Result}\n";
 
-        // Auto-queue catalog_sync after successful S3 restore
-        // Pass source_repository_id for copy mode restores so we can copy archive sizes
-        if ($s3Result === 'completed' && $sj['repository_id']) {
-            $catalogSyncJob = [
-                'agent_id' => $sj['agent_id'],
-                'repository_id' => $sj['repository_id'],
-                'task_type' => 'catalog_sync',
-                'status' => 'queued',
-            ];
-            // For copy mode, pass source_repository_id so catalog_sync can copy sizes
-            if (!empty($sj['source_repository_id'])) {
-                $catalogSyncJob['source_repository_id'] = $sj['source_repository_id'];
+        // After successful S3 restore, try to import manifest first (fast path)
+        // Falls back to catalog_sync if no manifest exists (slow path via borg commands)
+        if ($s3Result === 'completed' && $sj['repository_id'] && $s3Repo && $s3Agent) {
+            $manifestDownload = $s3Service->downloadManifestFile($s3Repo, $s3Agent, $creds, $sourceRepo);
+
+            if ($manifestDownload['success'] && $manifestDownload['file']) {
+                // Fast path: import from manifest
+                echo date('Y-m-d H:i:s') . "   Found manifest, importing catalog...\n";
+                $importResult = $s3Service->importManifestFile($manifestDownload['file'], $sj['repository_id']);
+
+                if ($importResult['success']) {
+                    echo date('Y-m-d H:i:s') . "   Manifest imported ({$importResult['archives']} archives, {$importResult['files']} files)\n";
+                    $db->insert('server_log', [
+                        'agent_id' => $sj['agent_id'],
+                        'level' => 'info',
+                        'message' => "Catalog imported from manifest: {$importResult['archives']} archives, {$importResult['files']} files",
+                    ]);
+                } else {
+                    // Manifest import failed, fall back to catalog_sync
+                    echo date('Y-m-d H:i:s') . "   Manifest import failed: {$importResult['error']}, falling back to catalog_sync\n";
+                    $db->insert('backup_jobs', [
+                        'agent_id' => $sj['agent_id'],
+                        'repository_id' => $sj['repository_id'],
+                        'task_type' => 'catalog_sync',
+                        'status' => 'queued',
+                    ]);
+                    $db->insert('server_log', [
+                        'agent_id' => $sj['agent_id'],
+                        'level' => 'warning',
+                        'message' => "Manifest import failed ({$importResult['error']}), catalog_sync queued",
+                    ]);
+                }
+            } else {
+                // No manifest found (legacy S3 backup or external repo), queue catalog_sync
+                echo date('Y-m-d H:i:s') . "   No manifest found, queuing catalog_sync (slow path)...\n";
+                $catalogSyncJob = [
+                    'agent_id' => $sj['agent_id'],
+                    'repository_id' => $sj['repository_id'],
+                    'task_type' => 'catalog_sync',
+                    'status' => 'queued',
+                ];
+                $db->insert('backup_jobs', $catalogSyncJob);
+                $db->insert('server_log', [
+                    'agent_id' => $sj['agent_id'],
+                    'level' => 'info',
+                    'message' => "No manifest in S3, catalog_sync queued for repository after S3 restore",
+                ]);
+                echo date('Y-m-d H:i:s') . " Queued catalog_sync for repo #{$sj['repository_id']} after S3 restore\n";
             }
-            $db->insert('backup_jobs', $catalogSyncJob);
-            $db->insert('server_log', [
-                'agent_id' => $sj['agent_id'],
-                'level' => 'info',
-                'message' => "Catalog sync queued for repository after S3 restore",
-            ]);
-            echo date('Y-m-d H:i:s') . " Queued catalog_sync for repo #{$sj['repository_id']} after S3 restore\n";
         }
         continue;
     }

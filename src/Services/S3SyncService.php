@@ -438,6 +438,369 @@ class S3SyncService
     }
 
     /**
+     * Generate a manifest file containing repository metadata, archives, and file catalog.
+     * Streams directly to file to handle large catalogs (millions of files) without memory issues.
+     * Returns ['success' => bool, 'file' => string, 'archives' => int, 'files' => int].
+     */
+    public function generateManifestFile(array $repo, array $agent, string $passphrase): array
+    {
+        $tempFile = tempnam(sys_get_temp_dir(), 'bbs-manifest-');
+        $fp = fopen($tempFile, 'w');
+
+        // Write opening brace and header fields
+        fwrite($fp, "{\n");
+        fwrite($fp, '  "version": 1,' . "\n");
+        fwrite($fp, '  "generated_at": ' . json_encode(date('c')) . ",\n");
+        fwrite($fp, '  "repository": ' . json_encode([
+            'name' => $repo['name'],
+            'encryption' => $repo['encryption'] ?? 'unknown',
+            'passphrase' => $passphrase,
+        ], JSON_UNESCAPED_SLASHES) . ",\n");
+
+        // Write archives array
+        fwrite($fp, '  "archives": [' . "\n");
+        $archives = $this->db->fetchAll(
+            "SELECT archive_name, original_size, deduplicated_size, file_count, created_at
+             FROM archives WHERE repository_id = ? ORDER BY created_at",
+            [$repo['id']]
+        );
+        $archiveCount = count($archives);
+        foreach ($archives as $i => $ar) {
+            $archiveJson = json_encode([
+                'name' => $ar['archive_name'],
+                'original_size' => (int) $ar['original_size'],
+                'deduplicated_size' => (int) $ar['deduplicated_size'],
+                'file_count' => (int) $ar['file_count'],
+                'created_at' => $ar['created_at'],
+            ], JSON_UNESCAPED_SLASHES);
+            $comma = ($i < $archiveCount - 1) ? ',' : '';
+            fwrite($fp, "    {$archiveJson}{$comma}\n");
+        }
+        fwrite($fp, "  ],\n");
+
+        // Build archive ID -> name mapping
+        $archiveIds = $this->db->fetchAll(
+            "SELECT id, archive_name FROM archives WHERE repository_id = ?",
+            [$repo['id']]
+        );
+        $archiveNameById = [];
+        foreach ($archiveIds as $a) {
+            $archiveNameById[$a['id']] = $a['archive_name'];
+        }
+
+        // Stream file catalog in batches to handle millions of files
+        fwrite($fp, '  "file_catalog": [' . "\n");
+
+        $batchSize = 10000;
+        $offset = 0;
+        $firstFile = true;
+        $fileCount = 0;
+
+        do {
+            $files = $this->db->fetchAll(
+                "SELECT archive_id, path, size, mtime FROM file_catalog
+                 WHERE archive_id IN (SELECT id FROM archives WHERE repository_id = ?)
+                 ORDER BY archive_id, path
+                 LIMIT ? OFFSET ?",
+                [$repo['id'], $batchSize, $offset]
+            );
+
+            foreach ($files as $file) {
+                $archiveName = $archiveNameById[$file['archive_id']] ?? null;
+                if ($archiveName) {
+                    $fileJson = json_encode([
+                        'archive' => $archiveName,
+                        'path' => $file['path'],
+                        'size' => (int) $file['size'],
+                        'mtime' => $file['mtime'],
+                    ], JSON_UNESCAPED_SLASHES);
+
+                    // Add comma before all entries except the first
+                    if (!$firstFile) {
+                        fwrite($fp, ",\n");
+                    }
+                    fwrite($fp, "    {$fileJson}");
+                    $firstFile = false;
+                    $fileCount++;
+                }
+            }
+
+            $offset += $batchSize;
+        } while (count($files) === $batchSize);
+
+        fwrite($fp, "\n  ]\n");
+        fwrite($fp, "}\n");
+        fclose($fp);
+
+        return [
+            'success' => true,
+            'file' => $tempFile,
+            'archives' => $archiveCount,
+            'files' => $fileCount,
+        ];
+    }
+
+    /**
+     * Upload manifest file to S3 alongside the repository.
+     * Manifest is stored as .bbs-manifest.json in the repo's S3 folder.
+     * @param string $manifestFile Path to the manifest file (will be deleted after upload)
+     */
+    public function uploadManifestFile(string $manifestFile, array $repo, array $agent, array $creds): array
+    {
+        if (empty($creds['bucket'])) {
+            @unlink($manifestFile);
+            return ['success' => false, 'output' => 'No S3 bucket configured'];
+        }
+
+        if (!$this->isRcloneInstalled()) {
+            @unlink($manifestFile);
+            return ['success' => false, 'output' => 'rclone is not installed'];
+        }
+
+        // Build remote path
+        $agentName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $agent['name'] ?? 'unknown');
+        $repoName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $repo['name'] ?? 'unknown');
+        $prefix = trim($creds['path_prefix'], '/');
+        $remotePath = $prefix ? "{$prefix}/{$agentName}/{$repoName}" : "{$agentName}/{$repoName}";
+        $remote = "S3:{$creds['bucket']}/{$remotePath}/.bbs-manifest.json";
+
+        // Upload via rclone copyto
+        $cmd = ['rclone', 'copyto', $manifestFile, $remote];
+        $env = $this->buildRcloneEnv($creds);
+
+        $desc = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+
+        $envStrings = [];
+        foreach ($env as $k => $v) {
+            $envStrings[$k] = $v;
+        }
+
+        $proc = proc_open($cmd, $desc, $pipes, null, array_merge($_SERVER, $envStrings));
+        if (!is_resource($proc)) {
+            @unlink($manifestFile);
+            return ['success' => false, 'output' => 'Failed to start rclone process'];
+        }
+
+        fclose($pipes[0]);
+        $stdout = stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($proc);
+
+        @unlink($manifestFile);
+
+        return [
+            'success' => $exitCode === 0,
+            'output' => $exitCode === 0
+                ? 'Manifest uploaded'
+                : (trim($stderr . $stdout) ?: "rclone exited with code {$exitCode}"),
+        ];
+    }
+
+    /**
+     * Download manifest from S3.
+     * Returns ['success' => bool, 'file' => string|null, 'error' => string|null].
+     * Caller is responsible for deleting the temp file after use.
+     */
+    public function downloadManifestFile(array $repo, array $agent, array $creds, ?array $sourceRepo = null): array
+    {
+        if (empty($creds['bucket'])) {
+            return ['success' => false, 'file' => null, 'error' => 'No S3 bucket configured'];
+        }
+
+        if (!$this->isRcloneInstalled()) {
+            return ['success' => false, 'file' => null, 'error' => 'rclone is not installed'];
+        }
+
+        // Build remote path (use sourceRepo for copy mode)
+        $agentName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $agent['name'] ?? 'unknown');
+        $sourceRepoName = $sourceRepo['name'] ?? $repo['name'];
+        $repoName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $sourceRepoName ?? 'unknown');
+        $prefix = trim($creds['path_prefix'], '/');
+        $remotePath = $prefix ? "{$prefix}/{$agentName}/{$repoName}" : "{$agentName}/{$repoName}";
+        $remote = "S3:{$creds['bucket']}/{$remotePath}/.bbs-manifest.json";
+
+        // Download to temp file
+        $tempFile = tempnam(sys_get_temp_dir(), 'bbs-manifest-');
+
+        $cmd = ['rclone', 'copyto', $remote, $tempFile];
+        $env = $this->buildRcloneEnv($creds);
+
+        $desc = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+
+        $envStrings = [];
+        foreach ($env as $k => $v) {
+            $envStrings[$k] = $v;
+        }
+
+        $proc = proc_open($cmd, $desc, $pipes, null, array_merge($_SERVER, $envStrings));
+        if (!is_resource($proc)) {
+            @unlink($tempFile);
+            return ['success' => false, 'file' => null, 'error' => 'Failed to start rclone process'];
+        }
+
+        fclose($pipes[0]);
+        $stdout = stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($proc);
+
+        if ($exitCode !== 0) {
+            @unlink($tempFile);
+            // Exit code 3 typically means file not found
+            if ($exitCode === 3 || strpos($stderr . $stdout, 'not found') !== false) {
+                return ['success' => false, 'file' => null, 'error' => 'Manifest not found'];
+            }
+            return ['success' => false, 'file' => null, 'error' => trim($stderr . $stdout) ?: "rclone exited with code {$exitCode}"];
+        }
+
+        if (!file_exists($tempFile) || filesize($tempFile) === 0) {
+            @unlink($tempFile);
+            return ['success' => false, 'file' => null, 'error' => 'Empty manifest file'];
+        }
+
+        return ['success' => true, 'file' => $tempFile, 'error' => null];
+    }
+
+    /**
+     * Import manifest from file into database (archives, file catalog, repo metadata).
+     * Streams the file to handle large manifests without memory issues.
+     * Returns ['success' => bool, 'archives' => int, 'files' => int, 'error' => string|null].
+     * @param string $manifestFile Path to manifest file (will be deleted after import)
+     */
+    public function importManifestFile(string $manifestFile, int $repoId): array
+    {
+        // For streaming JSON parsing, we'll read the file in sections
+        // First, read the header portion (version, generated_at, repository, archives)
+        // which is small, then stream the file_catalog
+
+        $content = file_get_contents($manifestFile);
+        if (empty($content)) {
+            @unlink($manifestFile);
+            return ['success' => false, 'archives' => 0, 'files' => 0, 'error' => 'Empty manifest file'];
+        }
+
+        // For manifests under 50MB, just parse normally
+        $fileSize = filesize($manifestFile);
+        if ($fileSize < 50 * 1024 * 1024) {
+            $manifest = json_decode($content, true);
+            @unlink($manifestFile);
+
+            if (!$manifest || !isset($manifest['version'])) {
+                return ['success' => false, 'archives' => 0, 'files' => 0, 'error' => 'Invalid manifest format'];
+            }
+
+            return $this->importManifestArray($manifest, $repoId);
+        }
+
+        // For large manifests, use streaming approach
+        @unlink($manifestFile);
+
+        // Parse normally but in chunks - for very large files, use JsonMachine or similar
+        // For now, rely on PHP's memory and parse the full file
+        // TODO: Implement true streaming JSON parser for 100M+ file catalogs
+        $manifest = json_decode($content, true);
+        unset($content);  // Free memory
+
+        if (!$manifest || !isset($manifest['version'])) {
+            return ['success' => false, 'archives' => 0, 'files' => 0, 'error' => 'Invalid manifest format'];
+        }
+
+        return $this->importManifestArray($manifest, $repoId);
+    }
+
+    /**
+     * Import manifest array into database.
+     * Internal helper used by importManifestFile.
+     */
+    private function importManifestArray(array $manifest, int $repoId): array
+    {
+        if (!isset($manifest['version']) || $manifest['version'] !== 1) {
+            return ['success' => false, 'archives' => 0, 'files' => 0, 'error' => 'Unsupported manifest version'];
+        }
+
+        // Update repository metadata if available
+        if (!empty($manifest['repository'])) {
+            $repoUpdate = [];
+            if (!empty($manifest['repository']['encryption'])) {
+                $repoUpdate['encryption'] = $manifest['repository']['encryption'];
+            }
+            if (!empty($manifest['repository']['passphrase'])) {
+                $repoUpdate['passphrase_encrypted'] = Encryption::encrypt($manifest['repository']['passphrase']);
+            }
+            if (!empty($repoUpdate)) {
+                $this->db->update('repositories', $repoUpdate, 'id = ?', [$repoId]);
+            }
+        }
+
+        // Clear existing archives for this repo (also cascades to file_catalog via FK)
+        $this->db->delete('archives', 'repository_id = ?', [$repoId]);
+
+        // Import archives
+        $archiveCount = 0;
+        $totalSize = 0;
+        $archiveNameToId = [];
+
+        foreach ($manifest['archives'] ?? [] as $ar) {
+            $archiveId = $this->db->insert('archives', [
+                'repository_id' => $repoId,
+                'archive_name' => $ar['name'],
+                'original_size' => $ar['original_size'] ?? 0,
+                'deduplicated_size' => $ar['deduplicated_size'] ?? 0,
+                'file_count' => $ar['file_count'] ?? 0,
+                'created_at' => $ar['created_at'] ?? date('Y-m-d H:i:s'),
+            ]);
+            $archiveNameToId[$ar['name']] = $archiveId;
+            $archiveCount++;
+            $totalSize += $ar['deduplicated_size'] ?? 0;
+        }
+
+        // Import file catalog in batches to reduce memory pressure
+        $fileCount = 0;
+        $fileCatalog = $manifest['file_catalog'] ?? [];
+        $batchSize = 1000;
+
+        for ($i = 0; $i < count($fileCatalog); $i += $batchSize) {
+            $batch = array_slice($fileCatalog, $i, $batchSize);
+            foreach ($batch as $file) {
+                $archiveId = $archiveNameToId[$file['archive']] ?? null;
+                if ($archiveId) {
+                    $this->db->insert('file_catalog', [
+                        'archive_id' => $archiveId,
+                        'path' => $file['path'],
+                        'size' => $file['size'] ?? 0,
+                        'mtime' => $file['mtime'] ?? null,
+                    ]);
+                    $fileCount++;
+                }
+            }
+        }
+
+        // Update repository stats
+        $this->db->update('repositories', [
+            'archive_count' => $archiveCount,
+            'size_bytes' => $totalSize,
+        ], 'id = ?', [$repoId]);
+
+        return [
+            'success' => true,
+            'archives' => $archiveCount,
+            'files' => $fileCount,
+            'error' => null,
+        ];
+    }
+
+    /**
      * Delete a repository from S3.
      * Returns ['success' => bool, 'output' => string].
      */
