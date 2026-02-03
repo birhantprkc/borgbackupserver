@@ -381,7 +381,7 @@ body.bg-light {
     .client-tabs .nav-link {
         padding: 6px 6px;
         font-size: 0.8rem;
-        min-width: 75px;
+        min-width: 100px;
     }
     .client-tabs .nav-link i {
         display: block;
