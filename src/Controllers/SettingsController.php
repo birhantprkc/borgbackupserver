@@ -385,7 +385,7 @@ class SettingsController extends Controller
     }
 
     /**
-     * POST /settings/borg-versions/sync — fetch available versions from GitHub.
+     * POST /settings/borg/sync — fetch available versions from GitHub.
      */
     public function syncBorgVersions(): void
     {
@@ -401,63 +401,63 @@ class SettingsController extends Controller
             $this->flash('success', "Synced borg versions from GitHub: {$result['added']} new, {$result['skipped']} pre-release skipped.");
         }
 
-        $this->redirect('/settings?tab=borg-versions');
+        $this->redirect('/settings?tab=borg');
     }
 
     /**
-     * POST /settings/borg-versions/set-target — set target borg version.
+     * POST /settings/borg/save — save borg update mode settings.
      */
-    public function setTargetBorgVersion(): void
+    public function saveBorgSettings(): void
     {
         $this->requireAdmin();
         $this->verifyCsrf();
 
-        $version = trim($_POST['version'] ?? '');
         $service = new \BBS\Services\BorgVersionService();
 
-        if (empty($version)) {
-            $service->setTargetVersion('');
-            $this->flash('info', 'Target borg version cleared.');
-            $this->redirect('/settings?tab=borg-versions');
-            return;
-        }
+        $mode = $_POST['borg_update_mode'] ?? 'official';
+        $serverVersion = trim($_POST['borg_server_version'] ?? '');
+        $autoUpdate = !empty($_POST['borg_auto_update']);
 
-        // Validate version exists
-        $versions = $service->getStoredVersions();
-        $found = false;
-        foreach ($versions as $v) {
-            if ($v['version'] === $version) {
-                $found = true;
-                break;
+        $service->setUpdateMode($mode);
+        $service->setAutoUpdate($autoUpdate);
+
+        if ($mode === 'server') {
+            // Validate version exists in server-hosted binaries
+            $serverVersions = $service->getServerVersions();
+            if (!empty($serverVersion) && !in_array($serverVersion, $serverVersions)) {
+                $this->flash('danger', 'Selected version not found in server-hosted binaries.');
+                $this->redirect('/settings?tab=borg');
+                return;
             }
+            $service->setServerVersion($serverVersion);
         }
 
-        if (!$found) {
-            $this->flash('danger', 'Version not found. Sync from GitHub first.');
-            $this->redirect('/settings?tab=borg-versions');
-            return;
-        }
-
-        $service->setTargetVersion($version);
-
-        // Also update the server's borg binary
-        $serverVersion = $service->getServerBorgVersion();
-        if ($serverVersion !== $version) {
-            $result = $service->updateServerBorg($version);
-            if ($result['success']) {
-                $this->flash('success', "Target borg version set to v{$version}. Server borg updated successfully.");
-            } else {
-                $this->flash('warning', "Target borg version set to v{$version}, but server borg update failed: {$result['error']}");
-            }
-        } else {
-            $this->flash('success', "Target borg version set to v{$version}. Server already at this version.");
-        }
-
-        $this->redirect('/settings?tab=borg-versions');
+        $this->flash('success', 'Borg update settings saved.');
+        $this->redirect('/settings?tab=borg');
     }
 
     /**
-     * POST /settings/borg-versions/update-all — queue borg updates for all outdated agents.
+     * POST /settings/borg/update-server — update server borg binary.
+     */
+    public function updateServerBorg(): void
+    {
+        $this->requireAdmin();
+        $this->verifyCsrf();
+
+        $service = new \BBS\Services\BorgVersionService();
+        $result = $service->updateServerBorgByMode();
+
+        if ($result['success']) {
+            $this->flash('success', "Server borg updated to v{$result['version']}.");
+        } else {
+            $this->flash('danger', "Server borg update failed: {$result['error']}");
+        }
+
+        $this->redirect('/settings?tab=borg');
+    }
+
+    /**
+     * POST /settings/borg/update-all — update server + queue updates for agents.
      */
     public function updateBorgBulk(): void
     {
@@ -465,15 +465,16 @@ class SettingsController extends Controller
         $this->verifyCsrf();
 
         $service = new \BBS\Services\BorgVersionService();
-        $targetVersion = $service->getTargetVersion();
+        $mode = $service->getUpdateMode();
 
-        if (empty($targetVersion)) {
-            $this->flash('danger', 'No target borg version set.');
-            $this->redirect('/settings?tab=borg-versions');
-            return;
-        }
+        // First update server
+        $serverResult = $service->updateServerBorgByMode();
+        $serverMsg = $serverResult['success']
+            ? "Server updated to v{$serverResult['version']}."
+            : "Server update failed: {$serverResult['error']}";
 
-        $outdated = $service->getOutdatedAgents($targetVersion);
+        // Get all agents
+        $agents = $service->getAllAgentVersions();
 
         // Find agents that already have a pending borg update job
         $pending = $this->db->fetchAll(
@@ -482,10 +483,23 @@ class SettingsController extends Controller
         $pendingIds = array_column($pending, 'agent_id');
 
         $queued = 0;
-        foreach ($outdated as $agent) {
+        $skipped = 0;
+
+        foreach ($agents as $agent) {
+            // Skip if already has pending job
             if (in_array($agent['id'], $pendingIds)) {
                 continue;
             }
+
+            // In server mode, skip incompatible agents
+            if ($mode === 'server') {
+                $version = $service->getServerVersion();
+                if (!$service->isAgentCompatibleWithServerVersion($agent, $version)) {
+                    $skipped++;
+                    continue;
+                }
+            }
+
             $jobId = $this->db->insert('backup_jobs', [
                 'agent_id' => $agent['id'],
                 'task_type' => 'update_borg',
@@ -495,18 +509,69 @@ class SettingsController extends Controller
                 'agent_id' => $agent['id'],
                 'backup_job_id' => $jobId,
                 'level' => 'info',
-                'message' => "Borg update queued (bulk) to v{$targetVersion}",
+                'message' => "Borg update queued ({$mode} mode)",
             ]);
             $queued++;
         }
 
+        $msg = $serverMsg;
         if ($queued > 0) {
-            $this->flash('success', "Queued borg updates for {$queued} client(s).");
-        } else {
-            $this->flash('info', 'No agents need updating (or updates already queued).');
+            $msg .= " Queued updates for {$queued} client(s).";
+        }
+        if ($skipped > 0) {
+            $msg .= " Skipped {$skipped} incompatible client(s).";
+        }
+        if ($queued === 0 && $skipped === 0) {
+            $msg .= " All clients already up to date or have pending updates.";
         }
 
-        $this->redirect('/settings?tab=borg-versions');
+        $this->flash($serverResult['success'] ? 'success' : 'warning', $msg);
+        $this->redirect('/settings?tab=borg');
+    }
+
+    /**
+     * POST /settings/borg/update-agent/{id} — queue update for a single agent.
+     */
+    public function updateBorgAgent(int $id): void
+    {
+        $this->requireAdmin();
+        $this->verifyCsrf();
+
+        $agent = $this->db->fetchOne("SELECT id, name FROM agents WHERE id = ?", [$id]);
+        if (!$agent) {
+            $this->flash('danger', 'Agent not found.');
+            $this->redirect('/settings?tab=borg');
+            return;
+        }
+
+        // Check for pending job
+        $pending = $this->db->fetchOne(
+            "SELECT id FROM backup_jobs WHERE agent_id = ? AND task_type = 'update_borg' AND status IN ('queued', 'sent', 'running')",
+            [$id]
+        );
+        if ($pending) {
+            $this->flash('info', 'Update already pending for this client.');
+            $this->redirect('/settings?tab=borg');
+            return;
+        }
+
+        $service = new \BBS\Services\BorgVersionService();
+        $mode = $service->getUpdateMode();
+
+        $jobId = $this->db->insert('backup_jobs', [
+            'agent_id' => $id,
+            'task_type' => 'update_borg',
+            'status' => 'queued',
+        ]);
+        $this->db->insert('server_log', [
+            'agent_id' => $id,
+            'backup_job_id' => $jobId,
+            'level' => 'info',
+            'message' => "Borg update queued ({$mode} mode)",
+        ]);
+
+        $this->flash('success', "Borg update queued for {$agent['name']}.");
+        $this->redirect('/settings?tab=borg');
     }
 
     /**

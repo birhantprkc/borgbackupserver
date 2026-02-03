@@ -129,9 +129,11 @@ class App
         $this->router->map('GET', '/api/templates/[i:id]', 'SettingsController@templateJson');
         $this->router->map('POST', '/settings/offsite-storage', 'SettingsController@saveOffsiteStorage');
         $this->router->map('POST', '/settings/offsite-storage/test', 'SettingsController@testOffsiteStorage');
-        $this->router->map('POST', '/settings/borg-versions/sync', 'SettingsController@syncBorgVersions');
-        $this->router->map('POST', '/settings/borg-versions/set-target', 'SettingsController@setTargetBorgVersion');
-        $this->router->map('POST', '/settings/borg-versions/update-all', 'SettingsController@updateBorgBulk');
+        $this->router->map('POST', '/settings/borg/sync', 'SettingsController@syncBorgVersions');
+        $this->router->map('POST', '/settings/borg/save', 'SettingsController@saveBorgSettings');
+        $this->router->map('POST', '/settings/borg/update-server', 'SettingsController@updateServerBorg');
+        $this->router->map('POST', '/settings/borg/update-all', 'SettingsController@updateBorgBulk');
+        $this->router->map('POST', '/settings/borg/update-agent/[i:id]', 'SettingsController@updateBorgAgent');
 
         // Users (admin)
         $this->router->map('GET', '/users', 'UserController@index');

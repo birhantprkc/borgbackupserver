@@ -518,65 +518,81 @@ class QueueManager
 
     /**
      * Build an update_borg task payload with download URL and version info.
+     * Uses the new two-mode system: 'official' or 'server'.
      */
     private function buildBorgUpdatePayload(array $job): array
     {
         $borgService = new BorgVersionService();
-        $targetVersion = $borgService->getTargetVersion();
-
-        $payload = [
-            'task' => 'update_borg',
-            'job_id' => $job['id'],
-            'target_version' => $targetVersion,
-            'download_url' => null,
-            'install_method' => 'pip',
-            'binary_path' => '/usr/local/bin/borg',
-            'fallback_to_pip' => $borgService->isFallbackToPipEnabled(),
-        ];
-
-        if (empty($targetVersion)) {
-            return $payload;
-        }
+        $mode = $borgService->getUpdateMode();
 
         // Get agent info for platform matching
         $agent = $this->db->fetchOne(
             "SELECT os_info, platform, architecture, glibc_version FROM agents WHERE id = ?",
             [$job['agent_id']]
         );
+
+        // Normalize platform/arch if not stored
         if ($agent) {
-            // Use stored platform/arch if available, fall back to parsing os_info
-            $platform = $agent['platform'] ?? null;
-            $arch = $agent['architecture'] ?? null;
-
-            if (!$platform && !empty($agent['os_info'])) {
+            if (empty($agent['platform']) && !empty($agent['os_info'])) {
                 $osInfo = $agent['os_info'];
-                $platform = 'linux';
+                $agent['platform'] = 'linux';
                 if (stripos($osInfo, 'Darwin') !== false) {
-                    $platform = 'macos';
+                    $agent['platform'] = 'macos';
                 } elseif (stripos($osInfo, 'FreeBSD') !== false) {
-                    $platform = 'freebsd';
+                    $agent['platform'] = 'freebsd';
                 }
             }
-            if (!$arch && !empty($agent['os_info'])) {
-                $arch = 'x86_64';
+            if (empty($agent['architecture']) && !empty($agent['os_info'])) {
+                $agent['architecture'] = 'x86_64';
                 if (preg_match('/\b(aarch64|arm64)\b/i', $agent['os_info'])) {
-                    $arch = 'arm64';
+                    $agent['architecture'] = 'arm64';
                 }
             }
+        }
 
-            if ($platform && $arch) {
-                $agentGlibc = $agent['glibc_version'] ?? null;
-                $asset = $borgService->getAssetForPlatform($targetVersion, $platform, $arch, $agentGlibc);
+        $payload = [
+            'task' => 'update_borg',
+            'job_id' => $job['id'],
+            'mode' => $mode,
+            'target_version' => '',
+            'download_url' => null,
+            'install_method' => 'binary',
+            'binary_path' => '/usr/local/bin/borg',
+            'fallback_to_pip' => false,
+        ];
 
-                if ($asset) {
-                    $payload['download_url'] = $asset['download_url'];
-                    $payload['install_method'] = 'binary';
+        if ($mode === 'server') {
+            // Server mode: use selected server-hosted binary
+            $version = $borgService->getServerVersion();
+            if (empty($version)) {
+                $payload['install_method'] = 'skip';
+                return $payload;
+            }
+
+            $payload['target_version'] = $version;
+            $payload['fallback_to_pip'] = false; // No fallback in server mode
+
+            if ($agent) {
+                $url = $borgService->getServerBinaryForAgent($version, $agent);
+                if ($url) {
+                    $payload['download_url'] = $url;
                 } else {
-                    $fallbackUrl = $borgService->getFallbackBinaryUrl($targetVersion, $platform, $arch, $agentGlibc);
-                    if ($fallbackUrl) {
-                        $payload['download_url'] = $fallbackUrl;
-                        $payload['install_method'] = 'binary';
-                    }
+                    // No compatible binary - skip this agent
+                    $payload['install_method'] = 'skip';
+                }
+            }
+        } else {
+            // Official mode: get latest compatible from GitHub
+            $payload['fallback_to_pip'] = true; // Always allow pip fallback
+
+            if ($agent) {
+                $result = $borgService->getOfficialBinaryForAgent($agent);
+                if ($result) {
+                    $payload['target_version'] = $result['version'];
+                    $payload['download_url'] = $result['url'];
+                } else {
+                    // No binary found, will fall back to pip for latest
+                    $payload['install_method'] = 'pip';
                 }
             }
         }

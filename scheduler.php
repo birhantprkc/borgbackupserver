@@ -618,3 +618,70 @@ if ($dayOfWeek === 6 && $hourOfDay === 2) {
         );
     }
 }
+
+// Step 12: Daily auto-update of borg (if enabled, at 3 AM)
+if ($hourOfDay === 3) {
+    $borgService = new \BBS\Services\BorgVersionService();
+    if ($borgService->isAutoUpdateEnabled()) {
+        $lastBorgAutoUpdate = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'last_borg_auto_update'");
+        $lastBorgAutoUpdateTime = $lastBorgAutoUpdate['value'] ?? null;
+
+        // Only run once per day
+        if (!$lastBorgAutoUpdateTime || strtotime($lastBorgAutoUpdateTime) < time() - 82800) {
+            $mode = $borgService->getUpdateMode();
+            $queued = 0;
+            $skipped = 0;
+
+            // Update server first
+            $serverResult = $borgService->updateServerBorgByMode();
+            if ($serverResult['success']) {
+                echo date('Y-m-d H:i:s') . " Auto-update: server borg updated to v{$serverResult['version']}\n";
+            }
+
+            // Queue updates for agents
+            $agents = $borgService->getAllAgentVersions();
+            $pending = $db->fetchAll(
+                "SELECT agent_id FROM backup_jobs WHERE task_type = 'update_borg' AND status IN ('queued', 'sent', 'running')"
+            );
+            $pendingIds = array_column($pending, 'agent_id');
+
+            foreach ($agents as $agent) {
+                if (in_array($agent['id'], $pendingIds)) {
+                    continue;
+                }
+
+                // In server mode, skip incompatible agents
+                if ($mode === 'server') {
+                    $version = $borgService->getServerVersion();
+                    if (!$borgService->isAgentCompatibleWithServerVersion($agent, $version)) {
+                        $skipped++;
+                        continue;
+                    }
+                }
+
+                $jobId = $db->insert('backup_jobs', [
+                    'agent_id' => $agent['id'],
+                    'task_type' => 'update_borg',
+                    'status' => 'queued',
+                ]);
+                $db->insert('server_log', [
+                    'agent_id' => $agent['id'],
+                    'backup_job_id' => $jobId,
+                    'level' => 'info',
+                    'message' => "Auto-update borg queued ({$mode} mode)",
+                ]);
+                $queued++;
+            }
+
+            if ($queued > 0 || $skipped > 0) {
+                echo date('Y-m-d H:i:s') . " Auto-update: queued {$queued} borg update(s), skipped {$skipped} incompatible\n";
+            }
+
+            $db->query(
+                "INSERT INTO settings (`key`, `value`) VALUES ('last_borg_auto_update', ?)
+                 ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)",
+                [date('Y-m-d H:i:s')]
+            );
+        }
+    }
+}

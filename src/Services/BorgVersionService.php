@@ -385,6 +385,265 @@ class BorgVersionService
         );
     }
 
+    // ========================================
+    // New two-mode update system
+    // ========================================
+
+    /**
+     * Get the update mode: 'official' or 'server'
+     */
+    public function getUpdateMode(): string
+    {
+        return $this->getSetting('borg_update_mode', 'official');
+    }
+
+    /**
+     * Set the update mode.
+     */
+    public function setUpdateMode(string $mode): void
+    {
+        if (!in_array($mode, ['official', 'server'])) {
+            $mode = 'official';
+        }
+        $this->setSetting('borg_update_mode', $mode);
+    }
+
+    /**
+     * Get the selected server binary version.
+     */
+    public function getServerVersion(): string
+    {
+        return $this->getSetting('borg_server_version', '');
+    }
+
+    /**
+     * Set the selected server binary version.
+     */
+    public function setServerVersion(string $version): void
+    {
+        $this->setSetting('borg_server_version', $version);
+    }
+
+    /**
+     * Check if auto-update is enabled.
+     */
+    public function isAutoUpdateEnabled(): bool
+    {
+        return $this->getSetting('borg_auto_update', '0') === '1';
+    }
+
+    /**
+     * Set auto-update enabled/disabled.
+     */
+    public function setAutoUpdate(bool $enabled): void
+    {
+        $this->setSetting('borg_auto_update', $enabled ? '1' : '0');
+    }
+
+    /**
+     * Get available server-hosted versions (directories in /public/borg/).
+     */
+    public function getServerVersions(): array
+    {
+        $borgDir = dirname(__DIR__, 2) . '/public/borg';
+        if (!is_dir($borgDir)) {
+            return [];
+        }
+
+        $dirs = array_filter(
+            scandir($borgDir),
+            fn($d) => $d !== '.' && $d !== '..' && is_dir($borgDir . '/' . $d)
+        );
+
+        // Sort versions descending
+        usort($dirs, fn($a, $b) => version_compare($b, $a));
+        return array_values($dirs);
+    }
+
+    /**
+     * Check if an agent is compatible with a server-hosted version.
+     * Returns true if a matching binary exists.
+     */
+    public function isAgentCompatibleWithServerVersion(array $agent, string $version): bool
+    {
+        $platform = $agent['platform'] ?? 'linux';
+        $arch = $agent['architecture'] ?? 'x86_64';
+        $glibc = $agent['glibc_version'] ?? null;
+
+        // Extract numeric glibc for comparison (e.g., 'glibc217' -> '217')
+        $agentGlibcNum = $glibc ? preg_replace('/[^0-9]/', '', $glibc) : null;
+
+        $borgDir = dirname(__DIR__, 2) . '/public/borg/' . $version;
+        if (!is_dir($borgDir)) {
+            return false;
+        }
+
+        $files = scandir($borgDir);
+        foreach ($files as $file) {
+            if ($file === '.' || $file === '..') continue;
+            // Match pattern: borg-{platform}-glibc{NNN}-{arch}
+            if (preg_match('/^borg-' . preg_quote($platform) . '-glibc(\d+)-' . preg_quote($arch) . '$/', $file, $m)) {
+                $fileGlibc = $m[1];
+                // Compatible if agent's glibc >= binary's required glibc
+                if ($agentGlibcNum === null || $fileGlibc <= $agentGlibcNum) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Get server binary URL for a specific version and agent.
+     * Returns null if no compatible binary exists.
+     */
+    public function getServerBinaryForAgent(string $version, array $agent): ?string
+    {
+        $platform = $agent['platform'] ?? 'linux';
+        $arch = $agent['architecture'] ?? 'x86_64';
+        $glibc = $agent['glibc_version'] ?? null;
+
+        // Extract numeric glibc for comparison
+        $agentGlibcNum = $glibc ? preg_replace('/[^0-9]/', '', $glibc) : null;
+
+        $borgDir = dirname(__DIR__, 2) . '/public/borg/' . $version;
+        if (!is_dir($borgDir)) {
+            return null;
+        }
+
+        $files = scandir($borgDir);
+        $best = null;
+        $bestGlibc = null;
+
+        foreach ($files as $file) {
+            if ($file === '.' || $file === '..') continue;
+            if (!preg_match('/^borg-' . preg_quote($platform) . '-glibc(\d+)-' . preg_quote($arch) . '$/', $file, $m)) {
+                continue;
+            }
+            $fileGlibc = $m[1];
+            // Skip if requires newer glibc than agent has
+            if ($agentGlibcNum !== null && $fileGlibc > $agentGlibcNum) {
+                continue;
+            }
+            // Pick highest compatible glibc
+            if ($best === null || $fileGlibc > $bestGlibc) {
+                $best = $file;
+                $bestGlibc = $fileGlibc;
+            }
+        }
+
+        if (!$best) {
+            return null;
+        }
+
+        $appUrl = rtrim($_ENV['APP_URL'] ?? ($this->db->fetchOne(
+            "SELECT `value` FROM settings WHERE `key` = 'app_url'"
+        )['value'] ?? ''), '/');
+
+        return $appUrl . '/borg/' . $version . '/' . $best;
+    }
+
+    /**
+     * For Official mode: get the best binary URL from GitHub for an agent.
+     * Returns ['version' => '1.4.3', 'url' => '...'] or null.
+     */
+    public function getOfficialBinaryForAgent(array $agent): ?array
+    {
+        $platform = $agent['platform'] ?? 'linux';
+        $arch = $agent['architecture'] ?? 'x86_64';
+        $glibc = $agent['glibc_version'] ?? null;
+
+        // Find latest version with a compatible binary
+        if ($platform === 'linux' && $glibc) {
+            $asset = $this->db->fetchOne(
+                "SELECT bv.version, bva.download_url
+                 FROM borg_versions bv
+                 JOIN borg_version_assets bva ON bva.borg_version_id = bv.id
+                 WHERE bva.platform = 'linux' AND bva.architecture = ?
+                   AND bva.glibc_version IS NOT NULL AND bva.glibc_version <= ?
+                 ORDER BY bv.release_date DESC, bva.glibc_version DESC
+                 LIMIT 1",
+                [$arch, $glibc]
+            );
+        } else {
+            $asset = $this->db->fetchOne(
+                "SELECT bv.version, bva.download_url
+                 FROM borg_versions bv
+                 JOIN borg_version_assets bva ON bva.borg_version_id = bv.id
+                 WHERE bva.platform = ? AND bva.architecture = ?
+                 ORDER BY bv.release_date DESC
+                 LIMIT 1",
+                [$platform, $arch]
+            );
+        }
+
+        if ($asset && !empty($asset['download_url'])) {
+            return [
+                'version' => $asset['version'],
+                'url' => $asset['download_url'],
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * Update server borg using current mode settings.
+     */
+    public function updateServerBorgByMode(): array
+    {
+        $mode = $this->getUpdateMode();
+        $platform = $this->getServerPlatformInfo();
+
+        if ($mode === 'server') {
+            $version = $this->getServerVersion();
+            if (empty($version)) {
+                return ['success' => false, 'error' => 'No server version selected'];
+            }
+            $url = $this->getServerBinaryForAgent($version, $platform);
+            if (!$url) {
+                return ['success' => false, 'error' => 'No compatible binary for server platform'];
+            }
+        } else {
+            // Official mode
+            $result = $this->getOfficialBinaryForAgent($platform);
+            if (!$result) {
+                return ['success' => false, 'error' => 'No compatible official binary for server platform'];
+            }
+            $version = $result['version'];
+            $url = $result['url'];
+        }
+
+        return $this->updateServerBorgFromUrl($url, $version);
+    }
+
+    /**
+     * Update server borg from a specific URL.
+     */
+    public function updateServerBorgFromUrl(string $url, string $version): array
+    {
+        $cmd = 'sudo /usr/local/bin/bbs-ssh-helper update-borg '
+            . escapeshellarg($url) . ' '
+            . escapeshellarg($version) . ' 2>&1';
+
+        $output = [];
+        $exitCode = 0;
+        exec($cmd, $output, $exitCode);
+
+        $outputStr = implode("\n", $output);
+
+        if ($exitCode !== 0) {
+            return ['success' => false, 'error' => 'Install failed (exit ' . $exitCode . '): ' . $outputStr];
+        }
+
+        return ['success' => true, 'version' => $version, 'output' => $outputStr];
+    }
+
+    // ========================================
+    // Legacy methods (kept for compatibility)
+    // ========================================
+
     public function getTargetVersion(): string
     {
         return $this->getSetting('target_borg_version', '');

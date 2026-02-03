@@ -19,7 +19,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.8.0"
+AGENT_VERSION = "1.8.1"
 CONFIG_PATH = "/etc/bbs-agent/config.ini"
 LOG_PATH = "/var/log/bbs-agent.log"
 SSH_KEY_PATH = "/etc/bbs-agent/ssh_key"
@@ -270,15 +270,26 @@ def count_files(directories):
 
 
 def execute_update_borg(config, task):
-    """Update borg via binary download from GitHub, with pip fallback."""
+    """Update borg via binary download, with optional pip fallback."""
     job_id = task.get("job_id")
     target_version = task.get("target_version", "")
     download_url = task.get("download_url")
     install_method = task.get("install_method", "binary")
     binary_path = task.get("binary_path", "/usr/local/bin/borg")
     fallback_to_pip = task.get("fallback_to_pip", True)
+    mode = task.get("mode", "official")  # 'official' or 'server'
 
-    logger.info(f"Executing borg update job #{job_id} to v{target_version} via {install_method}")
+    logger.info(f"Executing borg update job #{job_id} to v{target_version} via {install_method} (mode={mode})")
+
+    # Handle skip - agent is incompatible with selected server version
+    if install_method == "skip":
+        logger.info(f"Skipping borg update - no compatible binary for this agent")
+        api_request(config, "/api/agent/status", method="POST", data={
+            "job_id": job_id,
+            "result": "completed",
+            "output_log": "Skipped - no compatible binary available for this platform",
+        })
+        return
 
     # Report running
     api_request(config, "/api/agent/progress", method="POST", data={
@@ -294,7 +305,7 @@ def execute_update_borg(config, task):
             result, update_output, error_output = _install_borg_binary(
                 download_url, binary_path, target_version
             )
-            # If binary install failed, try pip fallback
+            # If binary install failed, try pip fallback (only in official mode)
             if result == "failed" and fallback_to_pip:
                 logger.warning(f"Binary install failed ({error_output}), falling back to pip")
                 result, update_output, error_output = _install_borg_pip(target_version)

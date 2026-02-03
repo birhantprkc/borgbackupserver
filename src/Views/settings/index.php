@@ -18,7 +18,7 @@
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link <?= $activeTab === 'borg-versions' ? 'active' : '' ?>" href="/settings?tab=borg-versions">
+        <a class="nav-link <?= $activeTab === 'borg' ? 'active' : '' ?>" href="/settings?tab=borg">
             <i class="bi bi-box-seam me-1"></i><span class="tab-label">Borg</span>
         </a>
     </li>
@@ -326,30 +326,21 @@
 <?php endif; ?>
 
 <!-- Borg Versions Tab -->
-<?php if ($activeTab === 'borg-versions'):
+<?php if ($activeTab === 'borg'):
     $borgService = new \BBS\Services\BorgVersionService();
-    $borgVersions = $borgService->getStoredVersions();
-    $targetBorgVersion = $borgService->getTargetVersion();
-    $lastBorgCheck = $borgService->getLastCheckTime();
-    $allBorgAgents = $borgService->getAllAgentVersions();
-    $outdatedBorgAgents = !empty($targetBorgVersion) ? $borgService->getOutdatedAgents($targetBorgVersion) : [];
-    $aboveAgents = !empty($targetBorgVersion) ? $borgService->getAgentsAboveVersion($targetBorgVersion) : [];
+    $updateMode = $borgService->getUpdateMode();
+    $serverVersion = $borgService->getServerVersion();
+    $autoUpdate = $borgService->isAutoUpdateEnabled();
     $serverBorgVersion = $borgService->getServerBorgVersion();
-    $serverBorgMatch = !empty($targetBorgVersion) && $serverBorgVersion === $targetBorgVersion;
-    $serverHostedBinaries = $borgService->getServerHostedBinaries();
+    $lastBorgCheck = $borgService->getLastCheckTime();
+    $serverVersions = $borgService->getServerVersions();
+    $allAgents = $borgService->getAllAgentVersions();
 
-    // Compute max compatible borg version per agent (includes fallback binaries)
-    $agentMaxVersions = [];
-    $agentUseFallback = [];
-    foreach ($allBorgAgents as $ba) {
-        $maxVer = $borgService->getMaxCompatibleVersion($ba);
-        $agentMaxVersions[$ba['id']] = $maxVer;
-        if (!empty($targetBorgVersion)) {
-            $platform = $ba['platform'] ?? null;
-            $arch = $ba['architecture'] ?? null;
-            $glibc = $ba['glibc_version'] ?? null;
-            $githubAsset = ($platform && $arch) ? $borgService->getAssetForPlatform($targetBorgVersion, $platform, $arch, $glibc) : null;
-            $agentUseFallback[$ba['id']] = !$githubAsset && $borgService->hasFallbackBinary($targetBorgVersion, $platform ?? '', $arch ?? '', $glibc);
+    // Check compatibility for each agent with selected server version
+    $agentCompatibility = [];
+    if ($updateMode === 'server' && !empty($serverVersion)) {
+        foreach ($allAgents as $agent) {
+            $agentCompatibility[$agent['id']] = $borgService->isAgentCompatibleWithServerVersion($agent, $serverVersion);
         }
     }
 ?>
@@ -357,109 +348,191 @@
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-white fw-semibold">
-                <i class="bi bi-box-seam me-1"></i> Borg Version Management
+                <i class="bi bi-box-seam me-1"></i> Borg Version Updater
             </div>
             <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
+                <!-- Server borg version -->
+                <div class="d-flex justify-content-between align-items-center mb-4">
                     <div>
-                        <span class="small">
-                            <i class="bi bi-server me-1"></i> Server borg:
-                            <?php if ($serverBorgVersion): ?>
-                                <?php if (!empty($targetBorgVersion)): ?>
-                                    <span class="badge <?= $serverBorgMatch ? 'bg-success' : 'bg-warning text-dark' ?>">v<?= htmlspecialchars($serverBorgVersion) ?></span>
-                                <?php else: ?>
-                                    <span class="badge bg-secondary">v<?= htmlspecialchars($serverBorgVersion) ?></span>
-                                <?php endif; ?>
-                            <?php else: ?>
-                                <span class="badge bg-danger">not installed</span>
-                            <?php endif; ?>
-                        </span>
-                    </div>
-                </div>
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <div>
-                        <?php if (!empty($lastBorgCheck)): ?>
-                            <span class="text-muted small">Last synced: <?= \BBS\Core\TimeHelper::format($lastBorgCheck, 'M j, Y g:i A') ?></span>
+                        <i class="bi bi-server me-1"></i> Server Borg:
+                        <?php if ($serverBorgVersion): ?>
+                            <span class="badge bg-success">v<?= htmlspecialchars($serverBorgVersion) ?></span>
                         <?php else: ?>
-                            <span class="text-muted small">Not synced yet</span>
+                            <span class="badge bg-danger">not installed</span>
                         <?php endif; ?>
                     </div>
-                    <form method="POST" action="/settings/borg-versions/sync">
+                    <form method="POST" action="/settings/borg/update-server">
+                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                        <button type="submit" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-arrow-up-circle me-1"></i> Update Server
+                        </button>
+                    </form>
+                </div>
+
+                <form method="POST" action="/settings/borg/save">
+                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+
+                    <!-- Official Binaries option -->
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="radio" name="borg_update_mode" id="modeOfficial"
+                               value="official" <?= $updateMode === 'official' ? 'checked' : '' ?>
+                               onchange="document.getElementById('serverOptions').style.display='none'">
+                        <label class="form-check-label fw-semibold" for="modeOfficial">
+                            Use Official Binaries
+                        </label>
+                        <div class="form-text ms-4">
+                            Borg will download and install the most recent compatible binary for each Agent & Server
+                            using portable binaries from Borg's Official GitHub Repo. This may cause mis-matched Borg
+                            versions depending on client operating systems, but should still work without issue.
+                        </div>
+                    </div>
+
+                    <!-- Server Binaries option -->
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="radio" name="borg_update_mode" id="modeServer"
+                               value="server" <?= $updateMode === 'server' ? 'checked' : '' ?>
+                               onchange="document.getElementById('serverOptions').style.display='block'">
+                        <label class="form-check-label fw-semibold" for="modeServer">
+                            Use Server Binaries
+                        </label>
+                        <div class="form-text ms-4">
+                            BBS includes unofficial Borg binaries compiled for older operating systems.
+                            All compatible clients will be updated to the same version.
+                        </div>
+                    </div>
+
+                    <!-- Server version selector (shown when server mode selected) -->
+                    <div id="serverOptions" class="ms-4 mb-3" style="display: <?= $updateMode === 'server' ? 'block' : 'none' ?>">
+                        <?php if (empty($serverVersions)): ?>
+                            <div class="alert alert-info py-2 px-3 small">
+                                <i class="bi bi-info-circle me-1"></i> No server-hosted binaries found in <code>/public/borg/</code>
+                            </div>
+                        <?php else: ?>
+                            <label class="form-label small fw-semibold">Select Version</label>
+                            <select name="borg_server_version" class="form-select form-select-sm" style="max-width: 200px;">
+                                <?php foreach ($serverVersions as $v): ?>
+                                <option value="<?= htmlspecialchars($v) ?>" <?= $v === $serverVersion ? 'selected' : '' ?>>
+                                    v<?= htmlspecialchars($v) ?>
+                                </option>
+                                <?php endforeach; ?>
+                            </select>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- Auto-update checkbox -->
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="borg_auto_update" id="autoUpdate"
+                               value="1" <?= $autoUpdate ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="autoUpdate">
+                            Enable auto-updates (check daily)
+                        </label>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="bi bi-check-lg me-1"></i> Save Settings
+                    </button>
+                </form>
+
+                <!-- GitHub sync for official mode -->
+                <?php if ($updateMode === 'official'): ?>
+                <hr>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="small text-muted">
+                        <?php if (!empty($lastBorgCheck)): ?>
+                            Last synced: <?= \BBS\Core\TimeHelper::format($lastBorgCheck, 'M j, Y g:i A') ?>
+                        <?php else: ?>
+                            GitHub versions not synced yet
+                        <?php endif; ?>
+                    </div>
+                    <form method="POST" action="/settings/borg/sync">
                         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                         <button type="submit" class="btn btn-sm btn-outline-secondary">
                             <i class="bi bi-arrow-clockwise me-1"></i> Sync from GitHub
                         </button>
                     </form>
                 </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
 
-                <?php if (empty($borgVersions)): ?>
-                    <div class="alert alert-info py-2 px-3 small mb-0">
-                        <i class="bi bi-info-circle me-1"></i> No versions synced yet. Click "Sync from GitHub" to fetch available borg releases.
-                    </div>
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-pc-display me-1"></i> Client Borg Versions</span>
+                <?php if (!empty($allAgents)): ?>
+                <form method="POST" action="/settings/borg/update-all"
+                      data-confirm="Update server and queue borg updates for all compatible clients?">
+                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                    <button type="submit" class="btn btn-sm btn-warning">
+                        <i class="bi bi-arrow-up-circle me-1"></i> Update All
+                    </button>
+                </form>
+                <?php endif; ?>
+            </div>
+            <div class="card-body">
+                <?php if (empty($allAgents)): ?>
+                    <p class="text-muted small mb-0">No agents connected yet.</p>
                 <?php else: ?>
-                    <form method="POST" action="/settings/borg-versions/set-target">
-                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-
-                        <?php if (!empty($aboveAgents)): ?>
-                        <div class="alert alert-warning py-2 px-3 small mb-3">
-                            <i class="bi bi-exclamation-triangle me-1"></i>
-                            <strong>Downgrade warning:</strong> <?= count($aboveAgents) ?> agent(s) are running a newer borg version than the selected target.
+                    <?php foreach ($allAgents as $agent):
+                        $borgVer = $agent['borg_version'] ?? 'unknown';
+                        $installMethod = $agent['borg_install_method'] ?? 'unknown';
+                        $isCompatible = $agentCompatibility[$agent['id']] ?? true;
+                    ?>
+                    <div class="d-flex justify-content-between align-items-center small py-2 border-bottom">
+                        <div>
+                            <i class="bi bi-pc-display me-1 text-muted"></i>
+                            <a href="/clients/<?= $agent['id'] ?>" class="text-decoration-none fw-semibold">
+                                <?= htmlspecialchars($agent['name']) ?>
+                            </a>
+                            <?php if ($updateMode === 'server' && !$isCompatible): ?>
+                                <span class="badge bg-danger ms-1" title="glibc <?= htmlspecialchars($agent['glibc_version'] ?? 'unknown') ?> - no compatible binary">
+                                    <i class="bi bi-exclamation-triangle"></i> incompatible
+                                </span>
+                            <?php endif; ?>
                         </div>
-                        <?php endif; ?>
-
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Target Borg Version</label>
-                            <select name="version" class="form-select">
-                                <option value="">-- No target set --</option>
-                                <?php foreach ($borgVersions as $v): ?>
-                                <option value="<?= htmlspecialchars($v['version']) ?>"
-                                    <?= $v['version'] === $targetBorgVersion ? 'selected' : '' ?>>
-                                    v<?= htmlspecialchars($v['version']) ?>
-                                    (<?= htmlspecialchars($v['release_date']) ?>)
-                                    — <?= (int)$v['asset_count'] ?> binaries
-                                </option>
-                                <?php endforeach; ?>
-                            </select>
-                            <div class="form-text">
-                                All agents will be updated to this version when you trigger updates.
-                            </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge bg-secondary"><?= htmlspecialchars($borgVer) ?></span>
+                            <span class="badge bg-light text-dark border small"><?= htmlspecialchars($installMethod) ?></span>
+                            <form method="POST" action="/settings/borg/update-agent/<?= $agent['id'] ?>" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                <button type="submit" class="btn btn-sm btn-outline-primary py-0 px-1" title="Update this client"
+                                    <?= ($updateMode === 'server' && !$isCompatible) ? 'disabled' : '' ?>>
+                                    <i class="bi bi-arrow-up-circle"></i>
+                                </button>
+                            </form>
                         </div>
-                        <button type="submit" class="btn btn-primary btn-sm">
-                            <i class="bi bi-check-lg me-1"></i> Set Target Version
-                        </button>
-                    </form>
-
-                    <div class="alert alert-light border py-2 px-3 small mt-3 mb-0">
-                        <i class="bi bi-info-circle me-1"></i>
-                        <strong>How updates work:</strong> Agents are first matched against official GitHub release binaries.
-                        If no compatible binary is found (e.g., the client's glibc is too old), the server will use a
-                        <strong>server-hosted fallback binary</strong> if one is available below.
-                        All borg 1.x versions share the same repository format, so clients can safely run different 1.x versions.
                     </div>
+                    <?php endforeach; ?>
                 <?php endif; ?>
             </div>
         </div>
 
-        <?php if (!empty($serverHostedBinaries)): ?>
+        <?php if ($updateMode === 'server' && !empty($serverVersions)): ?>
+        <!-- Server-hosted binaries info -->
         <div class="card border-0 shadow-sm mt-4">
             <div class="card-header bg-white fw-semibold">
-                <i class="bi bi-hdd me-1"></i> Server-Hosted Binaries
+                <i class="bi bi-hdd me-1"></i> Available Server Binaries
             </div>
             <div class="card-body">
                 <p class="text-muted small mb-2">
-                    The author of Borg Backup Server compiles and cryptographically signs custom borg backup versions that work with older operating systems. These versions will be used as a fall-back if the agent is unable to update using official packages.
+                    These binaries are compiled for older glibc versions to support a wider range of Linux distributions.
                 </p>
-                <?php foreach ($serverHostedBinaries as $version => $binaries): ?>
+                <?php
+                $serverHostedBinaries = $borgService->getServerHostedBinaries();
+                foreach ($serverHostedBinaries as $version => $binaries):
+                ?>
+                    <div class="mb-2">
+                        <strong class="small">v<?= htmlspecialchars($version) ?></strong>
+                    </div>
                     <?php foreach ($binaries as $bin): ?>
-                    <div class="d-flex justify-content-between align-items-center small py-1">
+                    <div class="d-flex justify-content-between align-items-center small py-1 ps-3">
                         <span>
                             <i class="bi bi-file-earmark-binary me-1 text-muted"></i>
                             <?= htmlspecialchars($bin['filename']) ?>
                         </span>
-                        <span>
-                            <span class="badge bg-secondary me-1">v<?= htmlspecialchars($version) ?></span>
-                            <span class="badge bg-light text-dark border"><?= htmlspecialchars($bin['platform']) ?>/<?= htmlspecialchars($bin['arch']) ?></span>
-                            <span class="badge bg-light text-dark border">glibc &ge; <?= htmlspecialchars(substr($bin['glibc'], 0, 1) . '.' . substr($bin['glibc'], 1)) ?></span>
+                        <span class="badge bg-light text-dark border">
+                            glibc &ge; <?= htmlspecialchars(substr($bin['glibc'], 0, 1) . '.' . substr($bin['glibc'], 1)) ?>
                         </span>
                     </div>
                     <?php endforeach; ?>
@@ -467,77 +540,6 @@
             </div>
         </div>
         <?php endif; ?>
-    </div>
-
-    <div class="col-lg-6">
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-pc-display me-1"></i> Client Borg Versions</span>
-                <?php if (!empty($targetBorgVersion) && count($outdatedBorgAgents) > 0): ?>
-                <form method="POST" action="/settings/borg-versions/update-all"
-                      data-confirm="Queue borg updates for <?= count($outdatedBorgAgents) ?> client(s) to v<?= htmlspecialchars($targetBorgVersion) ?>?">
-                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                    <button type="submit" class="btn btn-sm btn-warning">
-                        <i class="bi bi-arrow-up-circle me-1"></i> Update All (<?= count($outdatedBorgAgents) ?>)
-                    </button>
-                </form>
-                <?php endif; ?>
-            </div>
-            <div class="card-body">
-                <?php if (empty($allBorgAgents)): ?>
-                    <p class="text-muted small mb-0">No agents connected yet.</p>
-                <?php elseif (empty($targetBorgVersion)): ?>
-                    <p class="text-muted small mb-0">Set a target version first to see which clients need updates.</p>
-                    <hr>
-                    <?php foreach ($allBorgAgents as $ba): ?>
-                    <div class="d-flex justify-content-between align-items-center small py-1">
-                        <span>
-                            <i class="bi bi-pc-display me-1 text-muted"></i>
-                            <a href="/clients/<?= $ba['id'] ?>" class="text-decoration-none"><?= htmlspecialchars($ba['name']) ?></a>
-                        </span>
-                        <span class="badge bg-secondary"><?= htmlspecialchars($ba['borg_version'] ?? 'unknown') ?></span>
-                    </div>
-                    <?php endforeach; ?>
-                <?php elseif (count($outdatedBorgAgents) === 0): ?>
-                    <div class="d-flex align-items-center small">
-                        <span class="badge rounded-pill me-2" style="background-color: #e8f5e9; color: #2e7d32;">
-                            <i class="bi bi-check-circle me-1"></i>All matched
-                        </span>
-                        All <?= count($allBorgAgents) ?> client(s) at v<?= htmlspecialchars($targetBorgVersion) ?>
-                    </div>
-                <?php else: ?>
-                    <div class="mb-2 small text-muted">
-                        Target: <strong>v<?= htmlspecialchars($targetBorgVersion) ?></strong>
-                    </div>
-                    <?php foreach ($allBorgAgents as $ba):
-                        $borgVer = $ba['borg_version'] ?? 'unknown';
-                        $cleanVer = preg_replace('/^borg\s+/', '', $borgVer);
-                        $isMatch = ($cleanVer === $targetBorgVersion);
-                        $maxVer = $agentMaxVersions[$ba['id']] ?? null;
-                        $cantRunTarget = !$isMatch && $maxVer !== null && version_compare($maxVer, $targetBorgVersion, '<');
-                        $usesFallback = $agentUseFallback[$ba['id']] ?? false;
-                        $badgeClass = $isMatch ? 'bg-success' : ($cantRunTarget ? 'bg-danger' : 'bg-warning text-dark');
-                    ?>
-                    <div class="d-flex justify-content-between align-items-center small py-1">
-                        <span>
-                            <i class="bi bi-pc-display me-1 text-muted"></i>
-                            <a href="/clients/<?= $ba['id'] ?>" class="text-decoration-none"><?= htmlspecialchars($ba['name']) ?></a>
-                            <?php if ($cantRunTarget): ?>
-                                <span class="text-danger ms-1" title="glibc <?= htmlspecialchars($ba['glibc_version'] ?? 'unknown') ?>">
-                                    <i class="bi bi-exclamation-triangle-fill"></i> no compatible binary
-                                </span>
-                            <?php elseif ($usesFallback && !$isMatch): ?>
-                                <span class="text-info ms-1" title="Will use server-hosted binary (glibc <?= htmlspecialchars($ba['glibc_version'] ?? 'unknown') ?>)">
-                                    <i class="bi bi-hdd me-1"></i>server binary
-                                </span>
-                            <?php endif; ?>
-                        </span>
-                        <span class="badge <?= $badgeClass ?>"><?= htmlspecialchars($borgVer) ?></span>
-                    </div>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </div>
-        </div>
     </div>
 </div>
 <?php endif; ?>
