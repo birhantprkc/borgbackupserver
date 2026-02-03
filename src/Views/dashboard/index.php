@@ -312,20 +312,28 @@
                     </div>
                     <?php endif; ?>
                     <?php if (!empty($mysqlStats)): ?>
+                    <?php
+                    // Compact number formatter: 1234 → "1,234", 51200 → "51.2K", 1100000 → "1.1M"
+                    $compactNum = function(int $n): string {
+                        if ($n >= 1000000) return round($n / 1000000, 1) . 'M';
+                        if ($n >= 10000) return round($n / 1000, 1) . 'K';
+                        return number_format($n);
+                    };
+                    ?>
                     <div class="col-md-7 mt-3 mt-md-0 pt-3 pt-md-0 border-top border-top-0-md<?= !empty($mysqlStorage) && $mysqlStorage['disk_total'] > 0 ? ' border-md-start' : '' ?>">
                         <!-- Files Tracked (left) + Archives/Jobs (right) -->
                         <div class="d-flex align-items-center mb-2">
                             <div class="me-auto">
                                 <div class="text-muted small mb-0">Files Tracked</div>
-                                <div class="fw-bold" style="font-size:2.2rem;line-height:1;color:#e67e22;" id="stat-catalog"><?= number_format($mysqlStats['catalog_files']) ?></div>
+                                <div class="fw-bold" style="font-size:2.2rem;line-height:1;color:#e67e22;" id="stat-catalog"><?= $compactNum($mysqlStats['catalog_files']) ?></div>
                             </div>
                             <div class="d-flex gap-3 text-center" style="font-size:.75rem;">
                                 <div>
-                                    <div class="fw-bold" style="font-size:1rem;" id="stat-archives"><?= number_format($mysqlStats['archives']) ?></div>
+                                    <div class="fw-bold" style="font-size:1rem;" id="stat-archives"><?= $compactNum($mysqlStats['archives']) ?></div>
                                     <div class="text-muted">Archives</div>
                                 </div>
                                 <div>
-                                    <div class="fw-bold" style="font-size:1rem;" id="stat-completed-jobs"><?= number_format($mysqlStats['completed_jobs']) ?></div>
+                                    <div class="fw-bold" style="font-size:1rem;" id="stat-completed-jobs"><?= $compactNum($mysqlStats['completed_jobs']) ?></div>
                                     <div class="text-muted">Jobs Run</div>
                                 </div>
                             </div>
@@ -829,7 +837,7 @@ setInterval(function() {
             }
             if (data.mysqlStats) {
                 const ms = data.mysqlStats;
-                const fmt = n => Number(n).toLocaleString();
+                const fmt = n => { n = Number(n); if (n >= 1000000) return (n/1000000).toFixed(1)+'M'; if (n >= 10000) return (n/1000).toFixed(1)+'K'; return n.toLocaleString(); };
                 const map = {
                     'stat-catalog': ms.catalog_files, 'stat-archives': ms.archives,
                     'stat-completed-jobs': ms.completed_jobs
