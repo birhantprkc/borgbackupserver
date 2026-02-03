@@ -269,7 +269,7 @@ foreach ($serverJobs as $sj) {
         }
 
         $csLocalPath = \BBS\Services\BorgCommandBuilder::getLocalRepoPath($csRepo);
-        $passphrase = null;
+        $passphrase = '';
         if (!empty($csRepo['passphrase_encrypted'])) {
             try {
                 $passphrase = \BBS\Services\Encryption::decrypt($csRepo['passphrase_encrypted']);
@@ -278,35 +278,23 @@ foreach ($serverJobs as $sj) {
             }
         }
 
-        // Build environment for borg list
-        $csEnv = [];
-        if ($passphrase) {
-            $csEnv['BORG_PASSPHRASE'] = $passphrase;
-        }
-        $csEnv['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes';
-
-        // Run borg list --json to get all archives
-        $csCmd = ['borg', 'list', '--json', $csLocalPath];
-
-        // Run as the repo's unix user (same pattern as prune/compact)
+        // Run borg list via bbs-ssh-helper (handles sudo to the repo-owning user)
         $runAsUser = $sj['ssh_unix_user'] ?? null;
         if ($runAsUser) {
-            // Dedicated cache dir for this user
-            $userCache = "/var/bbs/cache/{$runAsUser}";
-            if (!is_dir($userCache)) {
-                mkdir($userCache, 0700, true);
-                chown($userCache, $runAsUser);
-            }
-            $csEnv['BORG_BASE_DIR'] = $userCache;
-            $csEnv['HOME'] = $userCache;
-
-            // Prepend env vars into the command so they survive sudo's env reset
-            $envPrefix = [];
-            foreach ($csEnv as $k => $v) {
-                $envPrefix[] = $k . '=' . $v;
-            }
-            array_unshift($csCmd, 'sudo', '-u', $runAsUser, 'env', ...$envPrefix);
+            // Use ssh-helper which handles sudo properly
+            $csCmd = [
+                'sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-list',
+                $runAsUser, $passphrase, $csLocalPath
+            ];
+            $csEnv = [];
         } else {
+            // No unix user — run directly as www-data (legacy mode)
+            $csCmd = ['borg', 'list', '--json', $csLocalPath];
+            $csEnv = [];
+            if ($passphrase) {
+                $csEnv['BORG_PASSPHRASE'] = $passphrase;
+            }
+            $csEnv['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes';
             $csEnv['BORG_BASE_DIR'] = '/tmp/bbs-borg-www-data';
             $csEnv['HOME'] = '/tmp/bbs-borg-www-data';
         }

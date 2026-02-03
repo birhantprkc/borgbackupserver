@@ -137,6 +137,45 @@ case "$ACTION" in
         exit $EXIT_CODE
         ;;
 
+    borg-list)
+        # Run borg list as the repo-owning user
+        # Usage: bbs-ssh-helper borg-list <username> <passphrase> <repo_path>
+        USERNAME="${2:-}"
+        PASSPHRASE="${3:-}"
+        REPO_PATH="${4:-}"
+
+        if [ -z "$USERNAME" ] || [ -z "$REPO_PATH" ]; then
+            echo "Usage: bbs-ssh-helper borg-list <username> <passphrase> <repo_path>"
+            exit 1
+        fi
+
+        if [[ ! "$USERNAME" =~ ^bbs-[a-z0-9_-]+$ ]]; then
+            echo "Error: username must match bbs-[a-z0-9_-]+"
+            exit 1
+        fi
+
+        # Safety: repo path must be under /var/bbs/
+        if [[ ! "$REPO_PATH" =~ ^/var/bbs/ ]]; then
+            echo "Error: repo path must be under /var/bbs/"
+            exit 1
+        fi
+
+        # Per-user borg cache dir
+        BORG_DIR="/var/bbs/cache/$USERNAME"
+        mkdir -p "$BORG_DIR"
+        chown "$USERNAME":"$USERNAME" "$BORG_DIR"
+
+        # Run borg list --json as the repo-owning user
+        sudo -u "$USERNAME" \
+            BORG_PASSPHRASE="$PASSPHRASE" \
+            BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes \
+            BORG_BASE_DIR="$BORG_DIR" \
+            HOME="$BORG_DIR" \
+            borg list --json "$REPO_PATH" 2>&1
+
+        exit $?
+        ;;
+
     fix-repo-perms)
         REPO_DIR="${2:-}"
         USERNAME="${3:-}"
