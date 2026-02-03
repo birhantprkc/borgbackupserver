@@ -1,6 +1,10 @@
 <?php $activeTab = $_GET['tab'] ?? 'general'; ?>
 
 <!-- Tab Navigation -->
+<?php
+$updateService = new \BBS\Services\UpdateService();
+$updateAvailable = $updateService->isUpdateAvailable();
+?>
 <ul class="nav nav-pills client-tabs mb-0 flex-wrap">
     <li class="nav-item">
         <a class="nav-link <?= $activeTab === 'general' ? 'active' : '' ?>" href="/settings?tab=general">
@@ -18,25 +22,21 @@
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link <?= $activeTab === 'borg' ? 'active' : '' ?>" href="/settings?tab=borg">
-            <i class="bi bi-box-seam me-1"></i><span class="tab-label">Borg</span>
-        </a>
-    </li>
-    <li class="nav-item">
         <a class="nav-link <?= $activeTab === 'offsite' ? 'active' : '' ?>" href="/settings?tab=offsite">
-            <i class="bi bi-cloud-arrow-up me-1"></i><span class="tab-label">Offsite</span>
+            <i class="bi bi-cloud-arrow-up me-1"></i><span class="tab-label">Off-Site Backups</span>
         </a>
     </li>
     <li class="nav-item">
-        <?php
-        $updateService = new \BBS\Services\UpdateService();
-        $updateAvailable = $updateService->isUpdateAvailable();
-        ?>
         <a class="nav-link <?= $activeTab === 'updates' ? 'active' : '' ?>" href="/settings?tab=updates">
-            <i class="bi bi-cloud-arrow-down me-1"></i><span class="tab-label">Updates</span>
+            <i class="bi bi-cloud-arrow-down me-1"></i><span class="tab-label">Software Update</span>
             <?php if ($updateAvailable): ?>
                 <span class="badge bg-warning text-dark ms-1">New</span>
             <?php endif; ?>
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link <?= $activeTab === 'borg' ? 'active' : '' ?>" href="/settings?tab=borg">
+            <i class="bi bi-box-seam me-1"></i><span class="tab-label">Borg Updates</span>
         </a>
     </li>
 </ul>
