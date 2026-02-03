@@ -5,6 +5,17 @@
     </a>
 </div>
 
+<?php
+// Custom column labels for the permission table
+$columnLabels = [
+    'trigger_backup' => 'Run Backups',
+    'manage_repos' => 'Manage Repos',
+    'manage_plans' => 'Manage Plans',
+    'restore' => 'Perform Restores',
+    'repo_maintenance' => 'Repo Maint',
+];
+?>
+
 <form method="POST" action="/users/<?= $user['id'] ?>/edit">
     <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
 
@@ -77,7 +88,7 @@
                         <input class="form-check-input" type="checkbox" name="perm_global_<?= $perm ?>" id="perm_global_<?= $perm ?>" value="1"
                             <?= $data['global'] ? 'checked' : '' ?>>
                         <label class="form-check-label" for="perm_global_<?= $perm ?>">
-                            <?= htmlspecialchars($permissionLabels[$perm]) ?>
+                            <?= htmlspecialchars($columnLabels[$perm] ?? $permissionLabels[$perm]) ?>
                         </label>
                     </div>
                     <?php endforeach; ?>
@@ -94,13 +105,11 @@
                     <table class="table table-sm table-hover align-middle mb-0">
                         <thead class="table-light">
                             <tr>
-                                <th style="width: 30px;">
-                                    <input type="checkbox" class="form-check-input" id="selectAllClients" title="Select/Deselect All">
-                                </th>
                                 <th>Client</th>
+                                <th class="text-center" style="width: 70px;"><small>View</small></th>
                                 <?php foreach ($allPermissions as $perm): ?>
-                                <th class="text-center" style="width: 100px;">
-                                    <small><?= htmlspecialchars($permissionLabels[$perm]) ?></small>
+                                <th class="text-center" style="width: 95px;">
+                                    <small><?= htmlspecialchars($columnLabels[$perm] ?? $permissionLabels[$perm]) ?></small>
                                 </th>
                                 <?php endforeach; ?>
                             </tr>
@@ -108,17 +117,17 @@
                         <tbody>
                             <?php foreach ($allAgents as $agent): ?>
                             <?php $isAssigned = in_array($agent['id'], $userAgentIds); ?>
-                            <tr class="<?= $isAssigned ? '' : 'table-light' ?>">
+                            <tr class="<?= $isAssigned ? '' : 'table-light' ?>" data-agent-id="<?= $agent['id'] ?>">
                                 <td>
+                                    <span class="client-name <?= $isAssigned ? 'fw-semibold' : 'text-muted' ?>">
+                                        <?= htmlspecialchars($agent['name']) ?>
+                                    </span>
+                                </td>
+                                <td class="text-center">
                                     <input class="form-check-input client-checkbox" type="checkbox" name="agents[]"
                                         value="<?= $agent['id'] ?>" id="agent_<?= $agent['id'] ?>"
                                         data-agent-id="<?= $agent['id'] ?>"
                                         <?= $isAssigned ? 'checked' : '' ?>>
-                                </td>
-                                <td>
-                                    <label for="agent_<?= $agent['id'] ?>" class="mb-0 <?= $isAssigned ? 'fw-semibold' : 'text-muted' ?>">
-                                        <?= htmlspecialchars($agent['name']) ?>
-                                    </label>
                                 </td>
                                 <?php foreach ($allPermissions as $perm): ?>
                                 <?php
@@ -138,11 +147,14 @@
                         </tbody>
                         <tfoot class="table-light">
                             <tr>
-                                <td colspan="2" class="text-end small text-muted">Select all permissions:</td>
+                                <td class="text-end small text-muted">Select all:</td>
+                                <td class="text-center">
+                                    <input type="checkbox" class="form-check-input" id="selectAllClients" title="Select/Deselect All">
+                                </td>
                                 <?php foreach ($allPermissions as $perm): ?>
                                 <td class="text-center">
                                     <input type="checkbox" class="form-check-input select-all-perm"
-                                        data-perm="<?= $perm ?>" title="Select all <?= htmlspecialchars($permissionLabels[$perm]) ?>">
+                                        data-perm="<?= $perm ?>" title="Select all <?= htmlspecialchars($columnLabels[$perm] ?? $permissionLabels[$perm]) ?>">
                                 </td>
                                 <?php endforeach; ?>
                             </tr>
@@ -217,17 +229,17 @@ document.addEventListener('DOMContentLoaded', function() {
             const agentId = this.dataset.agentId;
             const row = this.closest('tr');
             const permCheckboxes = row.querySelectorAll('.perm-checkbox');
-            const label = row.querySelector('label');
+            const clientName = row.querySelector('.client-name');
 
             if (this.checked) {
                 row.classList.remove('table-light');
-                label.classList.add('fw-semibold');
-                label.classList.remove('text-muted');
+                clientName.classList.add('fw-semibold');
+                clientName.classList.remove('text-muted');
                 permCheckboxes.forEach(cb => cb.disabled = false);
             } else {
                 row.classList.add('table-light');
-                label.classList.remove('fw-semibold');
-                label.classList.add('text-muted');
+                clientName.classList.remove('fw-semibold');
+                clientName.classList.add('text-muted');
                 permCheckboxes.forEach(cb => {
                     cb.disabled = true;
                     cb.checked = false;
