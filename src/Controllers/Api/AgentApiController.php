@@ -100,6 +100,9 @@ class AgentApiController extends Controller
     {
         $agent = $this->authenticateAgent();
 
+        // Auto-queue borg update if agent is outdated and a target version is set
+        $this->autoQueueBorgUpdate($agent);
+
         // First, run the queue manager to promote any queued jobs
         $queueManager = new QueueManager();
         $queueManager->processQueue();
@@ -589,5 +592,58 @@ class AgentApiController extends Controller
         $i = 0;
         while ($bytes >= 1024 && $i < count($units) - 1) { $bytes /= 1024; $i++; }
         return round($bytes, $i > 0 ? 1 : 0) . ' ' . $units[$i];
+    }
+
+    /**
+     * Auto-queue a borg update job if the agent is outdated relative to the target version
+     * and a compatible binary exists (GitHub or server-hosted fallback).
+     */
+    private function autoQueueBorgUpdate(array $agent): void
+    {
+        $borgService = new \BBS\Services\BorgVersionService();
+        $targetVersion = $borgService->getTargetVersion();
+
+        if (empty($targetVersion)) {
+            return;
+        }
+
+        // Check if agent is already at target version
+        $agentBorgVer = preg_replace('/^borg\s+/', '', $agent['borg_version'] ?? '');
+        if ($agentBorgVer === $targetVersion) {
+            return;
+        }
+
+        // Don't queue if there's already a pending/running borg update for this agent
+        $existing = $this->db->fetchOne(
+            "SELECT id FROM backup_jobs WHERE agent_id = ? AND task_type = 'update_borg' AND status IN ('queued', 'sent', 'running')",
+            [$agent['id']]
+        );
+        if ($existing) {
+            return;
+        }
+
+        // Check if there's a compatible binary (GitHub or fallback)
+        $platform = $agent['platform'] ?? null;
+        $arch = $agent['architecture'] ?? null;
+        $glibc = $agent['glibc_version'] ?? null;
+
+        if (!$platform || !$arch) {
+            return;
+        }
+
+        $asset = $borgService->getAssetForPlatform($targetVersion, $platform, $arch, $glibc);
+        $hasFallback = $borgService->hasFallbackBinary($targetVersion, $platform, $arch, $glibc);
+
+        if (!$asset && !$hasFallback) {
+            return; // No compatible binary available (e.g., Mac, ARM without matching binary)
+        }
+
+        // Queue the update
+        $this->db->insert('backup_jobs', [
+            'agent_id' => $agent['id'],
+            'task_type' => 'update_borg',
+            'status' => 'queued',
+            'message' => "Auto-queued borg update to v{$targetVersion}",
+        ]);
     }
 }

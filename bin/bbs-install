@@ -240,6 +240,23 @@ echo "www-data ALL=(bbs-*) NOPASSWD: /usr/bin/borg, /usr/local/bin/borg, /usr/bi
 chmod 440 /etc/sudoers.d/bbs-borg
 ok "Borg sudoers configured"
 
+# Install the latest server-hosted borg binary (if available) to replace the apt version
+BORG_PUBLIC="$BBS_DIR/public/borg"
+if [ -d "$BORG_PUBLIC" ]; then
+    # Find the highest version directory
+    LATEST_VER=$(ls -1 "$BORG_PUBLIC" 2>/dev/null | sort -V | tail -1)
+    if [ -n "$LATEST_VER" ]; then
+        # Find a linux x86_64 binary
+        BORG_BIN=$(ls "$BORG_PUBLIC/$LATEST_VER"/borg-linux-glibc*-x86_64 2>/dev/null | head -1)
+        if [ -n "$BORG_BIN" ]; then
+            cp "$BORG_BIN" /usr/local/bin/borg
+            chmod 755 /usr/local/bin/borg
+            INSTALLED_VER=$(/usr/local/bin/borg --version 2>/dev/null | grep -oP '[\d.]+' || echo "$LATEST_VER")
+            ok "Borg $INSTALLED_VER installed from server-hosted binary"
+        fi
+    fi
+fi
+
 # ─── Step 7: Configure Apache ───────────────────────────────────────────────
 step "7/10" "Configure Apache"
 
