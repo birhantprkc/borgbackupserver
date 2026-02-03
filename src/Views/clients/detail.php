@@ -587,57 +587,55 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         <div class="col-md-6 col-lg-4">
             <div class="card border-0 shadow-sm h-100 repo-card position-relative">
                 <!-- Action buttons in upper right -->
-                <div class="position-absolute" style="top: 8px; right: 8px;">
-                    <div class="btn-group btn-group-sm">
-                        <!-- Maintenance dropdown -->
-                        <div class="dropdown">
-                            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Maintenance">
-                                <i class="bi bi-wrench"></i>
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li>
-                                    <form method="POST" action="/repositories/<?= $repo['id'] ?>/maintenance" class="d-inline">
-                                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                        <input type="hidden" name="action" value="check">
-                                        <button type="submit" class="dropdown-item"><i class="bi bi-shield-check me-2"></i>Check Repository</button>
-                                    </form>
-                                </li>
-                                <li>
-                                    <form method="POST" action="/repositories/<?= $repo['id'] ?>/maintenance" class="d-inline">
-                                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                        <input type="hidden" name="action" value="compact">
-                                        <button type="submit" class="dropdown-item"><i class="bi bi-arrows-collapse me-2"></i>Compact</button>
-                                    </form>
-                                </li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li class="dropdown-header text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Advanced</li>
-                                <li>
-                                    <form method="POST" action="/repositories/<?= $repo['id'] ?>/maintenance" class="d-inline" data-confirm="Run REPAIR on repository &quot;<?= htmlspecialchars($repo['name']) ?>&quot;?&#10;&#10;This attempts to fix repository errors but may delete damaged data. Only use if Check reports errors. Make sure no other operations are running on this repository." data-confirm-danger>
-                                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                        <input type="hidden" name="action" value="repair">
-                                        <button type="submit" class="dropdown-item text-warning"><i class="bi bi-bandaid me-2"></i>Repair</button>
-                                    </form>
-                                </li>
-                                <li>
-                                    <form method="POST" action="/repositories/<?= $repo['id'] ?>/maintenance" class="d-inline" data-confirm="BREAK LOCK on repository &quot;<?= htmlspecialchars($repo['name']) ?>&quot;?&#10;&#10;This forcibly removes stale locks. Only use if you're CERTAIN no backup operations are running. Breaking a lock during an active operation can corrupt the repository." data-confirm-danger>
-                                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                        <input type="hidden" name="action" value="break_lock">
-                                        <button type="submit" class="dropdown-item text-danger"><i class="bi bi-unlock me-2"></i>Break Lock</button>
-                                    </form>
-                                </li>
-                            </ul>
-                        </div>
-                        <?php if ($deleteBlocked): ?>
-                            <span data-bs-toggle="tooltip" title="<?= htmlspecialchars($blockReason) ?>">
-                                <button type="button" class="btn btn-sm btn-outline-secondary" disabled><i class="bi bi-trash"></i></button>
-                            </span>
-                        <?php else: ?>
-                            <form method="POST" action="/repositories/<?= $repo['id'] ?>/delete" class="d-inline" data-confirm="PERMANENTLY delete repository &quot;<?= htmlspecialchars($repo['name']) ?>&quot;, all its archives, and the data on disk?&#10;&#10;This action is NOT reversible." data-confirm-danger>
-                                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                <button type="submit" class="btn btn-sm btn-outline-secondary" title="Delete"><i class="bi bi-trash"></i></button>
-                            </form>
-                        <?php endif; ?>
+                <div class="position-absolute d-flex" style="top: 8px; right: 8px; z-index: 10; gap: 6px;">
+                    <!-- Maintenance dropdown -->
+                    <div class="dropdown">
+                        <button class="btn btn-sm px-2 py-1 text-muted" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Maintenance" style="border: 1px solid #e0e0e0; background: #fff; font-size: 0.7rem; line-height: 1; border-radius: 4px;">
+                            <i class="bi bi-wrench"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end" style="z-index: 1050;">
+                            <li>
+                                <form method="POST" action="/repositories/<?= $repo['id'] ?>/maintenance" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                    <input type="hidden" name="action" value="check">
+                                    <button type="submit" class="dropdown-item"><i class="bi bi-shield-check me-2"></i>Check Repository</button>
+                                </form>
+                            </li>
+                            <li>
+                                <form method="POST" action="/repositories/<?= $repo['id'] ?>/maintenance" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                    <input type="hidden" name="action" value="compact">
+                                    <button type="submit" class="dropdown-item"><i class="bi bi-arrows-collapse me-2"></i>Compact</button>
+                                </form>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li class="dropdown-header text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Advanced</li>
+                            <li>
+                                <form method="POST" action="/repositories/<?= $repo['id'] ?>/maintenance" class="d-inline" data-confirm="Run REPAIR on repository &quot;<?= htmlspecialchars($repo['name']) ?>&quot;?&#10;&#10;This attempts to fix repository errors but may delete damaged data. Only use if Check reports errors. Make sure no other operations are running on this repository." data-confirm-danger>
+                                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                    <input type="hidden" name="action" value="repair">
+                                    <button type="submit" class="dropdown-item text-warning"><i class="bi bi-bandaid me-2"></i>Repair</button>
+                                </form>
+                            </li>
+                            <li>
+                                <form method="POST" action="/repositories/<?= $repo['id'] ?>/maintenance" class="d-inline" data-confirm="BREAK LOCK on repository &quot;<?= htmlspecialchars($repo['name']) ?>&quot;?&#10;&#10;This forcibly removes stale locks. Only use if you're CERTAIN no backup operations are running. Breaking a lock during an active operation can corrupt the repository." data-confirm-danger>
+                                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                    <input type="hidden" name="action" value="break_lock">
+                                    <button type="submit" class="dropdown-item text-danger"><i class="bi bi-unlock me-2"></i>Break Lock</button>
+                                </form>
+                            </li>
+                        </ul>
                     </div>
+                    <?php if ($deleteBlocked): ?>
+                        <span data-bs-toggle="tooltip" title="<?= htmlspecialchars($blockReason) ?>">
+                            <button type="button" class="btn btn-sm px-2 py-1 text-muted" disabled style="border: 1px solid #e0e0e0; background: #fff; font-size: 0.7rem; line-height: 1; border-radius: 4px;"><i class="bi bi-trash"></i></button>
+                        </span>
+                    <?php else: ?>
+                        <form method="POST" action="/repositories/<?= $repo['id'] ?>/delete" class="d-inline" data-confirm="PERMANENTLY delete repository &quot;<?= htmlspecialchars($repo['name']) ?>&quot;, all its archives, and the data on disk?&#10;&#10;This action is NOT reversible." data-confirm-danger>
+                            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                            <button type="submit" class="btn btn-sm px-2 py-1 text-muted" title="Delete" style="border: 1px solid #e0e0e0; background: #fff; font-size: 0.7rem; line-height: 1; border-radius: 4px;"><i class="bi bi-trash"></i></button>
+                        </form>
+                    <?php endif; ?>
                 </div>
                 <div class="card-body p-3">
                     <div class="d-flex align-items-center">

@@ -410,12 +410,18 @@ body.bg-light {
 /* Repo cards - dark header style */
 .repo-card {
     transition: transform 0.15s;
-    overflow: hidden;
+    overflow: visible !important;
 }
 
 .repo-card:hover {
     transform: translateY(-1px);
     box-shadow: 0 .2rem .5rem rgba(0,0,0,.1) !important;
+}
+
+.repo-card .dropdown-menu {
+    z-index: 1050;
+    font-size: 0.875rem;
+    min-width: 180px;
 }
 
 .repo-card-header {
