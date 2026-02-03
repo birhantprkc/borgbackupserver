@@ -827,7 +827,8 @@ class BorgVersionService
      */
     public function getServerBorgVersionCached(): ?string
     {
-        return $this->getSetting('server_borg_version_cached', null);
+        $cached = $this->getSetting('server_borg_version_cached', '');
+        return $cached === '' ? null : $cached;
     }
 
     /**
