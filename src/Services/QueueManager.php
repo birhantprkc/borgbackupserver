@@ -569,9 +569,11 @@ class QueueManager
 
         if ($best['source'] === 'pip') {
             $payload['install_method'] = 'pip';
+            $payload['source'] = 'official'; // pip installs official packages
         } else {
             $payload['target_version'] = $best['version'];
             $payload['download_url'] = $best['url'];
+            $payload['source'] = $best['source']; // 'official' or 'server'
         }
 
         return $payload;

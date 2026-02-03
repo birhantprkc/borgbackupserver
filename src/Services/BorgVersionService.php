@@ -737,7 +737,7 @@ class BorgVersionService
     public function getAllAgentVersions(): array
     {
         return $this->db->fetchAll(
-            "SELECT id, name, hostname, borg_version, borg_install_method, borg_binary_path, glibc_version, platform, architecture, status
+            "SELECT id, name, hostname, borg_version, borg_install_method, borg_source, borg_binary_path, glibc_version, platform, architecture, status
              FROM agents
              WHERE status != 'setup'
              ORDER BY name"

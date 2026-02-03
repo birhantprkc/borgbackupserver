@@ -19,10 +19,11 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.8.1"
+AGENT_VERSION = "1.8.2"
 CONFIG_PATH = "/etc/bbs-agent/config.ini"
 LOG_PATH = "/var/log/bbs-agent.log"
 SSH_KEY_PATH = "/etc/bbs-agent/ssh_key"
+BORG_SOURCE_PATH = "/etc/bbs-agent/borg_source"
 
 # Allow overrides for development
 if os.environ.get("BBS_AGENT_CONFIG"):
@@ -91,6 +92,29 @@ def api_request(config, endpoint, method="GET", data=None):
     except Exception as e:
         logger.error(f"Request error on {endpoint}: {e}")
         return None
+
+
+def get_borg_source():
+    """Get the stored borg source (official/server/unknown)."""
+    try:
+        if os.path.exists(BORG_SOURCE_PATH):
+            with open(BORG_SOURCE_PATH) as f:
+                source = f.read().strip()
+                if source in ("official", "server"):
+                    return source
+    except Exception:
+        pass
+    return "unknown"
+
+
+def set_borg_source(source):
+    """Store the borg source for future reporting."""
+    try:
+        os.makedirs(os.path.dirname(BORG_SOURCE_PATH), exist_ok=True)
+        with open(BORG_SOURCE_PATH, "w") as f:
+            f.write(source)
+    except Exception as e:
+        logger.warning(f"Failed to save borg source: {e}")
 
 
 def get_system_info():
@@ -164,6 +188,9 @@ def get_system_info():
             info["borg_install_method"] = "package"
     else:
         info["borg_install_method"] = "unknown"
+
+    # Get borg source (official/server) from stored state
+    info["borg_source"] = get_borg_source()
 
     try:
         borg_cmd = borg_path if borg_path else "borg"
@@ -277,9 +304,9 @@ def execute_update_borg(config, task):
     install_method = task.get("install_method", "binary")
     binary_path = task.get("binary_path", "/usr/local/bin/borg")
     fallback_to_pip = task.get("fallback_to_pip", True)
-    mode = task.get("mode", "official")  # 'official' or 'server'
+    source = task.get("source", "official")  # 'official' or 'server'
 
-    logger.info(f"Executing borg update job #{job_id} to v{target_version} via {install_method} (mode={mode})")
+    logger.info(f"Executing borg update job #{job_id} to v{target_version} via {install_method} (source={source})")
 
     # Handle skip - agent is incompatible with selected server version
     if install_method == "skip":
@@ -334,9 +361,11 @@ def execute_update_borg(config, task):
 
     # Re-report system info so borg_version gets updated
     if result == "completed":
+        # Save the source for future reporting
+        set_borg_source(source)
         info = get_system_info()
         api_request(config, "/api/agent/info", method="POST", data=info)
-        logger.info(f"Updated borg version: {info.get('borg_version', 'unknown')}")
+        logger.info(f"Updated borg version: {info.get('borg_version', 'unknown')} (source={source})")
 
 
 def _install_borg_binary(download_url, binary_path, target_version):

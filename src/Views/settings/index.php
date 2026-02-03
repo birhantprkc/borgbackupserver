@@ -357,7 +357,7 @@
                         <i class="bi bi-server me-1"></i> Server Borg:
                         <?php if ($serverBorgVersion): ?>
                             <span class="badge bg-success">v<?= htmlspecialchars($serverBorgVersion) ?></span>
-                            <span class="text-muted small">(<?= $updateMode === 'server' ? 'Server' : 'Official' ?>)</span>
+                            <span class="badge bg-light text-dark border small"><?= $updateMode === 'server' ? 'Server' : 'Official' ?></span>
                         <?php else: ?>
                             <span class="badge bg-danger">not installed</span>
                         <?php endif; ?>
@@ -478,6 +478,7 @@
                     <?php foreach ($allAgents as $agent):
                         $borgVer = $agent['borg_version'] ?? 'unknown';
                         $installMethod = $agent['borg_install_method'] ?? 'unknown';
+                        $borgSource = $agent['borg_source'] ?? 'unknown';
                         $isCompatible = $agentCompatibility[$agent['id']] ?? true;
                     ?>
                     <div class="d-flex justify-content-between align-items-center small py-2 border-bottom">
@@ -495,6 +496,9 @@
                         <div class="d-flex align-items-center gap-2">
                             <span class="badge bg-secondary"><?= htmlspecialchars($borgVer) ?></span>
                             <span class="badge bg-light text-dark border small"><?= htmlspecialchars($installMethod) ?></span>
+                            <?php if ($borgSource !== 'unknown'): ?>
+                            <span class="badge bg-light text-dark border small"><?= ucfirst(htmlspecialchars($borgSource)) ?></span>
+                            <?php endif; ?>
                             <form method="POST" action="/settings/borg/update-agent/<?= $agent['id'] ?>" class="d-inline">
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                 <button type="submit" class="btn btn-sm btn-outline-primary py-0 px-1" title="Update this client"

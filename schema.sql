@@ -92,6 +92,7 @@ CREATE TABLE agents (
     os_info VARCHAR(255) DEFAULT NULL,
     borg_version VARCHAR(20) DEFAULT NULL,
     borg_install_method ENUM('package','binary','pip','unknown') DEFAULT 'unknown',
+    borg_source ENUM('official','server','unknown') DEFAULT 'unknown',
     borg_binary_path VARCHAR(255) DEFAULT NULL,
     glibc_version VARCHAR(20) DEFAULT NULL,
     platform VARCHAR(20) DEFAULT NULL,
