@@ -84,16 +84,6 @@
                             <?php endif; ?>
                         </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Agent Poll Interval (seconds)</label>
-                        <input type="number" class="form-control" name="agent_poll_interval" value="<?= htmlspecialchars($settings['agent_poll_interval'] ?? '30') ?>" min="5" max="300">
-                        <div class="form-text">How often agents check for new tasks.</div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Session Timeout (hours)</label>
-                        <input type="number" class="form-control" name="session_timeout_hours" value="<?= htmlspecialchars($settings['session_timeout_hours'] ?? '8') ?>" min="1" max="720">
-                        <div class="form-text">Log out after this many hours of inactivity.</div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -115,6 +105,24 @@
                         <div class="form-text">
                             When enabled, users without 2FA will be redirected to set it up on their next page load.
                         </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Session Timeout (hours)</label>
+                        <input type="number" class="form-control" name="session_timeout_hours" value="<?= htmlspecialchars($settings['session_timeout_hours'] ?? '8') ?>" min="1" max="720">
+                        <div class="form-text">Log out after this many hours of inactivity.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm mt-4">
+                <div class="card-header bg-white fw-semibold">
+                    <i class="bi bi-incognito me-1"></i> Agent
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Agent Poll Interval (seconds)</label>
+                        <input type="number" class="form-control" name="agent_poll_interval" value="<?= htmlspecialchars($settings['agent_poll_interval'] ?? '30') ?>" min="5" max="300">
+                        <div class="form-text">How often agents check for new tasks.</div>
                     </div>
                 </div>
             </div>
