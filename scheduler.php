@@ -305,16 +305,14 @@ foreach ($serverJobs as $sj) {
             $csEnv['HOME'] = '/tmp/bbs-borg-www-data';
         }
 
-        $csEnvStrings = [];
-        foreach ($csEnv as $k => $v) {
-            $csEnvStrings[$k] = $v;
-        }
+        // When running via helper (runAsUser is set), env is handled by the helper
+        $csEnvStrings = $runAsUser ? null : array_filter($_SERVER, 'is_string') + $csEnv;
 
         $csProc = proc_open($csCmd, [
             0 => ['pipe', 'r'],
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
-        ], $csPipes, null, array_merge($_SERVER, $csEnvStrings));
+        ], $csPipes, null, $csEnvStrings);
 
         $csOutput = '';
         $csError = '';
@@ -345,10 +343,8 @@ foreach ($serverJobs as $sj) {
                 $db->insert('archives', [
                     'repository_id' => $csRepo['id'],
                     'archive_name' => $ar['name'] ?? 'unknown',
-                    'borg_archive_id' => $ar['id'] ?? null,
                     'created_at' => isset($ar['start']) ? date('Y-m-d H:i:s', strtotime($ar['start'])) : $csNow,
                     'original_size' => 0,
-                    'compressed_size' => 0,
                     'deduplicated_size' => 0,
                 ]);
                 $archiveCount++;

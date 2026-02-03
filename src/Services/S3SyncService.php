@@ -271,12 +271,10 @@ class S3SyncService
         ];
 
         // For non-sudo runs, pass env vars directly
-        $envStrings = [];
-        foreach ($env as $k => $v) {
-            $envStrings[$k] = $v;
-        }
+        // When running via helper (runAsUser is set), env is handled by the helper
+        $envStrings = $runAsUser ? null : array_filter($_SERVER, 'is_string') + $env;
 
-        $proc = proc_open($cmd, $desc, $pipes, null, array_merge($_SERVER, $envStrings));
+        $proc = proc_open($cmd, $desc, $pipes, null, $envStrings);
         if (!is_resource($proc)) {
             return ['success' => false, 'output' => 'Failed to start rclone process'];
         }
