@@ -198,9 +198,9 @@
                 <span class="text-muted" style="font-size:.7rem;"><?= htmlspecialchars($storage['path']) ?></span>
             </div>
             <div class="card-body px-3 py-2">
-                <div class="row g-0">
-                    <!-- Col 1: Repositories / Protected Data -->
-                    <div class="col-6 col-lg-3 pe-2">
+                <div class="d-flex align-items-center">
+                    <!-- Col 1: Repositories / Recovery Points (hidden on smaller screens) -->
+                    <div class="d-none d-xxl-block pe-3" style="min-width:85px;">
                         <div class="mb-2">
                             <div class="fw-semibold text-success" style="font-size:.6rem;">Repositories</div>
                             <div class="d-flex align-items-center">
@@ -209,20 +209,20 @@
                             </div>
                         </div>
                         <div>
-                            <div class="fw-semibold text-success" style="font-size:.6rem;">Protected Data</div>
-                            <div class="d-flex align-items-center">
-                                <i class="bi bi-shield-check text-muted me-1" style="font-size:.75rem;"></i>
-                                <span class="fw-bold" style="font-size:1rem;line-height:1;color:#333;"><?= \BBS\Services\ServerStats::formatBytes($totalOrig) ?></span>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- Col 2: Recovery Points / Dedup Savings -->
-                    <div class="col-6 col-lg-3 ps-1 pe-1">
-                        <div class="mb-2">
                             <div class="fw-semibold text-success" style="font-size:.6rem;">Recovery Points</div>
                             <div class="d-flex align-items-center">
                                 <i class="bi bi-clock-history text-muted me-1" style="font-size:.75rem;"></i>
                                 <span class="fw-bold" style="font-size:1rem;line-height:1;color:#333;"><?= number_format($storage['total_archives'] ?? 0) ?></span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Col 2: Protected Data / Dedup Savings -->
+                    <div class="pe-3" style="min-width:95px;">
+                        <div class="mb-2">
+                            <div class="fw-semibold text-success" style="font-size:.6rem;">Protected Data</div>
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-shield-check text-muted me-1" style="font-size:.75rem;"></i>
+                                <span class="fw-bold" style="font-size:1rem;line-height:1;color:#333;"><?= \BBS\Services\ServerStats::formatBytes($totalOrig) ?></span>
                             </div>
                         </div>
                         <div>
@@ -236,8 +236,8 @@
                         </div>
                     </div>
                     <!-- Col 3: Donut + Legend -->
-                    <div class="col-12 col-lg-6 d-flex align-items-center mt-3 mt-lg-0 pt-3 pt-lg-0 border-top border-lg-0 justify-content-center justify-content-lg-start">
-                        <div style="width:80px;flex-shrink:0;">
+                    <div class="d-flex align-items-center flex-grow-1">
+                        <div style="width:80px;flex-shrink:0;margin-top:-20px;">
                             <svg viewBox="0 0 120 120" style="width:100%;height:auto;transform:rotate(-90deg);">
                                 <circle cx="60" cy="60" r="<?= $r ?>" fill="none" stroke="#e9ecef" stroke-width="14"/>
                                 <?php if ($stRepoPct > 0): ?>
