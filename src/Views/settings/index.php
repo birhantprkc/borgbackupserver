@@ -382,9 +382,9 @@
                             Use Official Binaries
                         </label>
                         <div class="form-text ms-4">
-                            Borg will download and install the most recent compatible binary for each Agent & Server
-                            using portable binaries from Borg's Official GitHub Repo. This may cause mis-matched Borg
-                            versions depending on client operating systems, but should still work without issue.
+                            Download and install the most up-to-date and compatible Borg Version for each Agent & Server.
+                            This may cause mis-matched Borg versions depending on client operating systems, but should
+                            still work without issue.
                         </div>
                     </div>
 
@@ -397,8 +397,8 @@
                             Use Server Binaries
                         </label>
                         <div class="form-text ms-4">
-                            BBS includes unofficial Borg binaries compiled for older operating systems.
-                            All compatible clients will be updated to the same version.
+                            These newer binaries work with older operating systems that can't use the official ones.
+                            Compiled and signed by BBS Authors. See <a href="https://github.com/borgbackup/borg/issues/9285" target="_blank">Borg Issue 9285</a>.
                         </div>
                     </div>
 
