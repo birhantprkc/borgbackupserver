@@ -23,7 +23,7 @@ $updateAvailable = $updateService->isUpdateAvailable();
     </li>
     <li class="nav-item">
         <a class="nav-link <?= $activeTab === 'offsite' ? 'active' : '' ?>" href="/settings?tab=offsite">
-            <i class="bi bi-bucket me-1"></i><span class="tab-label d-none d-sm-inline">S3 Backups</span><span class="tab-label d-inline d-sm-none">S3</span>
+            <i class="bi bi-bucket me-1"></i><span class="tab-label"><span class="d-none d-sm-inline">S3 Backups</span><span class="d-sm-none">S3</span></span>
         </a>
     </li>
     <li class="nav-item">
@@ -36,7 +36,7 @@ $updateAvailable = $updateService->isUpdateAvailable();
     </li>
     <li class="nav-item">
         <a class="nav-link <?= $activeTab === 'borg' ? 'active' : '' ?>" href="/settings?tab=borg">
-            <i class="bi bi-box-seam me-1"></i><span class="tab-label d-none d-sm-inline">Borg Version</span><span class="tab-label d-inline d-sm-none">Borg</span>
+            <i class="bi bi-box-seam me-1"></i><span class="tab-label"><span class="d-none d-sm-inline">Borg Version</span><span class="d-sm-none">Borg</span></span>
         </a>
     </li>
 </ul>
