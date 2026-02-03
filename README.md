@@ -14,7 +14,8 @@ A self-hosted web application for centrally managing [BorgBackup](https://borgba
 - **Real-time progress** — live progress bars during backups
 - **File-level restore** — browse archive contents in a collapsible tree, restore individual files or entire directories
 - **Download archives** — extract and download files as .tar.gz directly from the browser
-- **Database backups** — MySQL and PostgreSQL dump plugins with point-in-time restore
+- **Plugin system** — extend backups with pre/post hooks for databases, applications, and custom scripts
+- **Database plugins** — MySQL, PostgreSQL, and control panel dumps (cPanel, Interworx) with point-in-time restore
 - **Flexible scheduling** — hourly to monthly intervals, multiple plans per client, manual trigger
 - **Backup templates** — pre-configured directory sets for common server roles
 - **Retention policies** — per-plan prune settings (hourly/daily/weekly/monthly/yearly)
