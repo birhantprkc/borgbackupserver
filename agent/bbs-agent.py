@@ -19,7 +19,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.8.3"
+AGENT_VERSION = "1.8.4"
 CONFIG_PATH = "/etc/bbs-agent/config.ini"
 LOG_PATH = "/var/log/bbs-agent.log"
 SSH_KEY_PATH = "/etc/bbs-agent/ssh_key"
@@ -332,20 +332,25 @@ def execute_update_borg(config, task):
             result, update_output, error_output = _install_borg_binary(
                 download_url, binary_path, target_version
             )
-            # If binary install failed, try pip fallback (only in official mode)
+            # If binary install failed, try package manager fallback
             if result == "failed" and fallback_to_pip:
-                logger.warning(f"Binary install failed ({error_output}), falling back to pip")
+                logger.warning(f"Binary install failed ({error_output}), falling back to package manager")
+                result, update_output, error_output = _install_borg_package_manager()
+                # If package manager also failed, try pip as last resort
+                if result == "failed":
+                    logger.warning(f"Package manager failed ({error_output}), falling back to pip")
+                    result, update_output, error_output = _install_borg_pip(target_version)
+
+        elif install_method == "pip":
+            # Server explicitly requested pip (no binary available)
+            # First try package manager (more reliable), then pip
+            result, update_output, error_output = _install_borg_package_manager()
+            if result == "failed":
+                logger.warning(f"Package manager failed ({error_output}), falling back to pip")
                 result, update_output, error_output = _install_borg_pip(target_version)
 
-        elif install_method == "pip" or fallback_to_pip:
-            result, update_output, error_output = _install_borg_pip(target_version)
-
-        elif not download_url and not target_version:
-            # Legacy task from older server — use package manager fallback
-            result, update_output, error_output = _install_borg_package_manager()
-
         else:
-            error_output = "No download URL provided and pip fallback disabled"
+            error_output = "No download URL or install method provided"
 
     except Exception as e:
         error_output = str(e)
@@ -502,23 +507,38 @@ def _install_borg_pip(target_version):
 
 
 def _install_borg_package_manager():
-    """Legacy fallback: update borg via OS package manager."""
+    """Install/update borg via OS package manager. Removes any existing /usr/local/bin/borg first."""
+    # Remove any existing binary at /usr/local/bin/borg so package manager version is used
+    existing_binary = "/usr/local/bin/borg"
+    if os.path.exists(existing_binary):
+        try:
+            size = os.path.getsize(existing_binary)
+            logger.info(f"Removing existing binary at {existing_binary} ({size} bytes) to use package manager")
+            backup_path = existing_binary + ".bak"
+            os.rename(existing_binary, backup_path)
+        except Exception as e:
+            logger.warning(f"Could not remove existing binary: {e}")
+
     if os.path.exists("/usr/bin/apt-get"):
-        cmd = ["apt-get", "install", "-y", "--only-upgrade", "borgbackup"]
+        cmd = ["apt-get", "install", "-y", "borgbackup"]
         pre_cmd = ["apt-get", "update", "-qq"]
     elif os.path.exists("/usr/bin/dnf"):
-        cmd = ["dnf", "upgrade", "-y", "borgbackup"]
+        cmd = ["dnf", "install", "-y", "borgbackup"]
         pre_cmd = None
     elif os.path.exists("/usr/bin/yum"):
-        cmd = ["yum", "update", "-y", "borgbackup"]
+        cmd = ["yum", "install", "-y", "borgbackup"]
         pre_cmd = None
     elif os.path.exists("/usr/bin/pacman"):
         cmd = ["pacman", "-Sy", "--noconfirm", "borg"]
         pre_cmd = None
     elif os.path.exists("/usr/local/bin/brew") or os.path.exists("/opt/homebrew/bin/brew"):
-        cmd = ["brew", "upgrade", "borgbackup"]
+        cmd = ["brew", "install", "borgbackup"]
         pre_cmd = None
     else:
+        # Restore backup if no package manager
+        backup_path = existing_binary + ".bak"
+        if os.path.exists(backup_path) and not os.path.exists(existing_binary):
+            os.rename(backup_path, existing_binary)
         return "failed", "", "No supported package manager found"
 
     try:
@@ -530,9 +550,33 @@ def _install_borg_package_manager():
         stderr_text = proc.stderr.decode("utf-8", errors="replace").strip()
 
         if proc.returncode == 0:
-            output = stdout_text or stderr_text or "Update completed (no output)"
+            # Clean up backup on success
+            backup_path = existing_binary + ".bak"
+            if os.path.exists(backup_path):
+                try:
+                    os.remove(backup_path)
+                except Exception:
+                    pass
+            # Get installed version
+            try:
+                result = subprocess.run(["borg", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+                if result.returncode == 0:
+                    installed_ver = result.stdout.decode().strip().replace("borg ", "")
+                    output = f"Borg updated to v{installed_ver} via package manager"
+                else:
+                    output = "Borg installed via package manager"
+            except Exception:
+                output = "Borg installed via package manager"
             return "completed", output, ""
         else:
+            # Restore backup on failure
+            backup_path = existing_binary + ".bak"
+            if os.path.exists(backup_path) and not os.path.exists(existing_binary):
+                try:
+                    os.rename(backup_path, existing_binary)
+                    logger.info("Restored backup binary after package manager failure")
+                except Exception:
+                    pass
             error = stderr_text or stdout_text or f"Exit code {proc.returncode}"
             return "failed", "", error
     except subprocess.TimeoutExpired:
