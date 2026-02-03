@@ -601,19 +601,20 @@ class AgentApiController extends Controller
     private function autoQueueBorgUpdate(array $agent): void
     {
         $borgService = new \BBS\Services\BorgVersionService();
-        $targetVersion = $borgService->getTargetVersion();
 
-        if (empty($targetVersion)) {
+        // Skip if auto-update is disabled
+        if (!$borgService->isAutoUpdateEnabled()) {
             return;
         }
 
-        // Check if agent is already at target version
-        $agentBorgVer = preg_replace('/^borg\s+/', '', $agent['borg_version'] ?? '');
-        if ($agentBorgVer === $targetVersion) {
+        // Skip if no platform info yet (agent hasn't registered fully)
+        $platform = $agent['platform'] ?? null;
+        $arch = $agent['architecture'] ?? null;
+        if (!$platform || !$arch) {
             return;
         }
 
-        // Don't queue if there's already a pending/running borg update for this agent
+        // Don't queue if there's already a pending/running borg update
         $existing = $this->db->fetchOne(
             "SELECT id FROM backup_jobs WHERE agent_id = ? AND task_type = 'update_borg' AND status IN ('queued', 'sent', 'running')",
             [$agent['id']]
@@ -622,20 +623,16 @@ class AgentApiController extends Controller
             return;
         }
 
-        // Check if there's a compatible binary (GitHub or fallback)
-        $platform = $agent['platform'] ?? null;
-        $arch = $agent['architecture'] ?? null;
-        $glibc = $agent['glibc_version'] ?? null;
-
-        if (!$platform || !$arch) {
-            return;
+        // Get best available version for this agent
+        $best = $borgService->getBestVersionForAgent($agent);
+        if (!$best) {
+            return; // No compatible binary available
         }
 
-        $asset = $borgService->getAssetForPlatform($targetVersion, $platform, $arch, $glibc);
-        $hasFallback = $borgService->hasFallbackBinary($targetVersion, $platform, $arch, $glibc);
-
-        if (!$asset && !$hasFallback) {
-            return; // No compatible binary available (e.g., Mac, ARM without matching binary)
+        // Check if agent already has this version or newer (but < 2.0)
+        $agentBorgVer = preg_replace('/^borg\s+/', '', $agent['borg_version'] ?? '');
+        if (!empty($agentBorgVer) && version_compare($agentBorgVer, $best['version'], '>=')) {
+            return; // Already up to date
         }
 
         // Queue the update

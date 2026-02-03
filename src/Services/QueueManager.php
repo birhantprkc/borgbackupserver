@@ -523,7 +523,6 @@ class QueueManager
     private function buildBorgUpdatePayload(array $job): array
     {
         $borgService = new BorgVersionService();
-        $mode = $borgService->getUpdateMode();
 
         // Get agent info for platform matching
         $agent = $this->db->fetchOne(
@@ -553,48 +552,26 @@ class QueueManager
         $payload = [
             'task' => 'update_borg',
             'job_id' => $job['id'],
-            'mode' => $mode,
             'target_version' => '',
             'download_url' => null,
             'install_method' => 'binary',
             'binary_path' => '/usr/local/bin/borg',
-            'fallback_to_pip' => false,
+            'fallback_to_pip' => true, // Always allow pip as last resort
         ];
 
-        if ($mode === 'server') {
-            // Server mode: use selected server-hosted binary
-            $version = $borgService->getServerVersion();
-            if (empty($version)) {
-                $payload['install_method'] = 'skip';
-                return $payload;
-            }
+        if (!$agent) {
+            $payload['install_method'] = 'pip';
+            return $payload;
+        }
 
-            $payload['target_version'] = $version;
-            $payload['fallback_to_pip'] = false; // No fallback in server mode
+        // Get best version: server binaries -> official GitHub -> pip
+        $best = $borgService->getBestVersionForAgent($agent);
 
-            if ($agent) {
-                $url = $borgService->getServerBinaryForAgent($version, $agent);
-                if ($url) {
-                    $payload['download_url'] = $url;
-                } else {
-                    // No compatible binary - skip this agent
-                    $payload['install_method'] = 'skip';
-                }
-            }
+        if ($best['source'] === 'pip') {
+            $payload['install_method'] = 'pip';
         } else {
-            // Official mode: get latest compatible from GitHub
-            $payload['fallback_to_pip'] = true; // Always allow pip fallback
-
-            if ($agent) {
-                $result = $borgService->getOfficialBinaryForAgent($agent);
-                if ($result) {
-                    $payload['target_version'] = $result['version'];
-                    $payload['download_url'] = $result['url'];
-                } else {
-                    // No binary found, will fall back to pip for latest
-                    $payload['install_method'] = 'pip';
-                }
-            }
+            $payload['target_version'] = $best['version'];
+            $payload['download_url'] = $best['url'];
         }
 
         return $payload;

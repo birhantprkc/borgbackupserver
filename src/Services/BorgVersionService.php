@@ -547,6 +547,7 @@ class BorgVersionService
     /**
      * For Official mode: get the best binary URL from GitHub for an agent.
      * Returns ['version' => '1.4.3', 'url' => '...'] or null.
+     * Excludes borg 2.0+ due to breaking changes.
      */
     public function getOfficialBinaryForAgent(array $agent): ?array
     {
@@ -554,7 +555,7 @@ class BorgVersionService
         $arch = $agent['architecture'] ?? 'x86_64';
         $glibc = $agent['glibc_version'] ?? null;
 
-        // Find latest version with a compatible binary
+        // Find latest version < 2.0 with a compatible binary
         if ($platform === 'linux' && $glibc) {
             $asset = $this->db->fetchOne(
                 "SELECT bv.version, bva.download_url
@@ -562,6 +563,7 @@ class BorgVersionService
                  JOIN borg_version_assets bva ON bva.borg_version_id = bv.id
                  WHERE bva.platform = 'linux' AND bva.architecture = ?
                    AND bva.glibc_version IS NOT NULL AND bva.glibc_version <= ?
+                   AND bv.version < '2.0'
                  ORDER BY bv.release_date DESC, bva.glibc_version DESC
                  LIMIT 1",
                 [$arch, $glibc]
@@ -572,6 +574,7 @@ class BorgVersionService
                  FROM borg_versions bv
                  JOIN borg_version_assets bva ON bva.borg_version_id = bv.id
                  WHERE bva.platform = ? AND bva.architecture = ?
+                   AND bv.version < '2.0'
                  ORDER BY bv.release_date DESC
                  LIMIT 1",
                 [$platform, $arch]
@@ -586,6 +589,51 @@ class BorgVersionService
         }
 
         return null;
+    }
+
+    /**
+     * Get the best borg version for an agent based on current mode.
+     * - Server mode: try server binaries first, fall back to official
+     * - Official mode: use GitHub binaries, pip as last resort
+     * Returns ['version' => '1.4.3', 'url' => '...', 'source' => 'server|official|pip'] or null.
+     */
+    public function getBestVersionForAgent(array $agent): ?array
+    {
+        $mode = $this->getUpdateMode();
+
+        // Server mode: try server binaries first
+        if ($mode === 'server') {
+            $serverVersion = $this->getServerVersion();
+            if (!empty($serverVersion)) {
+                $url = $this->getServerBinaryForAgent($serverVersion, $agent);
+                if ($url) {
+                    return [
+                        'version' => $serverVersion,
+                        'url' => $url,
+                        'source' => 'server',
+                    ];
+                }
+            }
+            // Fall through to official if no server binary matches
+        }
+
+        // Official mode (or server mode fallback): try GitHub binaries
+        $official = $this->getOfficialBinaryForAgent($agent);
+        if ($official) {
+            return [
+                'version' => $official['version'],
+                'url' => $official['url'],
+                'source' => 'official',
+            ];
+        }
+
+        // Last resort: pip (agent will handle installation)
+        // Return a marker that tells the agent to use pip
+        return [
+            'version' => 'latest',
+            'url' => null,
+            'source' => 'pip',
+        ];
     }
 
     /**
