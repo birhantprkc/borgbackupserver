@@ -385,18 +385,22 @@ foreach ($serverJobs as $sj) {
         continue;
     }
 
-    // Build command
+    // Build borg command arguments (without 'borg' prefix - that's added by helper or directly)
     if ($sj['task_type'] === 'prune') {
         $archivePrefix = $sj['backup_plan_id'] ? 'plan' . $sj['backup_plan_id'] : null;
-        $cmd = \BBS\Services\BorgCommandBuilder::buildPruneCommand($plan, $localRepo, $archivePrefix);
+        $borgArgs = \BBS\Services\BorgCommandBuilder::buildPruneCommand($plan, $localRepo, $archivePrefix);
+        // Remove 'borg' from the front since we'll add it back
+        if ($borgArgs[0] === 'borg') {
+            array_shift($borgArgs);
+        }
     } elseif ($sj['task_type'] === 'compact') {
-        $cmd = ['borg', 'compact', $localPath];
+        $borgArgs = ['compact', $localPath];
     } elseif ($sj['task_type'] === 'repo_check') {
-        $cmd = ['borg', 'check', '--verbose', $localPath];
+        $borgArgs = ['check', '--verbose', $localPath];
     } elseif ($sj['task_type'] === 'repo_repair') {
-        $cmd = ['borg', 'check', '--repair', $localPath];
+        $borgArgs = ['check', '--repair', $localPath];
     } elseif ($sj['task_type'] === 'break_lock') {
-        $cmd = ['borg', 'break-lock', $localPath];
+        $borgArgs = ['break-lock', $localPath];
     } else {
         // Unknown task type
         $db->update('backup_jobs', [
@@ -408,31 +412,34 @@ foreach ($serverJobs as $sj) {
         continue;
     }
 
-    // Build env (server-side, no BORG_RSH needed)
+    // Get passphrase for the helper
     $env = \BBS\Services\BorgCommandBuilder::buildEnv($localRepo, false);
+    $passphrase = $env['BORG_PASSPHRASE'] ?? '';
 
-    // Run as the repo's unix user to preserve file ownership
+    // Run as the repo's unix user via bbs-ssh-helper
     $runAsUser = $sj['ssh_unix_user'] ?? null;
     if ($runAsUser) {
-        // Dedicated cache dir — separate from storage and /tmp
-        $userCache = "/var/bbs/cache/{$runAsUser}";
-        if (!is_dir($userCache)) {
-            mkdir($userCache, 0700, true);
-            chown($userCache, $runAsUser);
-        }
-        $env['BORG_BASE_DIR'] = $userCache;
-        $env['HOME'] = $userCache;
-
-        // Prepend env vars into the command so they survive sudo's env reset
-        $envPrefix = [];
+        // Use ssh-helper which handles sudo properly
+        $cmd = array_merge(
+            ['sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-cmd', $runAsUser, $passphrase],
+            $borgArgs
+        );
+        $envStrings = [];
+    } else {
+        // No unix user — run directly as www-data (legacy mode)
+        $cmd = array_merge(['borg'], $borgArgs);
+        $envStrings = [];
         foreach ($env as $k => $v) {
-            $envPrefix[] = $k . '=' . $v;
+            $envStrings[$k] = $v;
         }
-        array_unshift($cmd, 'sudo', '-u', $runAsUser, 'env', ...$envPrefix);
+        $envStrings['BORG_BASE_DIR'] = '/tmp/bbs-borg-www-data';
+        $envStrings['HOME'] = '/tmp/bbs-borg-www-data';
     }
 
-    // Log the borg command (without env vars that may contain passphrases)
-    $logCmd = array_filter($cmd, fn($part) => !str_starts_with($part, 'BORG_PASSPHRASE='));
+    // Log the borg command (without passphrase)
+    $logCmd = $runAsUser
+        ? array_merge(['sudo', 'bbs-ssh-helper', 'borg-cmd', $runAsUser, '***'], $borgArgs)
+        : $cmd;
     $cmdStr = implode(' ', array_map('escapeshellarg', array_values($logCmd)));
     $db->insert('server_log', [
         'agent_id' => $sj['agent_id'],
@@ -442,11 +449,6 @@ foreach ($serverJobs as $sj) {
     ]);
 
     // Execute
-    $envStrings = [];
-    foreach ($env as $k => $v) {
-        $envStrings[$k] = $v;
-    }
-
     $desc = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
     $proc = proc_open($cmd, $desc, $pipes, null, array_merge($_SERVER, $envStrings));
 
@@ -504,16 +506,18 @@ foreach ($serverJobs as $sj) {
 
     // After successful prune, sync archives table with actual repo contents
     if ($result === 'completed' && $sj['task_type'] === 'prune') {
-        $listCmd = \BBS\Services\BorgCommandBuilder::buildListCommand($localRepo);
         if ($runAsUser) {
-            // Prepend env vars into the command so they survive sudo's env reset
-            $envPrefix = [];
-            foreach ($env as $k => $v) {
-                $envPrefix[] = $k . '=' . $v;
-            }
-            array_unshift($listCmd, 'sudo', '-u', $runAsUser, 'env', ...$envPrefix);
+            // Use ssh-helper for borg list
+            $listCmd = [
+                'sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-list',
+                $runAsUser, $passphrase, $localPath
+            ];
+            $listEnv = [];
+        } else {
+            $listCmd = \BBS\Services\BorgCommandBuilder::buildListCommand($localRepo);
+            $listEnv = $envStrings;
         }
-        $listProc = proc_open($listCmd, $desc, $listPipes, null, array_merge($_SERVER, $envStrings));
+        $listProc = proc_open($listCmd, $desc, $listPipes, null, array_merge($_SERVER, $listEnv));
 
         if (is_resource($listProc)) {
             fclose($listPipes[0]);
