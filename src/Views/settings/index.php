@@ -1,7 +1,7 @@
 <?php $activeTab = $_GET['tab'] ?? 'general'; ?>
 
 <!-- Tab Navigation -->
-<ul class="nav nav-pills client-tabs mb-4 flex-wrap">
+<ul class="nav nav-pills client-tabs mb-0 flex-wrap">
     <li class="nav-item">
         <a class="nav-link <?= $activeTab === 'general' ? 'active' : '' ?>" href="/settings?tab=general">
             <i class="bi bi-gear me-1"></i><span class="tab-label">General</span>
