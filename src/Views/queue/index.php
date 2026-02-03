@@ -122,15 +122,21 @@
                         <td class="text-nowrap"><?= jobTypeIcon($job['task_type']) ?><?= $job['task_type'] ?></td>
                         <td class="d-table-cell-md"><?= number_format($job['files_total'] ?? 0) ?></td>
                         <td>
-                            <?php if (($job['files_total'] ?? 0) > 0 && $job['status'] === 'running'): ?>
+                            <?php if ($job['status'] === 'queued'): ?>
+                                <span class="text-muted">Waiting</span>
+                            <?php elseif (($job['files_total'] ?? 0) > 0): ?>
                                 <?php $pct = round(($job['files_processed'] / $job['files_total']) * 100); ?>
-                                <div class="progress" style="height: 18px; min-width: 60px;">
+                                <div class="progress" style="height: 18px; min-width: 80px;">
                                     <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width: <?= $pct ?>%">
                                         <?= $pct ?>%
                                     </div>
                                 </div>
                             <?php else: ?>
-                                <?= number_format($job['files_processed'] ?? 0) ?>
+                                <div class="progress" style="height: 18px; min-width: 80px;">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-info" style="width: 100%">
+                                        Preparing...
+                                    </div>
+                                </div>
                             <?php endif; ?>
                         </td>
                         <td class="d-table-cell-md"><?= htmlspecialchars($job['repo_name'] ?? '--') ?></td>
@@ -277,11 +283,16 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
     }
 
     function buildInProgressRow(job) {
-        let progress = String(Number(job.files_processed || 0).toLocaleString());
-        if ((job.files_total || 0) > 0 && job.status === 'running') {
+        let progress;
+        if (job.status === 'queued') {
+            progress = '<span class="text-muted">Waiting</span>';
+        } else if ((job.files_total || 0) > 0) {
             const pct = Math.round((job.files_processed / job.files_total) * 100);
-            progress = '<div class="progress" style="height:18px;min-width:60px;">' +
+            progress = '<div class="progress" style="height:18px;min-width:80px;">' +
                 '<div class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width:' + pct + '%">' + pct + '%</div></div>';
+        } else {
+            progress = '<div class="progress" style="height:18px;min-width:80px;">' +
+                '<div class="progress-bar progress-bar-striped progress-bar-animated bg-info" style="width:100%">Preparing...</div></div>';
         }
 
         let actions = '<a href="/queue/' + job.id + '" class="btn btn-sm btn-outline-secondary" title="View Details"><i class="bi bi-eye"></i></a>';

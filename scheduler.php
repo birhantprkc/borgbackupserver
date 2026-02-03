@@ -200,6 +200,12 @@ foreach ($serverJobs as $sj) {
 
                 if ($manifestUploadResult['success']) {
                     echo date('Y-m-d H:i:s') . "   Manifest uploaded ({$manifestGenResult['archives']} archives, {$manifestGenResult['files']} files)\n";
+                    $db->insert('server_log', [
+                        'agent_id' => $sj['agent_id'],
+                        'backup_job_id' => $sj['id'],
+                        'level' => 'info',
+                        'message' => "Manifest uploaded: {$manifestGenResult['archives']} archives, {$manifestGenResult['files']} files cataloged",
+                    ]);
                 } else {
                     echo date('Y-m-d H:i:s') . "   Warning: manifest upload failed: {$manifestUploadResult['output']}\n";
                     $db->insert('server_log', [
@@ -211,6 +217,12 @@ foreach ($serverJobs as $sj) {
                 }
             } else {
                 echo date('Y-m-d H:i:s') . "   Warning: manifest generation failed\n";
+                $db->insert('server_log', [
+                    'agent_id' => $sj['agent_id'],
+                    'backup_job_id' => $sj['id'],
+                    'level' => 'warning',
+                    'message' => 'Manifest generation failed (no file catalog to backup)',
+                ]);
             }
         }
 

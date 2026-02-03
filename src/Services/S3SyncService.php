@@ -160,12 +160,11 @@ class S3SyncService
         ];
 
         // For non-sudo runs (e.g. test connection), pass env vars directly
-        $envStrings = [];
-        foreach ($env as $k => $v) {
-            $envStrings[$k] = $v;
-        }
+        // Filter $_SERVER to only include string values (avoid "Array to string conversion" warnings)
+        $baseEnv = array_filter($_SERVER, 'is_string');
+        $procEnv = array_merge($baseEnv, $env);
 
-        $proc = proc_open($cmd, $desc, $pipes, null, array_merge($_SERVER, $envStrings));
+        $proc = proc_open($cmd, $desc, $pipes, null, $procEnv);
         if (!is_resource($proc)) {
             return ['success' => false, 'output' => 'Failed to start rclone process'];
         }
