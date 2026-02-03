@@ -258,6 +258,49 @@ class BorgVersionService
     }
 
     /**
+     * Get all server-hosted fallback binaries grouped by version.
+     * Returns: ['1.4.3' => [['filename' => '...', 'platform' => 'linux', 'glibc' => '217', 'arch' => 'x86_64'], ...]]
+     */
+    public function getServerHostedBinaries(): array
+    {
+        $borgDir = dirname(__DIR__, 2) . '/public/borg';
+        if (!is_dir($borgDir)) {
+            return [];
+        }
+
+        $result = [];
+        $dirs = array_filter(scandir($borgDir), fn($d) => $d !== '.' && $d !== '..' && is_dir($borgDir . '/' . $d));
+
+        foreach ($dirs as $version) {
+            $versionDir = $borgDir . '/' . $version;
+            $files = scandir($versionDir);
+            foreach ($files as $file) {
+                if ($file === '.' || $file === '..') continue;
+                if (preg_match('/^borg-(\w+)-glibc(\d+)-(\w+)$/', $file, $m)) {
+                    $result[$version][] = [
+                        'filename' => $file,
+                        'platform' => $m[1],
+                        'glibc' => $m[2],
+                        'arch' => $m[3],
+                    ];
+                }
+            }
+        }
+
+        // Sort versions descending
+        uksort($result, fn($a, $b) => version_compare($b, $a));
+        return $result;
+    }
+
+    /**
+     * Check if a server-hosted fallback binary exists for a given version/platform/arch/glibc.
+     */
+    public function hasFallbackBinary(string $version, string $platform, string $arch, ?string $agentGlibc): bool
+    {
+        return $this->getFallbackBinaryUrl($version, $platform, $arch, $agentGlibc) !== null;
+    }
+
+    /**
      * Find a server-hosted fallback binary in public/borg/{version}/.
      * Naming convention: borg-{platform}-glibc{NNN}-{arch}
      * Returns full download URL or null.
@@ -396,6 +439,7 @@ class BorgVersionService
 
     /**
      * Find the highest borg version that has a compatible binary for a given agent's platform/arch/glibc.
+     * Checks both GitHub release assets and server-hosted fallback binaries.
      * Returns null if no compatible version exists or if agent info is incomplete.
      */
     public function getMaxCompatibleVersion(array $agent): ?string
@@ -408,8 +452,9 @@ class BorgVersionService
             return null;
         }
 
+        $githubMax = null;
+
         if ($platform === 'linux' && $glibc) {
-            // Find the highest version that has a linux binary with glibc <= agent's glibc
             $row = $this->db->fetchOne(
                 "SELECT bv.version FROM borg_versions bv
                  JOIN borg_version_assets bva ON bva.borg_version_id = bv.id
@@ -419,19 +464,36 @@ class BorgVersionService
                  LIMIT 1",
                 [$arch, $glibc]
             );
-            return $row['version'] ?? null;
+            $githubMax = $row['version'] ?? null;
+        } else {
+            $row = $this->db->fetchOne(
+                "SELECT bv.version FROM borg_versions bv
+                 JOIN borg_version_assets bva ON bva.borg_version_id = bv.id
+                 WHERE bva.platform = ? AND bva.architecture = ?
+                 ORDER BY bv.version DESC
+                 LIMIT 1",
+                [$platform, $arch]
+            );
+            $githubMax = $row['version'] ?? null;
         }
 
-        // macOS/FreeBSD — just find latest version with a matching asset
-        $row = $this->db->fetchOne(
-            "SELECT bv.version FROM borg_versions bv
-             JOIN borg_version_assets bva ON bva.borg_version_id = bv.id
-             WHERE bva.platform = ? AND bva.architecture = ?
-             ORDER BY bv.version DESC
-             LIMIT 1",
-            [$platform, $arch]
-        );
-        return $row['version'] ?? null;
+        // Also check server-hosted fallback binaries
+        $fallbackMax = null;
+        $serverBinaries = $this->getServerHostedBinaries();
+        foreach ($serverBinaries as $version => $binaries) {
+            foreach ($binaries as $bin) {
+                if ($bin['platform'] !== $platform || $bin['arch'] !== $arch) continue;
+                if ($platform === 'linux' && $glibc && $bin['glibc'] > $glibc) continue;
+                if ($fallbackMax === null || version_compare($version, $fallbackMax, '>')) {
+                    $fallbackMax = $version;
+                }
+            }
+        }
+
+        // Return the higher of the two
+        if ($githubMax === null) return $fallbackMax;
+        if ($fallbackMax === null) return $githubMax;
+        return version_compare($githubMax, $fallbackMax, '>=') ? $githubMax : $fallbackMax;
     }
 
     /**

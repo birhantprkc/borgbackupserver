@@ -328,17 +328,20 @@
     $aboveAgents = !empty($targetBorgVersion) ? $borgService->getAgentsAboveVersion($targetBorgVersion) : [];
     $serverBorgVersion = $borgService->getServerBorgVersion();
     $serverBorgMatch = !empty($targetBorgVersion) && $serverBorgVersion === $targetBorgVersion;
+    $serverHostedBinaries = $borgService->getServerHostedBinaries();
 
-    // Compute max compatible borg version per agent and fleet-wide
+    // Compute max compatible borg version per agent (includes fallback binaries)
     $agentMaxVersions = [];
-    $fleetMaxVersion = null;
+    $agentUseFallback = [];
     foreach ($allBorgAgents as $ba) {
         $maxVer = $borgService->getMaxCompatibleVersion($ba);
         $agentMaxVersions[$ba['id']] = $maxVer;
-        if ($maxVer !== null) {
-            if ($fleetMaxVersion === null || version_compare($maxVer, $fleetMaxVersion, '<')) {
-                $fleetMaxVersion = $maxVer;
-            }
+        if (!empty($targetBorgVersion)) {
+            $platform = $ba['platform'] ?? null;
+            $arch = $ba['architecture'] ?? null;
+            $glibc = $ba['glibc_version'] ?? null;
+            $githubAsset = ($platform && $arch) ? $borgService->getAssetForPlatform($targetBorgVersion, $platform, $arch, $glibc) : null;
+            $agentUseFallback[$ba['id']] = !$githubAsset && $borgService->hasFallbackBinary($targetBorgVersion, $platform ?? '', $arch ?? '', $glibc);
         }
     }
 ?>
@@ -411,9 +414,6 @@
                             </select>
                             <div class="form-text">
                                 All agents will be updated to this version when you trigger updates.
-                                <?php if ($fleetMaxVersion && count($allBorgAgents) > 0): ?>
-                                    <br><i class="bi bi-info-circle me-1"></i>Max version all clients can run: <strong>v<?= htmlspecialchars($fleetMaxVersion) ?></strong>
-                                <?php endif; ?>
                             </div>
                         </div>
                         <button type="submit" class="btn btn-primary btn-sm">
@@ -423,12 +423,42 @@
 
                     <div class="alert alert-light border py-2 px-3 small mt-3 mb-0">
                         <i class="bi bi-info-circle me-1"></i>
-                        <strong>Compatibility note:</strong> If a client's OS is too old for the latest borg binary, an older 1.x version will still work fine.
-                        All borg 1.x versions share the same repository format, so the server and clients can safely run different 1.x versions.
+                        <strong>How updates work:</strong> Agents are first matched against official GitHub release binaries.
+                        If no compatible binary is found (e.g., the client's glibc is too old), the server will use a
+                        <strong>server-hosted fallback binary</strong> if one is available below.
+                        All borg 1.x versions share the same repository format, so clients can safely run different 1.x versions.
                     </div>
                 <?php endif; ?>
             </div>
         </div>
+
+        <?php if (!empty($serverHostedBinaries)): ?>
+        <div class="card border-0 shadow-sm mt-4">
+            <div class="card-header bg-white fw-semibold">
+                <i class="bi bi-hdd me-1"></i> Server-Hosted Binaries
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-2">
+                    Custom-compiled binaries hosted on this server, used as fallbacks for clients that can't use the official GitHub releases.
+                </p>
+                <?php foreach ($serverHostedBinaries as $version => $binaries): ?>
+                    <?php foreach ($binaries as $bin): ?>
+                    <div class="d-flex justify-content-between align-items-center small py-1">
+                        <span>
+                            <i class="bi bi-file-earmark-binary me-1 text-muted"></i>
+                            <?= htmlspecialchars($bin['filename']) ?>
+                        </span>
+                        <span>
+                            <span class="badge bg-secondary me-1">v<?= htmlspecialchars($version) ?></span>
+                            <span class="badge bg-light text-dark border"><?= htmlspecialchars($bin['platform']) ?>/<?= htmlspecialchars($bin['arch']) ?></span>
+                            <span class="badge bg-light text-dark border">glibc &ge; <?= htmlspecialchars(substr($bin['glibc'], 0, 1) . '.' . substr($bin['glibc'], 1)) ?></span>
+                        </span>
+                    </div>
+                    <?php endforeach; ?>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php endif; ?>
     </div>
 
     <div class="col-lg-6">
@@ -477,6 +507,7 @@
                         $isMatch = ($cleanVer === $targetBorgVersion);
                         $maxVer = $agentMaxVersions[$ba['id']] ?? null;
                         $cantRunTarget = !$isMatch && $maxVer !== null && version_compare($maxVer, $targetBorgVersion, '<');
+                        $usesFallback = $agentUseFallback[$ba['id']] ?? false;
                         $badgeClass = $isMatch ? 'bg-success' : ($cantRunTarget ? 'bg-danger' : 'bg-warning text-dark');
                     ?>
                     <div class="d-flex justify-content-between align-items-center small py-1">
@@ -485,10 +516,12 @@
                             <a href="/clients/<?= $ba['id'] ?>" class="text-decoration-none"><?= htmlspecialchars($ba['name']) ?></a>
                             <?php if ($cantRunTarget): ?>
                                 <span class="text-danger ms-1" title="glibc <?= htmlspecialchars($ba['glibc_version'] ?? 'unknown') ?>">
-                                    <i class="bi bi-exclamation-triangle-fill"></i> max v<?= htmlspecialchars($maxVer) ?>
+                                    <i class="bi bi-exclamation-triangle-fill"></i> no compatible binary
                                 </span>
-                            <?php elseif ($maxVer === null && !$isMatch && ($ba['glibc_version'] ?? null)): ?>
-                                <span class="text-danger ms-1"><i class="bi bi-exclamation-triangle-fill"></i> no compatible binary</span>
+                            <?php elseif ($usesFallback && !$isMatch): ?>
+                                <span class="text-info ms-1" title="Will use server-hosted binary (glibc <?= htmlspecialchars($ba['glibc_version'] ?? 'unknown') ?>)">
+                                    <i class="bi bi-hdd me-1"></i>server binary
+                                </span>
                             <?php endif; ?>
                         </span>
                         <span class="badge <?= $badgeClass ?>"><?= htmlspecialchars($borgVer) ?></span>
