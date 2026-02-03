@@ -439,7 +439,7 @@
             </div>
             <div class="card-body">
                 <p class="text-muted small mb-2">
-                    Custom-compiled binaries hosted on this server, used as fallbacks for clients that can't use the official GitHub releases. Compiled and signed by the author of this software.
+                    The author of Borg Backup Server compiles and cryptographically signs custom borg backup versions that work with older operating systems. These versions will be used as a fall-back if the agent is unable to update using official packages.
                 </p>
                 <?php foreach ($serverHostedBinaries as $version => $binaries): ?>
                     <?php foreach ($binaries as $bin): ?>
