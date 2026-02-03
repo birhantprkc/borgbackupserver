@@ -482,7 +482,7 @@
                                 <th>Client</th>
                                 <th>OS</th>
                                 <th>glibc</th>
-                                <th>Version</th>
+                                <th>Borg Version</th>
                                 <th></th>
                             </tr>
                         </thead>
