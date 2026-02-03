@@ -50,7 +50,8 @@
                         <th>Username</th>
                         <th>Email</th>
                         <th>Role</th>
-                        <th>Agents</th>
+                        <th>Access</th>
+                        <th>2FA</th>
                         <th>Created</th>
                         <th>Actions</th>
                     </tr>
@@ -65,13 +66,44 @@
                                 <?= ucfirst($user['role']) ?>
                             </span>
                         </td>
-                        <td><?= $user['agent_count'] ?></td>
+                        <td>
+                            <?php if ($user['role'] === 'admin'): ?>
+                            <span class="text-muted small">All (admin)</span>
+                            <?php elseif ($user['all_clients']): ?>
+                            <span class="badge bg-info">All Clients</span>
+                            <?php elseif ($user['agent_count'] > 0): ?>
+                            <span class="badge bg-light text-dark"><?= $user['agent_count'] ?> client<?= $user['agent_count'] != 1 ? 's' : '' ?></span>
+                            <?php else: ?>
+                            <span class="text-muted small">None</span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <?php if ($user['totp_enabled']): ?>
+                            <span class="badge bg-success"><i class="bi bi-shield-check"></i></span>
+                            <?php else: ?>
+                            <span class="badge bg-secondary"><i class="bi bi-shield"></i></span>
+                            <?php endif; ?>
+                        </td>
                         <td class="small"><?= \BBS\Core\TimeHelper::format($user['created_at'], 'M j, Y') ?></td>
                         <td>
+                            <a href="/users/<?= $user['id'] ?>/edit" class="btn btn-sm btn-outline-primary me-1" title="Edit">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <?php if ($user['totp_enabled']): ?>
+                            <form method="POST" action="/users/<?= $user['id'] ?>/reset-2fa" class="d-inline"
+                                  data-confirm="Reset 2FA for <?= htmlspecialchars($user['username']) ?>? They will need to set up 2FA again." data-confirm-danger>
+                                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                <button type="submit" class="btn btn-sm btn-outline-warning me-1" title="Reset 2FA">
+                                    <i class="bi bi-shield-x"></i>
+                                </button>
+                            </form>
+                            <?php endif; ?>
                             <?php if ($user['id'] != $_SESSION['user_id']): ?>
                             <form method="POST" action="/users/<?= $user['id'] ?>/delete" class="d-inline" data-confirm="Delete this user?" data-confirm-danger>
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
+                                    <i class="bi bi-trash"></i>
+                                </button>
                             </form>
                             <?php endif; ?>
                         </td>

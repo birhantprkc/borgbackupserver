@@ -38,10 +38,9 @@ class DashboardController extends Controller
         $this->requireAuth();
         $since = $_GET['since'] ?? date('Y-m-d H:i:s', strtotime('-10 seconds'));
 
-        $isAdmin = $this->isAdmin();
-        $userId = $_SESSION['user_id'] ?? 0;
-        $jobScope = $isAdmin ? '' : 'AND a.user_id = ?';
-        $jobParams = $isAdmin ? [$since, $since] : [$since, $since, $userId];
+        [$agentWhere, $agentParams] = $this->getAgentWhereClause('a');
+        $jobScope = $agentWhere === '1=1' ? '' : "AND {$agentWhere}";
+        $jobParams = array_merge([$since, $since], $agentParams);
 
         $jobs = $this->db->fetchAll("
             SELECT bj.id, bj.status, bj.task_type, a.name as agent_name
@@ -55,15 +54,19 @@ class DashboardController extends Controller
             ORDER BY bj.id DESC LIMIT 10
         ", $jobParams);
 
-        $errParams = $isAdmin ? [$since] : [$since, $userId];
-        $errors = $this->db->fetchAll("
+        $errQuery = "
             SELECT sl.message, a.name as agent_name
             FROM server_log sl
             LEFT JOIN agents a ON a.id = sl.agent_id
             WHERE sl.level = 'error' AND sl.created_at > ?
-            " . ($isAdmin ? '' : 'AND (a.user_id = ? OR sl.agent_id IS NULL)') . "
-            ORDER BY sl.id DESC LIMIT 5
-        ", $errParams);
+        ";
+        $errParams = [$since];
+        if ($agentWhere !== '1=1') {
+            $errQuery .= " AND ({$agentWhere} OR sl.agent_id IS NULL)";
+            $errParams = array_merge($errParams, $agentParams);
+        }
+        $errQuery .= " ORDER BY sl.id DESC LIMIT 5";
+        $errors = $this->db->fetchAll($errQuery, $errParams);
 
         $toasts = [];
         foreach ($jobs as $job) {
@@ -96,28 +99,25 @@ class DashboardController extends Controller
 
     private function getDashboardData(): array
     {
-        // User-scoping: admins see all, users see only their agents
+        // User-scoping: admins see all, users see only their accessible agents
         $isAdmin = $this->isAdmin();
         $userId = $_SESSION['user_id'] ?? 0;
 
-        if ($isAdmin) {
-            $agentWhere = '1=1';
-            $agentParams = [];
-        } else {
-            $agentWhere = 'user_id = ?';
-            $agentParams = [$userId];
-        }
+        // Use the new permission system for agent scoping
+        [$agentWhere, $agentParams] = $this->getAgentWhereClause();
 
+        // Note: agentWhere expects the table to be aliased as the parameter passed to getAgentWhereClause
+        // For agents table queries, we alias it as 'a' and use the same where clause
         $agentCount = $this->db->fetchOne(
-            "SELECT COUNT(*) as cnt FROM agents WHERE {$agentWhere}", $agentParams
+            "SELECT COUNT(*) as cnt FROM agents a WHERE {$agentWhere}", $agentParams
         )['cnt'];
         $onlineCount = $this->db->fetchOne(
-            "SELECT COUNT(*) as cnt FROM agents WHERE {$agentWhere} AND status = 'online'", $agentParams
+            "SELECT COUNT(*) as cnt FROM agents a WHERE {$agentWhere} AND a.status = 'online'", $agentParams
         )['cnt'];
 
-        // Job/log queries need agent join for scoping
-        $jobScope = $isAdmin ? '' : 'AND a.user_id = ?';
-        $jobParams = $isAdmin ? [] : [$userId];
+        // Job/log queries need agent join for scoping - reuse the same where clause
+        $jobScope = $agentWhere === '1=1' ? '' : "AND {$agentWhere}";
+        $jobParams = $agentParams;
 
         $runningJobs = $this->db->fetchOne(
             "SELECT COUNT(*) as cnt FROM backup_jobs bj JOIN agents a ON a.id = bj.agent_id WHERE bj.status IN ('running', 'sent') {$jobScope}", $jobParams
@@ -125,9 +125,11 @@ class DashboardController extends Controller
         $queuedJobs = $this->db->fetchOne(
             "SELECT COUNT(*) as cnt FROM backup_jobs bj JOIN agents a ON a.id = bj.agent_id WHERE bj.status = 'queued' {$jobScope}", $jobParams
         )['cnt'];
-        $errorCount = $this->db->fetchOne(
-            "SELECT COUNT(*) as cnt FROM server_log sl LEFT JOIN agents a ON a.id = sl.agent_id WHERE sl.level = 'error' AND sl.created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR) " . ($isAdmin ? '' : 'AND (a.user_id = ? OR sl.agent_id IS NULL)'), $jobParams
-        )['cnt'];
+        $errorCountQuery = "SELECT COUNT(*) as cnt FROM server_log sl LEFT JOIN agents a ON a.id = sl.agent_id WHERE sl.level = 'error' AND sl.created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)";
+        if ($agentWhere !== '1=1') {
+            $errorCountQuery .= " AND ({$agentWhere} OR sl.agent_id IS NULL)";
+        }
+        $errorCount = $this->db->fetchOne($errorCountQuery, $jobParams)['cnt'];
 
         $recentJobs = $this->db->fetchAll("
             SELECT bj.*, a.name as agent_name,
@@ -172,7 +174,7 @@ class DashboardController extends Controller
                    bj.task_type,
                    COUNT(*) as count
             FROM backup_jobs bj
-            " . ($isAdmin ? '' : 'JOIN agents a ON a.id = bj.agent_id') . "
+            JOIN agents a ON a.id = bj.agent_id
             WHERE bj.status = 'completed'
               AND bj.completed_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
               {$jobScope}

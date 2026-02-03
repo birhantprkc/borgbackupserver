@@ -5,6 +5,7 @@ namespace BBS\Controllers;
 use BBS\Core\Controller;
 use BBS\Services\SshKeyManager;
 use BBS\Services\Encryption;
+use BBS\Services\PermissionService;
 
 class ClientController extends Controller
 {
@@ -12,13 +13,7 @@ class ClientController extends Controller
     {
         $this->requireAuth();
 
-        $where = '1=1';
-        $params = [];
-
-        if (!$this->isAdmin()) {
-            $where = 'a.user_id = ?';
-            $params[] = $_SESSION['user_id'];
-        }
+        [$where, $params] = $this->getAgentWhereClause('a');
 
         $agents = $this->db->fetchAll("
             SELECT a.*,
@@ -33,9 +28,9 @@ class ClientController extends Controller
             ORDER BY a.id DESC
         ", $params);
 
-        // Aggregate stats for stat cards
-        $jobScope = $this->isAdmin() ? '' : 'AND a.user_id = ?';
-        $jobParams = $this->isAdmin() ? [] : [$_SESSION['user_id']];
+        // Aggregate stats for stat cards - reuse the same where clause
+        $jobScope = $where === '1=1' ? '' : "AND {$where}";
+        $jobParams = $params;
 
         $totalClients = count($agents);
         $onlineCount = 0;
@@ -752,6 +747,9 @@ class ClientController extends Controller
             $this->redirect('/clients');
         }
 
+        // Require restore permission
+        $this->requirePermission(PermissionService::RESTORE, $id);
+
         $archive_id = (int) ($_POST['archive_id'] ?? 0);
         $selectedFiles = $_POST['files'] ?? [];
         $destination = trim($_POST['destination'] ?? '');
@@ -890,6 +888,9 @@ class ClientController extends Controller
             $this->redirect('/clients');
         }
 
+        // Require restore permission
+        $this->requirePermission(PermissionService::RESTORE, $id);
+
         $archive_id = (int) ($_POST['archive_id'] ?? 0);
         $databases = $_POST['databases'] ?? [];
         $pluginConfigId = (int) ($_POST['plugin_config_id'] ?? 0);
@@ -996,6 +997,9 @@ class ClientController extends Controller
             $this->redirect('/clients');
         }
 
+        // Require restore permission
+        $this->requirePermission(PermissionService::RESTORE, $id);
+
         $archive_id = (int) ($_POST['archive_id'] ?? 0);
         $databases = $_POST['databases'] ?? [];
         $pluginConfigId = (int) ($_POST['plugin_config_id'] ?? 0);
@@ -1096,6 +1100,9 @@ class ClientController extends Controller
             $this->flash('danger', 'Client not found.');
             $this->redirect('/clients');
         }
+
+        // Require restore permission (download is a form of restore)
+        $this->requirePermission(PermissionService::RESTORE, $id);
 
         $archive_id = (int) ($_POST['archive_id'] ?? 0);
         $selectedFiles = $_POST['files'] ?? [];
@@ -1314,7 +1321,8 @@ class ClientController extends Controller
             return null;
         }
 
-        if (!$this->isAdmin() && $agent['user_id'] != $_SESSION['user_id']) {
+        // Use the new permission service to check access
+        if (!$this->canAccessAgent($id)) {
             return null;
         }
 

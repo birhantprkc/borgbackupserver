@@ -99,6 +99,54 @@ class Controller
         return ($_SESSION['user_role'] ?? '') === 'admin';
     }
 
+    /**
+     * Check if current user can access a specific agent (client).
+     */
+    protected function canAccessAgent(int $agentId): bool
+    {
+        if ($this->isAdmin()) {
+            return true;
+        }
+        $permService = new \BBS\Services\PermissionService();
+        return $permService->canAccessAgent($_SESSION['user_id'], $agentId);
+    }
+
+    /**
+     * Check if current user has a specific permission on an agent.
+     */
+    protected function hasPermission(string $permission, int $agentId): bool
+    {
+        if ($this->isAdmin()) {
+            return true;
+        }
+        $permService = new \BBS\Services\PermissionService();
+        return $permService->hasPermission($_SESSION['user_id'], $permission, $agentId);
+    }
+
+    /**
+     * Require a specific permission, redirecting with error if denied.
+     */
+    protected function requirePermission(string $permission, int $agentId): void
+    {
+        if (!$this->hasPermission($permission, $agentId)) {
+            $this->flash('danger', 'You do not have permission to perform this action.');
+            $this->redirect('/clients');
+        }
+    }
+
+    /**
+     * Get SQL WHERE clause for agent filtering based on user permissions.
+     * Returns [where_clause, params] tuple.
+     */
+    protected function getAgentWhereClause(string $agentAlias = 'a'): array
+    {
+        if ($this->isAdmin()) {
+            return ['1=1', []];
+        }
+        $permService = new \BBS\Services\PermissionService();
+        return $permService->getAgentWhereClause($_SESSION['user_id'], $agentAlias);
+    }
+
     protected function csrfToken(): string
     {
         if (empty($_SESSION['csrf_token'])) {

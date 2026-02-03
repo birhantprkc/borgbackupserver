@@ -5,6 +5,7 @@ namespace BBS\Controllers;
 use BBS\Core\Controller;
 use BBS\Services\BorgCommandBuilder;
 use BBS\Services\Encryption;
+use BBS\Services\PermissionService;
 use BBS\Services\SshKeyManager;
 
 class RepositoryController extends Controller
@@ -24,12 +25,13 @@ class RepositoryController extends Controller
             $this->redirect("/clients/{$agentId}");
         }
 
-        // Verify agent access
+        // Verify agent access and manage_repos permission
         $agent = $this->db->fetchOne("SELECT * FROM agents WHERE id = ?", [$agentId]);
-        if (!$agent || (!$this->isAdmin() && $agent['user_id'] != $_SESSION['user_id'])) {
+        if (!$agent || !$this->canAccessAgent($agentId)) {
             $this->flash('danger', 'Access denied.');
             $this->redirect('/clients');
         }
+        $this->requirePermission(PermissionService::MANAGE_REPOS, $agentId);
 
         // Build repo path using single storage_path setting
         $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
@@ -146,16 +148,19 @@ class RepositoryController extends Controller
         $this->verifyCsrf();
 
         $repo = $this->db->fetchOne("
-            SELECT r.*, a.user_id
+            SELECT r.*, a.id as agent_id
             FROM repositories r
             JOIN agents a ON a.id = r.agent_id
             WHERE r.id = ?
         ", [$id]);
 
-        if (!$repo || (!$this->isAdmin() && $repo['user_id'] != $_SESSION['user_id'])) {
+        if (!$repo || !$this->canAccessAgent($repo['agent_id'])) {
             $this->flash('danger', 'Repository not found.');
             $this->redirect('/clients');
         }
+
+        // Require manage_repos permission to delete
+        $this->requirePermission(PermissionService::MANAGE_REPOS, $repo['agent_id']);
 
         $agentId = $repo['agent_id'];
 
@@ -250,16 +255,19 @@ class RepositoryController extends Controller
         }
 
         $repo = $this->db->fetchOne("
-            SELECT r.*, a.user_id, a.id as agent_id
+            SELECT r.*, a.id as agent_id
             FROM repositories r
             JOIN agents a ON a.id = r.agent_id
             WHERE r.id = ?
         ", [$id]);
 
-        if (!$repo || (!$this->isAdmin() && $repo['user_id'] != $_SESSION['user_id'])) {
+        if (!$repo || !$this->canAccessAgent($repo['agent_id'])) {
             $this->flash('danger', 'Repository not found.');
             $this->redirect('/clients');
         }
+
+        // Require repo_maintenance permission
+        $this->requirePermission(PermissionService::REPO_MAINTENANCE, $repo['agent_id']);
 
         // Check for active jobs on this repo
         $activeJob = $this->db->fetchOne(

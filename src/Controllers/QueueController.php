@@ -3,6 +3,7 @@
 namespace BBS\Controllers;
 
 use BBS\Core\Controller;
+use BBS\Services\PermissionService;
 
 class QueueController extends Controller
 {
@@ -10,14 +11,17 @@ class QueueController extends Controller
     {
         $this->requireAuth();
 
+        [$agentWhere, $agentParams] = $this->getAgentWhereClause('a');
+
         $inProgress = $this->db->fetchAll("
             SELECT bj.*, a.name as agent_name, r.name as repo_name
             FROM backup_jobs bj
             JOIN agents a ON a.id = bj.agent_id
             LEFT JOIN repositories r ON r.id = bj.repository_id
             WHERE bj.status IN ('queued', 'sent', 'running')
+            AND {$agentWhere}
             ORDER BY bj.queued_at ASC
-        ");
+        ", $agentParams);
 
         $completed = $this->db->fetchAll("
             SELECT bj.*, a.name as agent_name, r.name as repo_name
@@ -25,16 +29,42 @@ class QueueController extends Controller
             JOIN agents a ON a.id = bj.agent_id
             LEFT JOIN repositories r ON r.id = bj.repository_id
             WHERE bj.status IN ('completed', 'failed')
+            AND {$agentWhere}
             ORDER BY bj.completed_at DESC
             LIMIT 25
-        ");
+        ", $agentParams);
 
-        // Queue stats
-        $queuedCount = (int) ($this->db->fetchOne("SELECT COUNT(*) AS cnt FROM backup_jobs WHERE status IN ('queued', 'sent')")['cnt'] ?? 0);
-        $runningCount = (int) ($this->db->fetchOne("SELECT COUNT(*) AS cnt FROM backup_jobs WHERE status = 'running'")['cnt'] ?? 0);
-        $completed24h = (int) ($this->db->fetchOne("SELECT COUNT(*) AS cnt FROM backup_jobs WHERE status = 'completed' AND completed_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)")['cnt'] ?? 0);
-        $failed24h = (int) ($this->db->fetchOne("SELECT COUNT(*) AS cnt FROM backup_jobs WHERE status = 'failed' AND completed_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)")['cnt'] ?? 0);
-        $avgDuration = $this->db->fetchOne("SELECT ROUND(AVG(TIMESTAMPDIFF(SECOND, started_at, completed_at))) AS avg_sec FROM backup_jobs WHERE status = 'completed' AND completed_at > DATE_SUB(NOW(), INTERVAL 24 HOUR) AND started_at IS NOT NULL");
+        // Queue stats (scoped to accessible agents)
+        $queuedCount = (int) ($this->db->fetchOne("
+            SELECT COUNT(*) AS cnt FROM backup_jobs bj
+            JOIN agents a ON a.id = bj.agent_id
+            WHERE bj.status IN ('queued', 'sent') AND {$agentWhere}
+        ", $agentParams)['cnt'] ?? 0);
+
+        $runningCount = (int) ($this->db->fetchOne("
+            SELECT COUNT(*) AS cnt FROM backup_jobs bj
+            JOIN agents a ON a.id = bj.agent_id
+            WHERE bj.status = 'running' AND {$agentWhere}
+        ", $agentParams)['cnt'] ?? 0);
+
+        $completed24h = (int) ($this->db->fetchOne("
+            SELECT COUNT(*) AS cnt FROM backup_jobs bj
+            JOIN agents a ON a.id = bj.agent_id
+            WHERE bj.status = 'completed' AND bj.completed_at > DATE_SUB(NOW(), INTERVAL 24 HOUR) AND {$agentWhere}
+        ", $agentParams)['cnt'] ?? 0);
+
+        $failed24h = (int) ($this->db->fetchOne("
+            SELECT COUNT(*) AS cnt FROM backup_jobs bj
+            JOIN agents a ON a.id = bj.agent_id
+            WHERE bj.status = 'failed' AND bj.completed_at > DATE_SUB(NOW(), INTERVAL 24 HOUR) AND {$agentWhere}
+        ", $agentParams)['cnt'] ?? 0);
+
+        $avgDuration = $this->db->fetchOne("
+            SELECT ROUND(AVG(TIMESTAMPDIFF(SECOND, bj.started_at, bj.completed_at))) AS avg_sec
+            FROM backup_jobs bj
+            JOIN agents a ON a.id = bj.agent_id
+            WHERE bj.status = 'completed' AND bj.completed_at > DATE_SUB(NOW(), INTERVAL 24 HOUR) AND bj.started_at IS NOT NULL AND {$agentWhere}
+        ", $agentParams);
         $avgSec = (int) ($avgDuration['avg_sec'] ?? 0);
 
         $this->view('queue/index', [
@@ -53,14 +83,17 @@ class QueueController extends Controller
     {
         $this->requireAuth();
 
+        [$agentWhere, $agentParams] = $this->getAgentWhereClause('a');
+
         $inProgress = $this->db->fetchAll("
             SELECT bj.*, a.name as agent_name, r.name as repo_name
             FROM backup_jobs bj
             JOIN agents a ON a.id = bj.agent_id
             LEFT JOIN repositories r ON r.id = bj.repository_id
             WHERE bj.status IN ('queued', 'sent', 'running')
+            AND {$agentWhere}
             ORDER BY bj.queued_at ASC
-        ");
+        ", $agentParams);
 
         $completed = $this->db->fetchAll("
             SELECT bj.*, a.name as agent_name, r.name as repo_name
@@ -68,9 +101,10 @@ class QueueController extends Controller
             JOIN agents a ON a.id = bj.agent_id
             LEFT JOIN repositories r ON r.id = bj.repository_id
             WHERE bj.status IN ('completed', 'failed')
+            AND {$agentWhere}
             ORDER BY bj.completed_at DESC
             LIMIT 25
-        ");
+        ", $agentParams);
 
         $this->json([
             'inProgress' => $inProgress,
@@ -94,7 +128,7 @@ class QueueController extends Controller
             WHERE bj.id = ?
         ", [$id]);
 
-        if (!$job) {
+        if (!$job || !$this->canAccessAgent($job['agent_id'])) {
             $this->flash('danger', 'Job not found.');
             $this->redirect('/queue');
         }
@@ -143,7 +177,7 @@ class QueueController extends Controller
             WHERE bj.id = ?
         ", [$id]);
 
-        if (!$job) {
+        if (!$job || !$this->canAccessAgent($job['agent_id'])) {
             http_response_code(404);
             header('Content-Type: application/json');
             echo json_encode(['error' => 'Not found']);
@@ -185,6 +219,15 @@ class QueueController extends Controller
             $this->redirect('/queue');
         }
 
+        // Check access to the agent
+        if (!$this->canAccessAgent($job['agent_id'])) {
+            $this->flash('danger', 'Job not found.');
+            $this->redirect('/queue');
+        }
+
+        // Require trigger_backup permission to cancel jobs
+        $this->requirePermission(PermissionService::TRIGGER_BACKUP, $job['agent_id']);
+
         $this->db->update('backup_jobs', [
             'status' => 'failed',
             'error_log' => 'Cancelled by user',
@@ -212,6 +255,15 @@ class QueueController extends Controller
             $this->flash('danger', 'Job cannot be retried.');
             $this->redirect('/queue');
         }
+
+        // Check access to the agent
+        if (!$this->canAccessAgent($job['agent_id'])) {
+            $this->flash('danger', 'Job not found.');
+            $this->redirect('/queue');
+        }
+
+        // Require trigger_backup permission to retry jobs
+        $this->requirePermission(PermissionService::TRIGGER_BACKUP, $job['agent_id']);
 
         // Create a new queued job based on the failed one
         $newJobId = $this->db->insert('backup_jobs', [

@@ -3,6 +3,7 @@
 namespace BBS\Controllers;
 
 use BBS\Core\Controller;
+use BBS\Services\PermissionService;
 
 class ScheduleController extends Controller
 {
@@ -16,6 +17,9 @@ class ScheduleController extends Controller
             $this->flash('danger', 'Schedule not found.');
             $this->redirect('/clients');
         }
+
+        // Require manage_plans permission to toggle schedules
+        $this->requirePermission(PermissionService::MANAGE_PLANS, $schedule['agent_id']);
 
         $newEnabled = $schedule['enabled'] ? 0 : 1;
         $this->db->update('schedules', ['enabled' => $newEnabled], 'id = ?', [$id]);
@@ -36,6 +40,9 @@ class ScheduleController extends Controller
             $this->redirect('/clients');
         }
 
+        // Require manage_plans permission to delete schedules
+        $this->requirePermission(PermissionService::MANAGE_PLANS, $schedule['agent_id']);
+
         $this->db->delete('schedules', 'id = ?', [$id]);
         $this->flash('success', 'Schedule deleted.');
         $this->redirect("/clients/{$schedule['agent_id']}?tab=schedules");
@@ -44,7 +51,7 @@ class ScheduleController extends Controller
     private function getSchedule(int $id): ?array
     {
         $schedule = $this->db->fetchOne("
-            SELECT s.*, bp.agent_id, a.user_id
+            SELECT s.*, bp.agent_id
             FROM schedules s
             JOIN backup_plans bp ON bp.id = s.backup_plan_id
             JOIN agents a ON a.id = bp.agent_id
@@ -52,7 +59,7 @@ class ScheduleController extends Controller
         ", [$id]);
 
         if (!$schedule) return null;
-        if (!$this->isAdmin() && $schedule['user_id'] != $_SESSION['user_id']) return null;
+        if (!$this->canAccessAgent($schedule['agent_id'])) return null;
 
         return $schedule;
     }

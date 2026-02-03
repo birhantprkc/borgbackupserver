@@ -11,6 +11,7 @@ CREATE TABLE users (
     email VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     role ENUM('admin', 'user') NOT NULL DEFAULT 'user',
+    all_clients TINYINT(1) NOT NULL DEFAULT 0,
     timezone VARCHAR(50) NOT NULL DEFAULT 'America/New_York',
     totp_secret VARCHAR(255) DEFAULT NULL,
     totp_enabled TINYINT(1) NOT NULL DEFAULT 0,
@@ -50,6 +51,33 @@ CREATE TABLE password_resets (
 -- Default admin user (password: admin)
 INSERT INTO users (username, email, password_hash, role) VALUES
 ('admin', 'admin@borgbackupserver.com', '$2y$12$OMFE1ma3aKDFjEYAP24eTuIznogvlOD2k3Emh0Hmvdckirgu73U2m', 'admin');
+
+-- --------------------------------------------------------
+-- User Permissions & Client Access
+-- --------------------------------------------------------
+
+CREATE TABLE user_agents (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    agent_id INT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_user_agent (user_id, agent_id),
+    INDEX idx_agent_id (agent_id),
+    INDEX idx_user_id (user_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE user_permissions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    permission ENUM('trigger_backup', 'manage_repos', 'manage_plans', 'restore', 'repo_maintenance') NOT NULL,
+    agent_id INT DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_user_perm_agent (user_id, permission, agent_id),
+    INDEX idx_user_id (user_id),
+    INDEX idx_agent_id (agent_id)
+) ENGINE=InnoDB;
 
 -- --------------------------------------------------------
 -- Storage & Agents
@@ -382,3 +410,10 @@ CREATE TABLE borg_version_assets (
     FOREIGN KEY (borg_version_id) REFERENCES borg_versions(id) ON DELETE CASCADE,
     UNIQUE KEY unique_asset (borg_version_id, platform, architecture, glibc_version)
 ) ENGINE=InnoDB;
+
+-- --------------------------------------------------------
+-- Foreign Keys (added after all tables created)
+-- --------------------------------------------------------
+
+ALTER TABLE user_agents ADD FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE;
+ALTER TABLE user_permissions ADD FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE;

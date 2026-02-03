@@ -3,6 +3,7 @@
 namespace BBS\Controllers;
 
 use BBS\Core\Controller;
+use BBS\Services\PermissionService;
 use BBS\Services\PluginManager;
 
 class BackupPlanController extends Controller
@@ -35,12 +36,13 @@ class BackupPlanController extends Controller
             $this->redirect("/clients/{$agentId}?tab=schedules");
         }
 
-        // Verify agent access
+        // Verify agent access and manage_plans permission
         $agent = $this->db->fetchOne("SELECT * FROM agents WHERE id = ?", [$agentId]);
-        if (!$agent || (!$this->isAdmin() && $agent['user_id'] != $_SESSION['user_id'])) {
+        if (!$agent || !$this->canAccessAgent($agentId)) {
             $this->flash('danger', 'Access denied.');
             $this->redirect('/clients');
         }
+        $this->requirePermission(PermissionService::MANAGE_PLANS, $agentId);
 
         // Verify repository belongs to agent
         $repo = $this->db->fetchOne("SELECT * FROM repositories WHERE id = ? AND agent_id = ?", [$repositoryId, $agentId]);
@@ -97,6 +99,9 @@ class BackupPlanController extends Controller
             $this->redirect('/clients');
         }
 
+        // Require manage_plans permission
+        $this->requirePermission(PermissionService::MANAGE_PLANS, $plan['agent_id']);
+
         $data = [];
         if (isset($_POST['name'])) $data['name'] = trim($_POST['name']);
         if (isset($_POST['directories'])) $data['directories'] = trim($_POST['directories']);
@@ -150,6 +155,9 @@ class BackupPlanController extends Controller
             $this->redirect('/clients');
         }
 
+        // Require manage_plans permission
+        $this->requirePermission(PermissionService::MANAGE_PLANS, $plan['agent_id']);
+
         $agentId = $plan['agent_id'];
         $this->db->delete('backup_plans', 'id = ?', [$id]);
         $this->flash('success', "Backup plan \"{$plan['name']}\" deleted.");
@@ -166,6 +174,9 @@ class BackupPlanController extends Controller
             $this->flash('danger', 'Backup plan not found.');
             $this->redirect('/clients');
         }
+
+        // Require trigger_backup permission
+        $this->requirePermission(PermissionService::TRIGGER_BACKUP, $plan['agent_id']);
 
         // Check if this plan already has an active job (no point running the same plan twice)
         $planBusy = $this->db->fetchOne("
@@ -202,14 +213,14 @@ class BackupPlanController extends Controller
     private function getPlan(int $id): ?array
     {
         $plan = $this->db->fetchOne("
-            SELECT bp.*, a.user_id
+            SELECT bp.*, a.id as agent_id
             FROM backup_plans bp
             JOIN agents a ON a.id = bp.agent_id
             WHERE bp.id = ?
         ", [$id]);
 
         if (!$plan) return null;
-        if (!$this->isAdmin() && $plan['user_id'] != $_SESSION['user_id']) return null;
+        if (!$this->canAccessAgent($plan['agent_id'])) return null;
 
         return $plan;
     }

@@ -136,7 +136,9 @@ class App
         // Users (admin)
         $this->router->map('GET', '/users', 'UserController@index');
         $this->router->map('POST', '/users/add', 'UserController@store');
+        $this->router->map('GET', '/users/[i:id]/edit', 'UserController@edit');
         $this->router->map('POST', '/users/[i:id]/edit', 'UserController@update');
+        $this->router->map('POST', '/users/[i:id]/reset-2fa', 'UserController@reset2fa');
         $this->router->map('POST', '/users/[i:id]/delete', 'UserController@delete');
 
         // Profile
