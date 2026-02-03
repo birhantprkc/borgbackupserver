@@ -1792,6 +1792,10 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                     <div class="d-flex align-items-center justify-content-center rounded-circle mt-1" style="width:48px;height:48px;flex-shrink:0;background-color:rgba(13,110,253,0.1);">
                                         <i class="bi bi-terminal text-primary" style="font-size:1.5rem;"></i>
                                     </div>
+                                <?php elseif ($plugin['slug'] === 's3_sync'): ?>
+                                    <div class="d-flex align-items-center justify-content-center rounded-circle mt-1" style="width:48px;height:48px;flex-shrink:0;background-color:#ff6b6b;">
+                                        <i class="bi bi-bucket text-white" style="font-size:1.5rem;"></i>
+                                    </div>
                                 <?php else: ?>
                                     <i class="bi bi-database" style="font-size:2.5rem;flex-shrink:0;" class="mt-1 text-secondary"></i>
                                 <?php endif; ?>
