@@ -197,7 +197,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                     <div class="flex-grow-1">
                         <h6 class="mb-1">Restore from S3</h6>
                         <p class="text-muted small mb-2">Download repository data from S3 back to the server. Use this to recover from local data loss or sync issues.</p>
-                        <div class="d-flex gap-2 flex-wrap">
+                        <div class="d-flex gap-2 flex-wrap align-items-end">
                             <form method="POST" action="/clients/<?= $agentId ?>/repo/<?= $repo['id'] ?>/s3-restore" class="d-inline" data-confirm="Restore (replace) from S3?&#10;&#10;This will download the repository data from S3 and OVERWRITE local files.">
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                 <input type="hidden" name="mode" value="replace">
@@ -208,9 +208,12 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                             <form method="POST" action="/clients/<?= $agentId ?>/repo/<?= $repo['id'] ?>/s3-restore" class="d-inline" data-confirm="Restore (copy) from S3?&#10;&#10;This will create a NEW repository and download data from S3.">
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                 <input type="hidden" name="mode" value="copy">
-                                <button type="submit" class="btn btn-sm btn-outline-secondary" <?= $activeJob ? 'disabled' : '' ?>>
-                                    <i class="bi bi-files me-1"></i>Restore (copy)
-                                </button>
+                                <div class="input-group input-group-sm" style="width: auto;">
+                                    <input type="text" name="copy_name" class="form-control form-control-sm" placeholder="New repo name" value="<?= htmlspecialchars($repo['name']) ?>-copy" style="width: 140px;" required <?= $activeJob ? 'disabled' : '' ?>>
+                                    <button type="submit" class="btn btn-outline-secondary" <?= $activeJob ? 'disabled' : '' ?>>
+                                        <i class="bi bi-files me-1"></i>Restore (copy)
+                                    </button>
+                                </div>
                             </form>
                         </div>
                     </div>

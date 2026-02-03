@@ -481,12 +481,16 @@ class RepositoryController extends Controller
         $targetRepoId = $id;
         $targetRepoName = $repo['name'];
         if ($mode === 'copy') {
-            // Generate unique name for the copy
-            $copyName = $repo['name'] . '-copy';
-            $counter = 1;
-            while ($this->db->fetchOne("SELECT id FROM repositories WHERE agent_id = ? AND name = ?", [$agentId, $copyName])) {
-                $copyName = $repo['name'] . '-copy' . $counter;
-                $counter++;
+            // Use provided name or generate unique name for the copy
+            $copyName = trim($_POST['copy_name'] ?? '');
+            if (empty($copyName)) {
+                $copyName = $repo['name'] . '-copy';
+            }
+
+            // Check if name already exists
+            if ($this->db->fetchOne("SELECT id FROM repositories WHERE agent_id = ? AND name = ?", [$agentId, $copyName])) {
+                $this->flash('danger', "Repository \"{$copyName}\" already exists. Choose a different name.");
+                $this->redirect("/clients/{$agentId}/repo/{$id}");
             }
 
             // Build path for the copy
