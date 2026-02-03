@@ -313,20 +313,21 @@
                     <?php endif; ?>
                     <?php if (!empty($mysqlStats)): ?>
                     <div class="col-md-7 mt-3 mt-md-0 pt-3 pt-md-0 border-top border-top-0-md<?= !empty($mysqlStorage) && $mysqlStorage['disk_total'] > 0 ? ' border-md-start' : '' ?>">
-                        <!-- Hero: Catalog Files Tracked -->
-                        <div class="text-center mb-2">
-                            <div class="fw-bold" style="font-size:2.2rem;line-height:1;color:#e67e22;" id="stat-catalog"><?= number_format($mysqlStats['catalog_files']) ?></div>
-                            <div class="text-muted small">Files Tracked</div>
-                        </div>
-                        <!-- Supporting stats row -->
-                        <div class="d-flex justify-content-center gap-3 mb-2" style="font-size:.75rem;">
-                            <div class="text-center">
-                                <div class="fw-bold" id="stat-archives"><?= number_format($mysqlStats['archives']) ?></div>
-                                <div class="text-muted">Archives</div>
+                        <!-- Files Tracked (left) + Archives/Jobs (right) -->
+                        <div class="d-flex align-items-center mb-2">
+                            <div class="me-auto">
+                                <div class="text-muted small mb-0">Files Tracked</div>
+                                <div class="fw-bold" style="font-size:2.2rem;line-height:1;color:#e67e22;" id="stat-catalog"><?= number_format($mysqlStats['catalog_files']) ?></div>
                             </div>
-                            <div class="text-center">
-                                <div class="fw-bold" id="stat-completed-jobs"><?= number_format($mysqlStats['completed_jobs']) ?></div>
-                                <div class="text-muted">Jobs Run</div>
+                            <div class="d-flex gap-3 text-center" style="font-size:.75rem;">
+                                <div>
+                                    <div class="fw-bold" style="font-size:1rem;" id="stat-archives"><?= number_format($mysqlStats['archives']) ?></div>
+                                    <div class="text-muted">Archives</div>
+                                </div>
+                                <div>
+                                    <div class="fw-bold" style="font-size:1rem;" id="stat-completed-jobs"><?= number_format($mysqlStats['completed_jobs']) ?></div>
+                                    <div class="text-muted">Jobs Run</div>
+                                </div>
                             </div>
                         </div>
                         <!-- MySQL Performance -->
