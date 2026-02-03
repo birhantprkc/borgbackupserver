@@ -191,9 +191,23 @@ foreach ($serverJobs as $sj) {
     if ($sj['task_type'] === 'prune') {
         $archivePrefix = $sj['backup_plan_id'] ? 'plan' . $sj['backup_plan_id'] : null;
         $cmd = \BBS\Services\BorgCommandBuilder::buildPruneCommand($plan, $localRepo, $archivePrefix);
-    } else {
-        // compact
+    } elseif ($sj['task_type'] === 'compact') {
         $cmd = ['borg', 'compact', $localPath];
+    } elseif ($sj['task_type'] === 'repo_check') {
+        $cmd = ['borg', 'check', '--verbose', $localPath];
+    } elseif ($sj['task_type'] === 'repo_repair') {
+        $cmd = ['borg', 'check', '--repair', $localPath];
+    } elseif ($sj['task_type'] === 'break_lock') {
+        $cmd = ['borg', 'break-lock', $localPath];
+    } else {
+        // Unknown task type
+        $db->update('backup_jobs', [
+            'status' => 'failed',
+            'completed_at' => date('Y-m-d H:i:s'),
+            'error_log' => "Unknown server-side task type: {$sj['task_type']}",
+        ], 'id = ?', [$sj['id']]);
+        echo date('Y-m-d H:i:s') . " Unknown task type: {$sj['task_type']} for job #{$sj['id']}\n";
+        continue;
     }
 
     // Build env (server-side, no BORG_RSH needed)
@@ -545,5 +559,62 @@ if (!$lastSelfBackupTime || strtotime($lastSelfBackupTime) < time() - 86400) {
                 echo date('Y-m-d H:i:s') . " Server backups synced to S3\n";
             }
         }
+    }
+}
+
+// Step 11: Weekly auto-compact of all repositories (Saturday night at 2 AM)
+// Jobs are queued sequentially and processed one at a time by the scheduler
+$dayOfWeek = (int) date('w'); // 0=Sunday, 6=Saturday
+$hourOfDay = (int) date('G'); // 0-23
+
+// Check if it's Saturday (6) and within the 2 AM hour
+if ($dayOfWeek === 6 && $hourOfDay === 2) {
+    $lastAutoCompact = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'last_auto_compact'");
+    $lastAutoCompactTime = $lastAutoCompact['value'] ?? null;
+
+    // Only run once per week (check if last run was more than 6 days ago)
+    if (!$lastAutoCompactTime || strtotime($lastAutoCompactTime) < time() - (6 * 86400)) {
+        // Get all repositories
+        $repos = $db->fetchAll("SELECT r.id, r.name, r.agent_id FROM repositories r");
+        $queued = 0;
+
+        foreach ($repos as $repo) {
+            // Check if there's already a pending compact job for this repo
+            $existing = $db->fetchOne(
+                "SELECT id FROM backup_jobs WHERE repository_id = ? AND task_type = 'compact' AND status IN ('queued', 'sent', 'running')",
+                [$repo['id']]
+            );
+            if ($existing) {
+                continue;
+            }
+
+            // Queue compact job
+            $jobId = $db->insert('backup_jobs', [
+                'agent_id' => $repo['agent_id'],
+                'repository_id' => $repo['id'],
+                'task_type' => 'compact',
+                'status' => 'queued',
+                'message' => "Weekly auto-compact for repository \"{$repo['name']}\"",
+            ]);
+
+            $db->insert('server_log', [
+                'agent_id' => $repo['agent_id'],
+                'backup_job_id' => $jobId,
+                'level' => 'info',
+                'message' => "Weekly auto-compact job #{$jobId} queued for repository \"{$repo['name']}\"",
+            ]);
+
+            $queued++;
+        }
+
+        if ($queued > 0) {
+            echo date('Y-m-d H:i:s') . " Weekly auto-compact: queued {$queued} compact job(s)\n";
+        }
+
+        $db->query(
+            "INSERT INTO settings (`key`, `value`) VALUES ('last_auto_compact', ?)
+             ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)",
+            [date('Y-m-d H:i:s')]
+        );
     }
 }

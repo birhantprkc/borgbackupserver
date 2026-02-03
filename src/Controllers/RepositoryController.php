@@ -233,4 +233,78 @@ class RepositoryController extends Controller
         }
         return implode('-', $segments);
     }
+
+    /**
+     * Queue a repository maintenance task (check, compact, repair, break_lock).
+     */
+    public function maintenance(int $id): void
+    {
+        $this->requireAuth();
+        $this->verifyCsrf();
+
+        $action = $_POST['action'] ?? '';
+        $validActions = ['check', 'compact', 'repair', 'break_lock'];
+        if (!in_array($action, $validActions)) {
+            $this->flash('danger', 'Invalid maintenance action.');
+            $this->redirect('/clients');
+        }
+
+        $repo = $this->db->fetchOne("
+            SELECT r.*, a.user_id, a.id as agent_id
+            FROM repositories r
+            JOIN agents a ON a.id = r.agent_id
+            WHERE r.id = ?
+        ", [$id]);
+
+        if (!$repo || (!$this->isAdmin() && $repo['user_id'] != $_SESSION['user_id'])) {
+            $this->flash('danger', 'Repository not found.');
+            $this->redirect('/clients');
+        }
+
+        // Check for active jobs on this repo
+        $activeJob = $this->db->fetchOne(
+            "SELECT id, task_type FROM backup_jobs WHERE repository_id = ? AND status IN ('queued', 'sent', 'running')",
+            [$id]
+        );
+        if ($activeJob) {
+            $this->flash('warning', "Cannot run maintenance — repository has an active {$activeJob['task_type']} job (#" . $activeJob['id'] . ').');
+            $this->redirect("/clients/{$repo['agent_id']}?tab=repos");
+        }
+
+        // Map action to task_type
+        $taskType = match($action) {
+            'check' => 'repo_check',
+            'compact' => 'compact',
+            'repair' => 'repo_repair',
+            'break_lock' => 'break_lock',
+            default => null,
+        };
+
+        $actionLabel = match($action) {
+            'check' => 'Check',
+            'compact' => 'Compact',
+            'repair' => 'Repair',
+            'break_lock' => 'Break Lock',
+            default => $action,
+        };
+
+        // Queue the job
+        $jobId = $this->db->insert('backup_jobs', [
+            'agent_id' => $repo['agent_id'],
+            'repository_id' => $id,
+            'task_type' => $taskType,
+            'status' => 'queued',
+            'message' => "{$actionLabel} queued for repository \"{$repo['name']}\"",
+        ]);
+
+        $this->db->insert('server_log', [
+            'agent_id' => $repo['agent_id'],
+            'backup_job_id' => $jobId,
+            'level' => 'info',
+            'message' => "{$actionLabel} job #{$jobId} queued for repository \"{$repo['name']}\"",
+        ]);
+
+        $this->flash('success', "{$actionLabel} job queued for repository \"{$repo['name']}\".");
+        $this->redirect("/clients/{$repo['agent_id']}?tab=repos");
+    }
 }

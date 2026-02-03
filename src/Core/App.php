@@ -86,6 +86,7 @@ class App
         // Repositories
         $this->router->map('POST', '/repositories/create', 'RepositoryController@store');
         $this->router->map('POST', '/repositories/[i:id]/delete', 'RepositoryController@delete');
+        $this->router->map('POST', '/repositories/[i:id]/maintenance', 'RepositoryController@maintenance');
 
         // Backup Plans
         $this->router->map('POST', '/plans/create', 'BackupPlanController@store');
