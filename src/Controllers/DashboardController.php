@@ -166,15 +166,6 @@ class DashboardController extends Controller
             LIMIT 5
         ", $jobParams);
 
-        $recentLogs = $this->db->fetchAll("
-            SELECT sl.*, a.name as agent_name
-            FROM server_log sl
-            LEFT JOIN agents a ON a.id = sl.agent_id
-            WHERE 1=1 " . ($isAdmin ? '' : 'AND (a.user_id = ? OR sl.agent_id IS NULL)') . "
-            ORDER BY sl.created_at DESC
-            LIMIT 15
-        ", $jobParams);
-
         // Backups completed per hour over last 24h
         $backupsChart = $this->db->fetchAll("
             SELECT DATE_FORMAT(bj.completed_at, '%Y-%m-%d %H:00') as hour,
@@ -221,7 +212,6 @@ class DashboardController extends Controller
             'recentJobs' => $recentJobs,
             'activeJobs' => $activeJobs,
             'upcomingSchedules' => $upcomingSchedules,
-            'recentLogs' => $recentLogs,
             'chartData' => $chartData,
         ];
 
