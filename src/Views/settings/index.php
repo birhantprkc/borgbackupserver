@@ -558,6 +558,16 @@
                         <div class="form-text">Repos sync to: <code>bucket/prefix/agent-name/repo-name/</code></div>
                     </div>
 
+                    <hr>
+                    <div class="form-check mb-3">
+                        <input type="hidden" name="s3_sync_server_backups" value="0">
+                        <input class="form-check-input" type="checkbox" name="s3_sync_server_backups" id="s3_sync_server_backups" value="1" <?= ($settings['s3_sync_server_backups'] ?? '0') === '1' ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="s3_sync_server_backups">
+                            Sync server backups to off-site storage daily
+                        </label>
+                        <div class="form-text">Uploads the 7 most recent server backups from <code>/var/bbs/backups/</code> and removes older ones from S3.</div>
+                    </div>
+
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-warning">
                             <i class="bi bi-check-lg me-1"></i> Save S3 Settings

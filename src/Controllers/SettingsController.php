@@ -532,7 +532,7 @@ class SettingsController extends Controller
         $this->requireAdmin();
         $this->verifyCsrf();
 
-        $fields = ['s3_endpoint', 's3_region', 's3_bucket', 's3_path_prefix'];
+        $fields = ['s3_endpoint', 's3_region', 's3_bucket', 's3_path_prefix', 's3_sync_server_backups'];
         foreach ($fields as $key) {
             if (isset($_POST[$key])) {
                 $existing = $this->db->fetchOne("SELECT `key` FROM settings WHERE `key` = ?", [$key]);

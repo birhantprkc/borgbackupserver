@@ -514,4 +514,36 @@ if (!$lastSelfBackupTime || strtotime($lastSelfBackupTime) < time() - 86400) {
          ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)",
         [date('Y-m-d H:i:s')]
     );
+
+    // Sync server backups to S3 if enabled
+    $syncEnabled = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 's3_sync_server_backups'");
+    if (($syncEnabled['value'] ?? '0') === '1') {
+        $s3Service = new \BBS\Services\S3SyncService();
+        $creds = $s3Service->resolveCredentials(['credential_source' => 'global']);
+
+        if (!empty($creds['bucket']) && $s3Service->isRcloneInstalled()) {
+            $backupDir = '/var/bbs/backups';
+            $prefix = trim($creds['path_prefix'], '/');
+            $remotePath = $prefix ? "{$prefix}/_server-backups" : '_server-backups';
+            $remote = "S3:{$creds['bucket']}/{$remotePath}/";
+
+            $env = $s3Service->buildRcloneEnv($creds);
+            $envArgs = [];
+            foreach ($env as $k => $v) {
+                $envArgs[] = escapeshellarg("$k=$v");
+            }
+            $envStr = implode(' ', $envArgs);
+
+            // rclone sync mirrors the local dir to S3 (keeps 7, removes older from S3)
+            $cmd = "env $envStr rclone sync " . escapeshellarg($backupDir) . " " . escapeshellarg($remote)
+                 . " --include 'bbs-backup-*.tar.gz' --transfers 2 -v 2>&1";
+            $syncOutput = shell_exec($cmd);
+
+            if (str_contains($syncOutput ?? '', 'ERROR')) {
+                echo date('Y-m-d H:i:s') . " Server backup S3 sync failed: " . trim($syncOutput) . "\n";
+            } else {
+                echo date('Y-m-d H:i:s') . " Server backups synced to S3\n";
+            }
+        }
+    }
 }
