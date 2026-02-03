@@ -116,7 +116,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                         </div>
                         <div class="flex-grow-1">
                             <h6 class="mb-1">Compact Repository</h6>
-                            <p class="text-muted small mb-2">Reclaim disk space by removing unused data chunks after pruning archives. Run after prune operations.</p>
+                            <p class="text-muted small mb-2">Reclaim disk space by removing unused data chunks after pruning archives. Runs automatically every Saturday at 2 AM.</p>
                             <form method="POST" action="/repositories/<?= $repo['id'] ?>/maintenance" class="d-inline">
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                 <input type="hidden" name="action" value="compact">
