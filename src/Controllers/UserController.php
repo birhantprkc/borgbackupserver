@@ -144,9 +144,10 @@ class UserController extends Controller
         $newRole = $_POST['role'] ?? $user['role'];
         if ($newRole !== 'admin') {
             $permService = new PermissionService();
+            $allClients = !empty($_POST['all_clients']);
 
             // Assign agents (only if not all_clients)
-            if (empty($_POST['all_clients'])) {
+            if (!$allClients) {
                 $agentIds = $_POST['agents'] ?? [];
                 $permService->assignAgents($id, $agentIds);
             } else {
@@ -154,18 +155,22 @@ class UserController extends Controller
                 $permService->assignAgents($id, []);
             }
 
-            // Set permissions
+            // Set permissions based on form mode
             $permissions = [];
-            foreach (PermissionService::ALL_PERMISSIONS as $perm) {
-                if (isset($_POST['perm_' . $perm])) {
-                    // Permission is enabled
-                    $scope = $_POST['perm_scope_' . $perm] ?? 'global';
-                    if ($scope === 'global') {
+
+            if ($allClients) {
+                // All clients mode: use global permission checkboxes (perm_global_{permission})
+                foreach (PermissionService::ALL_PERMISSIONS as $perm) {
+                    if (isset($_POST['perm_global_' . $perm])) {
                         $permissions[] = ['permission' => $perm, 'agent_id' => null];
-                    } else {
-                        // Specific agents
-                        $permAgents = $_POST['perm_agents_' . $perm] ?? [];
-                        foreach ($permAgents as $agentId) {
+                    }
+                }
+            } else {
+                // Specific clients mode: use per-agent permission checkboxes (perm_{permission}_{agent_id})
+                $assignedAgentIds = $_POST['agents'] ?? [];
+                foreach (PermissionService::ALL_PERMISSIONS as $perm) {
+                    foreach ($assignedAgentIds as $agentId) {
+                        if (isset($_POST['perm_' . $perm . '_' . $agentId])) {
                             $permissions[] = ['permission' => $perm, 'agent_id' => (int) $agentId];
                         }
                     }

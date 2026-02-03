@@ -53,10 +53,10 @@
         </div>
     </div>
 
-    <!-- Client Access (hidden for admins) -->
+    <!-- Client Access & Permissions (hidden for admins) -->
     <div class="card border-0 shadow-sm mb-4" id="clientAccessCard" style="<?= $user['role'] === 'admin' ? 'display:none' : '' ?>">
         <div class="card-header bg-white border-0">
-            <h6 class="mb-0"><i class="bi bi-pc-display me-2"></i>Client Access</h6>
+            <h6 class="mb-0"><i class="bi bi-pc-display me-2"></i>Client Access & Permissions</h6>
         </div>
         <div class="card-body">
             <div class="form-check mb-3">
@@ -67,81 +67,90 @@
                 <div class="form-text">User will have access to all current and future clients</div>
             </div>
 
-            <div id="specificClientsDiv" style="<?= $user['all_clients'] ? 'display:none' : '' ?>">
-                <label class="form-label fw-semibold">Assigned Clients</label>
-                <?php if (empty($allAgents)): ?>
-                <p class="text-muted">No clients available</p>
-                <?php else: ?>
-                <div class="row">
-                    <?php foreach ($allAgents as $agent): ?>
-                    <div class="col-md-4 col-lg-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="agents[]" value="<?= $agent['id'] ?>" id="agent_<?= $agent['id'] ?>"
-                                <?= in_array($agent['id'], $userAgentIds) ? 'checked' : '' ?>>
-                            <label class="form-check-label" for="agent_<?= $agent['id'] ?>">
-                                <?= htmlspecialchars($agent['name']) ?>
-                            </label>
-                        </div>
-                    </div>
-                    <?php endforeach; ?>
-                </div>
-                <?php endif; ?>
-            </div>
-        </div>
-    </div>
-
-    <!-- Permissions (hidden for admins) -->
-    <div class="card border-0 shadow-sm mb-4" id="permissionsCard" style="<?= $user['role'] === 'admin' ? 'display:none' : '' ?>">
-        <div class="card-header bg-white border-0">
-            <h6 class="mb-0"><i class="bi bi-shield-lock me-2"></i>Permissions</h6>
-        </div>
-        <div class="card-body">
-            <p class="text-muted small mb-3">Select which actions this user can perform. Permissions can apply to all assigned clients or specific ones.</p>
-
-            <?php foreach ($allPermissions as $perm): ?>
-            <?php $data = $permissionData[$perm]; ?>
-            <div class="border rounded p-3 mb-3">
-                <div class="d-flex align-items-center justify-content-between mb-2">
+            <!-- All Clients Permissions (shown when all_clients is checked) -->
+            <div id="allClientsPermsDiv" style="<?= $user['all_clients'] ? '' : 'display:none' ?>">
+                <p class="text-muted small mb-2">Grant permissions for all clients:</p>
+                <div class="d-flex flex-wrap gap-3">
+                    <?php foreach ($allPermissions as $perm): ?>
+                    <?php $data = $permissionData[$perm]; ?>
                     <div class="form-check">
-                        <input class="form-check-input perm-check" type="checkbox" name="perm_<?= $perm ?>" id="perm_<?= $perm ?>" value="1"
-                            <?= $data['enabled'] ? 'checked' : '' ?> data-perm="<?= $perm ?>">
-                        <label class="form-check-label fw-semibold" for="perm_<?= $perm ?>">
+                        <input class="form-check-input" type="checkbox" name="perm_global_<?= $perm ?>" id="perm_global_<?= $perm ?>" value="1"
+                            <?= $data['global'] ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="perm_global_<?= $perm ?>">
                             <?= htmlspecialchars($permissionLabels[$perm]) ?>
                         </label>
                     </div>
-                </div>
-
-                <div class="perm-scope-div ms-4" id="scope_<?= $perm ?>" style="<?= $data['enabled'] ? '' : 'display:none' ?>">
-                    <div class="form-check form-check-inline">
-                        <input class="form-check-input scope-radio" type="radio" name="perm_scope_<?= $perm ?>" id="scope_global_<?= $perm ?>" value="global"
-                            <?= $data['global'] || empty($data['agent_ids']) ? 'checked' : '' ?> data-perm="<?= $perm ?>">
-                        <label class="form-check-label" for="scope_global_<?= $perm ?>">All assigned clients</label>
-                    </div>
-                    <div class="form-check form-check-inline">
-                        <input class="form-check-input scope-radio" type="radio" name="perm_scope_<?= $perm ?>" id="scope_specific_<?= $perm ?>" value="specific"
-                            <?= !$data['global'] && !empty($data['agent_ids']) ? 'checked' : '' ?> data-perm="<?= $perm ?>">
-                        <label class="form-check-label" for="scope_specific_<?= $perm ?>">Specific clients</label>
-                    </div>
-
-                    <div class="perm-agents-div mt-2" id="agents_<?= $perm ?>" style="<?= (!$data['global'] && !empty($data['agent_ids'])) ? '' : 'display:none' ?>">
-                        <div class="row">
-                            <?php foreach ($allAgents as $agent): ?>
-                            <div class="col-md-4 col-lg-3">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="perm_agents_<?= $perm ?>[]" value="<?= $agent['id'] ?>"
-                                        id="perm_agent_<?= $perm ?>_<?= $agent['id'] ?>"
-                                        <?= in_array($agent['id'], $data['agent_ids']) ? 'checked' : '' ?>>
-                                    <label class="form-check-label small" for="perm_agent_<?= $perm ?>_<?= $agent['id'] ?>">
-                                        <?= htmlspecialchars($agent['name']) ?>
-                                    </label>
-                                </div>
-                            </div>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
+                    <?php endforeach; ?>
                 </div>
             </div>
-            <?php endforeach; ?>
+
+            <!-- Specific Clients Table (shown when all_clients is unchecked) -->
+            <div id="specificClientsDiv" style="<?= $user['all_clients'] ? 'display:none' : '' ?>">
+                <?php if (empty($allAgents)): ?>
+                <p class="text-muted">No clients available</p>
+                <?php else: ?>
+                <p class="text-muted small mb-2">Select clients and their permissions:</p>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 30px;">
+                                    <input type="checkbox" class="form-check-input" id="selectAllClients" title="Select/Deselect All">
+                                </th>
+                                <th>Client</th>
+                                <?php foreach ($allPermissions as $perm): ?>
+                                <th class="text-center" style="width: 100px;">
+                                    <small><?= htmlspecialchars($permissionLabels[$perm]) ?></small>
+                                </th>
+                                <?php endforeach; ?>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($allAgents as $agent): ?>
+                            <?php $isAssigned = in_array($agent['id'], $userAgentIds); ?>
+                            <tr class="<?= $isAssigned ? '' : 'table-light' ?>">
+                                <td>
+                                    <input class="form-check-input client-checkbox" type="checkbox" name="agents[]"
+                                        value="<?= $agent['id'] ?>" id="agent_<?= $agent['id'] ?>"
+                                        data-agent-id="<?= $agent['id'] ?>"
+                                        <?= $isAssigned ? 'checked' : '' ?>>
+                                </td>
+                                <td>
+                                    <label for="agent_<?= $agent['id'] ?>" class="mb-0 <?= $isAssigned ? 'fw-semibold' : 'text-muted' ?>">
+                                        <?= htmlspecialchars($agent['name']) ?>
+                                    </label>
+                                </td>
+                                <?php foreach ($allPermissions as $perm): ?>
+                                <?php
+                                    $data = $permissionData[$perm];
+                                    $hasPermForAgent = $data['global'] || in_array($agent['id'], $data['agent_ids']);
+                                ?>
+                                <td class="text-center perm-cell" data-agent-id="<?= $agent['id'] ?>">
+                                    <input class="form-check-input perm-checkbox" type="checkbox"
+                                        name="perm_<?= $perm ?>_<?= $agent['id'] ?>" value="1"
+                                        data-agent-id="<?= $agent['id'] ?>" data-perm="<?= $perm ?>"
+                                        <?= $hasPermForAgent && $isAssigned ? 'checked' : '' ?>
+                                        <?= $isAssigned ? '' : 'disabled' ?>>
+                                </td>
+                                <?php endforeach; ?>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                        <tfoot class="table-light">
+                            <tr>
+                                <td colspan="2" class="text-end small text-muted">Select all permissions:</td>
+                                <?php foreach ($allPermissions as $perm): ?>
+                                <td class="text-center">
+                                    <input type="checkbox" class="form-check-input select-all-perm"
+                                        data-perm="<?= $perm ?>" title="Select all <?= htmlspecialchars($permissionLabels[$perm]) ?>">
+                                </td>
+                                <?php endforeach; ?>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                <?php endif; ?>
+            </div>
         </div>
     </div>
 
@@ -185,37 +194,93 @@
 document.addEventListener('DOMContentLoaded', function() {
     const roleSelect = document.getElementById('roleSelect');
     const clientAccessCard = document.getElementById('clientAccessCard');
-    const permissionsCard = document.getElementById('permissionsCard');
     const allClientsCheck = document.getElementById('allClientsCheck');
+    const allClientsPermsDiv = document.getElementById('allClientsPermsDiv');
     const specificClientsDiv = document.getElementById('specificClientsDiv');
+    const selectAllClients = document.getElementById('selectAllClients');
 
-    // Toggle client access and permissions based on role
+    // Toggle client access based on role
     roleSelect.addEventListener('change', function() {
         const isAdmin = this.value === 'admin';
         clientAccessCard.style.display = isAdmin ? 'none' : '';
-        permissionsCard.style.display = isAdmin ? 'none' : '';
     });
 
-    // Toggle specific clients based on all_clients checkbox
+    // Toggle between all clients and specific clients
     allClientsCheck.addEventListener('change', function() {
+        allClientsPermsDiv.style.display = this.checked ? '' : 'none';
         specificClientsDiv.style.display = this.checked ? 'none' : '';
     });
 
-    // Toggle permission scope options
-    document.querySelectorAll('.perm-check').forEach(function(check) {
-        check.addEventListener('change', function() {
-            const perm = this.dataset.perm;
-            document.getElementById('scope_' + perm).style.display = this.checked ? '' : 'none';
+    // Handle client checkbox changes - enable/disable permission checkboxes
+    document.querySelectorAll('.client-checkbox').forEach(function(checkbox) {
+        checkbox.addEventListener('change', function() {
+            const agentId = this.dataset.agentId;
+            const row = this.closest('tr');
+            const permCheckboxes = row.querySelectorAll('.perm-checkbox');
+            const label = row.querySelector('label');
+
+            if (this.checked) {
+                row.classList.remove('table-light');
+                label.classList.add('fw-semibold');
+                label.classList.remove('text-muted');
+                permCheckboxes.forEach(cb => cb.disabled = false);
+            } else {
+                row.classList.add('table-light');
+                label.classList.remove('fw-semibold');
+                label.classList.add('text-muted');
+                permCheckboxes.forEach(cb => {
+                    cb.disabled = true;
+                    cb.checked = false;
+                });
+            }
+            updateSelectAllState();
         });
     });
 
-    // Toggle specific agents for permission
-    document.querySelectorAll('.scope-radio').forEach(function(radio) {
-        radio.addEventListener('change', function() {
+    // Select all clients checkbox
+    if (selectAllClients) {
+        selectAllClients.addEventListener('change', function() {
+            document.querySelectorAll('.client-checkbox').forEach(cb => {
+                if (cb.checked !== this.checked) {
+                    cb.checked = this.checked;
+                    cb.dispatchEvent(new Event('change'));
+                }
+            });
+        });
+    }
+
+    // Select all for a specific permission column
+    document.querySelectorAll('.select-all-perm').forEach(function(checkbox) {
+        checkbox.addEventListener('change', function() {
             const perm = this.dataset.perm;
-            const isSpecific = this.value === 'specific';
-            document.getElementById('agents_' + perm).style.display = isSpecific ? '' : 'none';
+            const isChecked = this.checked;
+            document.querySelectorAll(`.perm-checkbox[data-perm="${perm}"]`).forEach(cb => {
+                if (!cb.disabled) {
+                    cb.checked = isChecked;
+                }
+            });
         });
     });
+
+    // Update select-all checkbox state based on individual checkboxes
+    function updateSelectAllState() {
+        if (!selectAllClients) return;
+        const allCheckboxes = document.querySelectorAll('.client-checkbox');
+        const checkedCount = document.querySelectorAll('.client-checkbox:checked').length;
+        selectAllClients.checked = checkedCount === allCheckboxes.length;
+        selectAllClients.indeterminate = checkedCount > 0 && checkedCount < allCheckboxes.length;
+
+        // Update permission column select-all states
+        document.querySelectorAll('.select-all-perm').forEach(function(selectAll) {
+            const perm = selectAll.dataset.perm;
+            const enabledPerms = document.querySelectorAll(`.perm-checkbox[data-perm="${perm}"]:not(:disabled)`);
+            const checkedPerms = document.querySelectorAll(`.perm-checkbox[data-perm="${perm}"]:not(:disabled):checked`);
+            selectAll.checked = enabledPerms.length > 0 && checkedPerms.length === enabledPerms.length;
+            selectAll.indeterminate = checkedPerms.length > 0 && checkedPerms.length < enabledPerms.length;
+        });
+    }
+
+    // Initial state update
+    updateSelectAllState();
 });
 </script>
