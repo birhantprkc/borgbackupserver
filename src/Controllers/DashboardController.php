@@ -180,18 +180,16 @@ class DashboardController extends Controller
             ORDER BY hour
         ", $jobParams);
 
-        // Group task types into categories (prune/compact are routine, skip them)
+        // Group task types into 3 categories
         $categoryMap = [
             'backup' => 'backups',
             'restore' => 'restores', 'restore_mysql' => 'restores', 'restore_pg' => 'restores',
             's3_sync' => 's3_sync',
-            'prune' => null, 'compact' => null,
-            'update_agent' => null, 'update_borg' => null, 'plugin_test' => null,
         ];
         // Index by hour+category
         $hourCounts = [];
         foreach ($jobsChart as $row) {
-            $cat = $categoryMap[$row['task_type']] ?? 'other';
+            $cat = $categoryMap[$row['task_type']] ?? null;
             if ($cat === null) continue;
             $hourCounts[$row['hour']][$cat] = ($hourCounts[$row['hour']][$cat] ?? 0) + (int) $row['count'];
         }
@@ -214,7 +212,6 @@ class DashboardController extends Controller
                 'backups' => $counts['backups'] ?? 0,
                 'restores' => $counts['restores'] ?? 0,
                 's3_sync' => $counts['s3_sync'] ?? 0,
-                'other' => $counts['other'] ?? 0,
             ];
         }
 

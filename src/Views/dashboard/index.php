@@ -600,12 +600,6 @@ new Chart(ctx, {
                 backgroundColor: 'rgba(75, 192, 192, 0.7)',
                 borderRadius: 2,
             },
-            {
-                label: 'Other',
-                data: chartData.map(d => d.other),
-                backgroundColor: 'rgba(153, 102, 255, 0.7)',
-                borderRadius: 2,
-            },
         ]
     },
     options: {
