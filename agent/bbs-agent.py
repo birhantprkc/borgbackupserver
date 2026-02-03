@@ -19,7 +19,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.8.4"
+AGENT_VERSION = "1.8.5"
 CONFIG_PATH = "/etc/bbs-agent/config.ini"
 LOG_PATH = "/var/log/bbs-agent.log"
 SSH_KEY_PATH = "/etc/bbs-agent/ssh_key"
@@ -1535,6 +1535,11 @@ def execute_task(config, task):
     # Build environment
     env = os.environ.copy()
     env.update(env_vars)
+
+    # Always allow relocated repos - common after S3 restore or copying repositories
+    # This prevents "repository was previously located at X" interactive prompts
+    env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
+    env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
 
     # Ensure BORG_RSH is set if SSH key exists and command targets an SSH repo
     if os.path.exists(SSH_KEY_PATH) and "BORG_RSH" not in env:

@@ -274,6 +274,16 @@ foreach ($serverJobs as $sj) {
 
         echo date('Y-m-d H:i:s') . " S3 restore job #{$sj['id']} {$s3Result}\n";
 
+        // After successful S3 restore, clear borg cache to prevent "repository relocated" errors
+        // This happens because S3 copies share the same internal borg repository UUID
+        if ($s3Result === 'completed' && !empty($sj['ssh_unix_user'])) {
+            $clearCmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'clear-borg-cache', $sj['ssh_unix_user']];
+            exec(implode(' ', array_map('escapeshellarg', $clearCmd)) . ' 2>&1', $clearOutput, $clearRet);
+            if ($clearRet === 0) {
+                echo date('Y-m-d H:i:s') . "   Cleared borg cache for {$sj['ssh_unix_user']}\n";
+            }
+        }
+
         // After successful S3 restore, try to import manifest first (fast path)
         // Falls back to catalog_sync if no manifest exists (slow path via borg commands)
         if ($s3Result === 'completed' && $sj['repository_id'] && $s3Repo && $s3Agent) {

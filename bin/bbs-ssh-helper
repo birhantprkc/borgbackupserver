@@ -542,8 +542,36 @@ case "$ACTION" in
         echo "OK"
         ;;
 
+    clear-borg-cache)
+        # Clear borg cache for a specific user
+        # Usage: bbs-ssh-helper clear-borg-cache <username>
+        # This is needed after S3 restore to prevent "repository relocated" errors
+        # when multiple repos share the same internal borg UUID (common with S3 copies)
+        USERNAME="${2:-}"
+
+        if [ -z "$USERNAME" ]; then
+            echo "Usage: bbs-ssh-helper clear-borg-cache <username>"
+            exit 1
+        fi
+
+        if [[ ! "$USERNAME" =~ ^bbs-[a-z0-9_-]+$ ]]; then
+            echo "Error: username must match bbs-[a-z0-9_-]+"
+            exit 1
+        fi
+
+        BORG_CACHE="/var/bbs/cache/$USERNAME/.cache/borg"
+        if [ -d "$BORG_CACHE" ]; then
+            rm -rf "$BORG_CACHE"
+            echo "Cleared borg cache at $BORG_CACHE"
+        else
+            echo "No borg cache found at $BORG_CACHE"
+        fi
+
+        echo "OK"
+        ;;
+
     *)
-        echo "Usage: bbs-ssh-helper {create-user|create-repo-dir|borg-extract|fix-repo-perms|delete-user|rclone-sync|rclone-restore|get-size|delete-storage} [args...]"
+        echo "Usage: bbs-ssh-helper {create-user|create-repo-dir|borg-extract|fix-repo-perms|delete-user|rclone-sync|rclone-restore|get-size|delete-storage|clear-borg-cache} [args...]"
         exit 1
         ;;
 esac
