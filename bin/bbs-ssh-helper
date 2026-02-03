@@ -269,9 +269,9 @@ case "$ACTION" in
         fi
 
         # Run rclone as the repo-owning user with S3 config via env vars
-        # RCLONE_CONFIG="" disables loading config file from home directory
+        # RCLONE_CONFIG=/dev/null disables loading config file from home directory
         sudo -u "$USERNAME" env \
-            "RCLONE_CONFIG=" \
+            "RCLONE_CONFIG=/dev/null" \
             "RCLONE_CONFIG_S3_TYPE=s3" \
             "RCLONE_CONFIG_S3_PROVIDER=Other" \
             "RCLONE_CONFIG_S3_ACCESS_KEY_ID=${S3_ACCESS_KEY}" \
@@ -322,10 +322,10 @@ case "$ACTION" in
         chmod 770 "$LOCAL_PATH"
 
         # Run rclone as the repo-owning user with S3 config via env vars
-        # RCLONE_CONFIG="" disables loading config file from home directory
+        # RCLONE_CONFIG=/dev/null disables loading config file from home directory
         # Note: sync FROM remote TO local (reverse of rclone-sync)
         sudo -u "$USERNAME" env \
-            "RCLONE_CONFIG=" \
+            "RCLONE_CONFIG=/dev/null" \
             "RCLONE_CONFIG_S3_TYPE=s3" \
             "RCLONE_CONFIG_S3_PROVIDER=Other" \
             "RCLONE_CONFIG_S3_ACCESS_KEY_ID=${S3_ACCESS_KEY}" \
