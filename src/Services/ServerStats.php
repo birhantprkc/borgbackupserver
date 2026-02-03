@@ -156,7 +156,7 @@ class ServerStats
     {
         $db = \BBS\Core\Database::getInstance();
 
-        $catalogFiles = $db->fetchOne("SELECT COUNT(*) AS cnt FROM file_catalog");
+        $catalogFiles = $db->fetchOne("SELECT COUNT(*) AS cnt FROM file_paths");
         $archives = $db->fetchOne("SELECT COUNT(*) AS cnt FROM archives");
         $jobs = $db->fetchOne("SELECT COUNT(*) AS cnt FROM backup_jobs WHERE status = 'completed'");
 
