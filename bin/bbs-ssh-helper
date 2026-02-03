@@ -176,6 +176,49 @@ case "$ACTION" in
         exit $?
         ;;
 
+    borg-list-archive)
+        # List files in a specific archive (for catalog rebuild)
+        # Usage: bbs-ssh-helper borg-list-archive <username> <passphrase> <repo_path>::<archive_name>
+        # Output: JSON array of file paths
+        USERNAME="${2:-}"
+        PASSPHRASE="${3:-}"
+        ARCHIVE_PATH="${4:-}"
+
+        if [ -z "$USERNAME" ] || [ -z "$ARCHIVE_PATH" ]; then
+            echo "Usage: bbs-ssh-helper borg-list-archive <username> <passphrase> <repo::archive>"
+            exit 1
+        fi
+
+        if [[ ! "$USERNAME" =~ ^bbs-[a-z0-9_-]+$ ]]; then
+            echo "Error: username must match bbs-[a-z0-9_-]+"
+            exit 1
+        fi
+
+        # Extract repo path from archive path (before ::)
+        REPO_PATH="${ARCHIVE_PATH%%::*}"
+
+        # Safety: repo path must be under /var/bbs/
+        if [[ ! "$REPO_PATH" =~ ^/var/bbs/ ]]; then
+            echo "Error: repo path must be under /var/bbs/"
+            exit 1
+        fi
+
+        # Per-user borg cache dir
+        BORG_DIR="/var/bbs/cache/$USERNAME"
+        mkdir -p "$BORG_DIR"
+        chown "$USERNAME":"$USERNAME" "$BORG_DIR"
+
+        # Run borg list on archive with JSON output (paths only)
+        sudo -u "$USERNAME" \
+            BORG_PASSPHRASE="$PASSPHRASE" \
+            BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes \
+            BORG_BASE_DIR="$BORG_DIR" \
+            HOME="$BORG_DIR" \
+            borg list --json-lines "$ARCHIVE_PATH" 2>&1
+
+        exit $?
+        ;;
+
     borg-cmd)
         # Run arbitrary borg command as the repo-owning user
         # Usage: bbs-ssh-helper borg-cmd <username> <passphrase> <borg-subcommand> [args...]

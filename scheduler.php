@@ -368,6 +368,22 @@ foreach ($serverJobs as $sj) {
                 'message' => "Catalog sync completed: {$archiveCount} archives found",
             ]);
             echo date('Y-m-d H:i:s') . " Catalog sync job #{$sj['id']} completed: {$archiveCount} archives\n";
+
+            // Auto-queue catalog_rebuild to populate file catalog for all archives
+            if ($archiveCount > 0) {
+                $db->insert('backup_jobs', [
+                    'agent_id' => $sj['agent_id'],
+                    'repository_id' => $sj['repository_id'],
+                    'task_type' => 'catalog_rebuild',
+                    'status' => 'queued',
+                ]);
+                $db->insert('server_log', [
+                    'agent_id' => $sj['agent_id'],
+                    'level' => 'info',
+                    'message' => "Catalog rebuild queued for {$archiveCount} archives after catalog sync",
+                ]);
+                echo date('Y-m-d H:i:s') . " Queued catalog_rebuild for repo #{$sj['repository_id']} ({$archiveCount} archives)\n";
+            }
         } else {
             // Error may be in $csOutput (due to 2>&1 in helper) or $csError
             $errorMsg = trim($csError ?: $csOutput) ?: "borg list failed with exit code {$csExitCode}";
@@ -385,6 +401,222 @@ foreach ($serverJobs as $sj) {
                 'message' => "Catalog sync failed: " . $errorMsg,
             ]);
             echo date('Y-m-d H:i:s') . " Catalog sync job #{$sj['id']} failed: {$errorMsg}\n";
+        }
+        continue;
+    }
+
+    // Catalog rebuild — extract file listings from all archives to populate file_catalog
+    if ($sj['task_type'] === 'catalog_rebuild') {
+        $crRepo = $db->fetchOne("SELECT * FROM repositories WHERE id = ?", [$sj['repository_id']]);
+        if (!$crRepo) {
+            $db->update('backup_jobs', [
+                'status' => 'failed',
+                'completed_at' => date('Y-m-d H:i:s'),
+                'error_log' => 'Repository not found',
+            ], 'id = ?', [$sj['id']]);
+            echo date('Y-m-d H:i:s') . " Catalog rebuild job #{$sj['id']} failed: repository not found\n";
+            continue;
+        }
+
+        $crLocalPath = \BBS\Services\BorgCommandBuilder::getLocalRepoPath($crRepo);
+        $passphrase = '';
+        if (!empty($crRepo['passphrase_encrypted'])) {
+            try {
+                $passphrase = \BBS\Services\Encryption::decrypt($crRepo['passphrase_encrypted']);
+            } catch (\Exception $e) {
+                // May already be plaintext or missing
+            }
+        }
+
+        // Get all archives for this repo
+        $crArchives = $db->fetchAll("SELECT id, archive_name FROM archives WHERE repository_id = ? ORDER BY created_at ASC", [$crRepo['id']]);
+        $totalArchives = count($crArchives);
+
+        if ($totalArchives === 0) {
+            $db->update('backup_jobs', [
+                'status' => 'completed',
+                'completed_at' => date('Y-m-d H:i:s'),
+                'duration_seconds' => 0,
+            ], 'id = ?', [$sj['id']]);
+            echo date('Y-m-d H:i:s') . " Catalog rebuild job #{$sj['id']} completed: no archives to process\n";
+            continue;
+        }
+
+        $runAsUser = $sj['ssh_unix_user'] ?? null;
+        $agentId = $sj['agent_id'];
+        $processedArchives = 0;
+        $totalFiles = 0;
+        $errors = [];
+
+        echo date('Y-m-d H:i:s') . " Catalog rebuild job #{$sj['id']}: processing {$totalArchives} archives...\n";
+
+        foreach ($crArchives as $crArchive) {
+            $archivePath = "{$crLocalPath}::{$crArchive['archive_name']}";
+
+            // Build command to list archive files
+            if ($runAsUser) {
+                $crCmd = [
+                    'sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-list-archive',
+                    $runAsUser, $passphrase, $archivePath
+                ];
+                $crEnv = null;
+            } else {
+                $crCmd = ['borg', 'list', '--json-lines', $archivePath];
+                $crEnv = [];
+                if ($passphrase) {
+                    $crEnv['BORG_PASSPHRASE'] = $passphrase;
+                }
+                $crEnv['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes';
+                $crEnv['BORG_BASE_DIR'] = '/tmp/bbs-borg-www-data';
+                $crEnv['HOME'] = '/tmp/bbs-borg-www-data';
+                $crEnv = array_filter($_SERVER, 'is_string') + $crEnv;
+            }
+
+            $crProc = proc_open($crCmd, [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ], $crPipes, null, $crEnv);
+
+            if (!is_resource($crProc)) {
+                $errors[] = "Failed to start borg for archive {$crArchive['archive_name']}";
+                continue;
+            }
+
+            fclose($crPipes[0]);
+            $crOutput = stream_get_contents($crPipes[1]);
+            $crError = stream_get_contents($crPipes[2]);
+            fclose($crPipes[1]);
+            fclose($crPipes[2]);
+            $crExitCode = proc_close($crProc);
+
+            if ($crExitCode !== 0) {
+                $errors[] = "Archive {$crArchive['archive_name']}: exit code {$crExitCode}";
+                continue;
+            }
+
+            // Parse JSON lines output and insert into file_catalog
+            $files = [];
+            $lines = array_filter(explode("\n", trim($crOutput)));
+            foreach ($lines as $line) {
+                $fileData = json_decode($line, true);
+                if ($fileData && isset($fileData['path'])) {
+                    // Only include files (not directories)
+                    if (($fileData['type'] ?? '') !== 'd') {
+                        $files[] = [
+                            'path' => $fileData['path'],
+                            'size' => $fileData['size'] ?? 0,
+                            'mtime' => isset($fileData['mtime']) ? date('Y-m-d H:i:s', strtotime($fileData['mtime'])) : null,
+                        ];
+                    }
+                }
+            }
+
+            if (!empty($files)) {
+                // Step 1: Upsert paths into file_paths
+                $pathPlaceholders = [];
+                $pathValues = [];
+                $paths = [];
+                foreach ($files as $file) {
+                    $path = $file['path'];
+                    if (isset($paths[$path])) continue;
+                    $paths[$path] = true;
+                    $pathPlaceholders[] = '(?, ?, ?)';
+                    $pathValues[] = $agentId;
+                    $pathValues[] = $path;
+                    $pathValues[] = basename($path);
+                }
+
+                if (!empty($pathPlaceholders)) {
+                    $sql = "INSERT IGNORE INTO file_paths (agent_id, path, file_name) VALUES "
+                         . implode(', ', $pathPlaceholders);
+                    $db->query($sql, $pathValues);
+                }
+
+                // Step 2: Fetch IDs for all paths
+                $pathKeys = array_keys($paths);
+                $inPlaceholders = implode(',', array_fill(0, count($pathKeys), '?'));
+                $rows = $db->fetchAll(
+                    "SELECT id, path FROM file_paths WHERE agent_id = ? AND path IN ({$inPlaceholders})",
+                    array_merge([$agentId], $pathKeys)
+                );
+                $pathIdMap = [];
+                foreach ($rows as $row) {
+                    $pathIdMap[$row['path']] = $row['id'];
+                }
+
+                // Step 3: Insert into file_catalog (batch for performance)
+                $catalogPlaceholders = [];
+                $catalogValues = [];
+                foreach ($files as $file) {
+                    $path = $file['path'];
+                    if (!isset($pathIdMap[$path])) continue;
+
+                    $catalogPlaceholders[] = '(?, ?, ?, ?, ?)';
+                    $catalogValues[] = $crArchive['id'];
+                    $catalogValues[] = $pathIdMap[$path];
+                    $catalogValues[] = (int) $file['size'];
+                    $catalogValues[] = 'U';  // Unknown status for restored files
+                    $catalogValues[] = $file['mtime'];
+                }
+
+                if (!empty($catalogPlaceholders)) {
+                    // Use INSERT IGNORE to avoid duplicates if catalog already has some entries
+                    $sql = "INSERT IGNORE INTO file_catalog (archive_id, file_path_id, file_size, status, mtime) VALUES "
+                         . implode(', ', $catalogPlaceholders);
+                    $db->query($sql, $catalogValues);
+                }
+
+                $totalFiles += count($files);
+            }
+
+            $processedArchives++;
+            $archiveFileCount = count($files);
+
+            // Log progress to server_log for UI visibility
+            $db->insert('server_log', [
+                'agent_id' => $sj['agent_id'],
+                'backup_job_id' => $sj['id'],
+                'level' => 'info',
+                'message' => "Catalog rebuild {$processedArchives}/{$totalArchives}: {$crArchive['archive_name']} ({$archiveFileCount} files)",
+            ]);
+
+            echo date('Y-m-d H:i:s') . "   Catalog rebuild {$processedArchives}/{$totalArchives}: {$crArchive['archive_name']} ({$archiveFileCount} files)\n";
+        }
+
+        $crNow = date('Y-m-d H:i:s');
+        $duration = max(0, strtotime($crNow) - strtotime($startedAt));
+
+        if (empty($errors)) {
+            $db->update('backup_jobs', [
+                'status' => 'completed',
+                'completed_at' => $crNow,
+                'duration_seconds' => $duration,
+            ], 'id = ?', [$sj['id']]);
+
+            $db->insert('server_log', [
+                'agent_id' => $sj['agent_id'],
+                'backup_job_id' => $sj['id'],
+                'level' => 'info',
+                'message' => "Catalog rebuild completed: {$processedArchives} archives, {$totalFiles} files indexed",
+            ]);
+            echo date('Y-m-d H:i:s') . " Catalog rebuild job #{$sj['id']} completed: {$processedArchives} archives, {$totalFiles} files\n";
+        } else {
+            $errorSummary = count($errors) . " errors: " . implode('; ', array_slice($errors, 0, 3));
+            $db->update('backup_jobs', [
+                'status' => 'failed',
+                'completed_at' => $crNow,
+                'duration_seconds' => $duration,
+                'error_log' => $errorSummary,
+            ], 'id = ?', [$sj['id']]);
+
+            $db->insert('server_log', [
+                'agent_id' => $sj['agent_id'],
+                'backup_job_id' => $sj['id'],
+                'level' => 'error',
+                'message' => "Catalog rebuild failed: {$errorSummary}",
+            ]);
+            echo date('Y-m-d H:i:s') . " Catalog rebuild job #{$sj['id']} failed: {$errorSummary}\n";
         }
         continue;
     }
