@@ -183,8 +183,18 @@ class ServerStats
         $pagesTotal = $statusVars['Innodb_buffer_pool_pages_total'] ?? 1;
         $pagesFree = $statusVars['Innodb_buffer_pool_pages_free'] ?? 0;
 
-        // Calculate metrics
-        $qps = round($questions / max($uptime, 1), 1);
+        // Calculate real-time QPS from delta between polls
+        $cache = Cache::getInstance();
+        $prevSnapshot = $cache->get('mysql_qps_snapshot');
+        if ($prevSnapshot && isset($prevSnapshot['questions'], $prevSnapshot['uptime'])) {
+            $dQuestions = $questions - $prevSnapshot['questions'];
+            $dUptime = $uptime - $prevSnapshot['uptime'];
+            $qps = $dUptime > 0 ? round($dQuestions / $dUptime, 1) : 0;
+        } else {
+            // First call: fall back to lifetime average
+            $qps = round($questions / max($uptime, 1), 1);
+        }
+        $cache->set('mysql_qps_snapshot', ['questions' => $questions, 'uptime' => $uptime], 300);
         $hitRate = $readRequests > 0
             ? round((1 - $diskReads / $readRequests) * 100, 2)
             : 100.0;
