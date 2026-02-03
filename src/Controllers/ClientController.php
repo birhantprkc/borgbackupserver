@@ -358,6 +358,21 @@ class ClientController extends Controller
         $allPlugins = $pluginManager->getAllPlugins();
         $pluginConfigs = $pluginManager->getPluginConfigs($id);
 
+        // Repos with S3 sync enabled (via plan plugins)
+        $s3SyncRepos = $this->db->fetchAll("
+            SELECT DISTINCT bp.repository_id,
+                   (SELECT MAX(bj.completed_at) FROM backup_jobs bj
+                    WHERE bj.repository_id = bp.repository_id AND bj.task_type = 's3_sync' AND bj.status = 'completed') as last_s3_sync
+            FROM backup_plan_plugins bpp
+            JOIN plugins p ON p.id = bpp.plugin_id
+            JOIN backup_plans bp ON bp.id = bpp.backup_plan_id
+            WHERE p.slug = 's3_sync' AND bp.agent_id = ?
+        ", [$id]);
+        $s3SyncByRepo = [];
+        foreach ($s3SyncRepos as $sr) {
+            $s3SyncByRepo[$sr['repository_id']] = $sr['last_s3_sync'];
+        }
+
         $this->view('clients/detail', [
             'pageTitle' => 'Clients',
             'agent' => $agent,
@@ -379,6 +394,7 @@ class ClientController extends Controller
             'allPlugins' => $allPlugins,
             'pluginManager' => $pluginManager,
             'pluginConfigs' => $pluginConfigs,
+            's3SyncByRepo' => $s3SyncByRepo,
         ]);
     }
 
