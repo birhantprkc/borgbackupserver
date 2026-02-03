@@ -1,11 +1,3 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h4 class="mb-0">Backup Clients</h4>
-    <?php if (($_SESSION['user_role'] ?? '') === 'admin'): ?>
-    <a href="/clients/add" class="btn btn-success">
-        <i class="bi bi-plus-circle me-1"></i><span class="d-none d-sm-inline"> Add Client</span>
-    </a>
-    <?php endif; ?>
-</div>
 
 <?php if (!empty($agents)): ?>
 <!-- Stat Cards -->
@@ -109,11 +101,16 @@
 <div class="card border-0 shadow-sm">
     <div class="card-body p-0">
         <?php if (!empty($agents)): ?>
-        <div class="px-3 pt-3 pb-2">
+        <div class="d-flex justify-content-between align-items-center px-3 pt-3 pb-2">
             <div class="input-group" style="max-width: 320px;">
                 <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
                 <input type="text" id="clientSearch" class="form-control border-start-0 ps-0" placeholder="Search clients...">
             </div>
+            <?php if (($_SESSION['user_role'] ?? '') === 'admin'): ?>
+            <a href="/clients/add" class="btn btn-success">
+                <i class="bi bi-plus-circle me-1"></i><span class="d-none d-sm-inline"> Add Client</span>
+            </a>
+            <?php endif; ?>
         </div>
         <?php endif; ?>
 
