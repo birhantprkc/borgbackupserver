@@ -76,7 +76,7 @@
     <div class="<?= $isAdmin ? 'col-lg-4' : 'col-12' ?>">
         <div class="card border-0 card-no-outline shadow-sm h-100">
             <div class="card-header bg-white fw-semibold">
-                <i class="bi bi-bar-chart me-1"></i> Backups (24h)
+                <i class="bi bi-bar-chart me-1"></i> Jobs (24h)
             </div>
             <div class="card-body py-2">
                 <canvas id="backupsChart" height="160"></canvas>
@@ -574,35 +574,59 @@
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script>
-// Backups Chart
+// Jobs Chart (stacked bar)
 const chartData = <?= json_encode($chartData) ?>;
 const ctx = document.getElementById('backupsChart').getContext('2d');
 new Chart(ctx, {
     type: 'bar',
     data: {
         labels: chartData.map(d => d.label),
-        datasets: [{
-            label: 'Backups',
-            data: chartData.map(d => d.count),
-            backgroundColor: 'rgba(54, 162, 235, 0.7)',
-            borderColor: 'rgba(54, 162, 235, 1)',
-            borderWidth: 1,
-            borderRadius: 3,
-        }]
+        datasets: [
+            {
+                label: 'Backups',
+                data: chartData.map(d => d.backups),
+                backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                borderRadius: 2,
+            },
+            {
+                label: 'Restores',
+                data: chartData.map(d => d.restores),
+                backgroundColor: 'rgba(255, 159, 64, 0.7)',
+                borderRadius: 2,
+            },
+            {
+                label: 'S3 Sync',
+                data: chartData.map(d => d.s3_sync),
+                backgroundColor: 'rgba(75, 192, 192, 0.7)',
+                borderRadius: 2,
+            },
+            {
+                label: 'Other',
+                data: chartData.map(d => d.other),
+                backgroundColor: 'rgba(153, 102, 255, 0.7)',
+                borderRadius: 2,
+            },
+        ]
     },
     options: {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-            legend: { display: false },
+            legend: {
+                display: true,
+                position: 'bottom',
+                labels: { boxWidth: 10, font: { size: 9 }, padding: 8 },
+            },
         },
         scales: {
             y: {
                 beginAtZero: true,
+                stacked: true,
                 ticks: { stepSize: 1, font: { size: 10 } },
                 grid: { color: 'rgba(0,0,0,0.05)' },
             },
             x: {
+                stacked: true,
                 ticks: {
                     font: { size: 9 },
                     maxRotation: 45,

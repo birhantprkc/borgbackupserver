@@ -166,18 +166,32 @@ class DashboardController extends Controller
             LIMIT 5
         ", $jobParams);
 
-        // Backups completed per hour over last 24h
-        $backupsChart = $this->db->fetchAll("
+        // Jobs completed per hour over last 24h, segmented by category
+        $jobsChart = $this->db->fetchAll("
             SELECT DATE_FORMAT(bj.completed_at, '%Y-%m-%d %H:00') as hour,
+                   bj.task_type,
                    COUNT(*) as count
             FROM backup_jobs bj
             " . ($isAdmin ? '' : 'JOIN agents a ON a.id = bj.agent_id') . "
             WHERE bj.status = 'completed'
               AND bj.completed_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
               {$jobScope}
-            GROUP BY hour
+            GROUP BY hour, bj.task_type
             ORDER BY hour
         ", $jobParams);
+
+        // Group task types into categories
+        $categoryMap = [
+            'backup' => 'backups',
+            'restore' => 'restores', 'restore_mysql' => 'restores', 'restore_pg' => 'restores',
+            's3_sync' => 's3_sync',
+        ];
+        // Index by hour+category
+        $hourCounts = [];
+        foreach ($jobsChart as $row) {
+            $cat = $categoryMap[$row['task_type']] ?? 'other';
+            $hourCounts[$row['hour']][$cat] = ($hourCounts[$row['hour']][$cat] ?? 0) + (int) $row['count'];
+        }
 
         // Fill in missing hours
         $chartData = [];
@@ -187,18 +201,18 @@ class DashboardController extends Controller
         for ($i = 23; $i >= 0; $i--) {
             $hourDt = clone $now;
             $hourDt->modify("-{$i} hours");
-            $hourKey = $hourDt->format('Y-m-d H:00'); // UTC key to match DB
+            $hourKey = $hourDt->format('Y-m-d H:00');
             $localDt = clone $hourDt;
             $localDt->setTimezone($userTz);
-            $label = $localDt->format('ga'); // User's timezone for display
-            $count = 0;
-            foreach ($backupsChart as $row) {
-                if ($row['hour'] === $hourKey) {
-                    $count = (int) $row['count'];
-                    break;
-                }
-            }
-            $chartData[] = ['label' => $label, 'count' => $count];
+            $label = $localDt->format('ga');
+            $counts = $hourCounts[$hourKey] ?? [];
+            $chartData[] = [
+                'label' => $label,
+                'backups' => $counts['backups'] ?? 0,
+                'restores' => $counts['restores'] ?? 0,
+                's3_sync' => $counts['s3_sync'] ?? 0,
+                'other' => $counts['other'] ?? 0,
+            ];
         }
 
         // Server stats (admin only)
