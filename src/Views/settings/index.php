@@ -492,7 +492,7 @@
                         $installMethod = $agent['borg_install_method'] ?? 'unknown';
                         $borgSource = $agent['borg_source'] ?? 'unknown';
                         $isCompatible = $agentCompatibility[$agent['id']] ?? true;
-                        $platform = $agent['platform'] ?? 'unknown';
+                        $osInfo = $agent['os_info'] ?? '';
                         $glibcVer = $agent['glibc_version'] ?? '';
                         // Format glibc version: glibc217 -> 2.17
                         $glibcDisplay = '';
@@ -500,6 +500,14 @@
                             $glibcDisplay = $m[1] . '.' . $m[2];
                         } elseif ($glibcVer) {
                             $glibcDisplay = $glibcVer;
+                        }
+                        // Shorten os_info: "Rocky Linux 8.10 (Green Obsidian) x86_64" -> "Rocky Linux 8.10"
+                        $osDisplay = $osInfo;
+                        if ($osInfo && preg_match('/^(.+?)\s*\(/', $osInfo, $m)) {
+                            $osDisplay = trim($m[1]);
+                        } elseif ($osInfo) {
+                            // Remove trailing architecture like "x86_64"
+                            $osDisplay = preg_replace('/\s+(x86_64|aarch64|arm64|i686)$/i', '', $osInfo);
                         }
                     ?>
                             <tr>
@@ -514,7 +522,7 @@
                                         </span>
                                     <?php endif; ?>
                                 </td>
-                                <td class="text-muted"><?= htmlspecialchars(ucfirst($platform)) ?></td>
+                                <td class="text-muted"><?= htmlspecialchars($osDisplay ?: '-') ?></td>
                                 <td class="text-muted"><?= htmlspecialchars($glibcDisplay ?: '-') ?></td>
                                 <td>
                                     <span class="badge bg-secondary"><?= htmlspecialchars($borgVer) ?></span>
