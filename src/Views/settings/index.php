@@ -439,7 +439,7 @@
             </div>
             <div class="card-body">
                 <p class="text-muted small mb-2">
-                    Custom-compiled binaries hosted on this server, used as fallbacks for clients that can't use the official GitHub releases.
+                    Custom-compiled binaries hosted on this server, used as fallbacks for clients that can't use the official GitHub releases. Compiled and signed by the author of this software.
                 </p>
                 <?php foreach ($serverHostedBinaries as $version => $binaries): ?>
                     <?php foreach ($binaries as $bin): ?>
