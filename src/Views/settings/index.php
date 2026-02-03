@@ -111,6 +111,18 @@
                         <input type="number" class="form-control" name="session_timeout_hours" value="<?= htmlspecialchars($settings['session_timeout_hours'] ?? '8') ?>" min="1" max="720">
                         <div class="form-text">Log out after this many hours of inactivity.</div>
                     </div>
+                    <div class="mb-0">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="debug_mode" value="1"
+                                   id="debugMode" <?= ($settings['debug_mode'] ?? '0') === '1' ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-semibold" for="debugMode">
+                                Enable Debug Mode
+                            </label>
+                        </div>
+                        <div class="form-text">
+                            Shows detailed error pages with stack traces. Disable in production for security.
+                        </div>
+                    </div>
                 </div>
             </div>
 
