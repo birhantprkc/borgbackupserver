@@ -475,40 +475,68 @@
                 <?php if (empty($allAgents)): ?>
                     <p class="text-muted small mb-0">No agents connected yet.</p>
                 <?php else: ?>
+                    <div class="table-responsive">
+                    <table class="table table-sm small mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Client</th>
+                                <th>OS</th>
+                                <th>glibc</th>
+                                <th>Version</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
                     <?php foreach ($allAgents as $agent):
                         $borgVer = $agent['borg_version'] ?? 'unknown';
                         $installMethod = $agent['borg_install_method'] ?? 'unknown';
                         $borgSource = $agent['borg_source'] ?? 'unknown';
                         $isCompatible = $agentCompatibility[$agent['id']] ?? true;
+                        $platform = $agent['platform'] ?? 'unknown';
+                        $glibcVer = $agent['glibc_version'] ?? '';
+                        // Format glibc version: glibc217 -> 2.17
+                        $glibcDisplay = '';
+                        if ($glibcVer && preg_match('/^glibc(\d)(\d+)$/', $glibcVer, $m)) {
+                            $glibcDisplay = $m[1] . '.' . $m[2];
+                        } elseif ($glibcVer) {
+                            $glibcDisplay = $glibcVer;
+                        }
                     ?>
-                    <div class="d-flex justify-content-between align-items-center small py-2 border-bottom">
-                        <div>
-                            <i class="bi bi-pc-display me-1 text-muted"></i>
-                            <a href="/clients/<?= $agent['id'] ?>" class="text-decoration-none fw-semibold">
-                                <?= htmlspecialchars($agent['name']) ?>
-                            </a>
-                            <?php if ($updateMode === 'server' && !$isCompatible): ?>
-                                <span class="badge bg-danger ms-1" title="glibc <?= htmlspecialchars($agent['glibc_version'] ?? 'unknown') ?> - no compatible binary">
-                                    <i class="bi bi-exclamation-triangle"></i> incompatible
-                                </span>
-                            <?php endif; ?>
-                        </div>
-                        <div class="d-flex align-items-center gap-2">
-                            <span class="badge bg-secondary"><?= htmlspecialchars($borgVer) ?></span>
-                            <span class="badge bg-light text-dark border small"><?= htmlspecialchars($installMethod) ?></span>
-                            <?php if ($borgSource !== 'unknown'): ?>
-                            <span class="badge bg-light text-dark border small"><?= ucfirst(htmlspecialchars($borgSource)) ?></span>
-                            <?php endif; ?>
-                            <form method="POST" action="/settings/borg/update-agent/<?= $agent['id'] ?>" class="d-inline">
-                                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                <button type="submit" class="btn btn-sm btn-outline-primary py-0 px-1" title="Update this client"
-                                    <?= ($updateMode === 'server' && !$isCompatible) ? 'disabled' : '' ?>>
-                                    <i class="bi bi-arrow-up-circle"></i>
-                                </button>
-                            </form>
-                        </div>
-                    </div>
+                            <tr>
+                                <td>
+                                    <i class="bi bi-pc-display me-1 text-muted"></i>
+                                    <a href="/clients/<?= $agent['id'] ?>" class="text-decoration-none fw-semibold">
+                                        <?= htmlspecialchars($agent['name']) ?>
+                                    </a>
+                                    <?php if ($updateMode === 'server' && !$isCompatible): ?>
+                                        <span class="badge bg-danger ms-1" title="No compatible binary for glibc <?= htmlspecialchars($glibcDisplay ?: 'unknown') ?>">
+                                            <i class="bi bi-exclamation-triangle"></i>
+                                        </span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="text-muted"><?= htmlspecialchars(ucfirst($platform)) ?></td>
+                                <td class="text-muted"><?= htmlspecialchars($glibcDisplay ?: '-') ?></td>
+                                <td>
+                                    <span class="badge bg-secondary"><?= htmlspecialchars($borgVer) ?></span>
+                                    <span class="badge bg-light text-dark border"><?= htmlspecialchars($installMethod) ?></span>
+                                    <?php if ($borgSource !== 'unknown'): ?>
+                                    <span class="badge bg-light text-dark border"><?= ucfirst(htmlspecialchars($borgSource)) ?></span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="text-end">
+                                    <form method="POST" action="/settings/borg/update-agent/<?= $agent['id'] ?>" class="d-inline">
+                                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                        <button type="submit" class="btn btn-sm btn-outline-primary py-0 px-1" title="Update this client"
+                                            <?= ($updateMode === 'server' && !$isCompatible) ? 'disabled' : '' ?>>
+                                            <i class="bi bi-arrow-up-circle"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
                     <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                    </div>
                 <?php endif; ?>
             </div>
         </div>
