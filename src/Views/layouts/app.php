@@ -177,14 +177,19 @@
             <i class="bi bi-clock-history"></i>
             <span>Queue</span>
         </a>
-        <a href="/log" class="mobile-nav-item <?= ($pageTitle ?? '') === 'Log' ? 'active' : '' ?>">
-            <i class="bi bi-journal-text"></i>
-            <span>Log</span>
-        </a>
         <?php if (($_SESSION['user_role'] ?? '') === 'admin'): ?>
         <a href="/settings" class="mobile-nav-item <?= ($pageTitle ?? '') === 'Settings' ? 'active' : '' ?>">
             <i class="bi bi-gear"></i>
             <span>Settings</span>
+        </a>
+        <a href="/users" class="mobile-nav-item <?= ($pageTitle ?? '') === 'Users' ? 'active' : '' ?>">
+            <i class="bi bi-people"></i>
+            <span>Users</span>
+        </a>
+        <?php else: ?>
+        <a href="/log" class="mobile-nav-item <?= ($pageTitle ?? '') === 'Log' ? 'active' : '' ?>">
+            <i class="bi bi-journal-text"></i>
+            <span>Log</span>
         </a>
         <?php endif; ?>
     </nav>
