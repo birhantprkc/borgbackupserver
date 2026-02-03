@@ -28,7 +28,13 @@
                     <?php foreach ($logs as $log): ?>
                     <tr>
                         <td class="small" style="white-space: nowrap;"><?= \BBS\Core\TimeHelper::format($log['created_at'], 'M j, g:i A') ?></td>
-                        <td style="white-space: nowrap;"><?= htmlspecialchars($log['agent_name'] ?? '--') ?></td>
+                        <td style="white-space: nowrap;">
+                            <?php if ($log['agent_id']): ?>
+                                <a href="/clients/<?= $log['agent_id'] ?>" class="text-decoration-none"><?= htmlspecialchars($log['agent_name']) ?></a>
+                            <?php else: ?>
+                                --
+                            <?php endif; ?>
+                        </td>
                         <td>
                             <?php
                             $lc = match($log['level']) {
@@ -60,8 +66,8 @@
                     <span class="badge bg-<?= $lc ?>"><?= $log['level'] ?></span>
                     <small class="text-muted"><?= \BBS\Core\TimeHelper::format($log['created_at'], 'M j, g:i A') ?></small>
                 </div>
-                <?php if ($log['agent_name']): ?>
-                <div class="small text-muted mb-1"><?= htmlspecialchars($log['agent_name']) ?></div>
+                <?php if ($log['agent_id']): ?>
+                <div class="small mb-1"><a href="/clients/<?= $log['agent_id'] ?>" class="text-decoration-none text-muted"><?= htmlspecialchars($log['agent_name']) ?></a></div>
                 <?php endif; ?>
                 <div class="small"><?= htmlspecialchars($log['message']) ?></div>
             </div>
