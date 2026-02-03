@@ -23,12 +23,12 @@ $updateAvailable = $updateService->isUpdateAvailable();
     </li>
     <li class="nav-item">
         <a class="nav-link <?= $activeTab === 'offsite' ? 'active' : '' ?>" href="/settings?tab=offsite">
-            <img src="/images/bucket.svg" alt="" class="me-1" style="width:16px;height:16px;vertical-align:-.125em;"><span class="tab-label">S3 Backups</span>
+            <i class="bi bi-bucket me-1"></i><span class="tab-label">S3 Backups</span>
         </a>
     </li>
     <li class="nav-item">
         <a class="nav-link <?= $activeTab === 'updates' ? 'active' : '' ?>" href="/settings?tab=updates">
-            <i class="bi bi-cloud-arrow-down me-1"></i><span class="tab-label">Software Update</span>
+            <i class="bi bi-cloud-arrow-down me-1"></i><span class="tab-label">Update</span>
             <?php if ($updateAvailable): ?>
                 <span class="badge bg-warning text-dark ms-1">New</span>
             <?php endif; ?>
@@ -36,7 +36,7 @@ $updateAvailable = $updateService->isUpdateAvailable();
     </li>
     <li class="nav-item">
         <a class="nav-link <?= $activeTab === 'borg' ? 'active' : '' ?>" href="/settings?tab=borg">
-            <i class="bi bi-box-seam me-1"></i><span class="tab-label">Borg Updates</span>
+            <i class="bi bi-box-seam me-1"></i><span class="tab-label">Borg Version</span>
         </a>
     </li>
 </ul>
