@@ -1,30 +1,30 @@
 <?php $activeTab = $_GET['tab'] ?? 'general'; ?>
 
 <!-- Tab Navigation -->
-<ul class="nav nav-tabs mb-4" role="tablist">
+<ul class="nav nav-pills client-tabs mb-4 flex-wrap">
     <li class="nav-item">
         <a class="nav-link <?= $activeTab === 'general' ? 'active' : '' ?>" href="/settings?tab=general">
-            <i class="bi bi-gear me-1"></i> General
+            <i class="bi bi-gear me-1"></i><span class="tab-label">General</span>
         </a>
     </li>
     <li class="nav-item">
         <a class="nav-link <?= $activeTab === 'notifications' ? 'active' : '' ?>" href="/settings?tab=notifications">
-            <i class="bi bi-bell me-1"></i> Notifications
+            <i class="bi bi-bell me-1"></i><span class="tab-label">Notifications</span>
         </a>
     </li>
     <li class="nav-item">
         <a class="nav-link <?= $activeTab === 'templates' ? 'active' : '' ?>" href="/settings?tab=templates">
-            <i class="bi bi-clipboard-check me-1"></i> Templates
+            <i class="bi bi-clipboard-check me-1"></i><span class="tab-label">Templates</span>
         </a>
     </li>
     <li class="nav-item">
         <a class="nav-link <?= $activeTab === 'borg-versions' ? 'active' : '' ?>" href="/settings?tab=borg-versions">
-            <i class="bi bi-box-seam me-1"></i> Borg Versions
+            <i class="bi bi-box-seam me-1"></i><span class="tab-label">Borg</span>
         </a>
     </li>
     <li class="nav-item">
         <a class="nav-link <?= $activeTab === 'offsite' ? 'active' : '' ?>" href="/settings?tab=offsite">
-            <i class="bi bi-cloud-arrow-up me-1"></i> Offsite Storage
+            <i class="bi bi-cloud-arrow-up me-1"></i><span class="tab-label">Offsite</span>
         </a>
     </li>
     <li class="nav-item">
@@ -33,7 +33,7 @@
         $updateAvailable = $updateService->isUpdateAvailable();
         ?>
         <a class="nav-link <?= $activeTab === 'updates' ? 'active' : '' ?>" href="/settings?tab=updates">
-            <i class="bi bi-cloud-arrow-down me-1"></i> Updates
+            <i class="bi bi-cloud-arrow-down me-1"></i><span class="tab-label">Updates</span>
             <?php if ($updateAvailable): ?>
                 <span class="badge bg-warning text-dark ms-1">New</span>
             <?php endif; ?>
