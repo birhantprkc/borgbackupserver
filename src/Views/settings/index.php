@@ -40,6 +40,7 @@
         </a>
     </li>
 </ul>
+<div class="client-tab-content border rounded-bottom bg-white p-4 mb-4 shadow-sm">
 
 <!-- General Tab -->
 <?php if ($activeTab === 'general'): ?>
@@ -818,6 +819,7 @@ $outdatedCount = count($outdatedAgents);
 </div>
 <?php endif; ?>
 <?php endif; ?>
+</div><!-- /client-tab-content -->
 
 <script>
 document.getElementById('btnTestSmtp')?.addEventListener('click', function() {
