@@ -74,14 +74,14 @@
     </div>
 </div>
 
-<h5 class="mb-3">In Progress</h5>
+<h6 class="mb-3">In Progress</h6>
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body p-0" id="queue-in-progress">
         <?php if (empty($inProgress)): ?>
         <div class="p-4 text-muted text-center">No jobs in progress.</div>
         <?php else: ?>
         <div class="table-responsive">
-            <table class="table table-hover mb-0">
+            <table class="table table-hover table-sm small mb-0">
                 <thead class="table-light">
                     <tr>
                         <th>Date</th>
@@ -145,14 +145,14 @@
     </div>
 </div>
 
-<h5 class="mb-3">Recently Completed</h5>
+<h6 class="mb-3">Recently Completed</h6>
 <div class="card border-0 shadow-sm">
     <div class="card-body p-0" id="queue-completed">
         <?php if (empty($completed)): ?>
         <div class="p-4 text-muted text-center">No completed jobs yet.</div>
         <?php else: ?>
         <div class="table-responsive">
-            <table class="table table-hover mb-0">
+            <table class="table table-hover table-sm small mb-0">
                 <thead class="table-light">
                     <tr>
                         <th>Date</th>
@@ -301,7 +301,7 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
                 if (data.inProgress.length === 0) {
                     ipCard.innerHTML = '<div class="p-4 text-muted text-center">No jobs in progress.</div>';
                 } else {
-                    let html = '<div class="table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr>' +
+                    let html = '<div class="table-responsive"><table class="table table-hover table-sm small mb-0"><thead class="table-light"><tr>' +
                         '<th>Date</th><th>Client</th><th>Task</th><th class="d-th-md">Files</th><th>Progress</th><th class="d-th-md">Repo</th><th>Status</th><th></th>' +
                         '</tr></thead><tbody>';
                     data.inProgress.forEach(j => html += buildInProgressRow(j));
@@ -314,7 +314,7 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
                 if (data.completed.length === 0) {
                     cCard.innerHTML = '<div class="p-4 text-muted text-center">No completed jobs yet.</div>';
                 } else {
-                    let html = '<div class="table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr>' +
+                    let html = '<div class="table-responsive"><table class="table table-hover table-sm small mb-0"><thead class="table-light"><tr>' +
                         '<th>Date</th><th>Client</th><th>Task</th><th class="d-th-md">Files</th><th class="d-th-md">Repo</th><th class="d-th-md">Duration</th><th>Status</th><th></th>' +
                         '</tr></thead><tbody>';
                     data.completed.forEach(j => html += buildCompletedRow(j));
