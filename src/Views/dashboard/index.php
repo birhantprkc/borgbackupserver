@@ -198,9 +198,9 @@
                 <span class="text-muted" style="font-size:.7rem;"><?= htmlspecialchars($storage['path']) ?></span>
             </div>
             <div class="card-body px-3 py-2">
-                <div class="d-flex align-items-center">
+                <div class="d-flex align-items-center justify-content-between">
                     <!-- Col 1: Repositories / Recovery Points (hidden on smaller screens) -->
-                    <div class="d-none d-xxl-block pe-3" style="min-width:85px;">
+                    <div class="d-none d-xxl-block">
                         <div class="mb-2">
                             <div class="fw-semibold text-success" style="font-size:.6rem;">Repositories</div>
                             <div class="d-flex align-items-center">
@@ -217,7 +217,7 @@
                         </div>
                     </div>
                     <!-- Col 2: Protected Data / Dedup Savings -->
-                    <div class="pe-3" style="min-width:95px;">
+                    <div>
                         <div class="mb-2">
                             <div class="fw-semibold text-success" style="font-size:.6rem;">Protected Data</div>
                             <div class="d-flex align-items-center">
@@ -236,7 +236,7 @@
                         </div>
                     </div>
                     <!-- Col 3: Donut + Legend -->
-                    <div class="d-flex align-items-center flex-grow-1">
+                    <div class="d-flex align-items-center">
                         <div style="width:80px;flex-shrink:0;margin-top:-20px;">
                             <svg viewBox="0 0 120 120" style="width:100%;height:auto;transform:rotate(-90deg);">
                                 <circle cx="60" cy="60" r="<?= $r ?>" fill="none" stroke="#e9ecef" stroke-width="14"/>
