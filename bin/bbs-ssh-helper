@@ -268,9 +268,17 @@ case "$ACTION" in
             exit 1
         fi
 
+        # Ensure cache directory exists for the user
+        CACHE_DIR="/var/bbs/cache/$USERNAME/rclone"
+        mkdir -p "$CACHE_DIR"
+        chown -R "$USERNAME":"$USERNAME" "/var/bbs/cache/$USERNAME"
+
         # Run rclone as the repo-owning user with S3 config via env vars
-        # RCLONE_CONFIG=/dev/null disables loading config file from home directory
+        # Set HOME and XDG dirs to writable locations to prevent permission errors
         sudo -u "$USERNAME" env \
+            "HOME=/var/bbs/cache/$USERNAME" \
+            "XDG_CACHE_HOME=$CACHE_DIR" \
+            "XDG_CONFIG_HOME=/var/bbs/cache/$USERNAME" \
             "RCLONE_CONFIG=/dev/null" \
             "RCLONE_CONFIG_S3_TYPE=s3" \
             "RCLONE_CONFIG_S3_PROVIDER=Other" \
@@ -321,10 +329,18 @@ case "$ACTION" in
         chown "$USERNAME":www-data "$LOCAL_PATH"
         chmod 770 "$LOCAL_PATH"
 
+        # Ensure cache directory exists for the user
+        CACHE_DIR="/var/bbs/cache/$USERNAME/rclone"
+        mkdir -p "$CACHE_DIR"
+        chown -R "$USERNAME":"$USERNAME" "/var/bbs/cache/$USERNAME"
+
         # Run rclone as the repo-owning user with S3 config via env vars
-        # RCLONE_CONFIG=/dev/null disables loading config file from home directory
+        # Set HOME and XDG dirs to writable locations to prevent permission errors
         # Note: sync FROM remote TO local (reverse of rclone-sync)
         sudo -u "$USERNAME" env \
+            "HOME=/var/bbs/cache/$USERNAME" \
+            "XDG_CACHE_HOME=$CACHE_DIR" \
+            "XDG_CONFIG_HOME=/var/bbs/cache/$USERNAME" \
             "RCLONE_CONFIG=/dev/null" \
             "RCLONE_CONFIG_S3_TYPE=s3" \
             "RCLONE_CONFIG_S3_PROVIDER=Other" \
