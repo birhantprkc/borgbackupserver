@@ -545,13 +545,18 @@ class RepositoryController extends Controller
         }
 
         // Queue the S3 restore job on the target repo
-        $jobId = $this->db->insert('backup_jobs', [
+        // For copy mode, source_repository_id tells the restore where to pull S3 data from
+        $jobData = [
             'agent_id' => $agentId,
             'repository_id' => $targetRepoId,
             'task_type' => 's3_restore',
             'plugin_config_id' => $s3Config['plugin_config_id'],
             'status' => 'queued',
-        ]);
+        ];
+        if ($mode === 'copy') {
+            $jobData['source_repository_id'] = $id;  // Original repo
+        }
+        $jobId = $this->db->insert('backup_jobs', $jobData);
 
         $modeLabel = $mode === 'copy' ? 'copy' : 'replace';
         $this->db->insert('server_log', [

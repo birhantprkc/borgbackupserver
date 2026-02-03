@@ -171,6 +171,7 @@ CREATE TABLE backup_jobs (
     backup_plan_id INT DEFAULT NULL,
     agent_id INT NOT NULL,
     repository_id INT DEFAULT NULL,
+    source_repository_id INT DEFAULT NULL,
     task_type ENUM('backup', 'prune', 'restore', 'restore_mysql', 'restore_pg', 'check', 'compact', 'update_borg', 'update_agent', 'plugin_test', 's3_sync', 'repo_check', 'repo_repair', 'break_lock', 's3_restore', 'catalog_sync') NOT NULL DEFAULT 'backup',
     plugin_config_id INT DEFAULT NULL,
     status ENUM('queued', 'sent', 'running', 'completed', 'failed', 'cancelled') NOT NULL DEFAULT 'queued',

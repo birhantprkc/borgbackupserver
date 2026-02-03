@@ -199,8 +199,14 @@ class S3SyncService
     /**
      * Restore a borg repository from S3.
      * Returns ['success' => bool, 'output' => string].
+     *
+     * @param array $repo Target repository to restore into
+     * @param array $agent Agent that owns the repository
+     * @param array $creds S3 credentials
+     * @param string|null $runAsUser Unix user to run as
+     * @param array|null $sourceRepo For "copy" mode: the source repo to pull S3 data from
      */
-    public function restoreRepository(array $repo, array $agent, array $creds, ?string $runAsUser = null): array
+    public function restoreRepository(array $repo, array $agent, array $creds, ?string $runAsUser = null, ?array $sourceRepo = null): array
     {
         if (empty($creds['bucket'])) {
             return ['success' => false, 'output' => 'No S3 bucket configured'];
@@ -211,8 +217,10 @@ class S3SyncService
         }
 
         // Build remote path: bucket/prefix/agent-name/repo-name/
+        // For "copy" mode, use sourceRepo's name for the S3 path
         $agentName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $agent['name'] ?? 'unknown');
-        $repoName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $repo['name'] ?? 'unknown');
+        $sourceRepoName = $sourceRepo['name'] ?? $repo['name'];
+        $repoName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $sourceRepoName ?? 'unknown');
         $prefix = trim($creds['path_prefix'], '/');
         $remotePath = $prefix ? "{$prefix}/{$agentName}/{$repoName}" : "{$agentName}/{$repoName}";
         $remote = "S3:{$creds['bucket']}/{$remotePath}/";

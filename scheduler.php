@@ -206,12 +206,18 @@ foreach ($serverJobs as $sj) {
         $s3Repo = $db->fetchOne("SELECT * FROM repositories WHERE id = ?", [$sj['repository_id']]);
         $s3Agent = $db->fetchOne("SELECT * FROM agents WHERE id = ?", [$sj['agent_id']]);
 
+        // For "copy" mode, source_repository_id tells us where to pull S3 data from
+        $sourceRepo = null;
+        if (!empty($sj['source_repository_id'])) {
+            $sourceRepo = $db->fetchOne("SELECT * FROM repositories WHERE id = ?", [$sj['source_repository_id']]);
+        }
+
         if (!$s3Repo || !$s3Agent) {
             $s3Result = 'failed';
             $s3Error = 'Repository or agent not found';
         } else {
             $runAsUser = $sj['ssh_unix_user'] ?? null;
-            $restoreResult = $s3Service->restoreRepository($s3Repo, $s3Agent, $creds, $runAsUser);
+            $restoreResult = $s3Service->restoreRepository($s3Repo, $s3Agent, $creds, $runAsUser, $sourceRepo);
             $s3Result = $restoreResult['success'] ? 'completed' : 'failed';
             $s3Output = $restoreResult['output'] ?? '';
             $s3Error = $restoreResult['success'] ? null : $s3Output;
@@ -367,20 +373,22 @@ foreach ($serverJobs as $sj) {
             ]);
             echo date('Y-m-d H:i:s') . " Catalog sync job #{$sj['id']} completed: {$archiveCount} archives\n";
         } else {
+            // Error may be in $csOutput (due to 2>&1 in helper) or $csError
+            $errorMsg = trim($csError ?: $csOutput) ?: "borg list failed with exit code {$csExitCode}";
             $db->update('backup_jobs', [
                 'status' => 'failed',
                 'completed_at' => $csNow,
                 'duration_seconds' => max(0, strtotime($csNow) - strtotime($startedAt)),
-                'error_log' => $csError ?: "borg list failed with exit code {$csExitCode}",
+                'error_log' => $errorMsg,
             ], 'id = ?', [$sj['id']]);
 
             $db->insert('server_log', [
                 'agent_id' => $sj['agent_id'],
                 'backup_job_id' => $sj['id'],
                 'level' => 'error',
-                'message' => "Catalog sync failed: " . ($csError ?: "exit code {$csExitCode}"),
+                'message' => "Catalog sync failed: " . $errorMsg,
             ]);
-            echo date('Y-m-d H:i:s') . " Catalog sync job #{$sj['id']} failed\n";
+            echo date('Y-m-d H:i:s') . " Catalog sync job #{$sj['id']} failed: {$errorMsg}\n";
         }
         continue;
     }
@@ -466,7 +474,8 @@ foreach ($serverJobs as $sj) {
         if ($exitCode <= 1) {
             $result = 'completed';
         } else {
-            $errorOutput = $stderr ?: "Exit code $exitCode";
+            // Error may be in $stdout (due to 2>&1 in helper) or $stderr
+            $errorOutput = trim($stderr ?: $stdout) ?: "Exit code $exitCode";
         }
     } else {
         $errorOutput = 'Failed to execute borg command';
