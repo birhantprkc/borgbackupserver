@@ -258,6 +258,62 @@ class BorgVersionService
     }
 
     /**
+     * Find a server-hosted fallback binary in public/borg/{version}/.
+     * Naming convention: borg-{platform}-glibc{NNN}-{arch}
+     * Returns full download URL or null.
+     */
+    public function getFallbackBinaryUrl(string $version, string $platform, string $arch, ?string $agentGlibc): ?string
+    {
+        $borgDir = dirname(__DIR__, 2) . '/public/borg';
+        $versionDir = $borgDir . '/' . $version;
+
+        if (!is_dir($versionDir)) {
+            // No exact version — scan all version dirs for best match
+            if (!is_dir($borgDir)) {
+                return null;
+            }
+            $dirs = array_filter(scandir($borgDir), fn($d) => $d !== '.' && $d !== '..' && is_dir($borgDir . '/' . $d));
+            if (empty($dirs)) {
+                return null;
+            }
+            // Use highest available version
+            usort($dirs, 'version_compare');
+            $versionDir = $borgDir . '/' . end($dirs);
+            $version = end($dirs);
+        }
+
+        $files = scandir($versionDir);
+        $best = null;
+        $bestGlibc = null;
+
+        foreach ($files as $file) {
+            if ($file === '.' || $file === '..') continue;
+            // Match pattern: borg-{platform}-glibc{NNN}-{arch}
+            if (!preg_match('/^borg-' . preg_quote($platform) . '-glibc(\d+)-' . preg_quote($arch) . '$/', $file, $m)) {
+                continue;
+            }
+            $fileGlibc = $m[1];
+            if ($agentGlibc !== null && $fileGlibc > $agentGlibc) {
+                continue; // requires newer glibc than agent has
+            }
+            if ($best === null || $fileGlibc > $bestGlibc) {
+                $best = $file;
+                $bestGlibc = $fileGlibc;
+            }
+        }
+
+        if (!$best) {
+            return null;
+        }
+
+        $appUrl = rtrim($_ENV['APP_URL'] ?? (\BBS\Core\Database::getInstance()->fetchOne(
+            "SELECT `value` FROM settings WHERE `key` = 'app_url'"
+        )['value'] ?? ''), '/');
+
+        return $appUrl . '/borg/' . $version . '/' . $best;
+    }
+
+    /**
      * Get all stored borg versions, newest first.
      */
     public function getStoredVersions(): array

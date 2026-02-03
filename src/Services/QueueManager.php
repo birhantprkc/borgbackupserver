@@ -571,6 +571,12 @@ class QueueManager
                 if ($asset) {
                     $payload['download_url'] = $asset['download_url'];
                     $payload['install_method'] = 'binary';
+                } else {
+                    $fallbackUrl = $borgService->getFallbackBinaryUrl($targetVersion, $platform, $arch, $agentGlibc);
+                    if ($fallbackUrl) {
+                        $payload['download_url'] = $fallbackUrl;
+                        $payload['install_method'] = 'binary';
+                    }
                 }
             }
         }
