@@ -1,3 +1,79 @@
+<?php
+    $avgDur = '--';
+    if ($avgSec > 0) {
+        if ($avgSec < 60) $avgDur = $avgSec . 's';
+        elseif ($avgSec < 3600) $avgDur = round($avgSec / 60) . 'm';
+        else $avgDur = round($avgSec / 3600, 1) . 'h';
+    }
+?>
+<div class="row g-3 mb-4">
+    <div class="col-xl-3 col-md-6">
+        <div class="card stat-card border-0 shadow-sm overflow-hidden">
+            <div class="d-flex align-items-stretch">
+                <div class="d-flex align-items-center justify-content-center text-white" style="width:52px;font-size:1.4rem;background:#4a90d9;">
+                    <i class="bi bi-hourglass-split"></i>
+                </div>
+                <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
+                    <div>
+                        <div class="fw-semibold small text-dark">In Queue</div>
+                        <div class="text-muted" style="font-size:.7rem;"><?= $runningCount ?> running</div>
+                    </div>
+                    <div class="fs-2 fw-bold" style="color:#4a90d9;"><?= $queuedCount ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="card stat-card border-0 shadow-sm overflow-hidden">
+            <div class="d-flex align-items-stretch">
+                <div class="d-flex align-items-center justify-content-center text-white" style="width:52px;font-size:1.4rem;background:#48bb78;">
+                    <i class="bi bi-check-circle"></i>
+                </div>
+                <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
+                    <div>
+                        <div class="fw-semibold small text-dark">Completed (24h)</div>
+                        <div class="text-muted" style="font-size:.7rem;">avg duration: <?= $avgDur ?></div>
+                    </div>
+                    <div class="fs-2 fw-bold" style="color:#48bb78;"><?= $completed24h ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="card stat-card border-0 shadow-sm overflow-hidden">
+            <div class="d-flex align-items-stretch">
+                <?php $failColor = $failed24h > 0 ? '#c0392b' : '#48bb78'; ?>
+                <div class="d-flex align-items-center justify-content-center text-white" style="width:52px;font-size:1.4rem;background:<?= $failColor ?>;">
+                    <i class="bi bi-<?= $failed24h > 0 ? 'x-circle' : 'check-circle' ?>"></i>
+                </div>
+                <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
+                    <div>
+                        <div class="fw-semibold small text-dark">Failed (24h)</div>
+                        <div class="text-muted" style="font-size:.7rem;"><?= $failed24h > 0 ? 'check logs for errors' : 'no failures' ?></div>
+                    </div>
+                    <div class="fs-2 fw-bold" style="color:<?= $failColor ?>;"><?= $failed24h ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="card stat-card border-0 shadow-sm overflow-hidden">
+            <div class="d-flex align-items-stretch">
+                <div class="d-flex align-items-center justify-content-center text-white" style="width:52px;font-size:1.4rem;background:#e67e22;">
+                    <i class="bi bi-speedometer2"></i>
+                </div>
+                <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
+                    <div>
+                        <div class="fw-semibold small text-dark">Avg Duration</div>
+                        <div class="text-muted" style="font-size:.7rem;">last 24 hours</div>
+                    </div>
+                    <div class="fs-2 fw-bold" style="color:#e67e22;"><?= $avgDur ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <h5 class="mb-3">In Progress</h5>
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body p-0" id="queue-in-progress">

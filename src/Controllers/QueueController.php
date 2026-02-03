@@ -29,10 +29,23 @@ class QueueController extends Controller
             LIMIT 25
         ");
 
+        // Queue stats
+        $queuedCount = (int) ($this->db->fetchOne("SELECT COUNT(*) AS cnt FROM backup_jobs WHERE status IN ('queued', 'sent')")['cnt'] ?? 0);
+        $runningCount = (int) ($this->db->fetchOne("SELECT COUNT(*) AS cnt FROM backup_jobs WHERE status = 'running'")['cnt'] ?? 0);
+        $completed24h = (int) ($this->db->fetchOne("SELECT COUNT(*) AS cnt FROM backup_jobs WHERE status = 'completed' AND completed_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)")['cnt'] ?? 0);
+        $failed24h = (int) ($this->db->fetchOne("SELECT COUNT(*) AS cnt FROM backup_jobs WHERE status = 'failed' AND completed_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)")['cnt'] ?? 0);
+        $avgDuration = $this->db->fetchOne("SELECT ROUND(AVG(TIMESTAMPDIFF(SECOND, started_at, completed_at))) AS avg_sec FROM backup_jobs WHERE status = 'completed' AND completed_at > DATE_SUB(NOW(), INTERVAL 24 HOUR) AND started_at IS NOT NULL");
+        $avgSec = (int) ($avgDuration['avg_sec'] ?? 0);
+
         $this->view('queue/index', [
             'pageTitle' => 'Queue',
             'inProgress' => $inProgress,
             'completed' => $completed,
+            'queuedCount' => $queuedCount,
+            'runningCount' => $runningCount,
+            'completed24h' => $completed24h,
+            'failed24h' => $failed24h,
+            'avgSec' => $avgSec,
         ]);
     }
 
