@@ -244,13 +244,19 @@ foreach ($serverJobs as $sj) {
         echo date('Y-m-d H:i:s') . " S3 restore job #{$sj['id']} {$s3Result}\n";
 
         // Auto-queue catalog_sync after successful S3 restore
+        // Pass source_repository_id for copy mode restores so we can copy archive sizes
         if ($s3Result === 'completed' && $sj['repository_id']) {
-            $db->insert('backup_jobs', [
+            $catalogSyncJob = [
                 'agent_id' => $sj['agent_id'],
                 'repository_id' => $sj['repository_id'],
                 'task_type' => 'catalog_sync',
                 'status' => 'queued',
-            ]);
+            ];
+            // For copy mode, pass source_repository_id so catalog_sync can copy sizes
+            if (!empty($sj['source_repository_id'])) {
+                $catalogSyncJob['source_repository_id'] = $sj['source_repository_id'];
+            }
+            $db->insert('backup_jobs', $catalogSyncJob);
             $db->insert('server_log', [
                 'agent_id' => $sj['agent_id'],
                 'level' => 'info',
@@ -334,25 +340,85 @@ foreach ($serverJobs as $sj) {
             // Clear existing archives for this repo and rebuild
             $db->delete('archives', 'repository_id = ?', [$csRepo['id']]);
 
+            // Set progress bar for archive processing
+            $totalArchiveCount = count($archives);
+            $db->update('backup_jobs', [
+                'files_total' => $totalArchiveCount,
+                'files_processed' => 0,
+            ], 'id = ?', [$sj['id']]);
+
             $archiveCount = 0;
             $totalSize = 0;
             foreach ($archives as $ar) {
-                // borg list --json gives: name, start, id
-                // We need to run borg info for full stats, but that's expensive
-                // For now, insert basic info - size will be 0 until next backup reports stats
+                $archiveName = $ar['name'] ?? 'unknown';
+                $createdAt = isset($ar['start']) ? date('Y-m-d H:i:s', strtotime($ar['start'])) : $csNow;
+                $originalSize = 0;
+                $deduplicatedSize = 0;
+
+                // Run borg info to get archive sizes
+                $archivePath = "{$csLocalPath}::{$archiveName}";
+                if ($runAsUser) {
+                    $infoCmd = [
+                        'sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-cmd',
+                        $runAsUser, $passphrase, 'info', '--json', $archivePath
+                    ];
+                    $infoEnvStrings = null;
+                } else {
+                    $infoCmd = ['borg', 'info', '--json', $archivePath];
+                    $infoEnv = [];
+                    if ($passphrase) {
+                        $infoEnv['BORG_PASSPHRASE'] = $passphrase;
+                    }
+                    $infoEnv['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes';
+                    $infoEnv['BORG_BASE_DIR'] = '/tmp/bbs-borg-www-data';
+                    $infoEnv['HOME'] = '/tmp/bbs-borg-www-data';
+                    $infoEnvStrings = array_filter($_SERVER, 'is_string') + $infoEnv;
+                }
+
+                $infoProc = proc_open($infoCmd, [
+                    0 => ['pipe', 'r'],
+                    1 => ['pipe', 'w'],
+                    2 => ['pipe', 'w'],
+                ], $infoPipes, null, $infoEnvStrings);
+
+                if (is_resource($infoProc)) {
+                    fclose($infoPipes[0]);
+                    $infoOutput = stream_get_contents($infoPipes[1]);
+                    fclose($infoPipes[1]);
+                    fclose($infoPipes[2]);
+                    $infoExitCode = proc_close($infoProc);
+
+                    if ($infoExitCode === 0) {
+                        $infoData = json_decode($infoOutput, true);
+                        $archiveInfo = $infoData['archives'][0] ?? [];
+                        $stats = $archiveInfo['stats'] ?? [];
+                        $originalSize = (int) ($stats['original_size'] ?? 0);
+                        $deduplicatedSize = (int) ($stats['deduplicated_size'] ?? 0);
+                    }
+                }
+
                 $db->insert('archives', [
                     'repository_id' => $csRepo['id'],
-                    'archive_name' => $ar['name'] ?? 'unknown',
-                    'created_at' => isset($ar['start']) ? date('Y-m-d H:i:s', strtotime($ar['start'])) : $csNow,
-                    'original_size' => 0,
-                    'deduplicated_size' => 0,
+                    'archive_name' => $archiveName,
+                    'created_at' => $createdAt,
+                    'original_size' => $originalSize,
+                    'deduplicated_size' => $deduplicatedSize,
                 ]);
                 $archiveCount++;
+                $totalSize += $deduplicatedSize;
+
+                // Update progress
+                $db->update('backup_jobs', [
+                    'files_processed' => $archiveCount,
+                ], 'id = ?', [$sj['id']]);
+
+                echo date('Y-m-d H:i:s') . "   Catalog sync {$archiveCount}/{$totalArchiveCount}: {$archiveName}\n";
             }
 
             // Update repo stats
             $db->update('repositories', [
                 'archive_count' => $archiveCount,
+                'size_bytes' => $totalSize,
             ], 'id = ?', [$csRepo['id']]);
 
             $db->update('backup_jobs', [
