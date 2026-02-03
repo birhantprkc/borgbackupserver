@@ -575,6 +575,74 @@ class SettingsController extends Controller
     }
 
     /**
+     * GET /api/borg-status — returns server borg version and client versions as JSON.
+     * Used for AJAX refresh on borg settings tab.
+     */
+    public function borgStatusJson(): void
+    {
+        $this->requireAdmin();
+
+        $service = new \BBS\Services\BorgVersionService();
+        $updateMode = $service->getUpdateMode();
+        $serverVersion = $service->getServerVersion();
+
+        // Get fresh server borg version (slow but runs in background via AJAX)
+        $serverBorgVersion = $service->getServerBorgVersion();
+
+        // Get all agents with borg info
+        $allAgents = $service->getAllAgentVersions();
+
+        // Check compatibility for server mode
+        $agents = [];
+        foreach ($allAgents as $agent) {
+            $borgVer = $agent['borg_version'] ?? 'unknown';
+            $installMethod = $agent['borg_install_method'] ?? 'unknown';
+            $borgSource = $agent['borg_source'] ?? 'unknown';
+            $osInfo = $agent['os_info'] ?? '';
+            $glibcVer = $agent['glibc_version'] ?? '';
+
+            // Format glibc version
+            $glibcDisplay = '';
+            if ($glibcVer && preg_match('/^glibc(\d)(\d+)$/', $glibcVer, $m)) {
+                $glibcDisplay = $m[1] . '.' . $m[2];
+            } elseif ($glibcVer) {
+                $glibcDisplay = $glibcVer;
+            }
+
+            // Shorten os_info
+            $osDisplay = $osInfo;
+            if ($osInfo && preg_match('/^(.+?)\s*\(/', $osInfo, $m)) {
+                $osDisplay = trim($m[1]);
+            } elseif ($osInfo) {
+                $osDisplay = preg_replace('/\s+(x86_64|aarch64|arm64|i686)$/i', '', $osInfo);
+            }
+
+            // Check compatibility
+            $isCompatible = true;
+            if ($updateMode === 'server' && !empty($serverVersion)) {
+                $isCompatible = $service->isAgentCompatibleWithServerVersion($agent, $serverVersion);
+            }
+
+            $agents[] = [
+                'id' => $agent['id'],
+                'name' => $agent['name'],
+                'borg_version' => $borgVer,
+                'install_method' => $installMethod,
+                'borg_source' => $borgSource,
+                'os_display' => $osDisplay ?: '-',
+                'glibc_display' => $glibcDisplay ?: '-',
+                'is_compatible' => $isCompatible,
+            ];
+        }
+
+        $this->json([
+            'server_borg_version' => $serverBorgVersion,
+            'update_mode' => $updateMode,
+            'agents' => $agents,
+        ]);
+    }
+
+    /**
      * GET /api/templates/{id} — returns template data as JSON for form pre-fill.
      */
     public function templateJson(int $id): void

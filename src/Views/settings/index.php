@@ -331,7 +331,8 @@
     $updateMode = $borgService->getUpdateMode();
     $serverVersion = $borgService->getServerVersion();
     $autoUpdate = $borgService->isAutoUpdateEnabled();
-    $serverBorgVersion = $borgService->getServerBorgVersion();
+    // Use cached version for fast page load (AJAX will refresh it)
+    $serverBorgVersion = $borgService->getServerBorgVersionCached();
     $lastBorgCheck = $borgService->getLastCheckTime();
     $serverVersions = $borgService->getServerVersions();
     $allAgents = $borgService->getAllAgentVersions();
@@ -355,12 +356,14 @@
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <div>
                         <i class="bi bi-server me-1"></i> Server Borg:
+                        <span id="server-borg-version">
                         <?php if ($serverBorgVersion): ?>
                             <span class="badge bg-success">v<?= htmlspecialchars($serverBorgVersion) ?></span>
                             <span class="badge bg-light text-dark border small"><?= $updateMode === 'server' ? 'Server' : 'Official' ?></span>
                         <?php else: ?>
-                            <span class="badge bg-danger">not installed</span>
+                            <span class="badge bg-secondary"><i class="bi bi-hourglass-split"></i> checking...</span>
                         <?php endif; ?>
+                        </span>
                     </div>
                     <form method="POST" action="/settings/borg/update-server">
                         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
@@ -476,7 +479,7 @@
                     <p class="text-muted small mb-0">No agents connected yet.</p>
                 <?php else: ?>
                     <div class="table-responsive">
-                    <table class="table table-sm small mb-0">
+                    <table class="table table-sm small mb-0" id="borg-clients-table">
                         <thead class="table-light">
                             <tr>
                                 <th>Client</th>
@@ -486,7 +489,7 @@
                                 <th></th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="borg-clients-tbody">
                     <?php foreach ($allAgents as $agent):
                         $borgVer = $agent['borg_version'] ?? 'unknown';
                         $installMethod = $agent['borg_install_method'] ?? 'unknown';
@@ -583,6 +586,70 @@
         <?php endif; ?>
     </div>
 </div>
+
+<script>
+(function() {
+    var csrfToken = <?= json_encode($this->csrfToken()) ?>;
+    var updateMode = <?= json_encode($updateMode) ?>;
+
+    function updateBorgStatus() {
+        fetch('/api/borg-status')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                // Update server borg version
+                var serverEl = document.getElementById('server-borg-version');
+                if (serverEl && data.server_borg_version) {
+                    var modeLabel = data.update_mode === 'server' ? 'Server' : 'Official';
+                    serverEl.innerHTML = '<span class="badge bg-success">v' + data.server_borg_version.replace(/</g, '&lt;') + '</span> '
+                        + '<span class="badge bg-light text-dark border small">' + modeLabel + '</span>';
+                } else if (serverEl && !data.server_borg_version) {
+                    serverEl.innerHTML = '<span class="badge bg-danger">not installed</span>';
+                }
+
+                // Update client table
+                var tbody = document.getElementById('borg-clients-tbody');
+                if (tbody && data.agents) {
+                    var html = '';
+                    data.agents.forEach(function(agent) {
+                        html += '<tr>';
+                        html += '<td><i class="bi bi-pc-display me-1 text-muted"></i>';
+                        html += '<a href="/clients/' + agent.id + '" class="text-decoration-none fw-semibold">' + agent.name.replace(/</g, '&lt;') + '</a>';
+                        if (data.update_mode === 'server' && !agent.is_compatible) {
+                            html += ' <span class="badge bg-danger ms-1" title="No compatible binary"><i class="bi bi-exclamation-triangle"></i></span>';
+                        }
+                        html += '</td>';
+                        html += '<td class="text-muted">' + agent.os_display.replace(/</g, '&lt;') + '</td>';
+                        html += '<td class="text-muted">' + agent.glibc_display.replace(/</g, '&lt;') + '</td>';
+                        html += '<td>';
+                        html += '<span class="badge bg-secondary">' + agent.borg_version.replace(/</g, '&lt;') + '</span> ';
+                        html += '<span class="badge bg-light text-dark border">' + agent.install_method.replace(/</g, '&lt;') + '</span>';
+                        if (agent.borg_source !== 'unknown') {
+                            html += ' <span class="badge bg-light text-dark border">' + agent.borg_source.charAt(0).toUpperCase() + agent.borg_source.slice(1) + '</span>';
+                        }
+                        html += '</td>';
+                        html += '<td class="text-end">';
+                        html += '<form method="POST" action="/settings/borg/update-agent/' + agent.id + '" class="d-inline">';
+                        html += '<input type="hidden" name="csrf_token" value="' + csrfToken + '">';
+                        html += '<button type="submit" class="btn btn-sm btn-outline-primary py-0 px-1" title="Update this client"';
+                        if (data.update_mode === 'server' && !agent.is_compatible) {
+                            html += ' disabled';
+                        }
+                        html += '><i class="bi bi-arrow-up-circle"></i></button></form>';
+                        html += '</td></tr>';
+                    });
+                    tbody.innerHTML = html;
+                }
+            })
+            .catch(function() {});
+    }
+
+    // Initial fetch to get fresh server version (replaces "checking...")
+    setTimeout(updateBorgStatus, 500);
+
+    // Refresh every 30 seconds
+    setInterval(updateBorgStatus, 30000);
+})();
+</script>
 <?php endif; ?>
 
 <!-- Offsite Storage Tab -->

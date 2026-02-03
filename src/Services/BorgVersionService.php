@@ -823,7 +823,16 @@ class BorgVersionService
     }
 
     /**
-     * Detect the server's currently installed borg version.
+     * Get cached server borg version (fast, for page loads).
+     */
+    public function getServerBorgVersionCached(): ?string
+    {
+        return $this->getSetting('server_borg_version_cached', null);
+    }
+
+    /**
+     * Detect the server's currently installed borg version (slow, runs shell command).
+     * Also updates the cache.
      */
     public function getServerBorgVersion(): ?string
     {
@@ -834,7 +843,14 @@ class BorgVersionService
         // Output is like "borg 1.2.0" or "borg 1.4.3"
         $output = trim($output);
         $version = preg_replace('/^borg\s+/', '', $output);
-        return $version ?: null;
+        $version = $version ?: null;
+
+        // Update cache
+        if ($version) {
+            $this->setSetting('server_borg_version_cached', $version);
+        }
+
+        return $version;
     }
 
     /**

@@ -126,6 +126,7 @@ class App
         $this->router->map('POST', '/settings/sync', 'SettingsController@sync');
         $this->router->map('POST', '/settings/upgrade-agents', 'SettingsController@upgradeAgents');
         $this->router->map('GET', '/api/agent-updates', 'SettingsController@agentUpdatesJson');
+        $this->router->map('GET', '/api/borg-status', 'SettingsController@borgStatusJson');
         $this->router->map('GET', '/api/templates/[i:id]', 'SettingsController@templateJson');
         $this->router->map('POST', '/settings/offsite-storage', 'SettingsController@saveOffsiteStorage');
         $this->router->map('POST', '/settings/offsite-storage/test', 'SettingsController@testOffsiteStorage');
