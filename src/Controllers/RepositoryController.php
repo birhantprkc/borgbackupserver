@@ -85,6 +85,7 @@ class RepositoryController extends Controller
             $env['BORG_PASSPHRASE'] = $passphrase;
         }
         $env['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes';
+        $env['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes';
         $env['BORG_BASE_DIR'] = '/tmp/bbs-borg-www-data';
         $env['HOME'] = '/tmp/bbs-borg-www-data';
 

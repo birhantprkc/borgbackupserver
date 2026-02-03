@@ -124,6 +124,7 @@ case "$ACTION" in
         sudo -u "$USERNAME" \
             BORG_PASSPHRASE="$PASSPHRASE" \
             BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes \
+            BORG_RELOCATED_REPO_ACCESS_IS_OK=yes \
             BORG_BASE_DIR="$BORG_DIR" \
             HOME="$BORG_DIR" \
             borg extract "$@" 2>&1
@@ -169,6 +170,7 @@ case "$ACTION" in
         sudo -u "$USERNAME" \
             BORG_PASSPHRASE="$PASSPHRASE" \
             BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes \
+            BORG_RELOCATED_REPO_ACCESS_IS_OK=yes \
             BORG_BASE_DIR="$BORG_DIR" \
             HOME="$BORG_DIR" \
             borg list --json "$REPO_PATH" 2>&1
@@ -212,6 +214,7 @@ case "$ACTION" in
         sudo -u "$USERNAME" \
             BORG_PASSPHRASE="$PASSPHRASE" \
             BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes \
+            BORG_RELOCATED_REPO_ACCESS_IS_OK=yes \
             BORG_BASE_DIR="$BORG_DIR" \
             HOME="$BORG_DIR" \
             borg list --json-lines "$ARCHIVE_PATH" 2>&1
@@ -261,6 +264,7 @@ case "$ACTION" in
         sudo -u "$USERNAME" \
             BORG_PASSPHRASE="$PASSPHRASE" \
             BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes \
+            BORG_RELOCATED_REPO_ACCESS_IS_OK=yes \
             BORG_BASE_DIR="$BORG_DIR" \
             HOME="$BORG_DIR" \
             borg "$@" 2>&1

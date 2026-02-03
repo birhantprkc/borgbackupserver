@@ -377,6 +377,7 @@ foreach ($serverJobs as $sj) {
                 $csEnv['BORG_PASSPHRASE'] = $passphrase;
             }
             $csEnv['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes';
+            $csEnv['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes';
             $csEnv['BORG_BASE_DIR'] = '/tmp/bbs-borg-www-data';
             $csEnv['HOME'] = '/tmp/bbs-borg-www-data';
         }
@@ -440,6 +441,7 @@ foreach ($serverJobs as $sj) {
                         $infoEnv['BORG_PASSPHRASE'] = $passphrase;
                     }
                     $infoEnv['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes';
+                    $infoEnv['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes';
                     $infoEnv['BORG_BASE_DIR'] = '/tmp/bbs-borg-www-data';
                     $infoEnv['HOME'] = '/tmp/bbs-borg-www-data';
                     $infoEnvStrings = array_filter($_SERVER, 'is_string') + $infoEnv;
@@ -609,6 +611,7 @@ foreach ($serverJobs as $sj) {
                     $crEnv['BORG_PASSPHRASE'] = $passphrase;
                 }
                 $crEnv['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes';
+                $crEnv['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes';
                 $crEnv['BORG_BASE_DIR'] = '/tmp/bbs-borg-www-data';
                 $crEnv['HOME'] = '/tmp/bbs-borg-www-data';
                 $crEnv = array_filter($_SERVER, 'is_string') + $crEnv;

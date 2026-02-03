@@ -159,6 +159,8 @@ class BorgCommandBuilder
         $env = [
             // Agent runs on a different machine than where the repo was created
             'BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK' => 'yes',
+            // Allow repos that were restored from S3 (copies share the same UUID)
+            'BORG_RELOCATED_REPO_ACCESS_IS_OK' => 'yes',
         ];
         if (!empty($repo['passphrase_encrypted']) && ($repo['encryption'] ?? '') !== 'none') {
             try {
