@@ -651,7 +651,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     </div>
                 </div>
                 <div class="repo-status-bar">
-                    <?= $sizeLabel ?> &middot; <?= $repo['archive_count'] ?> archives<?php if (isset($s3SyncByRepo[$repo['id']])): ?> &middot; <i class="bi bi-cloud text-info" title="Replicated to S3<?= $s3SyncByRepo[$repo['id']] ? ' (last: ' . \BBS\Core\TimeHelper::ago($s3SyncByRepo[$repo['id']]) . ')' : '' ?>"></i> S3<?php endif; ?>
+                    <?= $sizeLabel ?> &middot; <?= $repo['archive_count'] ?> archives<?php if (isset($s3SyncByRepo[$repo['id']])): ?> &middot; <i class="bi bi-cloud text-info" title="Replicated to S3<?= $s3SyncByRepo[$repo['id']] ? ' (last: ' . \BBS\Core\TimeHelper::ago($s3SyncByRepo[$repo['id']]) . ')' : '' ?>"></i> S3 Sync<?php endif; ?>
                 </div>
             </div>
         </div>
