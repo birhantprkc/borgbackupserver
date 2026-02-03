@@ -186,6 +186,7 @@ class DashboardController extends Controller
             'restore' => 'restores', 'restore_mysql' => 'restores', 'restore_pg' => 'restores',
             's3_sync' => 's3_sync',
             'prune' => null, 'compact' => null,
+            'update_agent' => null, 'update_borg' => null, 'plugin_test' => null,
         ];
         // Index by hour+category
         $hourCounts = [];
