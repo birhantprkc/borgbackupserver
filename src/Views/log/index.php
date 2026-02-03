@@ -1,5 +1,4 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h5 class="mb-0">Server Log</h5>
+<div class="d-flex justify-content-end mb-3">
     <div>
         <a href="/log" class="btn btn-sm <?= empty($currentLevel) ? 'btn-primary' : 'btn-outline-secondary' ?>">All</a>
         <a href="/log?level=info" class="btn btn-sm <?= $currentLevel === 'info' ? 'btn-info' : 'btn-outline-secondary' ?>">Info</a>
