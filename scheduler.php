@@ -458,3 +458,39 @@ if (!$lastBorgCheckTime || strtotime($lastBorgCheckTime) < time() - 86400) {
         echo date('Y-m-d H:i:s') . " Borg version sync failed: {$syncResult['error']}\n";
     }
 }
+
+// Step 9: Clean up old backup jobs (daily, keep 30 days)
+$lastJobCleanup = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'last_job_cleanup'");
+$lastJobCleanupTime = $lastJobCleanup['value'] ?? null;
+if (!$lastJobCleanupTime || strtotime($lastJobCleanupTime) < time() - 86400) {
+    $cutoffDate = date('Y-m-d H:i:s', time() - 30 * 86400);
+
+    // Delete related server_log entries first
+    $db->query(
+        "DELETE FROM server_log WHERE backup_job_id IN (
+            SELECT id FROM backup_jobs
+            WHERE status IN ('completed', 'failed', 'cancelled')
+              AND COALESCE(completed_at, queued_at) < ?
+        )",
+        [$cutoffDate]
+    );
+
+    // Delete old completed/failed/cancelled jobs
+    $deleted = $db->query(
+        "DELETE FROM backup_jobs
+         WHERE status IN ('completed', 'failed', 'cancelled')
+           AND COALESCE(completed_at, queued_at) < ?",
+        [$cutoffDate]
+    );
+
+    $count = $deleted->rowCount();
+    if ($count > 0) {
+        echo date('Y-m-d H:i:s') . " Job cleanup: removed {$count} jobs older than 30 days\n";
+    }
+
+    $db->query(
+        "INSERT INTO settings (`key`, `value`) VALUES ('last_job_cleanup', ?)
+         ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)",
+        [date('Y-m-d H:i:s')]
+    );
+}

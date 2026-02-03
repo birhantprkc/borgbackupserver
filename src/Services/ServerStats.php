@@ -158,7 +158,7 @@ class ServerStats
 
         $catalogFiles = $db->fetchOne("SELECT COUNT(*) AS cnt FROM file_paths");
         $archives = $db->fetchOne("SELECT COUNT(*) AS cnt FROM archives");
-        $jobs = $db->fetchOne("SELECT COUNT(*) AS cnt FROM backup_jobs WHERE status = 'completed'");
+        $jobs = $db->fetchOne("SELECT COALESCE(MAX(id), 0) AS cnt FROM backup_jobs");
 
         // MySQL performance stats from SHOW GLOBAL STATUS
         $statusVars = [];
