@@ -92,7 +92,7 @@
     </div>
 </div>
 
-<h6 class="mb-3">In Progress</h6>
+<h6 class="mb-3">In Progress <span class="text-muted fw-normal small">(Max: <?= $maxQueue ?> Concurrent)</span></h6>
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body p-0" id="queue-in-progress">
         <?php if (empty($inProgress)): ?>

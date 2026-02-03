@@ -67,6 +67,8 @@ class QueueController extends Controller
         ", $agentParams);
         $avgSec = (int) ($avgDuration['avg_sec'] ?? 0);
 
+        $maxQueue = (int) ($this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'max_queue'")['value'] ?? 4);
+
         $this->view('queue/index', [
             'pageTitle' => 'Queue',
             'inProgress' => $inProgress,
@@ -76,6 +78,7 @@ class QueueController extends Controller
             'completed24h' => $completed24h,
             'failed24h' => $failed24h,
             'avgSec' => $avgSec,
+            'maxQueue' => $maxQueue,
         ]);
     }
 
