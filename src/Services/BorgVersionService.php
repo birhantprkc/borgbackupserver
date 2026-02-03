@@ -593,7 +593,7 @@ class BorgVersionService
 
     /**
      * Get the best borg version for an agent based on current mode.
-     * - Server mode: try server binaries first, fall back to official
+     * - Server mode: use official if compatible, only use server binary for agents that need it
      * - Official mode: use GitHub binaries, pip as last resort
      * Returns ['version' => '1.4.3', 'url' => '...', 'source' => 'server|official|pip'].
      */
@@ -601,7 +601,17 @@ class BorgVersionService
     {
         $mode = $this->getUpdateMode();
 
-        // Server mode: try server binaries first
+        // Always try official binaries first (they're preferred when compatible)
+        $official = $this->getOfficialBinaryForAgent($agent);
+        if ($official) {
+            return [
+                'version' => $official['version'],
+                'url' => $official['url'],
+                'source' => 'official',
+            ];
+        }
+
+        // Server mode: use server binary for agents that can't use official
         if ($mode === 'server') {
             $serverVersion = $this->getServerVersion();
             if (!empty($serverVersion)) {
@@ -614,17 +624,6 @@ class BorgVersionService
                     ];
                 }
             }
-            // Fall through to official if no server binary matches
-        }
-
-        // Official mode (or server mode fallback): try GitHub binaries
-        $official = $this->getOfficialBinaryForAgent($agent);
-        if ($official) {
-            return [
-                'version' => $official['version'],
-                'url' => $official['url'],
-                'source' => 'official',
-            ];
         }
 
         // Last resort: pip (agent will remove any existing binary first)
@@ -637,32 +636,32 @@ class BorgVersionService
 
     /**
      * Update server borg using current mode settings.
+     * Always prefers official binaries; only uses server binary if official isn't compatible.
      */
     public function updateServerBorgByMode(): array
     {
         $mode = $this->getUpdateMode();
         $platform = $this->getServerPlatformInfo();
 
+        // Always try official first (preferred when compatible)
+        $result = $this->getOfficialBinaryForAgent($platform);
+        if ($result) {
+            return $this->updateServerBorgFromUrl($result['url'], $result['version']);
+        }
+
+        // Server mode: fall back to server binary if official isn't compatible
         if ($mode === 'server') {
             $version = $this->getServerVersion();
             if (empty($version)) {
                 return ['success' => false, 'error' => 'No server version selected'];
             }
             $url = $this->getServerBinaryForAgent($version, $platform);
-            if (!$url) {
-                return ['success' => false, 'error' => 'No compatible binary for server platform'];
+            if ($url) {
+                return $this->updateServerBorgFromUrl($url, $version);
             }
-        } else {
-            // Official mode
-            $result = $this->getOfficialBinaryForAgent($platform);
-            if (!$result) {
-                return ['success' => false, 'error' => 'No compatible official binary for server platform'];
-            }
-            $version = $result['version'];
-            $url = $result['url'];
         }
 
-        return $this->updateServerBorgFromUrl($url, $version);
+        return ['success' => false, 'error' => 'No compatible binary for server platform'];
     }
 
     /**
