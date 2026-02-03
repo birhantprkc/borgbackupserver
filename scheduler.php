@@ -509,8 +509,13 @@ foreach ($serverJobs as $sj) {
                 if ($fileData && isset($fileData['path'])) {
                     // Only include files (not directories)
                     if (($fileData['type'] ?? '') !== 'd') {
+                        // Ensure path starts with / (borg outputs relative paths)
+                        $path = $fileData['path'];
+                        if ($path !== '' && $path[0] !== '/') {
+                            $path = '/' . $path;
+                        }
                         $files[] = [
-                            'path' => $fileData['path'],
+                            'path' => $path,
                             'size' => $fileData['size'] ?? 0,
                             'mtime' => isset($fileData['mtime']) ? date('Y-m-d H:i:s', strtotime($fileData['mtime'])) : null,
                         ];
