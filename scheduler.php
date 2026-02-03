@@ -409,11 +409,12 @@ if ((int) date('i') % 5 === 0) {
     $repos = $db->fetchAll("SELECT id, path, agent_id, name FROM repositories");
     foreach ($repos as $repo) {
         $localPath = \BBS\Services\BorgCommandBuilder::getLocalRepoPath($repo);
-        if (!empty($localPath) && is_dir($localPath)) {
+        if (!empty($localPath)) {
+            // Use SSH helper to get size (runs as root, can read all repos)
             $output = [];
-            exec('du -sb ' . escapeshellarg($localPath) . ' 2>/dev/null', $output);
-            if (!empty($output[0])) {
-                $sizeBytes = (int) explode("\t", $output[0])[0];
+            exec('sudo /usr/local/bin/bbs-ssh-helper get-size ' . escapeshellarg($localPath) . ' 2>/dev/null', $output);
+            if (!empty($output[0]) && is_numeric($output[0])) {
+                $sizeBytes = (int) $output[0];
                 $db->update('repositories', ['size_bytes' => $sizeBytes], 'id = ?', [$repo['id']]);
             }
         }

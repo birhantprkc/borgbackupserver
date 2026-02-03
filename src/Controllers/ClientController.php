@@ -100,7 +100,7 @@ class ClientController extends Controller
             ", array_merge([$latestVersion], $params))['cnt'];
         }
 
-        // 7-day backup activity chart — group by user's local date
+        // 7-day backup activity chart — group by user's local date (backups only)
         $utcTz = new \DateTimeZone('UTC');
         $userTz = new \DateTimeZone($_SESSION['timezone'] ?? 'UTC');
         $recentJobs = $this->db->fetchAll("
@@ -109,6 +109,7 @@ class ClientController extends Controller
             JOIN agents a ON a.id = bj.agent_id
             WHERE bj.completed_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
               AND bj.status IN ('completed', 'failed')
+              AND bj.task_type = 'backup'
               {$jobScope}
         ", $jobParams);
 

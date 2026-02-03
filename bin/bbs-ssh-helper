@@ -284,6 +284,29 @@ case "$ACTION" in
         exit $?
         ;;
 
+    get-size)
+        # Get size of a directory in bytes
+        # Usage: bbs-ssh-helper get-size <directory>
+        DIR="${2:-}"
+
+        if [ -z "$DIR" ]; then
+            echo "Usage: bbs-ssh-helper get-size <directory>"
+            exit 1
+        fi
+
+        # Safety: only allow paths under /var/bbs/
+        if [[ ! "$DIR" =~ ^/var/bbs/ ]]; then
+            echo "Error: path must be under /var/bbs/"
+            exit 1
+        fi
+
+        if [ -d "$DIR" ]; then
+            du -sb "$DIR" 2>/dev/null | cut -f1
+        else
+            echo "0"
+        fi
+        ;;
+
     delete-storage)
         STORAGE_DIR="${2:-}"
 
@@ -311,7 +334,7 @@ case "$ACTION" in
         ;;
 
     *)
-        echo "Usage: bbs-ssh-helper {create-user|create-repo-dir|borg-extract|fix-repo-perms|delete-user|rclone-sync|delete-storage} [args...]"
+        echo "Usage: bbs-ssh-helper {create-user|create-repo-dir|borg-extract|fix-repo-perms|delete-user|rclone-sync|get-size|delete-storage} [args...]"
         exit 1
         ;;
 esac
