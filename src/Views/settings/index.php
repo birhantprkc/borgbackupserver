@@ -357,6 +357,7 @@
                         <i class="bi bi-server me-1"></i> Server Borg:
                         <?php if ($serverBorgVersion): ?>
                             <span class="badge bg-success">v<?= htmlspecialchars($serverBorgVersion) ?></span>
+                            <span class="text-muted small">(<?= $updateMode === 'server' ? 'Server' : 'Official' ?>)</span>
                         <?php else: ?>
                             <span class="badge bg-danger">not installed</span>
                         <?php endif; ?>
