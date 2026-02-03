@@ -594,7 +594,6 @@ if ($dayOfWeek === 6 && $hourOfDay === 2) {
                 'repository_id' => $repo['id'],
                 'task_type' => 'compact',
                 'status' => 'queued',
-                'message' => "Weekly auto-compact for repository \"{$repo['name']}\"",
             ]);
 
             $db->insert('server_log', [

@@ -294,7 +294,6 @@ class RepositoryController extends Controller
             'repository_id' => $id,
             'task_type' => $taskType,
             'status' => 'queued',
-            'message' => "{$actionLabel} queued for repository \"{$repo['name']}\"",
         ]);
 
         $this->db->insert('server_log', [
