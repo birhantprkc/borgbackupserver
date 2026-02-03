@@ -643,7 +643,6 @@ class AgentApiController extends Controller
             'agent_id' => $agent['id'],
             'task_type' => 'update_borg',
             'status' => 'queued',
-            'message' => "Auto-queued borg update to v{$targetVersion}",
         ]);
     }
 }
