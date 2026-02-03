@@ -197,12 +197,22 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                     <div class="flex-grow-1">
                         <h6 class="mb-1">Restore from S3</h6>
                         <p class="text-muted small mb-2">Download repository data from S3 back to the server. Use this to recover from local data loss or sync issues.</p>
-                        <form method="POST" action="/clients/<?= $agentId ?>/repo/<?= $repo['id'] ?>/s3-restore" class="d-inline" data-confirm="Restore repository from S3?&#10;&#10;This will download the repository data from S3 and overwrite local files.">
-                            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                            <button type="submit" class="btn btn-sm btn-outline-primary" <?= $activeJob ? 'disabled' : '' ?>>
-                                <i class="bi bi-cloud-download me-1"></i>Restore from S3
-                            </button>
-                        </form>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <form method="POST" action="/clients/<?= $agentId ?>/repo/<?= $repo['id'] ?>/s3-restore" class="d-inline" data-confirm="Restore (replace) from S3?&#10;&#10;This will download the repository data from S3 and OVERWRITE local files.">
+                                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                <input type="hidden" name="mode" value="replace">
+                                <button type="submit" class="btn btn-sm btn-outline-primary" <?= $activeJob ? 'disabled' : '' ?>>
+                                    <i class="bi bi-arrow-repeat me-1"></i>Restore (replace)
+                                </button>
+                            </form>
+                            <form method="POST" action="/clients/<?= $agentId ?>/repo/<?= $repo['id'] ?>/s3-restore" class="d-inline" data-confirm="Restore (copy) from S3?&#10;&#10;This will create a NEW repository and download data from S3.">
+                                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                <input type="hidden" name="mode" value="copy">
+                                <button type="submit" class="btn btn-sm btn-outline-secondary" <?= $activeJob ? 'disabled' : '' ?>>
+                                    <i class="bi bi-files me-1"></i>Restore (copy)
+                                </button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -317,12 +327,34 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                 <i class="bi bi-trash me-1"></i>Delete
             </button>
             <?php else: ?>
-            <form method="POST" action="/repositories/<?= $repo['id'] ?>/delete" data-confirm="PERMANENTLY delete repository &quot;<?= htmlspecialchars($repo['name']) ?>&quot;, all its archives, and the data on disk?&#10;&#10;This action is NOT reversible." data-confirm-danger>
+            <form method="POST" action="/repositories/<?= $repo['id'] ?>/delete" id="deleteRepoForm">
                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                <?php if ($s3SyncInfo): ?>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" name="delete_from_s3" id="deleteFromS3" value="1">
+                    <label class="form-check-label small" for="deleteFromS3">
+                        <i class="bi bi-cloud text-info me-1"></i>Also delete from S3 offsite storage
+                    </label>
+                    <input type="hidden" name="plugin_config_id" value="<?= $s3SyncInfo['plugin_config_id'] ?>">
+                </div>
+                <?php endif; ?>
                 <button type="submit" class="btn btn-outline-danger">
                     <i class="bi bi-trash me-1"></i>Delete Repository
                 </button>
             </form>
+            <script>
+            document.getElementById('deleteRepoForm').addEventListener('submit', function(e) {
+                var deleteS3 = document.getElementById('deleteFromS3');
+                var msg = 'PERMANENTLY delete repository "<?= htmlspecialchars($repo['name'], ENT_QUOTES) ?>", all its archives, and the data on disk?';
+                if (deleteS3 && deleteS3.checked) {
+                    msg += '\n\nThis will ALSO delete the offsite copy from S3!';
+                }
+                msg += '\n\nThis action is NOT reversible.';
+                if (!confirm(msg)) {
+                    e.preventDefault();
+                }
+            });
+            </script>
             <?php endif; ?>
         </div>
     </div>

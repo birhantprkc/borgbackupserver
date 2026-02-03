@@ -21,6 +21,7 @@
             'plugin_test' => '<i class="bi bi-pencil text-secondary me-1"></i>',
             's3_sync' => '<i class="bi bi-cloud-upload text-info me-1"></i>',
             's3_restore' => '<i class="bi bi-cloud-download text-info me-1"></i>',
+            'catalog_sync' => '<i class="bi bi-list-ul text-success me-1"></i>',
             default => '<i class="bi bi-gear text-muted me-1"></i>',
         };
     }
@@ -269,7 +270,8 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
             'update_agent': '<i class="bi bi-arrow-up-square text-info me-1"></i>',
             'plugin_test': '<i class="bi bi-pencil text-secondary me-1"></i>',
             's3_sync': '<i class="bi bi-cloud-upload text-info me-1"></i>',
-            's3_restore': '<i class="bi bi-cloud-download text-info me-1"></i>'
+            's3_restore': '<i class="bi bi-cloud-download text-info me-1"></i>',
+            'catalog_sync': '<i class="bi bi-list-ul text-success me-1"></i>'
         };
         return icons[type] || '<i class="bi bi-gear text-muted me-1"></i>';
     }

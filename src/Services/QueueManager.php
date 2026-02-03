@@ -161,7 +161,7 @@ class QueueManager
                     'level' => 'info',
                     'message' => "Backup command: {$cmdStr}",
                 ]);
-            } elseif (in_array($job['task_type'], ['prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock'])) {
+            } elseif (in_array($job['task_type'], ['prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync'])) {
                 // Server-side jobs — mark as sent, scheduler will execute them
                 $taskPayload = ['task' => $job['task_type'], 'server_side' => true, 'job_id' => $job['id']];
             } elseif ($job['task_type'] === 'restore') {
@@ -231,7 +231,7 @@ class QueueManager
             LEFT JOIN repositories r ON r.id = bj.repository_id
             WHERE bj.agent_id = ?
               AND bj.status = 'sent'
-              AND bj.task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore')
+              AND bj.task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'catalog_sync')
             ORDER BY bj.queued_at ASC
         ", [$agentId]);
 
@@ -328,7 +328,7 @@ class QueueManager
             LEFT JOIN repositories r ON r.id = bj.repository_id
             LEFT JOIN agents a ON a.id = bj.agent_id
             WHERE bj.status = 'sent'
-              AND bj.task_type IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock')
+              AND bj.task_type IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync')
             ORDER BY bj.queued_at ASC
         ");
     }

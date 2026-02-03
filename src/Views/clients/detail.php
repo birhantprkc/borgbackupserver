@@ -740,6 +740,51 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     </div>
     </div>
 
+    <?php if (!empty($s3Orphans)): ?>
+    <!-- S3 Offsite Backups (Orphaned) -->
+    <div class="card border-0 shadow-sm mt-4">
+        <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-cloud text-info me-1"></i> Offsite Backups</span>
+            <span class="badge bg-info"><?= count($s3Orphans) ?> available to restore</span>
+        </div>
+        <div class="card-body">
+            <p class="text-muted small mb-3">
+                These repositories exist in your S3 offsite storage but are not currently on this server.
+                You can restore them to recover data or re-enable backups.
+            </p>
+            <div class="row g-3">
+                <?php foreach ($s3Orphans as $orphanName): ?>
+                <div class="col-md-6 col-lg-4">
+                    <div class="card border h-100" style="border-style: dashed !important;">
+                        <div class="card-body p-3">
+                            <div class="d-flex align-items-center">
+                                <div class="me-3">
+                                    <i class="bi bi-cloud-download text-info" style="font-size: 1.5rem;"></i>
+                                </div>
+                                <div class="flex-grow-1 min-width-0">
+                                    <h6 class="mb-1 fw-bold"><?= htmlspecialchars($orphanName) ?></h6>
+                                    <div class="small text-muted">
+                                        <i class="bi bi-cloud me-1"></i>S3 Only
+                                    </div>
+                                </div>
+                            </div>
+                            <form method="POST" action="/clients/<?= $agent['id'] ?>/restore-orphan" class="mt-2" data-confirm="Restore repository &quot;<?= htmlspecialchars($orphanName) ?>&quot; from S3?&#10;&#10;This will create the repository and download data from S3.">
+                                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                <input type="hidden" name="repo_name" value="<?= htmlspecialchars($orphanName) ?>">
+                                <input type="hidden" name="plugin_config_id" value="<?= $s3PluginConfigId ?>">
+                                <button type="submit" class="btn btn-sm btn-outline-info w-100">
+                                    <i class="bi bi-cloud-download me-1"></i>Restore from S3
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <script>
     document.getElementById('encryptionSelect').addEventListener('change', function() {
         document.getElementById('passphraseRow').style.display = this.value === 'none' ? 'none' : 'flex';

@@ -236,6 +236,137 @@ foreach ($serverJobs as $sj) {
         ]);
 
         echo date('Y-m-d H:i:s') . " S3 restore job #{$sj['id']} {$s3Result}\n";
+
+        // Auto-queue catalog_sync after successful S3 restore
+        if ($s3Result === 'completed' && $sj['repository_id']) {
+            $db->insert('backup_jobs', [
+                'agent_id' => $sj['agent_id'],
+                'repository_id' => $sj['repository_id'],
+                'task_type' => 'catalog_sync',
+                'status' => 'queued',
+            ]);
+            $db->insert('server_log', [
+                'agent_id' => $sj['agent_id'],
+                'level' => 'info',
+                'message' => "Catalog sync queued for repository after S3 restore",
+            ]);
+            echo date('Y-m-d H:i:s') . " Queued catalog_sync for repo #{$sj['repository_id']} after S3 restore\n";
+        }
+        continue;
+    }
+
+    // Catalog sync — runs borg list to rebuild archives table
+    if ($sj['task_type'] === 'catalog_sync') {
+        $csRepo = $db->fetchOne("SELECT * FROM repositories WHERE id = ?", [$sj['repository_id']]);
+        if (!$csRepo) {
+            $db->update('backup_jobs', [
+                'status' => 'failed',
+                'completed_at' => date('Y-m-d H:i:s'),
+                'error_log' => 'Repository not found',
+            ], 'id = ?', [$sj['id']]);
+            echo date('Y-m-d H:i:s') . " Catalog sync job #{$sj['id']} failed: repository not found\n";
+            continue;
+        }
+
+        $csLocalPath = \BBS\Services\BorgCommandBuilder::getLocalRepoPath($csRepo);
+        $passphrase = null;
+        if (!empty($csRepo['passphrase_encrypted'])) {
+            try {
+                $passphrase = \BBS\Services\Encryption::decrypt($csRepo['passphrase_encrypted']);
+            } catch (\Exception $e) {
+                // May already be plaintext or missing
+            }
+        }
+
+        // Build environment for borg list
+        $csEnv = $_ENV;
+        if ($passphrase) {
+            $csEnv['BORG_PASSPHRASE'] = $passphrase;
+        }
+        $csEnv['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes';
+        $csEnv['BORG_BASE_DIR'] = '/tmp/bbs-borg-www-data';
+        $csEnv['HOME'] = '/tmp/bbs-borg-www-data';
+
+        // Run borg list --json to get all archives
+        $csCmd = ['borg', 'list', '--json', $csLocalPath];
+        $csProc = proc_open($csCmd, [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $csPipes, null, $csEnv);
+
+        $csOutput = '';
+        $csError = '';
+        $csExitCode = -1;
+        if (is_resource($csProc)) {
+            fclose($csPipes[0]);
+            $csOutput = stream_get_contents($csPipes[1]);
+            $csError = stream_get_contents($csPipes[2]);
+            fclose($csPipes[1]);
+            fclose($csPipes[2]);
+            $csExitCode = proc_close($csProc);
+        }
+
+        $csNow = date('Y-m-d H:i:s');
+        if ($csExitCode === 0) {
+            $csData = json_decode($csOutput, true);
+            $archives = $csData['archives'] ?? [];
+
+            // Clear existing archives for this repo and rebuild
+            $db->delete('archives', 'repository_id = ?', [$csRepo['id']]);
+
+            $archiveCount = 0;
+            $totalSize = 0;
+            foreach ($archives as $ar) {
+                // borg list --json gives: name, start, id
+                // We need to run borg info for full stats, but that's expensive
+                // For now, insert basic info - size will be 0 until next backup reports stats
+                $db->insert('archives', [
+                    'repository_id' => $csRepo['id'],
+                    'archive_name' => $ar['name'] ?? 'unknown',
+                    'borg_archive_id' => $ar['id'] ?? null,
+                    'created_at' => isset($ar['start']) ? date('Y-m-d H:i:s', strtotime($ar['start'])) : $csNow,
+                    'original_size' => 0,
+                    'compressed_size' => 0,
+                    'deduplicated_size' => 0,
+                ]);
+                $archiveCount++;
+            }
+
+            // Update repo stats
+            $db->update('repositories', [
+                'archive_count' => $archiveCount,
+            ], 'id = ?', [$csRepo['id']]);
+
+            $db->update('backup_jobs', [
+                'status' => 'completed',
+                'completed_at' => $csNow,
+                'duration_seconds' => max(0, strtotime($csNow) - strtotime($startedAt)),
+            ], 'id = ?', [$sj['id']]);
+
+            $db->insert('server_log', [
+                'agent_id' => $sj['agent_id'],
+                'backup_job_id' => $sj['id'],
+                'level' => 'info',
+                'message' => "Catalog sync completed: {$archiveCount} archives found",
+            ]);
+            echo date('Y-m-d H:i:s') . " Catalog sync job #{$sj['id']} completed: {$archiveCount} archives\n";
+        } else {
+            $db->update('backup_jobs', [
+                'status' => 'failed',
+                'completed_at' => $csNow,
+                'duration_seconds' => max(0, strtotime($csNow) - strtotime($startedAt)),
+                'error_log' => $csError ?: "borg list failed with exit code {$csExitCode}",
+            ], 'id = ?', [$sj['id']]);
+
+            $db->insert('server_log', [
+                'agent_id' => $sj['agent_id'],
+                'backup_job_id' => $sj['id'],
+                'level' => 'error',
+                'message' => "Catalog sync failed: " . ($csError ?: "exit code {$csExitCode}"),
+            ]);
+            echo date('Y-m-d H:i:s') . " Catalog sync job #{$sj['id']} failed\n";
+        }
         continue;
     }
 

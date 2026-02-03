@@ -355,4 +355,138 @@ class S3SyncService
         $output = @shell_exec('which rclone 2>/dev/null');
         return !empty(trim($output ?? ''));
     }
+
+    /**
+     * List remote repositories in S3 for a given agent.
+     * Returns array of repo names found in S3 for this agent.
+     */
+    public function listRemoteRepos(string $agentName, array $creds): array
+    {
+        if (empty($creds['bucket'])) {
+            return ['success' => false, 'repos' => [], 'error' => 'No S3 bucket configured'];
+        }
+
+        if (!$this->isRcloneInstalled()) {
+            return ['success' => false, 'repos' => [], 'error' => 'rclone is not installed'];
+        }
+
+        // Sanitize agent name same way as sync
+        $agentName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $agentName);
+        $prefix = trim($creds['path_prefix'], '/');
+        $remotePath = $prefix ? "{$prefix}/{$agentName}/" : "{$agentName}/";
+        $remote = "S3:{$creds['bucket']}/{$remotePath}";
+
+        // List directories (repos) under the agent folder
+        $cmd = ['rclone', 'lsd', $remote];
+
+        $env = $this->buildRcloneEnv($creds);
+
+        $desc = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+
+        $envStrings = [];
+        foreach ($env as $k => $v) {
+            $envStrings[$k] = $v;
+        }
+
+        $proc = proc_open($cmd, $desc, $pipes, null, array_merge($_SERVER, $envStrings));
+        if (!is_resource($proc)) {
+            return ['success' => false, 'repos' => [], 'error' => 'Failed to start rclone process'];
+        }
+
+        fclose($pipes[0]);
+        $stdout = stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($proc);
+
+        // Exit code 3 means directory not found (no repos for this agent yet)
+        if ($exitCode === 3) {
+            return ['success' => true, 'repos' => []];
+        }
+
+        if ($exitCode !== 0) {
+            $error = trim($stderr) ?: trim($stdout) ?: "rclone exited with code {$exitCode}";
+            return ['success' => false, 'repos' => [], 'error' => $error];
+        }
+
+        // Parse rclone lsd output - format: "          -1 2024-01-15 10:30:00        -1 repo-name"
+        $repos = [];
+        $lines = array_filter(array_map('trim', explode("\n", $stdout)));
+        foreach ($lines as $line) {
+            // Last space-separated token is the directory name
+            $parts = preg_split('/\s+/', $line);
+            if (!empty($parts)) {
+                $repoName = end($parts);
+                if (!empty($repoName)) {
+                    $repos[] = $repoName;
+                }
+            }
+        }
+
+        return ['success' => true, 'repos' => $repos];
+    }
+
+    /**
+     * Delete a repository from S3.
+     * Returns ['success' => bool, 'output' => string].
+     */
+    public function deleteFromS3(array $repo, array $agent, array $creds): array
+    {
+        if (empty($creds['bucket'])) {
+            return ['success' => false, 'output' => 'No S3 bucket configured'];
+        }
+
+        if (!$this->isRcloneInstalled()) {
+            return ['success' => false, 'output' => 'rclone is not installed on this server'];
+        }
+
+        // Build remote path: bucket/prefix/agent-name/repo-name/
+        $agentName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $agent['name'] ?? 'unknown');
+        $repoName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $repo['name'] ?? 'unknown');
+        $prefix = trim($creds['path_prefix'], '/');
+        $remotePath = $prefix ? "{$prefix}/{$agentName}/{$repoName}" : "{$agentName}/{$repoName}";
+        $remote = "S3:{$creds['bucket']}/{$remotePath}/";
+
+        // Use rclone purge to delete the directory and all contents
+        $cmd = ['rclone', 'purge', $remote];
+
+        $env = $this->buildRcloneEnv($creds);
+
+        $desc = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+
+        $envStrings = [];
+        foreach ($env as $k => $v) {
+            $envStrings[$k] = $v;
+        }
+
+        $proc = proc_open($cmd, $desc, $pipes, null, array_merge($_SERVER, $envStrings));
+        if (!is_resource($proc)) {
+            return ['success' => false, 'output' => 'Failed to start rclone process'];
+        }
+
+        fclose($pipes[0]);
+        $stdout = stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($proc);
+
+        $fullOutput = trim($stdout . "\n" . $stderr);
+
+        return [
+            'success' => $exitCode === 0,
+            'output' => $exitCode === 0
+                ? 'Deleted from S3'
+                : ($fullOutput ?: "rclone exited with code {$exitCode}"),
+        ];
+    }
 }

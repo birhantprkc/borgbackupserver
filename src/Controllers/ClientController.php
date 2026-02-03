@@ -6,6 +6,7 @@ use BBS\Core\Controller;
 use BBS\Services\SshKeyManager;
 use BBS\Services\Encryption;
 use BBS\Services\PermissionService;
+use BBS\Services\S3SyncService;
 
 class ClientController extends Controller
 {
@@ -373,6 +374,45 @@ class ClientController extends Controller
             $s3SyncByRepo[$sr['repository_id']] = $sr['last_s3_sync'];
         }
 
+        // Detect orphaned S3 repos (exist in S3 but not locally)
+        $s3Orphans = [];
+        $s3PluginConfigId = null;
+        // Get S3 config from any plan that uses S3 sync for this agent
+        $s3PluginConfig = $this->db->fetchOne("
+            SELECT bpp.plugin_config_id, pc.config
+            FROM backup_plan_plugins bpp
+            JOIN plugins p ON p.id = bpp.plugin_id
+            JOIN backup_plans bp ON bp.id = bpp.backup_plan_id
+            LEFT JOIN plugin_configs pc ON pc.id = bpp.plugin_config_id
+            WHERE p.slug = 's3_sync' AND bp.agent_id = ?
+            LIMIT 1
+        ", [$id]);
+
+        if ($s3PluginConfig) {
+            $s3PluginConfigId = $s3PluginConfig['plugin_config_id'];
+            $config = json_decode($s3PluginConfig['config'] ?? '{}', true) ?: [];
+            $s3Service = new S3SyncService();
+            $creds = $s3Service->resolveCredentials($config);
+
+            if (!empty($creds['bucket'])) {
+                $remoteResult = $s3Service->listRemoteRepos($agent['name'], $creds);
+                if ($remoteResult['success'] && !empty($remoteResult['repos'])) {
+                    // Get local repo names (sanitized the same way as S3)
+                    $localRepoNames = array_map(
+                        fn($r) => preg_replace('/[^a-zA-Z0-9_-]/', '_', $r['name']),
+                        $repositories
+                    );
+
+                    // Find repos that exist in S3 but not locally
+                    foreach ($remoteResult['repos'] as $remoteName) {
+                        if (!in_array($remoteName, $localRepoNames)) {
+                            $s3Orphans[] = $remoteName;
+                        }
+                    }
+                }
+            }
+        }
+
         $this->view('clients/detail', [
             'pageTitle' => 'Clients',
             'agent' => $agent,
@@ -395,6 +435,8 @@ class ClientController extends Controller
             'pluginManager' => $pluginManager,
             'pluginConfigs' => $pluginConfigs,
             's3SyncByRepo' => $s3SyncByRepo,
+            's3Orphans' => $s3Orphans,
+            's3PluginConfigId' => $s3PluginConfigId,
         ]);
     }
 

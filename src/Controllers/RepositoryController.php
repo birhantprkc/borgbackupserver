@@ -6,6 +6,7 @@ use BBS\Core\Controller;
 use BBS\Services\BorgCommandBuilder;
 use BBS\Services\Encryption;
 use BBS\Services\PermissionService;
+use BBS\Services\S3SyncService;
 use BBS\Services\SshKeyManager;
 
 class RepositoryController extends Controller
@@ -211,6 +212,34 @@ class RepositoryController extends Controller
             }
         }
 
+        // Handle S3 deletion if requested
+        $s3Deleted = false;
+        $deleteFromS3 = !empty($_POST['delete_from_s3']);
+        $pluginConfigId = (int) ($_POST['plugin_config_id'] ?? 0);
+
+        if ($deleteFromS3 && $pluginConfigId > 0) {
+            // Get plugin config and agent info
+            $pluginConfig = $this->db->fetchOne("SELECT config FROM plugin_configs WHERE id = ?", [$pluginConfigId]);
+            $agent = $this->db->fetchOne("SELECT * FROM agents WHERE id = ?", [$agentId]);
+
+            if ($pluginConfig && $agent) {
+                $config = json_decode($pluginConfig['config'], true) ?: [];
+                $s3Service = new S3SyncService();
+                $creds = $s3Service->resolveCredentials($config);
+
+                $result = $s3Service->deleteFromS3($repo, $agent, $creds);
+                $s3Deleted = $result['success'];
+
+                $this->db->insert('server_log', [
+                    'agent_id' => $agentId,
+                    'level' => $s3Deleted ? 'info' : 'warning',
+                    'message' => $s3Deleted
+                        ? "S3 data deleted for repository \"{$repo['name']}\""
+                        : "Failed to delete S3 data for repository \"{$repo['name']}\": " . ($result['output'] ?? 'Unknown error'),
+                ]);
+            }
+        }
+
         $this->db->delete('repositories', 'id = ?', [$id]);
 
         $msg = "Repository \"{$repo['name']}\" deleted.";
@@ -219,11 +248,18 @@ class RepositoryController extends Controller
         } elseif (!empty($localPath) && is_dir($localPath)) {
             $msg .= " Warning: disk data at {$localPath} could not be removed — clean up manually.";
         }
+        if ($deleteFromS3) {
+            if ($s3Deleted) {
+                $msg .= " S3 offsite copy removed.";
+            } else {
+                $msg .= " Warning: S3 data could not be removed — clean up manually.";
+            }
+        }
 
         $this->db->insert('server_log', [
             'agent_id' => $agentId,
             'level' => 'info',
-            'message' => "Repository \"{$repo['name']}\" deleted" . ($diskDeleted ? " (disk data removed)" : ""),
+            'message' => "Repository \"{$repo['name']}\" deleted" . ($diskDeleted ? " (disk data removed)" : "") . ($s3Deleted ? " (S3 data removed)" : ""),
         ]);
 
         $this->flash('success', $msg);
@@ -401,14 +437,18 @@ class RepositoryController extends Controller
 
     /**
      * Queue S3 restore job.
+     * Modes: 'replace' (default) - overwrites existing local data
+     *        'copy' - creates a new repository with the S3 data
      */
     public function s3Restore(int $agentId, int $id): void
     {
         $this->requireAuth();
         $this->verifyCsrf();
 
+        $mode = $_POST['mode'] ?? 'replace';
+
         $repo = $this->db->fetchOne("
-            SELECT r.*, a.name as agent_name
+            SELECT r.*, a.name as agent_name, a.ssh_unix_user
             FROM repositories r
             JOIN agents a ON a.id = r.agent_id
             WHERE r.id = ? AND r.agent_id = ?
@@ -437,33 +477,183 @@ class RepositoryController extends Controller
             $this->redirect("/clients/{$agentId}/repo/{$id}");
         }
 
-        // Check for active jobs on this repo
-        $activeJob = $this->db->fetchOne(
-            "SELECT id, task_type FROM backup_jobs WHERE repository_id = ? AND status IN ('queued', 'sent', 'running')",
-            [$id]
-        );
-        if ($activeJob) {
-            $this->flash('warning', "Cannot restore from S3 — repository has an active {$activeJob['task_type']} job (#" . $activeJob['id'] . ').');
-            $this->redirect("/clients/{$agentId}/repo/{$id}");
+        // For 'copy' mode, create a new repository first
+        $targetRepoId = $id;
+        $targetRepoName = $repo['name'];
+        if ($mode === 'copy') {
+            // Generate unique name for the copy
+            $copyName = $repo['name'] . '-copy';
+            $counter = 1;
+            while ($this->db->fetchOne("SELECT id FROM repositories WHERE agent_id = ? AND name = ?", [$agentId, $copyName])) {
+                $copyName = $repo['name'] . '-copy' . $counter;
+                $counter++;
+            }
+
+            // Build path for the copy
+            $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
+            $storagePath = $storageSetting['value'] ?? '';
+            $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
+            $host = $serverHost['value'] ?? '';
+
+            if (!empty($repo['ssh_unix_user']) && !empty($host)) {
+                $copyPath = SshKeyManager::buildSshRepoPath($repo['ssh_unix_user'], $host, $copyName);
+            } else {
+                $copyPath = rtrim($storagePath, '/') . '/' . $agentId . '/' . $copyName;
+            }
+
+            // Create the new repository record
+            $targetRepoId = $this->db->insert('repositories', [
+                'agent_id' => $agentId,
+                'name' => $copyName,
+                'path' => $copyPath,
+                'encryption' => $repo['encryption'],
+                'passphrase_encrypted' => $repo['passphrase_encrypted'],
+            ]);
+            $targetRepoName = $copyName;
+
+            // Create local directory via SSH helper
+            $localPath = BorgCommandBuilder::getLocalRepoPath(['path' => $copyPath, 'agent_id' => $agentId]);
+            $helperCmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'create-repo-dir', $localPath];
+            exec(implode(' ', array_map('escapeshellarg', $helperCmd)) . ' 2>&1', $helperOutput, $helperRet);
+            if ($helperRet !== 0) {
+                $this->db->insert('server_log', [
+                    'agent_id' => $agentId,
+                    'level' => 'warning',
+                    'message' => "create-repo-dir helper failed for S3 copy restore: " . implode(' ', $helperOutput),
+                ]);
+            }
+
+            $this->db->insert('server_log', [
+                'agent_id' => $agentId,
+                'level' => 'info',
+                'message' => "Created repository \"{$copyName}\" as copy target for S3 restore",
+            ]);
+        } else {
+            // For 'replace' mode, check for active jobs on this repo
+            $activeJob = $this->db->fetchOne(
+                "SELECT id, task_type FROM backup_jobs WHERE repository_id = ? AND status IN ('queued', 'sent', 'running')",
+                [$id]
+            );
+            if ($activeJob) {
+                $this->flash('warning', "Cannot restore from S3 — repository has an active {$activeJob['task_type']} job (#" . $activeJob['id'] . ').');
+                $this->redirect("/clients/{$agentId}/repo/{$id}");
+            }
         }
 
-        // Queue the S3 restore job
+        // Queue the S3 restore job on the target repo
         $jobId = $this->db->insert('backup_jobs', [
             'agent_id' => $agentId,
-            'repository_id' => $id,
+            'repository_id' => $targetRepoId,
             'task_type' => 's3_restore',
             'plugin_config_id' => $s3Config['plugin_config_id'],
             'status' => 'queued',
         ]);
 
+        $modeLabel = $mode === 'copy' ? 'copy' : 'replace';
         $this->db->insert('server_log', [
             'agent_id' => $agentId,
             'backup_job_id' => $jobId,
             'level' => 'info',
-            'message' => "S3 restore job #{$jobId} queued for repository \"{$repo['name']}\"",
+            'message' => "S3 restore ({$modeLabel}) job #{$jobId} queued for repository \"{$targetRepoName}\"",
         ]);
 
-        $this->flash('success', "S3 restore job queued for repository \"{$repo['name']}\".");
-        $this->redirect("/clients/{$agentId}/repo/{$id}");
+        $this->flash('success', "S3 restore ({$modeLabel}) job queued for repository \"{$targetRepoName}\".");
+        $this->redirect("/clients/{$agentId}/repo/{$targetRepoId}");
+    }
+
+    /**
+     * Restore an orphaned repository from S3 (exists in S3 but not locally).
+     */
+    public function restoreOrphan(int $id): void
+    {
+        $this->requireAuth();
+        $this->verifyCsrf();
+
+        $repoName = trim($_POST['repo_name'] ?? '');
+        $pluginConfigId = (int) ($_POST['plugin_config_id'] ?? 0);
+
+        if (empty($repoName) || $pluginConfigId === 0) {
+            $this->flash('danger', 'Invalid restore request.');
+            $this->redirect("/clients/{$id}?tab=repos");
+        }
+
+        // Verify agent access
+        $agent = $this->db->fetchOne("SELECT * FROM agents WHERE id = ?", [$id]);
+        if (!$agent || !$this->canAccessAgent($id)) {
+            $this->flash('danger', 'Access denied.');
+            $this->redirect('/clients');
+        }
+
+        // Require manage_repos permission
+        $this->requirePermission(PermissionService::MANAGE_REPOS, $id);
+
+        // Check if repo already exists
+        $existing = $this->db->fetchOne(
+            "SELECT id FROM repositories WHERE agent_id = ? AND name = ?",
+            [$id, $repoName]
+        );
+        if ($existing) {
+            $this->flash('warning', "Repository \"{$repoName}\" already exists.");
+            $this->redirect("/clients/{$id}?tab=repos");
+        }
+
+        // Get plugin config and resolve credentials
+        $pluginConfig = $this->db->fetchOne("SELECT config FROM plugin_configs WHERE id = ?", [$pluginConfigId]);
+        if (!$pluginConfig) {
+            $this->flash('danger', 'S3 configuration not found.');
+            $this->redirect("/clients/{$id}?tab=repos");
+        }
+
+        // Build repo path using same logic as store()
+        $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
+        $storagePath = $storageSetting['value'] ?? '';
+        $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
+        $host = $serverHost['value'] ?? '';
+
+        if (!empty($agent['ssh_unix_user']) && !empty($host)) {
+            $path = SshKeyManager::buildSshRepoPath($agent['ssh_unix_user'], $host, $repoName);
+        } else {
+            $path = rtrim($storagePath, '/') . '/' . $id . '/' . $repoName;
+        }
+
+        // Create the repository record (encryption unknown, will be detected after restore)
+        $repoId = $this->db->insert('repositories', [
+            'agent_id' => $id,
+            'name' => $repoName,
+            'path' => $path,
+            'encryption' => 'unknown',  // Will be detected by borg after restore
+            'passphrase_encrypted' => null,  // Unknown for orphan repos
+        ]);
+
+        // Create local directory via SSH helper
+        $localPath = BorgCommandBuilder::getLocalRepoPath(['path' => $path, 'agent_id' => $id]);
+        $helperCmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'create-repo-dir', $localPath];
+        exec(implode(' ', array_map('escapeshellarg', $helperCmd)) . ' 2>&1', $helperOutput, $helperRet);
+        if ($helperRet !== 0) {
+            $this->db->insert('server_log', [
+                'agent_id' => $id,
+                'level' => 'warning',
+                'message' => "create-repo-dir helper failed for orphan restore: " . implode(' ', $helperOutput),
+            ]);
+        }
+
+        // Queue the S3 restore job
+        $jobId = $this->db->insert('backup_jobs', [
+            'agent_id' => $id,
+            'repository_id' => $repoId,
+            'task_type' => 's3_restore',
+            'plugin_config_id' => $pluginConfigId,
+            'status' => 'queued',
+        ]);
+
+        $this->db->insert('server_log', [
+            'agent_id' => $id,
+            'backup_job_id' => $jobId,
+            'level' => 'info',
+            'message' => "Restoring orphan repository \"{$repoName}\" from S3 — job #{$jobId} queued",
+        ]);
+
+        $this->flash('success', "Repository \"{$repoName}\" created and S3 restore queued.");
+        $this->redirect("/clients/{$id}?tab=repos");
     }
 }
