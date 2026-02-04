@@ -19,7 +19,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.8.6"
+AGENT_VERSION = "1.8.7"
 CONFIG_PATH = "/etc/bbs-agent/config.ini"
 LOG_PATH = "/var/log/bbs-agent.log"
 SSH_KEY_PATH = "/etc/bbs-agent/ssh_key"
@@ -58,19 +58,11 @@ def load_config():
     config = ConfigParser()
     config.read(CONFIG_PATH)
 
-    result = {
+    return {
         "server_url": config.get("server", "url").rstrip("/"),
         "api_key": config.get("server", "api_key"),
         "poll_interval": config.getint("agent", "poll_interval", fallback=30),
     }
-
-    # Load SSH config if present
-    if config.has_section("ssh"):
-        result["ssh_unix_user"] = config.get("ssh", "unix_user", fallback="")
-        result["server_host"] = config.get("ssh", "server_host", fallback="")
-        result["ssh_port"] = config.getint("ssh", "port", fallback=22)
-
-    return result
 
 
 def api_request(config, endpoint, method="GET", data=None):
@@ -275,15 +267,11 @@ def download_ssh_key(config):
         os.chmod(SSH_KEY_PATH, 0o600)
         logger.info(f"SSH key saved to {SSH_KEY_PATH}")
 
-        # Store SSH config
+        # Log SSH user info (port comes from server in BORG_RSH)
         ssh_user = result.get("ssh_unix_user", "")
         server_host = result.get("server_host", "")
-        ssh_port = result.get("ssh_port", 22)
         if ssh_user:
-            config["ssh_unix_user"] = ssh_user
-            config["server_host"] = server_host
-            config["ssh_port"] = ssh_port
-            logger.info(f"SSH configured: {ssh_user}@{server_host}:{ssh_port}")
+            logger.info(f"SSH configured: {ssh_user}@{server_host}")
 
         return True
     except Exception as e:
@@ -1550,15 +1538,6 @@ def execute_task(config, task):
     # This prevents "repository was previously located at X" interactive prompts
     env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
     env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
-
-    # Ensure BORG_RSH is set if SSH key exists and command targets an SSH repo
-    if os.path.exists(SSH_KEY_PATH) and "BORG_RSH" not in env:
-        # Check if any command arg looks like an SSH repo path
-        for arg in command:
-            if arg.startswith("ssh://"):
-                ssh_port = config.get("ssh_port", 22)
-                env["BORG_RSH"] = f"ssh -i {SSH_KEY_PATH} -p {ssh_port} -o StrictHostKeyChecking=no -o BatchMode=yes"
-                break
 
     # Execute borg command
     files_processed = 0

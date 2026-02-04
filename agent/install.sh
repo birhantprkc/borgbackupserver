@@ -176,12 +176,8 @@ install_ssh_key() {
     # Extract SSH key from JSON response (simple parsing)
     local ssh_key
     ssh_key=$(echo "$response" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('ssh_private_key',''))" 2>/dev/null)
-    local ssh_user
-    ssh_user=$(echo "$response" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('ssh_unix_user',''))" 2>/dev/null)
     local ssh_host
     ssh_host=$(echo "$response" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('server_host',''))" 2>/dev/null)
-    local ssh_port
-    ssh_port=$(echo "$response" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('ssh_port', 22))" 2>/dev/null)
 
     if [ -n "$ssh_key" ] && [ "$ssh_key" != "" ]; then
         echo "$ssh_key" > "$CONFIG_DIR/ssh_key"
@@ -192,16 +188,6 @@ install_ssh_key() {
         # connections after a server rebuild
         if [ -n "$ssh_host" ]; then
             ssh-keygen -R "$ssh_host" 2>/dev/null || true
-        fi
-
-        # Write SSH config to config.ini
-        if [ -n "$ssh_user" ]; then
-            echo "" >> "$CONFIG_DIR/config.ini"
-            echo "[ssh]" >> "$CONFIG_DIR/config.ini"
-            echo "unix_user = $ssh_user" >> "$CONFIG_DIR/config.ini"
-            echo "server_host = $ssh_host" >> "$CONFIG_DIR/config.ini"
-            echo "port = ${ssh_port:-22}" >> "$CONFIG_DIR/config.ini"
-            echo "key_path = $CONFIG_DIR/ssh_key" >> "$CONFIG_DIR/config.ini"
         fi
     else
         echo "Warning: No SSH key available yet. Will be configured when SSH is provisioned."
