@@ -67,22 +67,34 @@ install_borg() {
         centos|rhel|rocky|almalinux)
             if command -v dnf &>/dev/null; then
                 dnf install -y epel-release 2>/dev/null || true
-                # Install python3-packaging first to fix EPEL borgbackup dependency
+                # Enable python39 module for python3-packaging dependency
+                dnf module enable -y python39 2>/dev/null || true
                 dnf install -y python3-packaging 2>/dev/null || true
                 dnf install -y borgbackup python3 || {
-                    # EPEL borgbackup may have dependency issues on older systems
-                    # Try installing without borgbackup - agent will upgrade later
+                    # EPEL borgbackup broken - download server binary instead
                     echo "Warning: Could not install borgbackup from EPEL"
-                    echo "Installing python3 only - agent will install borg on first run"
+                    echo "Downloading borg binary from server..."
                     dnf install -y python3
+                    if curl -fsSL -o /usr/local/bin/borg "$SERVER_URL/borg/1.4.3/borg-linux-glibc217-x86_64" 2>/dev/null; then
+                        chmod +x /usr/local/bin/borg
+                        echo "borg binary installed from server"
+                    else
+                        echo "Warning: borg not installed - agent will attempt to install on first run"
+                    fi
                 }
             else
                 yum install -y epel-release 2>/dev/null || true
                 yum install -y python3-packaging 2>/dev/null || true
                 yum install -y borgbackup python3 || {
                     echo "Warning: Could not install borgbackup from EPEL"
-                    echo "Installing python3 only - agent will install borg on first run"
+                    echo "Downloading borg binary from server..."
                     yum install -y python3
+                    if curl -fsSL -o /usr/local/bin/borg "$SERVER_URL/borg/1.4.3/borg-linux-glibc217-x86_64" 2>/dev/null; then
+                        chmod +x /usr/local/bin/borg
+                        echo "borg binary installed from server"
+                    else
+                        echo "Warning: borg not installed - agent will attempt to install on first run"
+                    fi
                 }
             fi
             ;;
