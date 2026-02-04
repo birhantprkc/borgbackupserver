@@ -67,8 +67,10 @@ install_borg() {
         centos|rhel|rocky|almalinux)
             if command -v dnf &>/dev/null; then
                 dnf install -y epel-release 2>/dev/null || true
-                # Enable python39 module for python3-packaging dependency
-                dnf module enable -y python39 2>/dev/null || true
+                # Enable PowerTools/CRB repo for python3-packaging (required by EPEL borgbackup)
+                dnf config-manager --set-enabled powertools 2>/dev/null || \
+                    dnf config-manager --set-enabled crb 2>/dev/null || \
+                    dnf config-manager --set-enabled PowerTools 2>/dev/null || true
                 dnf install -y python3-packaging 2>/dev/null || true
                 dnf install -y borgbackup python3 || {
                     # EPEL borgbackup broken - download server binary instead
