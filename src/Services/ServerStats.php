@@ -111,11 +111,14 @@ class ServerStats
         $partitions = [];
 
         if (PHP_OS_FAMILY === 'Darwin') {
+            // macOS: standard df output
             $output = shell_exec('df -h / 2>/dev/null') ?? '';
+            $useExtendedFormat = false;
         } else {
+            // Linux: try extended format first, fallback to standard
             $output = shell_exec('df -h --output=source,fstype,size,used,avail,pcent,target -x tmpfs -x devtmpfs -x squashfs 2>/dev/null') ?? '';
-            if (empty(trim($output))) {
-                // Fallback for systems without --output
+            $useExtendedFormat = !empty(trim($output));
+            if (!$useExtendedFormat) {
                 $output = shell_exec('df -h -x tmpfs -x devtmpfs 2>/dev/null') ?? '';
             }
         }
@@ -139,17 +142,30 @@ class ServerStats
             if (!is_dir($mount)) {
                 continue;
             }
-            // Standard df -h output: Filesystem, Size, Used, Avail, Use%, Mounted on
-            // Indices:                0           1     2     3      4     5
-            $pct = (int) str_replace('%', '', $parts[4] ?? '0');
 
-            $partitions[] = [
-                'mount' => $mount,
-                'size' => $parts[1] ?? '--',
-                'used' => $parts[2] ?? '--',
-                'free' => $parts[3] ?? '--',
-                'percent' => $pct,
-            ];
+            if ($useExtendedFormat && count($parts) >= 7) {
+                // Extended format: source, fstype, size, used, avail, pcent, target
+                // Indices:         0       1       2     3     4      5      6
+                $pct = (int) str_replace('%', '', $parts[5] ?? '0');
+                $partitions[] = [
+                    'mount' => $mount,
+                    'size' => $parts[2] ?? '--',
+                    'used' => $parts[3] ?? '--',
+                    'free' => $parts[4] ?? '--',
+                    'percent' => $pct,
+                ];
+            } else {
+                // Standard df -h output: Filesystem, Size, Used, Avail, Use%, Mounted on
+                // Indices:                0           1     2     3      4     5
+                $pct = (int) str_replace('%', '', $parts[4] ?? '0');
+                $partitions[] = [
+                    'mount' => $mount,
+                    'size' => $parts[1] ?? '--',
+                    'used' => $parts[2] ?? '--',
+                    'free' => $parts[3] ?? '--',
+                    'percent' => $pct,
+                ];
+            }
         }
 
         return $partitions;
