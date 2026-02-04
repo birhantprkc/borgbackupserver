@@ -139,14 +139,15 @@ class ServerStats
             if (!is_dir($mount)) {
                 continue;
             }
-            $pctStr = $parts[count($parts) - 2];
-            $pct = (int) str_replace('%', '', $pctStr);
+            // Standard df -h output: Filesystem, Size, Used, Avail, Use%, Mounted on
+            // Indices:                0           1     2     3      4     5
+            $pct = (int) str_replace('%', '', $parts[4] ?? '0');
 
             $partitions[] = [
                 'mount' => $mount,
-                'size' => $parts[count($parts) - 4] ?? '--',
-                'used' => $parts[count($parts) - 3] ?? '--',
-                'free' => $parts[count($parts) - 2] === $pctStr ? ($parts[count($parts) - 3] ?? '--') : ($parts[count($parts) - 2] ?? '--'),
+                'size' => $parts[1] ?? '--',
+                'used' => $parts[2] ?? '--',
+                'free' => $parts[3] ?? '--',
                 'percent' => $pct,
             ];
         }
