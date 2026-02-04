@@ -332,7 +332,7 @@ class S3SyncService
             $envStrings[$k] = $v;
         }
 
-        $proc = proc_open($cmd, $desc, $pipes, null, array_merge($_SERVER, $envStrings));
+        $proc = proc_open($cmd, $desc, $pipes, null, $envStrings);
         if (!is_resource($proc)) {
             return ['success' => false, 'error' => 'Failed to start rclone process'];
         }
@@ -397,7 +397,7 @@ class S3SyncService
             $envStrings[$k] = $v;
         }
 
-        $proc = proc_open($cmd, $desc, $pipes, null, array_merge($_SERVER, $envStrings));
+        $proc = proc_open($cmd, $desc, $pipes, null, $envStrings);
         if (!is_resource($proc)) {
             return ['success' => false, 'repos' => [], 'error' => 'Failed to start rclone process'];
         }
@@ -581,7 +581,7 @@ class S3SyncService
             $envStrings[$k] = $v;
         }
 
-        $proc = proc_open($cmd, $desc, $pipes, null, array_merge($_SERVER, $envStrings));
+        $proc = proc_open($cmd, $desc, $pipes, null, $envStrings);
         if (!is_resource($proc)) {
             @unlink($manifestFile);
             return ['success' => false, 'output' => 'Failed to start rclone process'];
@@ -644,7 +644,7 @@ class S3SyncService
             $envStrings[$k] = $v;
         }
 
-        $proc = proc_open($cmd, $desc, $pipes, null, array_merge($_SERVER, $envStrings));
+        $proc = proc_open($cmd, $desc, $pipes, null, $envStrings);
         if (!is_resource($proc)) {
             @unlink($tempFile);
             return ['success' => false, 'file' => null, 'error' => 'Failed to start rclone process'];
@@ -876,7 +876,7 @@ class S3SyncService
             $envStrings[$k] = $v;
         }
 
-        $proc = proc_open($cmd, $desc, $pipes, null, array_merge($_SERVER, $envStrings));
+        $proc = proc_open($cmd, $desc, $pipes, null, $envStrings);
         if (!is_resource($proc)) {
             return ['success' => false, 'output' => 'Failed to start rclone process'];
         }
