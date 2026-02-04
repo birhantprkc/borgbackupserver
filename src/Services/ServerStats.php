@@ -134,6 +134,11 @@ class ServerStats
             }
 
             $mount = end($parts);
+
+            // Skip bind mounts to files (not directories) - common in Docker
+            if (!is_dir($mount)) {
+                continue;
+            }
             $pctStr = $parts[count($parts) - 2];
             $pct = (int) str_replace('%', '', $pctStr);
 
