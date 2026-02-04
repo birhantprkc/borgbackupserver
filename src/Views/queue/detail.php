@@ -29,7 +29,8 @@ function formatBytes($bytes) {
 }
 
 $isActive = in_array($job['status'], ['queued', 'sent', 'running']);
-$isServerSide = in_array($job['task_type'], ['prune', 'compact', 's3_sync']);
+$isServerSide = in_array($job['task_type'], ['prune', 'compact', 's3_sync', 's3_restore', 'catalog_sync', 'catalog_rebuild']);
+$taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
 ?>
 
 <div class="d-flex align-items-center mb-4">
@@ -63,9 +64,6 @@ $isServerSide = in_array($job['task_type'], ['prune', 'compact', 's3_sync']);
                 </div>
             </div>
             <div class="text-white-50 small">This <?= $job['task_type'] ?> job runs server-side and will be picked up by the scheduler within 60 seconds</div>
-        <?php
-        $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
-        ?>
         <?php elseif ($job['status'] === 'running' && $pct > 0): ?>
             <div class="text-white fw-semibold mb-1"><?= $taskLabel ?>... <?= $pct ?>%</div>
             <div class="progress mb-1" style="height: 22px; background-color: rgba(255,255,255,0.15);">
