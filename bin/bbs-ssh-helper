@@ -71,9 +71,9 @@ case "$ACTION" in
             exit 1
         fi
 
-        # Safety: only create under /var/bbs
-        if [[ ! "$REPO_DIR" =~ ^/var/bbs/ ]]; then
-            echo "Error: repo dir must be under /var/bbs/"
+        # Safety: only create under /var/bbs or /home (Docker uses /home as storage)
+        if [[ ! "$REPO_DIR" =~ ^/var/bbs/ ]] && [[ ! "$REPO_DIR" =~ ^/home/ ]]; then
+            echo "Error: repo dir must be under /var/bbs/ or /home/"
             exit 1
         fi
 
@@ -91,9 +91,9 @@ case "$ACTION" in
         # Find the bbs-* user who owns the parent directory
         PARENT_OWNER=$(stat -c '%U' "$PARENT_DIR")
 
-        # If parent is still owned by root but looks like a user home dir (/var/bbs/home/N/),
+        # If parent is still owned by root but looks like a user home dir (/var/bbs/home/N/ or /home/N/),
         # try to find the correct bbs-* user from /etc/passwd
-        if [ "$PARENT_OWNER" = "root" ] && [[ "$PARENT_DIR" =~ ^/var/bbs/home/[0-9]+$ ]]; then
+        if [ "$PARENT_OWNER" = "root" ] && [[ "$PARENT_DIR" =~ ^(/var/bbs)?/home/[0-9]+$ ]]; then
             # Look for a bbs-* user whose home is this directory
             ACTUAL_USER=$(awk -F: -v home="$PARENT_DIR" '$6 == home && $1 ~ /^bbs-/ {print $1}' /etc/passwd)
             if [ -n "$ACTUAL_USER" ]; then
