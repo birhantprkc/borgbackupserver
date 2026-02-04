@@ -2030,10 +2030,17 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                         <input type="hidden" name="plugin_id" value="<?= $plugin['id'] ?>">
                         <div class="row">
                             <div class="<?= in_array($plugin['slug'], ['mysql_dump', 'pg_dump', 'shell_hook']) ? 'col-lg-6' : 'col-12' ?>">
+                                <?php if ($plugin['slug'] === 's3_sync'): ?>
+                                <div class="mb-2 s3-name-wrap" id="s3NameWrap<?= $plugin['id'] ?>" style="display:none;">
+                                    <label class="form-label small fw-semibold">Configuration Name <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control form-control-sm s3-name-input" name="name" placeholder="e.g. Wasabi US-East" value="Global Settings">
+                                </div>
+                                <?php else: ?>
                                 <div class="mb-2">
                                     <label class="form-label small fw-semibold">Configuration Name <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control form-control-sm" name="name" placeholder="e.g. Production DB" required>
                                 </div>
+                                <?php endif; ?>
                                 <?php if (in_array($plugin['slug'], ['mysql_dump', 'pg_dump'])): ?>
                                     <div class="row g-2 mb-2">
                                         <div class="col-8"><label class="form-label small fw-semibold mb-1">Host</label><input type="text" class="form-control form-control-sm" name="plugin_config[host]" value="localhost"></div>
@@ -2188,6 +2195,22 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
         radio.addEventListener('change', function() {
             const target = document.getElementById(this.dataset.target);
             if (target) target.classList.toggle('d-none', this.value !== 'custom');
+            // Toggle name field for new config forms
+            const form = this.closest('form');
+            const nameWrap = form ? form.querySelector('.s3-name-wrap') : null;
+            const nameInput = form ? form.querySelector('.s3-name-input') : null;
+            if (nameWrap && nameInput) {
+                if (this.value === 'custom') {
+                    nameWrap.style.display = '';
+                    nameInput.value = '';
+                    nameInput.required = true;
+                    nameInput.focus();
+                } else {
+                    nameWrap.style.display = 'none';
+                    nameInput.value = 'Global Settings';
+                    nameInput.required = false;
+                }
+            }
         });
     });
 
