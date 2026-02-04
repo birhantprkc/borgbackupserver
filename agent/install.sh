@@ -139,8 +139,16 @@ detect_os() {
 install_borg() {
     print_step "Checking for Borg Backup..."
 
-    if command -v borg &>/dev/null; then
-        local borg_ver=$(borg --version 2>/dev/null | head -1)
+    # Check for borg - prefer /usr/local/bin (where agent installs newer versions)
+    local borg_cmd=""
+    if [ -x /usr/local/bin/borg ]; then
+        borg_cmd="/usr/local/bin/borg"
+    elif command -v borg &>/dev/null; then
+        borg_cmd="borg"
+    fi
+
+    if [ -n "$borg_cmd" ]; then
+        local borg_ver=$($borg_cmd --version 2>/dev/null | head -1)
         print_success "Already installed: ${BOLD}$borg_ver${NC}"
         BORG_INSTALLED="existing"
         BORG_VERSION="$borg_ver"
@@ -363,8 +371,10 @@ EOF
 # Print final summary
 # ═══════════════════════════════════════════════════════════════════════════════
 print_summary() {
-    # Re-check borg version (may have been updated by previous agent runs)
-    if command -v borg &>/dev/null; then
+    # Re-check borg version - prefer /usr/local/bin (where agent installs newer versions)
+    if [ -x /usr/local/bin/borg ]; then
+        BORG_VERSION=$(/usr/local/bin/borg --version 2>/dev/null | head -1)
+    elif command -v borg &>/dev/null; then
         BORG_VERSION=$(borg --version 2>/dev/null | head -1)
     fi
 
