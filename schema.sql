@@ -355,6 +355,19 @@ CREATE TABLE backup_plan_plugins (
     UNIQUE KEY unique_plan_plugin (backup_plan_id, plugin_id)
 ) ENGINE=InnoDB;
 
+-- Repository-level S3 sync configuration (decoupled from backup plans)
+CREATE TABLE repository_s3_configs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    repository_id INT NOT NULL,
+    plugin_config_id INT NOT NULL,
+    enabled TINYINT(1) NOT NULL DEFAULT 1,
+    last_sync_at DATETIME DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (repository_id) REFERENCES repositories(id) ON DELETE CASCADE,
+    FOREIGN KEY (plugin_config_id) REFERENCES plugin_configs(id) ON DELETE RESTRICT,
+    UNIQUE KEY unique_repo_s3 (repository_id)
+) ENGINE=InnoDB;
+
 INSERT INTO plugins (slug, name, description, plugin_type) VALUES
 ('mysql_dump', 'MySQL Backup/Restore', 'Performs mysqldump before backup and optionally restores databases back to the MySQL server.', 'pre_backup'),
 ('pg_dump', 'PostgreSQL Backup/Restore', 'Performs pg_dump before backup and optionally restores databases back to the PostgreSQL server.', 'pre_backup'),

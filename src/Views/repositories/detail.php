@@ -171,8 +171,14 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
     <div class="col-lg-6">
         <?php if ($s3SyncInfo): ?>
         <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-white fw-semibold">
-                <i class="bi bi-cloud text-info me-1"></i> S3 Offsite Sync
+            <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-cloud text-info me-1"></i> S3 Offsite Mirror</span>
+                <form method="POST" action="/clients/<?= $agentId ?>/repo/<?= $repo['id'] ?>/s3-config/delete" class="d-inline" data-confirm="Disable S3 sync?&#10;&#10;The repository will no longer sync to S3 after backups. Data already in S3 will remain.">
+                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-cloud-slash me-1"></i>Disable
+                    </button>
+                </form>
             </div>
             <div class="card-body">
                 <div class="d-flex align-items-start gap-3 p-3 bg-light rounded mb-3">
@@ -218,6 +224,33 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+        <?php elseif (!empty($s3PluginConfigs)): ?>
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white fw-semibold">
+                <i class="bi bi-cloud text-muted me-1"></i> S3 Offsite Mirror
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">Enable S3 sync to automatically replicate this repository to S3 storage after each backup prune.</p>
+                <form method="POST" action="/clients/<?= $agentId ?>/repo/<?= $repo['id'] ?>/s3-config">
+                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-auto">
+                            <label class="form-label small">S3 Configuration</label>
+                            <select name="plugin_config_id" class="form-select form-select-sm" required>
+                                <?php foreach ($s3PluginConfigs as $cfg): ?>
+                                <option value="<?= $cfg['id'] ?>"><?= htmlspecialchars($cfg['name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-auto">
+                            <button type="submit" class="btn btn-sm btn-info">
+                                <i class="bi bi-cloud-plus me-1"></i>Enable S3 Sync
+                            </button>
+                        </div>
+                    </div>
+                </form>
             </div>
         </div>
         <?php endif; ?>

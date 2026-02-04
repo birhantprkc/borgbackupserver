@@ -89,6 +89,8 @@ class App
         $this->router->map('POST', '/repositories/[i:id]/maintenance', 'RepositoryController@maintenance');
         $this->router->map('GET', '/clients/[i:agentId]/repo/[i:id]', 'RepositoryController@detail');
         $this->router->map('POST', '/clients/[i:agentId]/repo/[i:id]/s3-restore', 'RepositoryController@s3Restore');
+        $this->router->map('POST', '/clients/[i:agentId]/repo/[i:id]/s3-config', 'RepositoryController@s3Config');
+        $this->router->map('POST', '/clients/[i:agentId]/repo/[i:id]/s3-config/delete', 'RepositoryController@s3ConfigDelete');
         $this->router->map('POST', '/clients/[i:id]/restore-orphan', 'RepositoryController@restoreOrphan');
 
         // Backup Plans

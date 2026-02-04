@@ -359,35 +359,31 @@ class ClientController extends Controller
         $allPlugins = $pluginManager->getAllPlugins();
         $pluginConfigs = $pluginManager->getPluginConfigs($id);
 
-        // Repos with S3 sync enabled (via plan plugins)
+        // Repos with S3 sync enabled (via repository_s3_configs)
         $s3SyncRepos = $this->db->fetchAll("
-            SELECT DISTINCT bp.repository_id, bpp.plugin_config_id,
-                   (SELECT MAX(bj.completed_at) FROM backup_jobs bj
-                    WHERE bj.repository_id = bp.repository_id AND bj.task_type = 's3_sync' AND bj.status = 'completed') as last_s3_sync
-            FROM backup_plan_plugins bpp
-            JOIN plugins p ON p.id = bpp.plugin_id
-            JOIN backup_plans bp ON bp.id = bpp.backup_plan_id
-            WHERE p.slug = 's3_sync' AND bp.agent_id = ?
+            SELECT rsc.repository_id, rsc.plugin_config_id, rsc.last_sync_at as last_s3_sync, rsc.enabled
+            FROM repository_s3_configs rsc
+            JOIN repositories r ON r.id = rsc.repository_id
+            WHERE r.agent_id = ?
         ", [$id]);
         $s3SyncByRepo = [];
         foreach ($s3SyncRepos as $sr) {
             $s3SyncByRepo[$sr['repository_id']] = [
                 'last_sync' => $sr['last_s3_sync'],
                 'plugin_config_id' => $sr['plugin_config_id'],
+                'enabled' => $sr['enabled'],
             ];
         }
 
         // Detect orphaned S3 repos (exist in S3 but not locally)
         $s3Orphans = [];
         $s3PluginConfigId = null;
-        // Get S3 config from any plan that uses S3 sync for this agent
+        // Get any S3 plugin config for this agent (for orphan detection)
         $s3PluginConfig = $this->db->fetchOne("
-            SELECT bpp.plugin_config_id, pc.config
-            FROM backup_plan_plugins bpp
-            JOIN plugins p ON p.id = bpp.plugin_id
-            JOIN backup_plans bp ON bp.id = bpp.backup_plan_id
-            LEFT JOIN plugin_configs pc ON pc.id = bpp.plugin_config_id
-            WHERE p.slug = 's3_sync' AND bp.agent_id = ?
+            SELECT pc.id as plugin_config_id, pc.config
+            FROM plugin_configs pc
+            JOIN plugins p ON p.id = pc.plugin_id
+            WHERE p.slug = 's3_sync' AND pc.agent_id = ?
             LIMIT 1
         ", [$id]);
 

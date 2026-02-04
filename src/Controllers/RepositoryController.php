@@ -391,24 +391,29 @@ class RepositoryController extends Controller
             ORDER BY queued_at DESC LIMIT 20
         ", [$id]);
 
-        // Check if repo has S3 sync enabled (via plan plugins)
+        // Check if repo has S3 sync enabled (via repository_s3_configs)
         $s3SyncInfo = $this->db->fetchOne("
-            SELECT bpp.plugin_config_id, pc.name as config_name,
-                   (SELECT MAX(bj.completed_at) FROM backup_jobs bj
-                    WHERE bj.repository_id = ? AND bj.task_type = 's3_sync' AND bj.status = 'completed') as last_s3_sync
-            FROM backup_plan_plugins bpp
-            JOIN plugins p ON p.id = bpp.plugin_id
-            JOIN backup_plans bp ON bp.id = bpp.backup_plan_id
-            LEFT JOIN plugin_configs pc ON pc.id = bpp.plugin_config_id
-            WHERE p.slug = 's3_sync' AND bp.repository_id = ?
-            LIMIT 1
-        ", [$id, $id]);
+            SELECT rsc.plugin_config_id, pc.name as config_name,
+                   rsc.last_sync_at as last_s3_sync, rsc.enabled
+            FROM repository_s3_configs rsc
+            JOIN plugin_configs pc ON pc.id = rsc.plugin_config_id
+            WHERE rsc.repository_id = ?
+        ", [$id]);
 
         // Check for active jobs on this repo
         $activeJob = $this->db->fetchOne(
             "SELECT id, task_type, status FROM backup_jobs WHERE repository_id = ? AND status IN ('queued', 'sent', 'running')",
             [$id]
         );
+
+        // Get available S3 plugin configs for this agent (for "Enable S3 Sync" option)
+        $s3PluginConfigs = $this->db->fetchAll("
+            SELECT pc.id, pc.name
+            FROM plugin_configs pc
+            JOIN plugins p ON p.id = pc.plugin_id
+            WHERE p.slug = 's3_sync' AND pc.agent_id = ?
+            ORDER BY pc.name
+        ", [$agentId]);
 
         // Get local path for display
         $localPath = BorgCommandBuilder::getLocalRepoPath($repo);
@@ -428,6 +433,7 @@ class RepositoryController extends Controller
             'plans' => $plans,
             'recentJobs' => $recentJobs,
             's3SyncInfo' => $s3SyncInfo,
+            's3PluginConfigs' => $s3PluginConfigs,
             'activeJob' => $activeJob,
             'totalSize' => $totalSize,
             'archiveCount' => $archiveCount,
@@ -463,14 +469,11 @@ class RepositoryController extends Controller
         // Require repo_maintenance permission for S3 restore
         $this->requirePermission(PermissionService::REPO_MAINTENANCE, $agentId);
 
-        // Get S3 plugin config for this repo
+        // Get S3 config for this repo from repository_s3_configs
         $s3Config = $this->db->fetchOne("
-            SELECT bpp.plugin_config_id
-            FROM backup_plan_plugins bpp
-            JOIN plugins p ON p.id = bpp.plugin_id
-            JOIN backup_plans bp ON bp.id = bpp.backup_plan_id
-            WHERE p.slug = 's3_sync' AND bp.repository_id = ?
-            LIMIT 1
+            SELECT plugin_config_id
+            FROM repository_s3_configs
+            WHERE repository_id = ?
         ", [$id]);
 
         if (!$s3Config) {
@@ -665,5 +668,99 @@ class RepositoryController extends Controller
 
         $this->flash('success', "Repository \"{$repoName}\" created and S3 restore queued.");
         $this->redirect("/clients/{$id}?tab=repos");
+    }
+
+    /**
+     * Enable or update S3 sync configuration for a repository.
+     */
+    public function s3Config(int $agentId, int $id): void
+    {
+        $this->requireAuth();
+        $this->verifyCsrf();
+
+        $repo = $this->db->fetchOne("SELECT * FROM repositories WHERE id = ? AND agent_id = ?", [$id, $agentId]);
+        if (!$repo || !$this->canAccessAgent($agentId)) {
+            $this->flash('danger', 'Repository not found.');
+            $this->redirect('/clients');
+        }
+
+        $this->requirePermission(PermissionService::MANAGE_REPOS, $agentId);
+
+        $pluginConfigId = (int) ($_POST['plugin_config_id'] ?? 0);
+        if ($pluginConfigId === 0) {
+            $this->flash('danger', 'Please select an S3 configuration.');
+            $this->redirect("/clients/{$agentId}/repo/{$id}");
+        }
+
+        // Verify the plugin config exists and belongs to this agent
+        $pluginConfig = $this->db->fetchOne(
+            "SELECT pc.id, pc.name FROM plugin_configs pc
+             JOIN plugins p ON p.id = pc.plugin_id
+             WHERE pc.id = ? AND pc.agent_id = ? AND p.slug = 's3_sync'",
+            [$pluginConfigId, $agentId]
+        );
+        if (!$pluginConfig) {
+            $this->flash('danger', 'Invalid S3 configuration.');
+            $this->redirect("/clients/{$agentId}/repo/{$id}");
+        }
+
+        // Check if config already exists for this repo
+        $existing = $this->db->fetchOne(
+            "SELECT id FROM repository_s3_configs WHERE repository_id = ?",
+            [$id]
+        );
+
+        if ($existing) {
+            // Update existing config
+            $this->db->update('repository_s3_configs', [
+                'plugin_config_id' => $pluginConfigId,
+                'enabled' => 1,
+            ], 'id = ?', [$existing['id']]);
+        } else {
+            // Create new config
+            $this->db->insert('repository_s3_configs', [
+                'repository_id' => $id,
+                'plugin_config_id' => $pluginConfigId,
+                'enabled' => 1,
+            ]);
+        }
+
+        $this->db->insert('server_log', [
+            'agent_id' => $agentId,
+            'level' => 'info',
+            'message' => "S3 sync enabled for repository \"{$repo['name']}\" using config \"{$pluginConfig['name']}\"",
+        ]);
+
+        $this->flash('success', "S3 sync enabled for repository \"{$repo['name']}\".");
+        $this->redirect("/clients/{$agentId}/repo/{$id}");
+    }
+
+    /**
+     * Disable S3 sync for a repository (data remains in S3).
+     */
+    public function s3ConfigDelete(int $agentId, int $id): void
+    {
+        $this->requireAuth();
+        $this->verifyCsrf();
+
+        $repo = $this->db->fetchOne("SELECT * FROM repositories WHERE id = ? AND agent_id = ?", [$id, $agentId]);
+        if (!$repo || !$this->canAccessAgent($agentId)) {
+            $this->flash('danger', 'Repository not found.');
+            $this->redirect('/clients');
+        }
+
+        $this->requirePermission(PermissionService::MANAGE_REPOS, $agentId);
+
+        // Delete the S3 config (data remains in S3 bucket)
+        $this->db->delete('repository_s3_configs', 'repository_id = ?', [$id]);
+
+        $this->db->insert('server_log', [
+            'agent_id' => $agentId,
+            'level' => 'info',
+            'message' => "S3 sync disabled for repository \"{$repo['name']}\" (data remains in S3)",
+        ]);
+
+        $this->flash('success', "S3 sync disabled for repository \"{$repo['name']}\". Data remains in S3.");
+        $this->redirect("/clients/{$agentId}/repo/{$id}");
     }
 }
