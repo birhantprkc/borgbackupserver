@@ -853,7 +853,7 @@ foreach ($serverJobs as $sj) {
 
     // Execute
     $desc = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
-    $proc = proc_open($cmd, $desc, $pipes, null, array_merge($_SERVER, $envStrings));
+    $proc = proc_open($cmd, $desc, $pipes, null, $envStrings);
 
     $result = 'failed';
     $errorOutput = '';
@@ -921,7 +921,7 @@ foreach ($serverJobs as $sj) {
             $listCmd = \BBS\Services\BorgCommandBuilder::buildListCommand($localRepo);
             $listEnv = $envStrings;
         }
-        $listProc = proc_open($listCmd, $desc, $listPipes, null, array_merge($_SERVER, $listEnv));
+        $listProc = proc_open($listCmd, $desc, $listPipes, null, $listEnv);
 
         if (is_resource($listProc)) {
             fclose($listPipes[0]);
