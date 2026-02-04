@@ -332,20 +332,29 @@ class AgentApiController extends Controller
 
         // Auto-queue prune after successful backup
         if ($result === 'completed' && $job['task_type'] === 'backup' && $job['backup_plan_id'] && $job['repository_id']) {
-            $pruneJobId = $this->db->insert('backup_jobs', [
-                'backup_plan_id' => $job['backup_plan_id'],
-                'agent_id' => $job['agent_id'],
-                'repository_id' => $job['repository_id'],
-                'task_type' => 'prune',
-                'status' => 'queued',
-            ]);
+            // Check if prune is already queued or running for this plan
+            $existingPrune = $this->db->fetchOne(
+                "SELECT id FROM backup_jobs
+                 WHERE backup_plan_id = ? AND task_type = 'prune' AND status IN ('queued', 'sent', 'running')
+                 LIMIT 1",
+                [$job['backup_plan_id']]
+            );
+            if (!$existingPrune) {
+                $pruneJobId = $this->db->insert('backup_jobs', [
+                    'backup_plan_id' => $job['backup_plan_id'],
+                    'agent_id' => $job['agent_id'],
+                    'repository_id' => $job['repository_id'],
+                    'task_type' => 'prune',
+                    'status' => 'queued',
+                ]);
 
-            $this->db->insert('server_log', [
-                'agent_id' => $agent['id'],
-                'backup_job_id' => $pruneJobId,
-                'level' => 'info',
-                'message' => "Auto-prune queued (job #{$pruneJobId}) after backup job #{$jobId}",
-            ]);
+                $this->db->insert('server_log', [
+                    'agent_id' => $agent['id'],
+                    'backup_job_id' => $pruneJobId,
+                    'level' => 'info',
+                    'message' => "Auto-prune queued (job #{$pruneJobId}) after backup job #{$jobId}",
+                ]);
+            }
         }
 
         // Return archive_id so agent can send catalog

@@ -989,6 +989,18 @@ foreach ($serverJobs as $sj) {
                 continue;
             }
 
+            // Check if s3_sync is already queued or running for this plan
+            $existingS3 = $db->fetchOne(
+                "SELECT id FROM backup_jobs
+                 WHERE backup_plan_id = ? AND task_type = 's3_sync' AND status IN ('queued', 'sent', 'running')
+                 LIMIT 1",
+                [$sj['backup_plan_id']]
+            );
+            if ($existingS3) {
+                echo date('Y-m-d H:i:s') . " Skipped: S3 sync already queued/running (job #{$existingS3['id']}) for plan #{$sj['backup_plan_id']}\n";
+                continue;
+            }
+
             $s3JobId = $db->insert('backup_jobs', [
                 'backup_plan_id' => $sj['backup_plan_id'],
                 'agent_id' => $sj['agent_id'],
