@@ -204,13 +204,13 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link <?= $tab === 'repos' ? 'active' : '' ?>" href="?tab=repos">
-            <i class="bi bi-archive me-1"></i><span class="tab-label">Repos</span>
+        <a class="nav-link <?= $tab === 'plugins' ? 'active' : '' ?>" href="?tab=plugins">
+            <i class="bi bi-plug me-1"></i><span class="tab-label">Plugins</span>
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link <?= $tab === 'plugins' ? 'active' : '' ?>" href="?tab=plugins">
-            <i class="bi bi-plug me-1"></i><span class="tab-label">Plugins</span>
+        <a class="nav-link <?= $tab === 'repos' ? 'active' : '' ?>" href="?tab=repos">
+            <i class="bi bi-archive me-1"></i><span class="tab-label">Repos</span>
         </a>
     </li>
     <li class="nav-item">
@@ -1847,82 +1847,64 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
 <?php elseif ($tab === 'plugins'): ?>
     <h5 class="mb-3"><i class="bi bi-plug me-1"></i> Plugins</h5>
 
-    <!-- Enable/Disable Plugins -->
-    <form method="POST" action="/clients/<?= $agent['id'] ?>/plugins" id="pluginToggleForm">
-        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-        <?php if (empty($allPlugins)): ?>
-            <p class="text-muted">No plugins available.</p>
-        <?php else: ?>
-            <?php
-            $pluginLogos = [
-                'mysql_dump' => '/images/mysql.png',
-                'pg_dump' => '/images/postgresql.svg',
-            ];
-            ?>
-            <div class="row g-3 mb-4">
-            <?php foreach ($allPlugins as $plugin):
-                $isEnabled = false;
-                foreach ($agentPlugins as $ap) { if ($ap['id'] == $plugin['id'] && $ap['agent_enabled']) { $isEnabled = true; break; } }
-                $logo = $pluginLogos[$plugin['slug']] ?? null;
-            ?>
-                <div class="col-12 col-md-6 col-lg-3">
-                    <label for="enablePlugin<?= $plugin['id'] ?>" class="d-block h-100" style="cursor:pointer;">
-                        <div class="card h-100 border-2 <?= $isEnabled ? 'border-primary' : 'border-light' ?>" id="pluginCard<?= $plugin['id'] ?>" style="background-color:rgba(44,62,80,0.04);">
-                            <div class="card-body d-flex align-items-start gap-3 p-3">
-                                <?php if ($logo): ?>
-                                    <img src="<?= $logo ?>" alt="" style="width:48px;height:48px;object-fit:contain;flex-shrink:0;" class="mt-1">
-                                <?php elseif ($plugin['slug'] === 'shell_hook'): ?>
-                                    <div class="d-flex align-items-center justify-content-center rounded-circle mt-1" style="width:48px;height:48px;flex-shrink:0;background-color:rgba(13,110,253,0.1);">
-                                        <i class="bi bi-terminal text-primary" style="font-size:1.5rem;"></i>
-                                    </div>
-                                <?php elseif ($plugin['slug'] === 's3_sync'): ?>
-                                    <div class="d-flex align-items-center justify-content-center rounded-circle mt-1" style="width:48px;height:48px;flex-shrink:0;background-color:#ff6b6b;">
-                                        <img src="/images/bucket-white.svg" alt="" style="width:28px;height:28px;">
-                                    </div>
-                                <?php else: ?>
-                                    <i class="bi bi-database" style="font-size:2.5rem;flex-shrink:0;" class="mt-1 text-secondary"></i>
-                                <?php endif; ?>
-                                <div class="flex-grow-1">
-                                    <div class="d-flex justify-content-between align-items-center mb-1">
-                                        <h6 class="mb-0 fw-bold"><?= htmlspecialchars($plugin['name']) ?></h6>
-                                        <div class="form-check form-switch mb-0">
-                                            <input type="checkbox" class="form-check-input" role="switch" name="plugins[]"
-                                                   value="<?= $plugin['id'] ?>" id="enablePlugin<?= $plugin['id'] ?>"
-                                                   <?= $isEnabled ? 'checked' : '' ?>
-                                                   onchange="var c=document.getElementById('pluginCard<?= $plugin['id'] ?>');c.classList.toggle('border-primary',this.checked);c.classList.toggle('border-light',!this.checked);document.getElementById('pluginToggleForm').submit();">
-                                        </div>
-                                    </div>
-                                    <p class="text-muted small mb-0"><?= htmlspecialchars($plugin['description']) ?></p>
-                                </div>
-                            </div>
-                        </div>
-                    </label>
-                </div>
-            <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
-    </form>
-
-    <!-- Plugin Configurations -->
+    <?php if (empty($allPlugins)): ?>
+        <p class="text-muted">No plugins available.</p>
+    <?php else: ?>
     <?php
-    $enabledPluginsList = array_filter($agentPlugins, fn($p) => !empty($p['agent_enabled']));
-    foreach ($enabledPluginsList as $plugin):
+    $pluginLogos = [
+        'mysql_dump' => '/images/mysql.png',
+        'pg_dump' => '/images/postgresql.svg',
+    ];
+    $randomPass = substr(str_shuffle('abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'), 0, 20);
+
+    foreach ($allPlugins as $plugin):
+        $isEnabled = false;
+        foreach ($agentPlugins as $ap) { if ($ap['id'] == $plugin['id'] && $ap['agent_enabled']) { $isEnabled = true; break; } }
+        $logo = $pluginLogos[$plugin['slug']] ?? null;
         $schema = $pluginManager->getPluginSchema($plugin['slug']);
-        $helpSql = $pluginManager->getPluginHelp($plugin['slug']);
         $configs = array_filter($pluginConfigs, fn($c) => $c['plugin_id'] == $plugin['id']);
     ?>
-    <div class="card mb-4">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <span class="fw-semibold"><i class="bi <?= $plugin['slug'] === 'shell_hook' ? 'bi-terminal' : 'bi-database' ?> me-1<?= $plugin['slug'] === 'mysql_dump' ? ' text-primary' : ($plugin['slug'] === 'pg_dump' ? ' text-info' : ($plugin['slug'] === 'shell_hook' ? ' text-primary' : '')) ?>"></i><?= htmlspecialchars($plugin['name']) ?> Configurations</span>
-            <button type="button" class="btn btn-sm btn-success" data-bs-toggle="collapse" data-bs-target="#newPluginConfig<?= $plugin['id'] ?>" title="Add Configuration">
-                <i class="bi bi-plus-circle"></i>
-            </button>
-        </div>
-        <div class="card-body">
-            <?php if (empty($configs)): ?>
-                <p class="text-muted mb-0">No configurations yet. Click <i class="bi bi-plus-circle"></i> to create one.</p>
+    <div class="card border-0 shadow-sm mb-3">
+        <!-- Plugin Header Row -->
+        <div class="card-header bg-white d-flex align-items-center gap-3 py-3">
+            <?php if ($logo): ?>
+                <img src="<?= $logo ?>" alt="" style="width:36px;height:36px;object-fit:contain;flex-shrink:0;">
+            <?php elseif ($plugin['slug'] === 'shell_hook'): ?>
+                <div class="d-flex align-items-center justify-content-center rounded-circle" style="width:36px;height:36px;flex-shrink:0;background-color:rgba(13,110,253,0.1);">
+                    <i class="bi bi-terminal text-primary" style="font-size:1.1rem;"></i>
+                </div>
+            <?php elseif ($plugin['slug'] === 's3_sync'): ?>
+                <div class="d-flex align-items-center justify-content-center rounded-circle" style="width:36px;height:36px;flex-shrink:0;background-color:#ff6b6b;">
+                    <img src="/images/bucket-white.svg" alt="" style="width:20px;height:20px;">
+                </div>
+            <?php else: ?>
+                <i class="bi bi-database text-secondary" style="font-size:1.8rem;flex-shrink:0;"></i>
             <?php endif; ?>
+            <div class="flex-grow-1">
+                <h6 class="mb-0 fw-bold"><?= htmlspecialchars($plugin['name']) ?></h6>
+                <small class="text-muted"><?= htmlspecialchars($plugin['description']) ?></small>
+            </div>
+            <form method="POST" action="/clients/<?= $agent['id'] ?>/plugins" class="d-inline" id="pluginToggle<?= $plugin['id'] ?>">
+                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                <?php foreach ($allPlugins as $ap2):
+                    $isEnabled2 = false;
+                    foreach ($agentPlugins as $ap3) { if ($ap3['id'] == $ap2['id'] && $ap3['agent_enabled']) { $isEnabled2 = true; break; } }
+                    $shouldCheck = ($ap2['id'] == $plugin['id']) ? !$isEnabled : $isEnabled2;
+                    if ($shouldCheck): ?>
+                    <input type="hidden" name="plugins[]" value="<?= $ap2['id'] ?>">
+                <?php endif; endforeach; ?>
+                <div class="form-check form-switch mb-0">
+                    <input type="checkbox" class="form-check-input" role="switch" id="enablePlugin<?= $plugin['id'] ?>"
+                           <?= $isEnabled ? 'checked' : '' ?>
+                           onchange="document.getElementById('pluginToggle<?= $plugin['id'] ?>').submit();"
+                           style="width:3em;height:1.5em;">
+                </div>
+            </form>
+        </div>
 
+        <?php if ($isEnabled): ?>
+        <div class="card-body pt-2">
+            <!-- Existing Configurations -->
             <?php foreach ($configs as $cfg):
                 $cfgData = json_decode($cfg['config'], true) ?: [];
                 $summaryParts = [];
@@ -1930,33 +1912,25 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 if (!empty($cfgData['host'])) $summaryParts[] = $cfgData['host'] . (!empty($cfgData['port']) && $cfgData['port'] != $defaultPort ? ':' . $cfgData['port'] : '');
                 if (!empty($cfgData['user'])) $summaryParts[] = 'user: ' . $cfgData['user'];
                 if (!empty($cfgData['databases'])) $summaryParts[] = 'db: ' . $cfgData['databases'];
-                $cfgIcon = $plugin['slug'] === 'shell_hook' ? 'bi-terminal' : 'bi-database';
-                $dbIcon = $plugin['slug'] === 'mysql_dump' ? 'text-primary' : ($plugin['slug'] === 'pg_dump' ? 'text-info' : ($plugin['slug'] === 'shell_hook' ? 'text-primary' : 'text-secondary'));
             ?>
-            <div class="border rounded p-3 mb-3" style="cursor:pointer;" onclick="var el=document.getElementById('editConfig<?= $cfg['id'] ?>');if(!el.classList.contains('show')){new bootstrap.Collapse(el).show();}">
-                <div class="d-flex justify-content-between align-items-start">
+            <div class="border rounded p-3 mb-2" style="cursor:pointer;" onclick="var el=document.getElementById('editConfig<?= $cfg['id'] ?>');if(!el.classList.contains('show')){new bootstrap.Collapse(el).show();}">
+                <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h6 class="mb-1"><i class="bi <?= $cfgIcon ?> me-1 <?= $dbIcon ?>"></i><?= htmlspecialchars($cfg['name']) ?></h6>
-                        <small class="text-muted"><?= htmlspecialchars(implode(' | ', $summaryParts)) ?></small>
+                        <span class="fw-semibold"><?= htmlspecialchars($cfg['name']) ?></span>
+                        <?php if ($summaryParts): ?>
+                        <span class="text-muted ms-2 small"><?= htmlspecialchars(implode(' | ', $summaryParts)) ?></span>
+                        <?php endif; ?>
                     </div>
-                    <div class="dropdown" onclick="event.stopPropagation();">
-                        <button class="btn btn-sm btn-outline-secondary border-0" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="bi bi-three-dots-vertical"></i>
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu-end">
-                            <li><a class="dropdown-item" href="#" onclick="event.preventDefault();testPluginConfig(<?= $agent['id'] ?>, <?= $cfg['id'] ?>)"><i class="bi bi-lightning me-2"></i>Test</a></li>
-                            <li><a class="dropdown-item" href="#" onclick="event.preventDefault();new bootstrap.Collapse(document.getElementById('editConfig<?= $cfg['id'] ?>')).toggle();"><i class="bi bi-pencil me-2"></i>Edit</a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li>
-                                <form method="POST" action="/clients/<?= $agent['id'] ?>/plugin-configs/<?= $cfg['id'] ?>/delete" data-confirm="Delete this configuration?" data-confirm-danger>
-                                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                    <button type="submit" class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Delete</button>
-                                </form>
-                            </li>
-                        </ul>
+                    <div class="d-flex align-items-center gap-1" onclick="event.stopPropagation();">
+                        <button type="button" class="btn btn-sm btn-outline-primary border-0" onclick="testPluginConfig(<?= $agent['id'] ?>, <?= $cfg['id'] ?>)" title="Test"><i class="bi bi-lightning"></i></button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary border-0" onclick="new bootstrap.Collapse(document.getElementById('editConfig<?= $cfg['id'] ?>')).toggle();" title="Edit"><i class="bi bi-pencil"></i></button>
+                        <form method="POST" action="/clients/<?= $agent['id'] ?>/plugin-configs/<?= $cfg['id'] ?>/delete" class="d-inline" data-confirm="Delete this configuration?" data-confirm-danger>
+                            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                            <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Delete"><i class="bi bi-trash"></i></button>
+                        </form>
                     </div>
                 </div>
-                <div id="test-result-<?= $cfg['id'] ?>" class="mt-2"></div>
+                <div id="test-result-<?= $cfg['id'] ?>" class="mt-1"></div>
 
                 <!-- Edit form (collapsed) -->
                 <div class="collapse mt-3" id="editConfig<?= $cfg['id'] ?>" onclick="event.stopPropagation();">
@@ -1966,56 +1940,91 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                             <label class="form-label small fw-semibold">Configuration Name</label>
                             <input type="text" class="form-control form-control-sm" name="name" value="<?= htmlspecialchars($cfg['name']) ?>" required>
                         </div>
-                        <?php foreach ($schema as $field => $def):
-                            $val = $cfgData[$field] ?? $def['default'] ?? '';
-                            if (is_array($val)) $val = implode(', ', $val);
-                            $fieldName = "plugin_config[{$field}]";
-                        ?>
-                        <div class="mb-2<?php if (!empty($def['show_when'])): ?> plugin-show-when<?php endif; ?>"
-                             <?php if (!empty($def['show_when'])): ?>
-                                 <?php foreach ($def['show_when'] as $swField => $swVal): ?>
-                                     data-show-field="<?= htmlspecialchars($swField) ?>" data-show-value="<?= htmlspecialchars($swVal) ?>"
-                                 <?php endforeach; ?>
-                             <?php endif; ?>>
-                            <?php if ($def['type'] === 'checkbox'): ?>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="<?= $fieldName ?>" value="1"
-                                           id="editCfg<?= $cfg['id'] ?>_<?= $field ?>"
-                                           <?= $val ? 'checked' : '' ?>>
-                                    <label class="form-check-label small" for="editCfg<?= $cfg['id'] ?>_<?= $field ?>">
-                                        <?= htmlspecialchars($def['label']) ?>
-                                    </label>
+                        <?php if (in_array($plugin['slug'], ['mysql_dump', 'pg_dump'])): ?>
+                            <?php $ev = $cfgData; ?>
+                            <div class="row g-2 mb-2">
+                                <div class="col-8"><label class="form-label small fw-semibold mb-1">Host</label><input type="text" class="form-control form-control-sm" name="plugin_config[host]" value="<?= htmlspecialchars($ev['host'] ?? 'localhost') ?>"></div>
+                                <div class="col-4"><label class="form-label small fw-semibold mb-1">Port</label><input type="number" class="form-control form-control-sm" name="plugin_config[port]" value="<?= htmlspecialchars($ev['port'] ?? ($plugin['slug'] === 'pg_dump' ? 5432 : 3306)) ?>"></div>
+                            </div>
+                            <div class="row g-2 mb-2">
+                                <div class="col-6"><label class="form-label small fw-semibold mb-1">User</label><input type="text" class="form-control form-control-sm" name="plugin_config[user]" value="<?= htmlspecialchars($ev['user'] ?? '') ?>"></div>
+                                <div class="col-6"><label class="form-label small fw-semibold mb-1">Password</label><input type="text" class="form-control form-control-sm" name="plugin_config[password]" placeholder="(unchanged if empty)"></div>
+                            </div>
+                            <div class="row g-2 mb-2">
+                                <div class="col-6"><label class="form-label small fw-semibold mb-1">Databases</label><input type="text" class="form-control form-control-sm" name="plugin_config[databases]" value="<?= htmlspecialchars($ev['databases'] ?? '*') ?>"><div class="form-text small">Use * for all, or comma-separated list</div></div>
+                                <div class="col-6"><label class="form-label small fw-semibold mb-1">Exclude DBs</label><input type="text" class="form-control form-control-sm" name="plugin_config[exclude_databases]" value="<?= htmlspecialchars(is_array($ev['exclude_databases'] ?? '') ? implode(', ', $ev['exclude_databases']) : ($ev['exclude_databases'] ?? '')) ?>"><div class="form-text small">Comma-separated</div></div>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label small fw-semibold mb-1">Dump Directory</label>
+                                <input type="text" class="form-control form-control-sm" name="plugin_config[dump_dir]" value="<?= htmlspecialchars($ev['dump_dir'] ?? '') ?>">
+                            </div>
+                            <div class="row g-2 mb-2">
+                                <div class="col-auto"><div class="form-check"><input class="form-check-input" type="checkbox" name="plugin_config[compress]" value="1" id="editCfg<?= $cfg['id'] ?>_compress" <?= ($ev['compress'] ?? true) ? 'checked' : '' ?>><label class="form-check-label small" for="editCfg<?= $cfg['id'] ?>_compress">Compress</label></div></div>
+                                <div class="col-auto"><div class="form-check"><input class="form-check-input" type="checkbox" name="plugin_config[cleanup_after]" value="1" id="editCfg<?= $cfg['id'] ?>_cleanup" <?= ($ev['cleanup_after'] ?? true) ? 'checked' : '' ?>><label class="form-check-label small" for="editCfg<?= $cfg['id'] ?>_cleanup">Cleanup after backup</label></div></div>
+                                <div class="col"><label class="form-label small fw-semibold mb-1">Extra Options</label><input type="text" class="form-control form-control-sm" name="plugin_config[extra_options]" value="<?= htmlspecialchars($ev['extra_options'] ?? '') ?>"></div>
+                            </div>
+                        <?php elseif ($plugin['slug'] === 's3_sync'): ?>
+                            <?php $ev = $cfgData; $credSrc = $ev['credential_source'] ?? 'global'; ?>
+                            <div class="mb-2">
+                                <div class="form-check form-check-inline"><input class="form-check-input s3-cred-radio" type="radio" name="plugin_config[credential_source]" value="global" id="editS3Global<?= $cfg['id'] ?>" <?= $credSrc === 'global' ? 'checked' : '' ?> data-target="editS3Custom<?= $cfg['id'] ?>"><label class="form-check-label small" for="editS3Global<?= $cfg['id'] ?>">Use Global S3 Settings</label></div>
+                                <div class="form-check form-check-inline"><input class="form-check-input s3-cred-radio" type="radio" name="plugin_config[credential_source]" value="custom" id="editS3CustomRadio<?= $cfg['id'] ?>" <?= $credSrc === 'custom' ? 'checked' : '' ?> data-target="editS3Custom<?= $cfg['id'] ?>"><label class="form-check-label small" for="editS3CustomRadio<?= $cfg['id'] ?>">Custom Credentials</label></div>
+                            </div>
+                            <div id="editS3Custom<?= $cfg['id'] ?>" class="<?= $credSrc === 'custom' ? '' : 'd-none' ?>">
+                                <div class="row g-2 mb-2">
+                                    <div class="col-8"><label class="form-label small fw-semibold mb-1">Endpoint</label><input type="text" class="form-control form-control-sm" name="plugin_config[endpoint]" value="<?= htmlspecialchars($ev['endpoint'] ?? '') ?>"></div>
+                                    <div class="col-4"><label class="form-label small fw-semibold mb-1">Region</label><input type="text" class="form-control form-control-sm" name="plugin_config[region]" value="<?= htmlspecialchars($ev['region'] ?? 'us-east-1') ?>"></div>
                                 </div>
-                            <?php elseif ($def['type'] === 'select'): ?>
-                                <label class="form-label small fw-semibold mb-1"><?= htmlspecialchars($def['label']) ?></label>
-                                <select class="form-select form-select-sm plugin-select-trigger" name="<?= $fieldName ?>" data-field="<?= $field ?>">
-                                    <?php foreach ($def['options'] as $optVal => $optLabel): ?>
-                                        <option value="<?= htmlspecialchars($optVal) ?>" <?= $val === $optVal ? 'selected' : '' ?>><?= htmlspecialchars($optLabel) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            <?php else: ?>
-                                <label class="form-label small fw-semibold mb-1"><?= htmlspecialchars($def['label']) ?></label>
-                                <input type="<?= $def['type'] === 'number' ? 'number' : 'text' ?>"
-                                       class="form-control form-control-sm" name="<?= $fieldName ?>"
-                                       value="<?= !empty($def['sensitive']) ? '' : htmlspecialchars($val) ?>"
-                                       <?= !empty($def['sensitive']) ? 'placeholder="(unchanged if empty)"' : '' ?>>
-                            <?php endif; ?>
-                            <?php if (!empty($def['help'])): ?>
-                                <div class="form-text small"><?= htmlspecialchars($def['help']) ?></div>
-                            <?php endif; ?>
-                        </div>
-                        <?php endforeach; ?>
-                        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-check-lg me-1"></i> Save Changes</button>
+                                <div class="mb-2"><label class="form-label small fw-semibold mb-1">Bucket</label><input type="text" class="form-control form-control-sm" name="plugin_config[bucket]" value="<?= htmlspecialchars($ev['bucket'] ?? '') ?>"></div>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-6"><label class="form-label small fw-semibold mb-1">Access Key</label><input type="text" class="form-control form-control-sm" name="plugin_config[access_key]" placeholder="(unchanged if empty)"></div>
+                                    <div class="col-6"><label class="form-label small fw-semibold mb-1">Secret Key</label><input type="text" class="form-control form-control-sm" name="plugin_config[secret_key]" placeholder="(unchanged if empty)"></div>
+                                </div>
+                            </div>
+                            <div class="row g-2 mb-2">
+                                <div class="col-6"><label class="form-label small fw-semibold mb-1">Path Prefix</label><input type="text" class="form-control form-control-sm" name="plugin_config[path_prefix]" value="<?= htmlspecialchars($ev['path_prefix'] ?? '') ?>"><div class="form-text small">Optional subfolder in bucket</div></div>
+                                <div class="col-6"><label class="form-label small fw-semibold mb-1">Bandwidth Limit</label><input type="text" class="form-control form-control-sm" name="plugin_config[bandwidth_limit]" value="<?= htmlspecialchars($ev['bandwidth_limit'] ?? '') ?>"><div class="form-text small">e.g. 50M</div></div>
+                            </div>
+                        <?php elseif ($plugin['slug'] === 'shell_hook'): ?>
+                            <?php $ev = $cfgData; ?>
+                            <div class="row g-2 mb-2">
+                                <div class="col-6"><label class="form-label small fw-semibold mb-1">Pre-backup Script</label><input type="text" class="form-control form-control-sm" name="plugin_config[pre_script]" value="<?= htmlspecialchars($ev['pre_script'] ?? '') ?>"><div class="form-text small">Absolute path to script</div></div>
+                                <div class="col-6"><label class="form-label small fw-semibold mb-1">Post-backup Script</label><input type="text" class="form-control form-control-sm" name="plugin_config[post_script]" value="<?= htmlspecialchars($ev['post_script'] ?? '') ?>"><div class="form-text small">Absolute path to script</div></div>
+                            </div>
+                            <div class="row g-2 mb-2">
+                                <div class="col-auto"><div class="form-check"><input class="form-check-input" type="checkbox" name="plugin_config[abort_on_failure]" value="1" id="editCfg<?= $cfg['id'] ?>_abort" <?= ($ev['abort_on_failure'] ?? true) ? 'checked' : '' ?>><label class="form-check-label small" for="editCfg<?= $cfg['id'] ?>_abort">Abort backup on failure</label></div></div>
+                                <div class="col"><label class="form-label small fw-semibold mb-1">Timeout (seconds)</label><input type="number" class="form-control form-control-sm" name="plugin_config[timeout]" value="<?= htmlspecialchars($ev['timeout'] ?? 300) ?>"></div>
+                            </div>
+                        <?php else: ?>
+                            <?php foreach ($schema as $field => $def):
+                                $val = $cfgData[$field] ?? $def['default'] ?? '';
+                                if (is_array($val)) $val = implode(', ', $val);
+                            ?>
+                            <div class="mb-2">
+                                <?php if ($def['type'] === 'checkbox'): ?>
+                                    <div class="form-check"><input class="form-check-input" type="checkbox" name="plugin_config[<?= $field ?>]" value="1" id="editCfg<?= $cfg['id'] ?>_<?= $field ?>" <?= $val ? 'checked' : '' ?>><label class="form-check-label small" for="editCfg<?= $cfg['id'] ?>_<?= $field ?>"><?= htmlspecialchars($def['label']) ?></label></div>
+                                <?php else: ?>
+                                    <label class="form-label small fw-semibold mb-1"><?= htmlspecialchars($def['label']) ?></label>
+                                    <input type="<?= $def['type'] === 'number' ? 'number' : 'text' ?>" class="form-control form-control-sm" name="plugin_config[<?= $field ?>]" value="<?= !empty($def['sensitive']) ? '' : htmlspecialchars($val) ?>" <?= !empty($def['sensitive']) ? 'placeholder="(unchanged if empty)"' : '' ?>>
+                                <?php endif; ?>
+                            </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-check-lg me-1"></i>Save</button>
                         <button type="button" class="btn btn-sm btn-outline-secondary ms-1" data-bs-toggle="collapse" data-bs-target="#editConfig<?= $cfg['id'] ?>">Cancel</button>
                     </form>
                 </div>
             </div>
             <?php endforeach; ?>
 
-            <!-- Add new config form (collapsed) -->
+            <!-- Add new config -->
+            <div class="mt-2">
+                <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="collapse" data-bs-target="#newPluginConfig<?= $plugin['id'] ?>">
+                    <i class="bi bi-plus-circle me-1"></i>Add Configuration
+                </button>
+            </div>
+
             <div class="collapse mt-3" id="newPluginConfig<?= $plugin['id'] ?>">
                 <div class="border rounded p-3 bg-light">
-                    <h6 class="mb-3">New <?= htmlspecialchars($plugin['name']) ?> Configuration</h6>
                     <form method="POST" action="/clients/<?= $agent['id'] ?>/plugin-configs" id="newConfigForm<?= $plugin['id'] ?>">
                         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                         <input type="hidden" name="plugin_id" value="<?= $plugin['id'] ?>">
@@ -2025,143 +2034,120 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                     <label class="form-label small fw-semibold">Configuration Name <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control form-control-sm" name="name" placeholder="e.g. Production DB" required>
                                 </div>
-                                <?php
-                                $randomPass = substr(str_shuffle('abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'), 0, 20);
-                                foreach ($schema as $field => $def):
-                                    $default = $def['default'] ?? '';
-                                    if (!empty($def['generate']) && $field === 'password') $default = $randomPass;
-                                    $fieldVal = is_array($default) ? implode(', ', $default) : $default;
-                                    $fieldName = "plugin_config[{$field}]";
-                                ?>
-                                <div class="mb-2<?php if (!empty($def['show_when'])): ?> plugin-show-when<?php endif; ?>"
-                                     <?php if (!empty($def['show_when'])): ?>
-                                         <?php foreach ($def['show_when'] as $swField => $swVal): ?>
-                                             data-show-field="<?= htmlspecialchars($swField) ?>" data-show-value="<?= htmlspecialchars($swVal) ?>"
-                                         <?php endforeach; ?>
-                                     <?php endif; ?>>
-                                    <?php if ($def['type'] === 'checkbox'): ?>
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" name="<?= $fieldName ?>" value="1"
-                                                   id="newCfg<?= $plugin['id'] ?>_<?= $field ?>"
-                                                   <?= $default ? 'checked' : '' ?>>
-                                            <label class="form-check-label small" for="newCfg<?= $plugin['id'] ?>_<?= $field ?>">
-                                                <?= htmlspecialchars($def['label']) ?>
-                                            </label>
+                                <?php if (in_array($plugin['slug'], ['mysql_dump', 'pg_dump'])): ?>
+                                    <div class="row g-2 mb-2">
+                                        <div class="col-8"><label class="form-label small fw-semibold mb-1">Host</label><input type="text" class="form-control form-control-sm" name="plugin_config[host]" value="localhost"></div>
+                                        <div class="col-4"><label class="form-label small fw-semibold mb-1">Port</label><input type="number" class="form-control form-control-sm" name="plugin_config[port]" value="<?= $plugin['slug'] === 'pg_dump' ? 5432 : 3306 ?>"></div>
+                                    </div>
+                                    <div class="row g-2 mb-2">
+                                        <div class="col-6"><label class="form-label small fw-semibold mb-1">User <span class="text-danger">*</span></label><input type="text" class="form-control form-control-sm" name="plugin_config[user]" value="bbs_backup" required <?= $plugin['slug'] === 'mysql_dump' ? 'id="newMysqlUser"' : 'id="newPgUser"' ?>></div>
+                                        <div class="col-6"><label class="form-label small fw-semibold mb-1">Password <span class="text-danger">*</span></label><input type="text" class="form-control form-control-sm" name="plugin_config[password]" value="<?= htmlspecialchars($randomPass) ?>" required <?= $plugin['slug'] === 'mysql_dump' ? 'id="newMysqlPass"' : 'id="newPgPass"' ?>></div>
+                                    </div>
+                                    <div class="row g-2 mb-2">
+                                        <div class="col-6"><label class="form-label small fw-semibold mb-1">Databases</label><input type="text" class="form-control form-control-sm" name="plugin_config[databases]" value="*"><div class="form-text small">Use * for all, or comma-separated list</div></div>
+                                        <div class="col-6"><label class="form-label small fw-semibold mb-1">Exclude DBs</label><input type="text" class="form-control form-control-sm" name="plugin_config[exclude_databases]" value="<?= $plugin['slug'] === 'pg_dump' ? 'template0, template1, postgres' : 'information_schema, performance_schema, sys' ?>"><div class="form-text small">Comma-separated</div></div>
+                                    </div>
+                                    <div class="mb-2"><label class="form-label small fw-semibold mb-1">Dump Directory</label><input type="text" class="form-control form-control-sm" name="plugin_config[dump_dir]" value="<?= $plugin['slug'] === 'pg_dump' ? '/home/bbs/pgdump' : '/home/bbs/mysql' ?>"></div>
+                                    <div class="row g-2 mb-2">
+                                        <div class="col-auto"><div class="form-check"><input class="form-check-input" type="checkbox" name="plugin_config[compress]" value="1" id="newCfg<?= $plugin['id'] ?>_compress" checked><label class="form-check-label small" for="newCfg<?= $plugin['id'] ?>_compress">Compress</label></div></div>
+                                        <div class="col-auto"><div class="form-check"><input class="form-check-input" type="checkbox" name="plugin_config[cleanup_after]" value="1" id="newCfg<?= $plugin['id'] ?>_cleanup" checked><label class="form-check-label small" for="newCfg<?= $plugin['id'] ?>_cleanup">Cleanup after backup</label></div></div>
+                                        <div class="col"><label class="form-label small fw-semibold mb-1">Extra Options</label><input type="text" class="form-control form-control-sm" name="plugin_config[extra_options]" value="<?= $plugin['slug'] === 'pg_dump' ? '--no-owner --no-privileges' : '--single-transaction --quick --routines --triggers --events' ?>"></div>
+                                    </div>
+                                <?php elseif ($plugin['slug'] === 's3_sync'): ?>
+                                    <div class="mb-2">
+                                        <div class="form-check form-check-inline"><input class="form-check-input s3-cred-radio" type="radio" name="plugin_config[credential_source]" value="global" id="newS3Global<?= $plugin['id'] ?>" checked data-target="newS3Custom<?= $plugin['id'] ?>"><label class="form-check-label small" for="newS3Global<?= $plugin['id'] ?>">Use Global S3 Settings</label></div>
+                                        <div class="form-check form-check-inline"><input class="form-check-input s3-cred-radio" type="radio" name="plugin_config[credential_source]" value="custom" id="newS3CustomRadio<?= $plugin['id'] ?>" data-target="newS3Custom<?= $plugin['id'] ?>"><label class="form-check-label small" for="newS3CustomRadio<?= $plugin['id'] ?>">Custom Credentials</label></div>
+                                    </div>
+                                    <div id="newS3Custom<?= $plugin['id'] ?>" class="d-none">
+                                        <div class="row g-2 mb-2">
+                                            <div class="col-8"><label class="form-label small fw-semibold mb-1">Endpoint</label><input type="text" class="form-control form-control-sm" name="plugin_config[endpoint]"></div>
+                                            <div class="col-4"><label class="form-label small fw-semibold mb-1">Region</label><input type="text" class="form-control form-control-sm" name="plugin_config[region]" value="us-east-1"></div>
                                         </div>
-                                    <?php elseif ($def['type'] === 'select'): ?>
-                                        <label class="form-label small fw-semibold mb-1"><?= htmlspecialchars($def['label']) ?></label>
-                                        <select class="form-select form-select-sm plugin-select-trigger" name="<?= $fieldName ?>" data-field="<?= $field ?>">
-                                            <?php foreach ($def['options'] as $optVal => $optLabel): ?>
-                                                <option value="<?= htmlspecialchars($optVal) ?>" <?= $fieldVal === $optVal ? 'selected' : '' ?>><?= htmlspecialchars($optLabel) ?></option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    <?php else: ?>
-                                        <label class="form-label small fw-semibold mb-1"><?= htmlspecialchars($def['label']) ?>
-                                            <?php if ($def['required'] ?? false): ?><span class="text-danger">*</span><?php endif; ?>
-                                        </label>
-                                        <input type="<?= $def['type'] === 'number' ? 'number' : 'text' ?>"
-                                               class="form-control form-control-sm" name="<?= $fieldName ?>"
-                                               value="<?= htmlspecialchars($fieldVal) ?>"
-                                               <?= $field === 'user' && $plugin['slug'] === 'mysql_dump' ? 'id="newMysqlUser"' : '' ?>
-                                               <?= $field === 'user' && $plugin['slug'] === 'pg_dump' ? 'id="newPgUser"' : '' ?>
-                                               <?= $field === 'password' && $plugin['slug'] === 'mysql_dump' ? 'id="newMysqlPass"' : '' ?>
-                                               <?= $field === 'password' && $plugin['slug'] === 'pg_dump' ? 'id="newPgPass"' : '' ?>>
-                                    <?php endif; ?>
-                                    <?php if (!empty($def['help'])): ?>
-                                        <div class="form-text small"><?= htmlspecialchars($def['help']) ?></div>
-                                    <?php endif; ?>
-                                </div>
-                                <?php endforeach; ?>
-                                <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-plus-circle me-1"></i> Create Configuration</button>
+                                        <div class="mb-2"><label class="form-label small fw-semibold mb-1">Bucket</label><input type="text" class="form-control form-control-sm" name="plugin_config[bucket]"></div>
+                                        <div class="row g-2 mb-2">
+                                            <div class="col-6"><label class="form-label small fw-semibold mb-1">Access Key</label><input type="text" class="form-control form-control-sm" name="plugin_config[access_key]"></div>
+                                            <div class="col-6"><label class="form-label small fw-semibold mb-1">Secret Key</label><input type="text" class="form-control form-control-sm" name="plugin_config[secret_key]"></div>
+                                        </div>
+                                    </div>
+                                    <div class="row g-2 mb-2">
+                                        <div class="col-6"><label class="form-label small fw-semibold mb-1">Path Prefix</label><input type="text" class="form-control form-control-sm" name="plugin_config[path_prefix]"><div class="form-text small">Optional subfolder in bucket</div></div>
+                                        <div class="col-6"><label class="form-label small fw-semibold mb-1">Bandwidth Limit</label><input type="text" class="form-control form-control-sm" name="plugin_config[bandwidth_limit]"><div class="form-text small">e.g. 50M</div></div>
+                                    </div>
+                                <?php elseif ($plugin['slug'] === 'shell_hook'): ?>
+                                    <div class="row g-2 mb-2">
+                                        <div class="col-6"><label class="form-label small fw-semibold mb-1">Pre-backup Script</label><input type="text" class="form-control form-control-sm" name="plugin_config[pre_script]"><div class="form-text small">Absolute path to script</div></div>
+                                        <div class="col-6"><label class="form-label small fw-semibold mb-1">Post-backup Script</label><input type="text" class="form-control form-control-sm" name="plugin_config[post_script]"><div class="form-text small">Absolute path to script</div></div>
+                                    </div>
+                                    <div class="row g-2 mb-2">
+                                        <div class="col-auto"><div class="form-check"><input class="form-check-input" type="checkbox" name="plugin_config[abort_on_failure]" value="1" id="newCfg<?= $plugin['id'] ?>_abort" checked><label class="form-check-label small" for="newCfg<?= $plugin['id'] ?>_abort">Abort backup on failure</label></div></div>
+                                        <div class="col"><label class="form-label small fw-semibold mb-1">Timeout (seconds)</label><input type="number" class="form-control form-control-sm" name="plugin_config[timeout]" value="300"></div>
+                                    </div>
+                                <?php else: ?>
+                                    <?php foreach ($schema as $field => $def):
+                                        $default = $def['default'] ?? '';
+                                        $fieldVal = is_array($default) ? implode(', ', $default) : $default;
+                                    ?>
+                                    <div class="mb-2">
+                                        <?php if ($def['type'] === 'checkbox'): ?>
+                                            <div class="form-check"><input class="form-check-input" type="checkbox" name="plugin_config[<?= $field ?>]" value="1" id="newCfg<?= $plugin['id'] ?>_<?= $field ?>" <?= $default ? 'checked' : '' ?>><label class="form-check-label small" for="newCfg<?= $plugin['id'] ?>_<?= $field ?>"><?= htmlspecialchars($def['label']) ?></label></div>
+                                        <?php else: ?>
+                                            <label class="form-label small fw-semibold mb-1"><?= htmlspecialchars($def['label']) ?></label>
+                                            <input type="<?= $def['type'] === 'number' ? 'number' : 'text' ?>" class="form-control form-control-sm" name="plugin_config[<?= $field ?>]" value="<?= htmlspecialchars($fieldVal) ?>">
+                                        <?php endif; ?>
+                                    </div>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                                <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-plus-circle me-1"></i>Create</button>
                                 <button type="button" class="btn btn-sm btn-outline-secondary ms-1" data-bs-toggle="collapse" data-bs-target="#newPluginConfig<?= $plugin['id'] ?>">Cancel</button>
                             </div>
                             <?php if ($plugin['slug'] === 'mysql_dump'): ?>
                             <div class="col-lg-6 mt-3 mt-lg-0">
                                 <div class="card border-0 bg-white shadow-sm h-100">
-                                    <div class="card-header bg-white fw-semibold small py-2">
-                                        <i class="bi bi-terminal me-1"></i> MySQL Setup Instructions
-                                    </div>
+                                    <div class="card-header bg-white fw-semibold small py-2"><i class="bi bi-terminal me-1"></i> MySQL Setup</div>
                                     <div class="card-body small">
-                                        <div class="alert alert-info small py-2 px-3 mb-3">
-                                            <i class="bi bi-info-circle me-1"></i>
-                                            On the client machine with MySQL, you'll need to create a dedicated MySQL user so that Borg Backup Server can perform database backups (and optionally restore them). Run one of the commands below in your MySQL terminal depending on the desired functionality.
-                                        </div>
-                                        <div class="mb-3">
-                                            <strong>Backup Only</strong>
-                                            <span class="text-muted">(read-only, recommended)</span>
-                                            <pre class="bg-light border rounded p-2 mt-1 mb-0" style="font-size:0.78rem;white-space:pre-wrap;" id="mysqlBackupOnlySql">CREATE USER '<span id="sqlUser1">bbs_backup</span>'@'localhost' IDENTIFIED BY '<span id="sqlPass1"><?= htmlspecialchars($randomPass) ?></span>';
+                                        <p class="text-muted mb-2">Create a MySQL user on the client for backups:</p>
+                                        <strong>Backup Only</strong> <span class="text-muted">(recommended)</span>
+                                        <pre class="bg-light border rounded p-2 mt-1 mb-2" style="font-size:0.78rem;white-space:pre-wrap;">CREATE USER '<span id="sqlUser1">bbs_backup</span>'@'localhost' IDENTIFIED BY '<span id="sqlPass1"><?= htmlspecialchars($randomPass) ?></span>';
 GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER ON *.* TO '<span id="sqlUser1b">bbs_backup</span>'@'localhost';
 FLUSH PRIVILEGES;</pre>
-                                        </div>
-                                        <div>
-                                            <strong>Backup + Restore</strong>
-                                            <span class="text-muted">(if you want to restore databases from the GUI)</span>
-                                            <pre class="bg-light border rounded p-2 mt-1 mb-0" style="font-size:0.78rem;white-space:pre-wrap;" id="mysqlBackupRestoreSql">CREATE USER '<span id="sqlUser2">bbs_backup</span>'@'localhost' IDENTIFIED BY '<span id="sqlPass2"><?= htmlspecialchars($randomPass) ?></span>';
+                                        <strong>Backup + Restore</strong>
+                                        <pre class="bg-light border rounded p-2 mt-1 mb-0" style="font-size:0.78rem;white-space:pre-wrap;">CREATE USER '<span id="sqlUser2">bbs_backup</span>'@'localhost' IDENTIFIED BY '<span id="sqlPass2"><?= htmlspecialchars($randomPass) ?></span>';
 GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER,
       CREATE, INSERT, DROP, ALTER, INDEX, REFERENCES
       ON *.* TO '<span id="sqlUser2b">bbs_backup</span>'@'localhost';
 FLUSH PRIVILEGES;</pre>
-                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            <?php endif; ?>
-                            <?php if ($plugin['slug'] === 'pg_dump'): ?>
+                            <?php elseif ($plugin['slug'] === 'pg_dump'): ?>
                             <div class="col-lg-6 mt-3 mt-lg-0">
                                 <div class="card border-0 bg-white shadow-sm h-100">
-                                    <div class="card-header bg-white fw-semibold small py-2">
-                                        <i class="bi bi-terminal me-1"></i> PostgreSQL Setup Instructions
-                                    </div>
+                                    <div class="card-header bg-white fw-semibold small py-2"><i class="bi bi-terminal me-1"></i> PostgreSQL Setup</div>
                                     <div class="card-body small">
-                                        <div class="alert alert-info small py-2 px-3 mb-3">
-                                            <i class="bi bi-info-circle me-1"></i>
-                                            On the client machine with PostgreSQL, you'll need to create a dedicated role so that Borg Backup Server can perform database backups (and optionally restore them). Run one of the command blocks below in your <code>psql</code> terminal depending on the desired functionality.
-                                        </div>
-                                        <div class="mb-3">
-                                            <strong>Backup Only</strong>
-                                            <span class="text-muted">(read-only, recommended)</span>
-                                            <pre class="bg-light border rounded p-2 mt-1 mb-0" style="font-size:0.78rem;white-space:pre-wrap;">CREATE ROLE <span id="pgUser1">bbs_backup</span> WITH LOGIN PASSWORD '<span id="pgPass1"><?= htmlspecialchars($randomPass) ?></span>';
+                                        <p class="text-muted mb-2">Create a PostgreSQL role on the client for backups:</p>
+                                        <strong>Backup Only</strong> <span class="text-muted">(recommended)</span>
+                                        <pre class="bg-light border rounded p-2 mt-1 mb-2" style="font-size:0.78rem;white-space:pre-wrap;">CREATE ROLE <span id="pgUser1">bbs_backup</span> WITH LOGIN PASSWORD '<span id="pgPass1"><?= htmlspecialchars($randomPass) ?></span>';
 GRANT CONNECT ON DATABASE mydb TO <span id="pgUser1b">bbs_backup</span>;
 GRANT USAGE ON SCHEMA public TO <span id="pgUser1c">bbs_backup</span>;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO <span id="pgUser1d">bbs_backup</span>;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO <span id="pgUser1e">bbs_backup</span>;</pre>
-                                        </div>
-                                        <div>
-                                            <strong>Backup + Restore</strong>
-                                            <span class="text-muted">(if you want to restore databases from the GUI)</span>
-                                            <pre class="bg-light border rounded p-2 mt-1 mb-0" style="font-size:0.78rem;white-space:pre-wrap;">CREATE ROLE <span id="pgUser2">bbs_backup</span> WITH LOGIN PASSWORD '<span id="pgPass2"><?= htmlspecialchars($randomPass) ?></span>';
+                                        <strong>Backup + Restore</strong>
+                                        <pre class="bg-light border rounded p-2 mt-1 mb-0" style="font-size:0.78rem;white-space:pre-wrap;">CREATE ROLE <span id="pgUser2">bbs_backup</span> WITH LOGIN PASSWORD '<span id="pgPass2"><?= htmlspecialchars($randomPass) ?></span>';
 GRANT CONNECT ON DATABASE mydb TO <span id="pgUser2b">bbs_backup</span>;
 GRANT USAGE ON SCHEMA public TO <span id="pgUser2c">bbs_backup</span>;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO <span id="pgUser2d">bbs_backup</span>;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO <span id="pgUser2e">bbs_backup</span>;
 ALTER ROLE <span id="pgUser2f">bbs_backup</span> CREATEDB;
 GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;</pre>
-                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            <?php endif; ?>
-                            <?php if ($plugin['slug'] === 'shell_hook'): ?>
+                            <?php elseif ($plugin['slug'] === 'shell_hook'): ?>
                             <div class="col-lg-6 mt-3 mt-lg-0">
-                                <div class="alert alert-warning small mb-3">
-                                    <i class="bi bi-exclamation-triangle me-1"></i>
-                                    <strong>Use at your own risk.</strong> Scripts run with the agent's system permissions.
-                                    BBS does not validate script contents. Ensure your scripts are tested and trusted
-                                    before enabling them in backup plans.
-                                </div>
-                                <div class="card border-0 bg-white shadow-sm">
-                                    <div class="card-header bg-white fw-semibold small py-2">
-                                        <i class="bi bi-terminal me-1"></i> Script Requirements
-                                    </div>
-                                    <div class="card-body small">
-                                        <ul class="mb-0">
-                                            <li>Scripts must be executable (<code>chmod +x script.sh</code>)</li>
-                                            <li>Use absolute paths (e.g. <code>/home/bbs/hooks/pre-backup.sh</code>)</li>
-                                            <li>Scripts should exit 0 on success, non-zero on failure</li>
-                                            <li>stdout and stderr are captured in the activity log</li>
-                                            <li>Scripts are killed if they exceed the configured timeout</li>
-                                        </ul>
-                                    </div>
+                                <div class="alert alert-warning small mb-2"><i class="bi bi-exclamation-triangle me-1"></i><strong>Use at your own risk.</strong> Scripts run with the agent's system permissions.</div>
+                                <div class="small text-muted">
+                                    Scripts must be executable, use absolute paths, and exit 0 on success.
+                                    stdout/stderr are captured in the activity log.
                                 </div>
                             </div>
                             <?php endif; ?>
@@ -2170,100 +2156,61 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
                 </div>
             </div>
         </div>
+        <?php endif; ?>
     </div>
     <?php endforeach; ?>
+    <?php endif; ?>
 
     <script>
     function testPluginConfig(agentId, configId) {
         const resultDiv = document.getElementById('test-result-' + configId);
-        resultDiv.innerHTML = '<div class="d-flex align-items-center text-muted small"><span class="spinner-border spinner-border-sm me-2"></span> Contacting client, please wait...</div>';
-
-        fetch('/clients/' + agentId + '/plugin-configs/' + configId + '/test', {
-            method: 'POST',
-            credentials: 'same-origin'
-        })
+        resultDiv.innerHTML = '<div class="d-flex align-items-center text-muted small"><span class="spinner-border spinner-border-sm me-2"></span> Contacting client...</div>';
+        fetch('/clients/' + agentId + '/plugin-configs/' + configId + '/test', { method: 'POST', credentials: 'same-origin' })
         .then(r => r.json())
-        .then(data => {
-            if (data.job_id) {
-                pollTestStatus(agentId, configId);
-            } else {
-                resultDiv.innerHTML = '<div class="alert alert-danger small mb-0 mt-1">Failed to create test job.</div>';
-            }
-        })
-        .catch(() => {
-            resultDiv.innerHTML = '<div class="alert alert-danger small mb-0 mt-1">Error contacting server.</div>';
-        });
+        .then(data => { if (data.job_id) pollTestStatus(agentId, configId); else resultDiv.innerHTML = '<div class="alert alert-danger small mb-0 mt-1">Failed to create test job.</div>'; })
+        .catch(() => { resultDiv.innerHTML = '<div class="alert alert-danger small mb-0 mt-1">Error contacting server.</div>'; });
     }
-
     function pollTestStatus(agentId, configId) {
         const resultDiv = document.getElementById('test-result-' + configId);
         const poll = setInterval(() => {
             fetch('/clients/' + agentId + '/plugin-configs/' + configId + '/test-status', { credentials: 'same-origin' })
             .then(r => r.json())
             .then(data => {
-                if (data.status === 'completed') {
-                    clearInterval(poll);
-                    resultDiv.innerHTML = '<div class="alert alert-success small mb-0 mt-1"><i class="bi bi-check-circle me-1"></i> ' + (data.message || 'Test passed.') + '</div>';
-                } else if (data.status === 'failed') {
-                    clearInterval(poll);
-                    resultDiv.innerHTML = '<div class="alert alert-danger small mb-0 mt-1"><i class="bi bi-x-circle me-1"></i> ' + (data.error || 'Test failed.') + '</div>';
-                }
+                if (data.status === 'completed') { clearInterval(poll); resultDiv.innerHTML = '<div class="alert alert-success small mb-0 mt-1"><i class="bi bi-check-circle me-1"></i> ' + (data.message || 'Test passed.') + '</div>'; }
+                else if (data.status === 'failed') { clearInterval(poll); resultDiv.innerHTML = '<div class="alert alert-danger small mb-0 mt-1"><i class="bi bi-x-circle me-1"></i> ' + (data.error || 'Test failed.') + '</div>'; }
             });
         }, 2000);
-
-        // Timeout after 60 seconds
-        setTimeout(() => {
-            clearInterval(poll);
-            if (resultDiv.querySelector('.spinner-border')) {
-                resultDiv.innerHTML = '<div class="alert alert-warning small mb-0 mt-1"><i class="bi bi-clock me-1"></i> Test timed out. The client may be offline.</div>';
-            }
-        }, 60000);
+        setTimeout(() => { clearInterval(poll); if (resultDiv.querySelector('.spinner-border')) resultDiv.innerHTML = '<div class="alert alert-warning small mb-0 mt-1"><i class="bi bi-clock me-1"></i> Test timed out. Client may be offline.</div>'; }, 60000);
     }
 
-    // Live-update MySQL setup instructions as user/password fields change
+    // S3 credential radio toggle
+    document.querySelectorAll('.s3-cred-radio').forEach(radio => {
+        radio.addEventListener('change', function() {
+            const target = document.getElementById(this.dataset.target);
+            if (target) target.classList.toggle('d-none', this.value !== 'custom');
+        });
+    });
+
+    // Live-update MySQL setup instructions
     (function() {
-        const userField = document.getElementById('newMysqlUser');
-        const passField = document.getElementById('newMysqlPass');
-        if (!userField || !passField) return;
-
-        function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#039;'); }
-
+        const u = document.getElementById('newMysqlUser'), p = document.getElementById('newMysqlPass');
+        if (!u || !p) return;
         function update() {
-            const u = esc(userField.value || 'bbs_backup');
-            const p = esc(passField.value || 'PASSWORD');
-            ['sqlUser1','sqlUser1b','sqlUser2','sqlUser2b'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.textContent = userField.value || 'bbs_backup';
-            });
-            ['sqlPass1','sqlPass2'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.textContent = passField.value || 'PASSWORD';
-            });
+            ['sqlUser1','sqlUser1b','sqlUser2','sqlUser2b'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = u.value || 'bbs_backup'; });
+            ['sqlPass1','sqlPass2'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = p.value || 'PASSWORD'; });
         }
-
-        userField.addEventListener('input', update);
-        passField.addEventListener('input', update);
+        u.addEventListener('input', update); p.addEventListener('input', update);
     })();
 
-    // Live-update PostgreSQL setup instructions as user/password fields change
+    // Live-update PostgreSQL setup instructions
     (function() {
-        const userField = document.getElementById('newPgUser');
-        const passField = document.getElementById('newPgPass');
-        if (!userField || !passField) return;
-
+        const u = document.getElementById('newPgUser'), p = document.getElementById('newPgPass');
+        if (!u || !p) return;
         function update() {
-            ['pgUser1','pgUser1b','pgUser1c','pgUser1d','pgUser1e','pgUser2','pgUser2b','pgUser2c','pgUser2d','pgUser2e','pgUser2f','pgUser2g'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.textContent = userField.value || 'bbs_backup';
-            });
-            ['pgPass1','pgPass2'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.textContent = passField.value || 'PASSWORD';
-            });
+            ['pgUser1','pgUser1b','pgUser1c','pgUser1d','pgUser1e','pgUser2','pgUser2b','pgUser2c','pgUser2d','pgUser2e','pgUser2f','pgUser2g'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = u.value || 'bbs_backup'; });
+            ['pgPass1','pgPass2'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = p.value || 'PASSWORD'; });
         }
-
-        userField.addEventListener('input', update);
-        passField.addEventListener('input', update);
+        u.addEventListener('input', update); p.addEventListener('input', update);
     })();
     </script>
 
