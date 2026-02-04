@@ -4,6 +4,7 @@ namespace BBS\Controllers;
 
 use BBS\Core\Controller;
 use BBS\Services\PluginManager;
+use BBS\Services\S3SyncService;
 
 class PluginConfigController extends Controller
 {
@@ -107,6 +108,29 @@ class PluginConfigController extends Controller
 
         if (!$this->getAgent($id)) {
             $this->json(['error' => 'Access denied'], 403);
+        }
+
+        // Check if this is an S3 plugin config — test runs server-side (rclone is on the server)
+        $pluginSlug = $this->db->fetchOne("
+            SELECT p.slug FROM plugin_configs pc
+            JOIN plugins p ON p.id = pc.plugin_id
+            WHERE pc.id = ?
+        ", [$configId]);
+
+        if ($pluginSlug && $pluginSlug['slug'] === 's3_sync') {
+            $config = $this->db->fetchOne("SELECT config FROM plugin_configs WHERE id = ?", [$configId]);
+            $configData = json_decode($config['config'] ?? '{}', true) ?: [];
+
+            $s3Service = new S3SyncService();
+            $creds = $s3Service->resolveCredentials($configData);
+            $result = $s3Service->testConnection($creds);
+
+            if ($result['success']) {
+                $this->json(['status' => 'completed', 'message' => "S3 connection successful. Bucket: {$creds['bucket']}"]);
+            } else {
+                $this->json(['status' => 'failed', 'error' => $result['error']]);
+            }
+            return;
         }
 
         $jobId = $this->db->insert('backup_jobs', [

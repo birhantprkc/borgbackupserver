@@ -2171,10 +2171,15 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
     <script>
     function testPluginConfig(agentId, configId) {
         const resultDiv = document.getElementById('test-result-' + configId);
-        resultDiv.innerHTML = '<div class="d-flex align-items-center text-muted small"><span class="spinner-border spinner-border-sm me-2"></span> Contacting client...</div>';
+        resultDiv.innerHTML = '<div class="d-flex align-items-center text-muted small"><span class="spinner-border spinner-border-sm me-2"></span> Testing...</div>';
         fetch('/clients/' + agentId + '/plugin-configs/' + configId + '/test', { method: 'POST', credentials: 'same-origin' })
         .then(r => r.json())
-        .then(data => { if (data.job_id) pollTestStatus(agentId, configId); else resultDiv.innerHTML = '<div class="alert alert-danger small mb-0 mt-1">Failed to create test job.</div>'; })
+        .then(data => {
+            if (data.status === 'completed') { resultDiv.innerHTML = '<div class="alert alert-success small mb-0 mt-1"><i class="bi bi-check-circle me-1"></i> ' + (data.message || 'Test passed.') + '</div>'; }
+            else if (data.status === 'failed') { resultDiv.innerHTML = '<div class="alert alert-danger small mb-0 mt-1"><i class="bi bi-x-circle me-1"></i> ' + (data.error || 'Test failed.') + '</div>'; }
+            else if (data.job_id) { resultDiv.innerHTML = '<div class="d-flex align-items-center text-muted small"><span class="spinner-border spinner-border-sm me-2"></span> Waiting for client...</div>'; pollTestStatus(agentId, configId); }
+            else { resultDiv.innerHTML = '<div class="alert alert-danger small mb-0 mt-1">Failed to create test job.</div>'; }
+        })
         .catch(() => { resultDiv.innerHTML = '<div class="alert alert-danger small mb-0 mt-1">Error contacting server.</div>'; });
     }
     function pollTestStatus(agentId, configId) {
