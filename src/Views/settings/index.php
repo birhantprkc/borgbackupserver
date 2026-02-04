@@ -70,6 +70,13 @@ $updateAvailable = $updateService->isUpdateAvailable();
                         <input type="text" class="form-control" name="storage_path" value="<?= htmlspecialchars($settings['storage_path'] ?? '') ?>" readonly>
                         <div class="form-text">Base directory for agent home directories and borg repositories. Set during installation.</div>
                     </div>
+                    <?php $sshPort = (int) ($settings['ssh_port'] ?? 22); if ($sshPort !== 22): ?>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">SSH Port</label>
+                        <input type="text" class="form-control" value="<?= $sshPort ?>" readonly>
+                        <div class="form-text"><i class="bi bi-info-circle me-1"></i>Agents connect via SSH on this non-standard port. Ensure client firewalls allow <strong>outbound TCP <?= $sshPort ?></strong>.</div>
+                    </div>
+                    <?php endif; ?>
                     <div class="mb-3">
                         <div class="form-check">
                             <?php $currentUrl = \BBS\Core\Config::get('APP_URL', 'https://'); $sslEnabled = str_starts_with($currentUrl, 'https://'); ?>
