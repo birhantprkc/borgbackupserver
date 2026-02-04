@@ -1223,9 +1223,36 @@ if ($dayOfWeek === 6 && $hourOfDay === 2) {
     }
 }
 
-// Step 12: Daily auto-update of borg (if enabled, at 3 AM)
-if ($hourOfDay === 3) {
+// Step 12: Auto-sync GitHub borg versions (daily, or if table is empty)
+{
     $borgService = new \BBS\Services\BorgVersionService();
+    $versionCount = $db->fetchOne("SELECT COUNT(*) as cnt FROM borg_versions");
+    $lastGitHubSync = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'last_borg_github_sync'");
+    $lastSyncTime = $lastGitHubSync['value'] ?? null;
+
+    // Sync if table is empty or last sync was more than 24 hours ago
+    $needsSync = ($versionCount['cnt'] ?? 0) == 0 || !$lastSyncTime || strtotime($lastSyncTime) < time() - 86400;
+
+    if ($needsSync) {
+        try {
+            $result = $borgService->syncVersionsFromGitHub();
+            if ($result['added'] > 0) {
+                echo date('Y-m-d H:i:s') . " GitHub sync: added {$result['added']} borg versions, skipped {$result['skipped']} pre-release\n";
+            }
+            $db->query(
+                "INSERT INTO settings (`key`, `value`) VALUES ('last_borg_github_sync', ?)
+                 ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)",
+                [date('Y-m-d H:i:s')]
+            );
+        } catch (\Exception $e) {
+            echo date('Y-m-d H:i:s') . " GitHub sync failed: {$e->getMessage()}\n";
+        }
+    }
+}
+
+// Step 13: Daily auto-update of borg (if enabled, at 3 AM)
+if ($hourOfDay === 3) {
+    $borgService = $borgService ?? new \BBS\Services\BorgVersionService();
     if ($borgService->isAutoUpdateEnabled()) {
         $lastBorgAutoUpdate = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'last_borg_auto_update'");
         $lastBorgAutoUpdateTime = $lastBorgAutoUpdate['value'] ?? null;
