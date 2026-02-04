@@ -624,6 +624,8 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                         <li>
                             <?php if ($deleteBlocked): ?>
                                 <span class="dropdown-item disabled text-muted" data-bs-toggle="tooltip" title="<?= htmlspecialchars($blockReason) ?>"><i class="bi bi-trash me-2"></i>Delete</span>
+                            <?php elseif (isset($s3SyncByRepo[$repo['id']])): ?>
+                                <button type="button" class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#deleteRepoModal<?= $repo['id'] ?>"><i class="bi bi-trash me-2"></i>Delete</button>
                             <?php else: ?>
                                 <form method="POST" action="/repositories/<?= $repo['id'] ?>/delete" data-confirm="PERMANENTLY delete repository &quot;<?= htmlspecialchars($repo['name']) ?>&quot;, all its archives, and the data on disk?&#10;&#10;This action is NOT reversible." data-confirm-danger>
                                     <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
@@ -651,7 +653,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     </div>
                 </div>
                 <div class="repo-status-bar">
-                    <?= $sizeLabel ?> &middot; <?= $repo['archive_count'] ?> archives<?php if (isset($s3SyncByRepo[$repo['id']])): ?> &middot; <i class="bi bi-cloud text-info" title="Replicated to S3<?= $s3SyncByRepo[$repo['id']] ? ' (last: ' . \BBS\Core\TimeHelper::ago($s3SyncByRepo[$repo['id']]) . ')' : '' ?>"></i> S3 Sync<?php endif; ?>
+                    <?= $sizeLabel ?> &middot; <?= $repo['archive_count'] ?> archives<?php if (isset($s3SyncByRepo[$repo['id']])): ?> &middot; <i class="bi bi-cloud text-info" title="Replicated to S3<?= !empty($s3SyncByRepo[$repo['id']]['last_sync']) ? ' (last: ' . \BBS\Core\TimeHelper::ago($s3SyncByRepo[$repo['id']]['last_sync']) . ')' : '' ?>"></i> S3 Sync<?php endif; ?>
                 </div>
             </div>
         </div>
@@ -665,6 +667,42 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
             </div>
         </div>
     </div>
+
+    <!-- Delete Repo Modals (for repos with S3 sync) -->
+    <?php foreach ($repositories as $repo): ?>
+    <?php if (isset($s3SyncByRepo[$repo['id']])): ?>
+    <div class="modal fade" id="deleteRepoModal<?= $repo['id'] ?>" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Delete Repository</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form method="POST" action="/repositories/<?= $repo['id'] ?>/delete">
+                    <div class="modal-body">
+                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                        <p>PERMANENTLY delete repository <strong>"<?= htmlspecialchars($repo['name']) ?>"</strong>, all its archives, and the data on disk?</p>
+                        <p class="text-danger fw-bold">This action is NOT reversible.</p>
+                        <div class="form-check mt-3 p-3 bg-light rounded">
+                            <input class="form-check-input" type="checkbox" name="delete_from_s3" id="deleteFromS3_<?= $repo['id'] ?>" value="1">
+                            <input type="hidden" name="plugin_config_id" value="<?= $s3SyncByRepo[$repo['id']]['plugin_config_id'] ?>">
+                            <label class="form-check-label" for="deleteFromS3_<?= $repo['id'] ?>">
+                                <i class="bi bi-cloud text-info me-1"></i>Also delete from S3 offsite storage
+                            </label>
+                            <div class="form-text">If unchecked, the S3 copy will remain and can be restored later.</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>Delete Repository</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+    <?php endforeach; ?>
+
     <?php endif; ?>
     <?php if (empty($repositories)): ?>
     <div id="add-repo-card-solo" style="cursor:pointer;" onclick="showCreateRepo()">

@@ -361,7 +361,7 @@ class ClientController extends Controller
 
         // Repos with S3 sync enabled (via plan plugins)
         $s3SyncRepos = $this->db->fetchAll("
-            SELECT DISTINCT bp.repository_id,
+            SELECT DISTINCT bp.repository_id, bpp.plugin_config_id,
                    (SELECT MAX(bj.completed_at) FROM backup_jobs bj
                     WHERE bj.repository_id = bp.repository_id AND bj.task_type = 's3_sync' AND bj.status = 'completed') as last_s3_sync
             FROM backup_plan_plugins bpp
@@ -371,7 +371,10 @@ class ClientController extends Controller
         ", [$id]);
         $s3SyncByRepo = [];
         foreach ($s3SyncRepos as $sr) {
-            $s3SyncByRepo[$sr['repository_id']] = $sr['last_s3_sync'];
+            $s3SyncByRepo[$sr['repository_id']] = [
+                'last_sync' => $sr['last_s3_sync'],
+                'plugin_config_id' => $sr['plugin_config_id'],
+            ];
         }
 
         // Detect orphaned S3 repos (exist in S3 but not locally)
