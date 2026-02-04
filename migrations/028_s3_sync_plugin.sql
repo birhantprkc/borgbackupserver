@@ -1,6 +1,6 @@
 -- Register s3_sync plugin
 INSERT INTO plugins (slug, name, description, plugin_type, is_active)
-VALUES ('s3_sync', 'S3 Offsite Sync', 'Automatically syncs repositories to S3-compatible storage after backup and prune', 'post_backup', 1);
+VALUES ('s3_sync', 'S3 Offsite Sync', 'Automatic sync of repositories to any S3-compatible storage after backup and prune operations. Stores a manifest for fast restore without long borg operations.', 'post_backup', 1);
 
 -- Global S3 settings
 INSERT IGNORE INTO settings (`key`, `value`) VALUES
