@@ -67,6 +67,8 @@ install_borg() {
         centos|rhel|rocky|almalinux)
             if command -v dnf &>/dev/null; then
                 dnf install -y epel-release 2>/dev/null || true
+                # Install python3-packaging first to fix EPEL borgbackup dependency
+                dnf install -y python3-packaging 2>/dev/null || true
                 dnf install -y borgbackup python3 || {
                     # EPEL borgbackup may have dependency issues on older systems
                     # Try installing without borgbackup - agent will upgrade later
@@ -76,6 +78,7 @@ install_borg() {
                 }
             else
                 yum install -y epel-release 2>/dev/null || true
+                yum install -y python3-packaging 2>/dev/null || true
                 yum install -y borgbackup python3 || {
                     echo "Warning: Could not install borgbackup from EPEL"
                     echo "Installing python3 only - agent will install borg on first run"
