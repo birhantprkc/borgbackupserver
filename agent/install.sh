@@ -48,104 +48,17 @@ detect_os() {
     echo "Detected OS: $OS"
 }
 
-# Install borg — downloads pre-compiled binary from GitHub releases
-# Falls back to pip, then package manager if binary download fails
-BORG_BINARY_PATH="/usr/local/bin/borg"
-BORG_DEFAULT_VERSION="1.4.3"
-
+# Install borg via OS package manager
+# The agent will handle upgrades later based on server settings (Official or Server binaries)
 install_borg() {
-    if [ -f "$BORG_BINARY_PATH" ]; then
-        echo "borg already installed at $BORG_BINARY_PATH: $($BORG_BINARY_PATH --version)"
-        return
-    fi
-
-    # Also check if borg is installed elsewhere
+    # Check if borg is already installed
     if command -v borg &>/dev/null; then
         echo "borg already installed: $(borg --version)"
         return
     fi
 
-    echo "Installing borg v${BORG_DEFAULT_VERSION}..."
+    echo "Installing borg via package manager..."
 
-    # Detect architecture
-    ARCH=$(uname -m)
-    case "$ARCH" in
-        x86_64|amd64)  ARCH="x86_64" ;;
-        aarch64|arm64) ARCH="arm64" ;;
-        *) echo "Warning: Unknown architecture $ARCH, trying pip install"
-           install_borg_pip
-           return ;;
-    esac
-
-    # Detect platform and build download URL
-    PLATFORM=$(uname -s | tr '[:upper:]' '[:lower:]')
-    DOWNLOAD_URL=""
-
-    case "$PLATFORM" in
-        linux)
-            # Detect glibc version
-            GLIBC_VER=$(ldd --version 2>&1 | head -1 | grep -oP '\d+\.\d+$' || echo "")
-            if [ -z "$GLIBC_VER" ]; then
-                echo "Warning: Could not detect glibc version, trying pip install"
-                install_borg_pip
-                return
-            fi
-            GLIBC_SHORT=$(echo "$GLIBC_VER" | tr -d '.')
-            # Try glibc-matched binary (prefer locally-built for glibc231)
-            if [ "$GLIBC_SHORT" -ge 235 ] && [ "$ARCH" = "x86_64" ]; then
-                DOWNLOAD_URL="https://github.com/borgbackup/borg/releases/download/${BORG_DEFAULT_VERSION}/borg-linux-glibc235-${ARCH}-gh"
-            elif [ "$GLIBC_SHORT" -ge 235 ] && [ "$ARCH" = "arm64" ]; then
-                DOWNLOAD_URL="https://github.com/borgbackup/borg/releases/download/${BORG_DEFAULT_VERSION}/borg-linux-glibc235-${ARCH}-gh"
-            elif [ "$GLIBC_SHORT" -ge 231 ] && [ "$ARCH" = "x86_64" ]; then
-                DOWNLOAD_URL="https://github.com/borgbackup/borg/releases/download/${BORG_DEFAULT_VERSION}/borg-linux-glibc231-${ARCH}"
-            fi
-            ;;
-        darwin)
-            if [ "$ARCH" = "arm64" ]; then
-                DOWNLOAD_URL="https://github.com/borgbackup/borg/releases/download/${BORG_DEFAULT_VERSION}/borg-macos-14-arm64-gh"
-            else
-                DOWNLOAD_URL="https://github.com/borgbackup/borg/releases/download/${BORG_DEFAULT_VERSION}/borg-macos-13-x86_64-gh"
-            fi
-            ;;
-    esac
-
-    if [ -n "$DOWNLOAD_URL" ]; then
-        echo "Downloading borg binary from $DOWNLOAD_URL"
-        TMP_PATH="${BORG_BINARY_PATH}.tmp"
-        if curl -fSL -o "$TMP_PATH" "$DOWNLOAD_URL" 2>/dev/null || wget -q -O "$TMP_PATH" "$DOWNLOAD_URL" 2>/dev/null; then
-            chmod 755 "$TMP_PATH"
-            # Test the binary
-            if "$TMP_PATH" --version &>/dev/null; then
-                mv "$TMP_PATH" "$BORG_BINARY_PATH"
-                echo "borg installed: $($BORG_BINARY_PATH --version)"
-                return
-            else
-                echo "Warning: Downloaded binary failed version check"
-                rm -f "$TMP_PATH"
-            fi
-        else
-            echo "Warning: Binary download failed"
-            rm -f "$TMP_PATH"
-        fi
-    fi
-
-    # Fallback: try pip install
-    echo "Trying pip install as fallback..."
-    install_borg_pip || install_borg_package_manager
-}
-
-install_borg_pip() {
-    if command -v pip3 &>/dev/null; then
-        pip3 install "borgbackup==${BORG_DEFAULT_VERSION}" && {
-            echo "borg installed via pip: $(borg --version)"
-            return 0
-        }
-    fi
-    return 1
-}
-
-install_borg_package_manager() {
-    echo "Trying package manager as last resort..."
     case "$OS" in
         ubuntu|debian|pop|linuxmint)
             apt-get update -qq
@@ -153,11 +66,21 @@ install_borg_package_manager() {
             ;;
         centos|rhel|rocky|almalinux)
             if command -v dnf &>/dev/null; then
-                dnf install -y epel-release
-                dnf install -y borgbackup python3
+                dnf install -y epel-release 2>/dev/null || true
+                dnf install -y borgbackup python3 || {
+                    # EPEL borgbackup may have dependency issues on older systems
+                    # Try installing without borgbackup - agent will upgrade later
+                    echo "Warning: Could not install borgbackup from EPEL"
+                    echo "Installing python3 only - agent will install borg on first run"
+                    dnf install -y python3
+                }
             else
-                yum install -y epel-release
-                yum install -y borgbackup python3
+                yum install -y epel-release 2>/dev/null || true
+                yum install -y borgbackup python3 || {
+                    echo "Warning: Could not install borgbackup from EPEL"
+                    echo "Installing python3 only - agent will install borg on first run"
+                    yum install -y python3
+                }
             fi
             ;;
         fedora)
@@ -173,16 +96,22 @@ install_borg_package_manager() {
             if command -v brew &>/dev/null; then
                 brew install borgbackup python3
             else
-                echo "Error: Could not install borg. Install manually."
+                echo "Error: Homebrew required on macOS. Install from https://brew.sh"
                 exit 1
             fi
             ;;
         *)
-            echo "Error: Unsupported OS '$OS'. Install borg manually and re-run."
+            echo "Error: Unsupported OS '$OS'. Install borg and python3 manually, then re-run."
             exit 1
             ;;
     esac
-    echo "borg installed: $(borg --version)"
+
+    if command -v borg &>/dev/null; then
+        echo "borg installed: $(borg --version)"
+        echo "Note: Agent will check for upgrades based on server settings"
+    else
+        echo "Warning: borg not installed - agent will attempt to install on first run"
+    fi
 }
 
 # Install agent files
