@@ -279,7 +279,8 @@ INSERT INTO settings (`key`, `value`) VALUES
     ('s3_access_key', ''),
     ('s3_secret_key', ''),
     ('s3_path_prefix', ''),
-    ('s3_sync_server_backups', '0');
+    ('s3_sync_server_backups', '0'),
+    ('ssh_port', '22');
 
 -- --------------------------------------------------------
 -- Notifications

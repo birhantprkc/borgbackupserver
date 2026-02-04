@@ -19,7 +19,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.8.5"
+AGENT_VERSION = "1.8.6"
 CONFIG_PATH = "/etc/bbs-agent/config.ini"
 LOG_PATH = "/var/log/bbs-agent.log"
 SSH_KEY_PATH = "/etc/bbs-agent/ssh_key"
@@ -58,11 +58,19 @@ def load_config():
     config = ConfigParser()
     config.read(CONFIG_PATH)
 
-    return {
+    result = {
         "server_url": config.get("server", "url").rstrip("/"),
         "api_key": config.get("server", "api_key"),
         "poll_interval": config.getint("agent", "poll_interval", fallback=30),
     }
+
+    # Load SSH config if present
+    if config.has_section("ssh"):
+        result["ssh_unix_user"] = config.get("ssh", "unix_user", fallback="")
+        result["server_host"] = config.get("ssh", "server_host", fallback="")
+        result["ssh_port"] = config.getint("ssh", "port", fallback=22)
+
+    return result
 
 
 def api_request(config, endpoint, method="GET", data=None):
@@ -270,10 +278,12 @@ def download_ssh_key(config):
         # Store SSH config
         ssh_user = result.get("ssh_unix_user", "")
         server_host = result.get("server_host", "")
+        ssh_port = result.get("ssh_port", 22)
         if ssh_user:
             config["ssh_unix_user"] = ssh_user
             config["server_host"] = server_host
-            logger.info(f"SSH configured: {ssh_user}@{server_host}")
+            config["ssh_port"] = ssh_port
+            logger.info(f"SSH configured: {ssh_user}@{server_host}:{ssh_port}")
 
         return True
     except Exception as e:
@@ -1546,7 +1556,8 @@ def execute_task(config, task):
         # Check if any command arg looks like an SSH repo path
         for arg in command:
             if arg.startswith("ssh://"):
-                env["BORG_RSH"] = f"ssh -i {SSH_KEY_PATH} -o StrictHostKeyChecking=no -o BatchMode=yes"
+                ssh_port = config.get("ssh_port", 22)
+                env["BORG_RSH"] = f"ssh -i {SSH_KEY_PATH} -p {ssh_port} -o StrictHostKeyChecking=no -o BatchMode=yes"
                 break
 
     # Execute borg command

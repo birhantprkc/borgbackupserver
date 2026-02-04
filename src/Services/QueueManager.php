@@ -8,12 +8,25 @@ class QueueManager
 {
     private Database $db;
     private int $maxQueue;
+    private ?int $sshPort = null;
 
     public function __construct()
     {
         $this->db = Database::getInstance();
         $setting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'max_queue'");
         $this->maxQueue = (int) ($setting['value'] ?? 4);
+    }
+
+    /**
+     * Get the SSH port setting (for Docker multi-tenant deployments).
+     */
+    private function getSshPort(): int
+    {
+        if ($this->sshPort === null) {
+            $setting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'ssh_port'");
+            $this->sshPort = (int) ($setting['value'] ?? 22);
+        }
+        return $this->sshPort;
     }
 
     /**
@@ -140,7 +153,7 @@ class QueueManager
                 }
 
                 $cmd = BorgCommandBuilder::buildCreateCommand($plan, $repo, $archiveName);
-                $env = BorgCommandBuilder::buildEnv($repo);
+                $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPort());
 
                 $extra = [
                     'job_id' => $job['id'],
@@ -272,7 +285,7 @@ class QueueManager
                 }
 
                 $cmd = BorgCommandBuilder::buildCreateCommand($plan, $repo, $archiveName);
-                $env = BorgCommandBuilder::buildEnv($repo);
+                $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPort());
                 $extra = [
                     'job_id' => $job['id'],
                     'archive_name' => $archiveName,
@@ -355,7 +368,7 @@ class QueueManager
 
         $repo = ['path' => $archive['repo_path'], 'passphrase_encrypted' => $archive['passphrase_encrypted']];
         $cmd = BorgCommandBuilder::buildExtractCommand($repo, $archive['archive_name'], $paths);
-        $env = BorgCommandBuilder::buildEnv($repo);
+        $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPort());
 
         $extra = ['job_id' => $job['id']];
         if ($destination) {
@@ -421,7 +434,7 @@ class QueueManager
         $repo = ['path' => $archive['repo_path'], 'passphrase_encrypted' => $archive['passphrase_encrypted']];
         $extractPath = ltrim($dumpDir, '/');
         $cmd = BorgCommandBuilder::buildExtractCommand($repo, $archive['archive_name'], [$extractPath]);
-        $env = BorgCommandBuilder::buildEnv($repo);
+        $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPort());
 
         return [
             'task' => 'restore_mysql',
@@ -496,7 +509,7 @@ class QueueManager
         $repo = ['path' => $archive['repo_path'], 'passphrase_encrypted' => $archive['passphrase_encrypted']];
         $extractPath = ltrim($dumpDir, '/');
         $cmd = BorgCommandBuilder::buildExtractCommand($repo, $archive['archive_name'], [$extractPath]);
-        $env = BorgCommandBuilder::buildEnv($repo);
+        $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPort());
 
         return [
             'task' => 'restore_pg',

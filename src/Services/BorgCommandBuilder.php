@@ -153,8 +153,12 @@ class BorgCommandBuilder
      *
      * When $forAgent is true (default), includes BORG_RSH for SSH key-based access.
      * When false (server-side execution), omits BORG_RSH since we access repos locally.
+     *
+     * @param array $repo Repository data
+     * @param bool $forAgent Whether this is for agent-side execution
+     * @param int|null $sshPort SSH port to use (default 22, used for Docker multi-tenant)
      */
-    public static function buildEnv(array $repo, bool $forAgent = true): array
+    public static function buildEnv(array $repo, bool $forAgent = true, ?int $sshPort = null): array
     {
         $env = [
             // Agent runs on a different machine than where the repo was created
@@ -174,7 +178,8 @@ class BorgCommandBuilder
         if ($forAgent) {
             // For agent-side execution, set BORG_RSH to use the agent's SSH key
             if (self::isSshRepo($repo['path'] ?? '')) {
-                $env['BORG_RSH'] = 'ssh -i /etc/bbs-agent/ssh_key -o StrictHostKeyChecking=no -o BatchMode=yes';
+                $port = $sshPort ?? 22;
+                $env['BORG_RSH'] = "ssh -i /etc/bbs-agent/ssh_key -p {$port} -o StrictHostKeyChecking=no -o BatchMode=yes";
             }
         } else {
             // Server-side: www-data can't write to /var/www/.config, redirect borg's config/cache

@@ -524,14 +524,16 @@ class AgentApiController extends Controller
             $this->json(['error' => 'Failed to decrypt SSH key'], 500);
         }
 
-        // Return the server_host setting so the agent knows which host to SSH to
+        // Return server_host and ssh_port settings so the agent knows how to connect
         $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
+        $sshPort = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'ssh_port'");
 
         $this->json([
             'status' => 'ok',
             'ssh_private_key' => $privateKey,
             'ssh_unix_user' => $agent['ssh_unix_user'],
             'server_host' => $serverHost['value'] ?? '',
+            'ssh_port' => (int) ($sshPort['value'] ?? 22),
         ]);
     }
 
