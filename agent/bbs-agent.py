@@ -19,7 +19,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.8.7"
+AGENT_VERSION = "1.8.8"
 CONFIG_PATH = "/etc/bbs-agent/config.ini"
 LOG_PATH = "/var/log/bbs-agent.log"
 SSH_KEY_PATH = "/etc/bbs-agent/ssh_key"
@@ -434,6 +434,28 @@ def _install_borg_binary(download_url, binary_path, target_version):
         if os.path.exists(backup_path) and not os.path.exists(binary_path):
             os.rename(backup_path, binary_path)
         return "failed", "", f"Failed to install binary: {e}"
+
+    # Remove package manager borg to avoid having two versions
+    # /usr/local/bin takes precedence in PATH, but it's cleaner to have just one
+    pkg_borg = "/usr/bin/borg"
+    if os.path.exists(pkg_borg) and binary_path != pkg_borg:
+        try:
+            # Try to uninstall via package manager
+            if os.path.exists("/usr/bin/apt-get"):
+                subprocess.run(["apt-get", "remove", "-y", "borgbackup"],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+            elif os.path.exists("/usr/bin/dnf"):
+                subprocess.run(["dnf", "remove", "-y", "borgbackup"],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+            elif os.path.exists("/usr/bin/yum"):
+                subprocess.run(["yum", "remove", "-y", "borgbackup"],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+            elif os.path.exists("/usr/bin/pacman"):
+                subprocess.run(["pacman", "-R", "--noconfirm", "borg"],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+            logger.info(f"Removed package manager borg to avoid duplicate installations")
+        except Exception as e:
+            logger.warning(f"Could not remove package manager borg: {e}")
 
     output = f"Borg updated to v{target_version} via binary install at {binary_path}"
     logger.info(output)
