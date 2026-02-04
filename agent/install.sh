@@ -363,6 +363,11 @@ EOF
 # Print final summary
 # ═══════════════════════════════════════════════════════════════════════════════
 print_summary() {
+    # Re-check borg version (may have been updated by previous agent runs)
+    if command -v borg &>/dev/null; then
+        BORG_VERSION=$(borg --version 2>/dev/null | head -1)
+    fi
+
     echo ""
     echo -e "${BOLD}${GREEN}╔══════════════════════════════════════════════════════════════╗${NC}"
     echo -e "${BOLD}${GREEN}║${NC}                  ${BOLD}${GREEN}Installation Complete!${NC}                     ${BOLD}${GREEN}║${NC}"
