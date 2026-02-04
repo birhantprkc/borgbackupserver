@@ -13,13 +13,14 @@ import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.8.8"
+AGENT_VERSION = "1.8.9"
 CONFIG_PATH = "/etc/bbs-agent/config.ini"
 LOG_PATH = "/var/log/bbs-agent.log"
 SSH_KEY_PATH = "/etc/bbs-agent/ssh_key"
@@ -33,6 +34,7 @@ if os.environ.get("BBS_AGENT_LOG"):
 
 logger = logging.getLogger("bbs-agent")
 running = True
+task_running = False  # Set True while executing a task, enables heartbeat thread
 
 
 def setup_logging():
@@ -1774,8 +1776,33 @@ def signal_handler(signum, frame):
     running = False
 
 
+def heartbeat_thread(config):
+    """Background thread that sends heartbeats while tasks are running.
+
+    This prevents the agent from appearing offline during long-running
+    backup operations. The thread only sends heartbeats when task_running
+    is True, and exits when running becomes False.
+    """
+    global running, task_running
+    heartbeat_interval = max(config.get("poll_interval", 30), 10)
+
+    while running:
+        if task_running:
+            try:
+                # Send a lightweight heartbeat ping
+                api_request(config, "/api/agent/heartbeat", method="POST", data={})
+            except Exception as e:
+                logger.debug(f"Heartbeat failed: {e}")
+
+        # Sleep in small increments so we can exit promptly
+        for _ in range(heartbeat_interval):
+            if not running:
+                break
+            time.sleep(1)
+
+
 def main():
-    global running
+    global running, task_running
 
     setup_logging()
     logger.info(f"BBS Agent v{AGENT_VERSION} starting")
@@ -1797,6 +1824,10 @@ def main():
         f"Polling {config['server_url']} every {config['poll_interval']}s"
     )
 
+    # Start heartbeat thread for keeping alive during long tasks
+    hb_thread = threading.Thread(target=heartbeat_thread, args=(config,), daemon=True)
+    hb_thread.start()
+
     while running:
         try:
             # Poll for tasks
@@ -1810,12 +1841,16 @@ def main():
                 for task in result["tasks"]:
                     if not running:
                         break
-                    if task.get("task") == "update_borg":
-                        execute_update_borg(config, task)
-                    elif task.get("task") == "update_agent":
-                        execute_update_agent(config, task)
-                    else:
-                        execute_task(config, task)
+                    task_running = True
+                    try:
+                        if task.get("task") == "update_borg":
+                            execute_update_borg(config, task)
+                        elif task.get("task") == "update_agent":
+                            execute_update_agent(config, task)
+                        else:
+                            execute_task(config, task)
+                    finally:
+                        task_running = False
             elif result is None:
                 # Connection error — server might be down
                 logger.warning("Failed to poll server, will retry")
