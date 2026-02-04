@@ -639,7 +639,7 @@ class RepositoryController extends Controller
         ]);
 
         // Create local directory via SSH helper
-        $localPath = BorgCommandBuilder::getLocalRepoPath(['path' => $path, 'agent_id' => $id]);
+        $localPath = BorgCommandBuilder::getLocalRepoPath(['path' => $path, 'agent_id' => $id, 'name' => $repoName]);
         $helperCmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'create-repo-dir', $localPath];
         exec(implode(' ', array_map('escapeshellarg', $helperCmd)) . ' 2>&1', $helperOutput, $helperRet);
         if ($helperRet !== 0) {
