@@ -157,7 +157,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
     </div>
 </div>
 <?php elseif ($job['status'] === 'completed' && $isServerSide): ?>
-<div class="card border-0 shadow-sm mb-4" style="background-color: #d4edda;">
+<div class="card border-0 shadow-sm mb-4 bg-success-subtle">
     <div class="card-body py-3">
         <div class="fw-semibold text-success mb-1"><i class="bi bi-hdd me-1"></i> <?= ucfirst($job['task_type']) ?> Completed</div>
         <div class="progress mb-1" style="height: 22px;">
@@ -169,7 +169,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
     </div>
 </div>
 <?php elseif ($job['status'] === 'completed' && ($job['files_total'] ?? 0) > 0): ?>
-<div class="card border-0 shadow-sm mb-4" style="background-color: #d4edda;">
+<div class="card border-0 shadow-sm mb-4 bg-success-subtle">
     <div class="card-body py-3">
         <div class="fw-semibold text-success mb-1">Completed</div>
         <div class="progress mb-1" style="height: 22px;">
@@ -181,7 +181,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
     </div>
 </div>
 <?php elseif ($job['status'] === 'failed'): ?>
-<div class="card border-0 shadow-sm mb-4" style="background-color: #f8d7da;">
+<div class="card border-0 shadow-sm mb-4 bg-danger-subtle">
     <div class="card-body py-3">
         <div class="fw-semibold text-danger mb-1">Failed</div>
         <div class="progress mb-1" style="height: 22px;">
@@ -421,18 +421,18 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
 
         if (job.status === 'completed') {
             if (isServerSide) {
-                container.innerHTML = '<div class="card border-0 shadow-sm mb-4" style="background-color:#d4edda;"><div class="card-body py-3">' +
+                container.innerHTML = '<div class="card border-0 shadow-sm mb-4 bg-success-subtle"><div class="card-body py-3">' +
                     '<div class="fw-semibold text-success mb-1"><i class="bi bi-hdd me-1"></i> ' + esc(job.task_type[0].toUpperCase()+job.task_type.slice(1)) + ' Completed</div>' +
                     '<div class="progress mb-1" style="height:22px"><div class="progress-bar bg-success" style="width:100%">Server-side ' + esc(job.task_type) + ' finished</div></div>' +
                     '<div class="text-muted small">Duration: ' + fmtDur(job.duration_seconds) + ' &middot; See activity log below for details</div></div></div>';
             } else {
-                container.innerHTML = '<div class="card border-0 shadow-sm mb-4" style="background-color:#d4edda;"><div class="card-body py-3">' +
+                container.innerHTML = '<div class="card border-0 shadow-sm mb-4 bg-success-subtle"><div class="card-body py-3">' +
                     '<div class="fw-semibold text-success mb-1">Completed</div>' +
                     '<div class="progress mb-1" style="height:22px"><div class="progress-bar bg-success" style="width:100%">' + (job.files_total ? Number(job.files_total).toLocaleString() + ' files processed' : 'Done') + '</div></div>' +
                     '<div class="text-muted small">' + fmtBytes(job.bytes_total) + ' total &middot; ' + fmtDur(job.duration_seconds) + '</div></div></div>';
             }
         } else if (job.status === 'failed') {
-            container.innerHTML = '<div class="card border-0 shadow-sm mb-4" style="background-color:#f8d7da;"><div class="card-body py-3">' +
+            container.innerHTML = '<div class="card border-0 shadow-sm mb-4 bg-danger-subtle"><div class="card-body py-3">' +
                 '<div class="fw-semibold text-danger mb-1">Failed</div>' +
                 '<div class="progress mb-1" style="height:22px"><div class="progress-bar bg-danger" style="width:100%">Failed</div></div>' +
                 (job.error_log ? '<div class="text-danger small mt-1"><i class="bi bi-exclamation-triangle me-1"></i>' + esc(job.error_log.substring(0,200)) + '</div>' : '') +
