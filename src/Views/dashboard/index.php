@@ -75,7 +75,7 @@
 <div class="row g-4 mb-4">
     <div class="<?= $isAdmin ? 'col-lg-4' : 'col-12' ?>">
         <div class="card border-0 card-no-outline shadow-sm h-100">
-            <div class="card-header bg-white fw-semibold">
+            <div class="card-header bg-body fw-semibold">
                 <i class="bi bi-bar-chart me-1"></i> Jobs (24h)
             </div>
             <div class="card-body py-2">
@@ -86,7 +86,7 @@
     <?php if ($isAdmin): ?>
     <div class="col-lg-3">
         <div class="card border-0 card-no-outline shadow-sm h-100">
-            <div class="card-header bg-white fw-semibold">
+            <div class="card-header bg-body fw-semibold">
                 <i class="bi bi-cpu me-1"></i> Server Stats
             </div>
             <div class="card-body">
@@ -131,7 +131,7 @@
     </div>
     <div class="col-lg-5">
         <div class="card border-0 card-no-outline shadow-sm h-100">
-            <div class="card-header bg-white fw-semibold">
+            <div class="card-header bg-body fw-semibold">
                 <i class="bi bi-hdd-stack me-1"></i> Server Partitions
             </div>
             <div class="card-body p-0">
@@ -193,7 +193,7 @@
     ?>
     <div class="col-lg-4">
         <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <div class="card-header bg-body d-flex justify-content-between align-items-center">
                 <span class="fw-semibold"><i class="bi bi-device-hdd me-1"></i> Storage Pool</span>
                 <span class="text-muted" style="font-size:.7rem;"><?= htmlspecialchars($storage['path']) ?></span>
             </div>
@@ -382,7 +382,7 @@
     <!-- Active Jobs -->
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white fw-semibold">
+            <div class="card-header bg-body fw-semibold">
                 <i class="bi bi-play-circle me-1"></i> Active &amp; Queued Jobs
             </div>
             <div class="card-body p-0 dash-table" id="active-jobs">
@@ -454,7 +454,7 @@
 
         <!-- Upcoming Backups -->
         <div class="card border-0 shadow-sm mt-4">
-            <div class="card-header bg-white fw-semibold">
+            <div class="card-header bg-body fw-semibold">
                 <i class="bi bi-calendar-event me-1"></i> Upcoming Backups
             </div>
             <div class="card-body p-0 dash-table" id="upcoming-backups">
@@ -518,7 +518,7 @@
     <!-- Recently Completed -->
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white fw-semibold">
+            <div class="card-header bg-body fw-semibold">
                 <i class="bi bi-check-circle me-1"></i> Recently Completed
             </div>
             <div class="card-body p-0 dash-table" id="recent-jobs">

@@ -21,14 +21,14 @@
         </a>
     </li>
 </ul>
-<div class="client-tab-content border rounded-bottom bg-white p-4 mb-4 shadow-sm">
+<div class="client-tab-content border rounded-bottom bg-body p-4 mb-4 shadow-sm">
 
 <?php if ($tab === 'account'): ?>
 <!-- Account Tab -->
 <div class="row justify-content-center">
     <div class="col-lg-8">
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white fw-semibold">
+            <div class="card-header bg-body fw-semibold">
                 <i class="bi bi-person me-1"></i> Account Information
             </div>
             <div class="card-body">
@@ -97,7 +97,7 @@
 <div class="row justify-content-center">
     <div class="col-lg-8">
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white fw-semibold">
+            <div class="card-header bg-body fw-semibold">
                 <i class="bi bi-key me-1"></i> Change Password
             </div>
             <div class="card-body">
@@ -136,7 +136,7 @@
     <?php if (!$twoFactorEnabled): ?>
         <!-- 2FA Disabled -->
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white fw-semibold">
+            <div class="card-header bg-body fw-semibold">
                 <i class="bi bi-shield-x me-1"></i> Two-Factor Authentication
             </div>
             <div class="card-body">
@@ -159,7 +159,7 @@
     <?php else: ?>
         <!-- 2FA Enabled -->
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white fw-semibold">
+            <div class="card-header bg-body fw-semibold">
                 <i class="bi bi-shield-check me-1 text-success"></i> Two-Factor Authentication
             </div>
             <div class="card-body">
@@ -219,7 +219,7 @@
     $qrSvg = $twoFactorSvc->generateQrCode($user['username'], $setupSecret);
     ?>
     <div class="card border-0 shadow-sm">
-        <div class="card-header bg-white fw-semibold">
+        <div class="card-header bg-body fw-semibold">
             <i class="bi bi-qr-code me-1"></i> Set Up Two-Factor Authentication
         </div>
         <div class="card-body">

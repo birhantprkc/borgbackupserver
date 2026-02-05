@@ -319,7 +319,7 @@ a .stat-card {
 }
 
 /* Login page */
-body.bg-light {
+body.bg-body-secondary {
     background-color: #ecf0f1 !important;
 }
 
@@ -345,13 +345,13 @@ body.bg-light {
 }
 
 .client-tabs .nav-link {
-    color: #495057;
-    background-color: #e9ecef;
+    color: var(--bs-secondary-color);
+    background-color: var(--bs-tertiary-bg);
     border-radius: 6px 6px 0 0 !important;
     padding: 8px 16px;
     font-weight: 500;
     font-size: 0.9rem;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--bs-border-color);
     border-bottom: none;
     margin-bottom: -1px;
     white-space: nowrap;
@@ -359,15 +359,15 @@ body.bg-light {
 }
 
 .client-tabs .nav-link:hover {
-    background-color: #dee2e6;
-    color: #212529;
+    background-color: var(--bs-secondary-bg);
+    color: var(--bs-body-color);
 }
 
 .client-tabs .nav-link.active {
-    background-color: #fff;
-    color: #2c3e50;
-    border-color: #dee2e6;
-    border-bottom-color: #fff;
+    background-color: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    border-color: var(--bs-border-color);
+    border-bottom-color: var(--bs-body-bg);
     position: relative;
     z-index: 1;
 }
@@ -378,7 +378,7 @@ body.bg-light {
 
 .client-tabs .nav-link.text-danger.active {
     color: #dc3545 !important;
-    background-color: #fff;
+    background-color: var(--bs-body-bg);
 }
 
 .client-tab-content {
@@ -751,14 +751,6 @@ body.bg-light {
 }
 
 /* Dark mode overrides */
-[data-bs-theme="dark"] .topbar .navbar-brand {
-    background-color: #1a1a2e;
-}
-
-[data-bs-theme="dark"] body.bg-light {
-    background-color: #1a1a2e !important;
-}
-
 [data-bs-theme="dark"] .card {
     border: 1px solid rgba(255, 255, 255, 0.1) !important;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2), 0 0 12px rgba(0, 0, 0, 0.1);
@@ -766,24 +758,6 @@ body.bg-light {
 
 [data-bs-theme="dark"] .card-header {
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-[data-bs-theme="dark"] .client-tabs .nav-link {
-    color: #adb5bd;
-    background-color: #2b3035;
-    border-color: #495057;
-}
-
-[data-bs-theme="dark"] .client-tabs .nav-link:hover {
-    background-color: #343a40;
-    color: #e9ecef;
-}
-
-[data-bs-theme="dark"] .client-tabs .nav-link.active {
-    background-color: var(--bs-body-bg);
-    color: #e9ecef;
-    border-color: #495057;
-    border-bottom-color: var(--bs-body-bg);
 }
 
 [data-bs-theme="dark"] .tree-item:nth-child(even) {
@@ -817,8 +791,4 @@ body.bg-light {
 
 [data-bs-theme="dark"] .table th {
     color: #9ca3af;
-}
-
-[data-bs-theme="dark"] .bg-white {
-    background-color: var(--bs-body-bg) !important;
 }

@@ -201,7 +201,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
 <div class="row g-4 mb-4">
     <div class="col-lg-7">
         <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-white fw-semibold">
+            <div class="card-header bg-body fw-semibold">
                 <i class="bi bi-info-circle me-1"></i> Job Details
             </div>
             <div class="card-body p-0">
@@ -269,7 +269,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
 
     <div class="col-lg-5">
         <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-white fw-semibold">
+            <div class="card-header bg-body fw-semibold">
                 <i class="bi bi-bar-chart me-1"></i> Stats
             </div>
             <div class="card-body p-0">
@@ -313,7 +313,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
 <!-- Error Log (if failed) -->
 <?php if ($job['status'] === 'failed' && $job['error_log']): ?>
 <div id="error-section" class="card border-0 shadow-sm mb-4 border-danger">
-    <div class="card-header bg-white fw-semibold text-danger">
+    <div class="card-header bg-body fw-semibold text-danger">
         <i class="bi bi-exclamation-triangle me-1"></i> Error Log
     </div>
     <div class="card-body">
@@ -326,7 +326,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
 <div id="log-section" <?= empty($logs) ? 'style="display:none"' : '' ?>>
 <?php if (!empty($logs)): ?>
 <div class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-white fw-semibold">
+    <div class="card-header bg-body fw-semibold">
         <i class="bi bi-journal-text me-1"></i> Activity Log
     </div>
     <div class="card-body p-0">
@@ -532,7 +532,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
                         const logEl = document.getElementById('log-section');
                         if (logEl) logEl.parentNode.insertBefore(errSection, logEl);
                     }
-                    errSection.innerHTML = '<div class="card border-0 shadow-sm mb-4 border-danger"><div class="card-header bg-white fw-semibold text-danger"><i class="bi bi-exclamation-triangle me-1"></i> Error Log</div><div class="card-body"><pre class="mb-0 small text-danger" style="white-space:pre-wrap;">' + esc(job.error_log) + '</pre></div></div>';
+                    errSection.innerHTML = '<div class="card border-0 shadow-sm mb-4 border-danger"><div class="card-header bg-body fw-semibold text-danger"><i class="bi bi-exclamation-triangle me-1"></i> Error Log</div><div class="card-body"><pre class="mb-0 small text-danger" style="white-space:pre-wrap;">' + esc(job.error_log) + '</pre></div></div>';
                 }
 
                 // Decide whether to keep polling

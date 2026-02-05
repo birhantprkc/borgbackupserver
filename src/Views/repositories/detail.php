@@ -86,7 +86,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
     <!-- Maintenance Actions -->
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-white fw-semibold">
+            <div class="card-header bg-body fw-semibold">
                 <i class="bi bi-tools me-1"></i> Maintenance
             </div>
             <div class="card-body">
@@ -171,7 +171,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
     <div class="col-lg-6">
         <?php if ($s3SyncInfo): ?>
         <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+            <div class="card-header bg-body fw-semibold d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-cloud text-info me-1"></i> S3 Offsite Mirror</span>
                 <form method="POST" action="/clients/<?= $agentId ?>/repo/<?= $repo['id'] ?>/s3-config/delete" class="d-inline" data-confirm="Disable S3 sync?&#10;&#10;The repository will no longer sync to S3 after backups. Data already in S3 will remain.">
                     <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
@@ -228,7 +228,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
         </div>
         <?php elseif (!empty($s3PluginConfigs)): ?>
         <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-white fw-semibold">
+            <div class="card-header bg-body fw-semibold">
                 <i class="bi bi-cloud text-muted me-1"></i> S3 Offsite Mirror
             </div>
             <div class="card-body">
@@ -257,7 +257,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
 
         <!-- Repository Info -->
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white fw-semibold">
+            <div class="card-header bg-body fw-semibold">
                 <i class="bi bi-info-circle me-1"></i> Repository Info
             </div>
             <div class="card-body">
@@ -291,7 +291,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
 <!-- Recent Jobs -->
 <?php if (!empty($recentJobs)): ?>
 <div class="card border-0 shadow-sm mt-4">
-    <div class="card-header bg-white fw-semibold">
+    <div class="card-header bg-body fw-semibold">
         <i class="bi bi-clock-history me-1"></i> Recent Jobs
     </div>
     <div class="card-body p-0">
@@ -343,7 +343,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
 <!-- Delete Repository -->
 <?php if ($this->isAdmin()): ?>
 <div class="card border-0 shadow-sm mt-4 border-danger">
-    <div class="card-header bg-white fw-semibold text-danger">
+    <div class="card-header bg-body fw-semibold text-danger">
         <i class="bi bi-exclamation-triangle me-1"></i> Danger Zone
     </div>
     <div class="card-body">

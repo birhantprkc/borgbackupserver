@@ -73,7 +73,7 @@
 <div class="row g-3 mb-4">
     <div class="col-md-6">
         <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-white fw-semibold border-0">
+            <div class="card-header bg-body fw-semibold border-0">
                 <i class="bi bi-bar-chart me-1"></i> Backup Activity (7 days)
             </div>
             <div class="card-body py-2">
@@ -83,7 +83,7 @@
     </div>
     <div class="col-md-6">
         <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-white fw-semibold border-0">
+            <div class="card-header bg-body fw-semibold border-0">
                 <i class="bi bi-pie-chart me-1"></i> Storage by Client
             </div>
             <div class="card-body py-2 d-flex align-items-center justify-content-center">
@@ -103,7 +103,7 @@
         <div class="d-flex justify-content-between align-items-center px-3 pt-3 pb-2">
             <?php if (!empty($agents)): ?>
             <div class="input-group input-group-sm" style="max-width: 280px;">
-                <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                <span class="input-group-text bg-body border-end-0"><i class="bi bi-search text-muted"></i></span>
                 <input type="text" id="clientSearch" class="form-control border-start-0 ps-0" placeholder="Search clients...">
             </div>
             <?php else: ?>
