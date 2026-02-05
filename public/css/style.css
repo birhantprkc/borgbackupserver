@@ -1,6 +1,13 @@
-/* Font */
+/* Font & nav color variables */
 :root {
     --bs-body-font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    --bbs-nav-bg: #2c3e50;
+    --bbs-nav-color: rgba(255, 255, 255, 0.7);
+    --bbs-nav-hover-bg: rgba(255, 255, 255, 0.1);
+    --bbs-nav-hover-color: #fff;
+    --bbs-nav-active-bg: #e67e22;
+    --bbs-nav-active-color: #fff;
+    --bbs-topbar-bg: #2c3e50;
 }
 
 /* Muted Bootstrap color overrides — buttons and badges only */
@@ -143,7 +150,7 @@ html, body {
 .sidebar {
     width: 90px;
     height: calc(100vh - 56px);
-    background-color: #2c3e50;
+    background-color: var(--bbs-nav-bg);
     position: fixed;
     top: 56px;
     left: 0;
@@ -152,7 +159,7 @@ html, body {
 }
 
 .sidebar-link {
-    color: rgba(255, 255, 255, 0.7) !important;
+    color: var(--bbs-nav-color) !important;
     padding: 10px 8px 6px !important;
     margin-bottom: 12px;
     border-radius: 0 !important;
@@ -165,19 +172,19 @@ html, body {
 }
 
 .sidebar-link:hover {
-    color: #fff !important;
-    background-color: rgba(255, 255, 255, 0.1) !important;
+    color: var(--bbs-nav-hover-color) !important;
+    background-color: var(--bbs-nav-hover-bg) !important;
 }
 
 .sidebar-link.active {
-    color: #fff !important;
-    background-color: #e67e22 !important;
+    color: var(--bbs-nav-active-color) !important;
+    background-color: var(--bbs-nav-active-bg) !important;
 }
 
 /* Topbar */
 .topbar {
     height: 56px;
-    background-color: #2c3e50;
+    background-color: var(--bbs-topbar-bg);
     position: fixed;
     top: 0;
     left: 0;
@@ -220,7 +227,7 @@ html, body {
     bottom: 0;
     left: 0;
     right: 0;
-    background-color: #2c3e50;
+    background-color: var(--bbs-nav-bg);
     display: flex;
     justify-content: space-around;
     align-items: center;
@@ -235,7 +242,7 @@ html, body {
     flex-direction: column;
     align-items: center;
     text-decoration: none;
-    color: rgba(255,255,255,0.6);
+    color: var(--bbs-nav-color);
     padding: 4px 8px;
     font-size: 0.65rem;
     line-height: 1;
@@ -250,11 +257,11 @@ html, body {
 }
 
 .mobile-nav-item.active {
-    color: #e67e22;
+    color: var(--bbs-nav-active-bg);
 }
 
 .mobile-nav-item:hover {
-    color: #fff;
+    color: var(--bbs-nav-hover-color);
 }
 
 /* Offset main content for fixed sidebar on desktop */
@@ -758,10 +765,16 @@ body.bg-body-secondary {
 /* Dark mode — low-contrast palette */
 [data-bs-theme="dark"] {
     --bs-body-bg: #1a1d21;
-    --bs-body-color: #d1d5db;
+    --bs-body-color: #dee2e6;
+    --bs-secondary-color: #adb5bd;
     --bs-secondary-bg: #23272b;
     --bs-tertiary-bg: #23272b;
-    --bs-border-color: rgba(255, 255, 255, 0.06);
+    --bs-border-color: rgba(255, 255, 255, 0.08);
+    --bbs-nav-bg: #16191d;
+    --bbs-nav-color: rgba(255, 255, 255, 0.5);
+    --bbs-nav-hover-bg: rgba(255, 255, 255, 0.06);
+    --bbs-nav-hover-color: rgba(255, 255, 255, 0.9);
+    --bbs-topbar-bg: #111315;
 }
 
 [data-bs-theme="dark"] .card {
@@ -776,7 +789,7 @@ body.bg-body-secondary {
 }
 
 [data-bs-theme="dark"] .table th {
-    color: #8b919a;
+    color: #adb5bd;
 }
 
 [data-bs-theme="dark"] .table-light {
@@ -817,3 +830,31 @@ body.bg-body-secondary {
 [data-bs-theme="dark"] .stat-card:hover {
     box-shadow: 0 .25rem .75rem rgba(0, 0, 0, .3) !important;
 }
+
+/* Dashboard: SVG gauge styles */
+.gauge-track { stroke: #e9ecef; }
+.gauge-pct { fill: #212529; }
+.gauge-detail { fill: #6c757d; }
+
+[data-bs-theme="dark"] .gauge-track { stroke: #343a40; }
+[data-bs-theme="dark"] .gauge-pct { fill: #f8f9fa; }
+[data-bs-theme="dark"] .gauge-detail { fill: #adb5bd; }
+
+/* Dashboard: Storage pool donut */
+.donut-track { stroke: #e9ecef; }
+.donut-free-dot { background: #e9ecef; }
+
+[data-bs-theme="dark"] .donut-track { stroke: #343a40; }
+[data-bs-theme="dark"] .donut-free-dot { background: #343a40; }
+
+/* Dashboard: MySQL partition bar */
+.mysql-partition-bar { background: #e9ecef; }
+.mysql-bar-db { background: #0d6efd; color: #fff; }
+.mysql-bar-other { background: #6c757d; color: #fff; }
+.mysql-bar-free { background: #e9ecef; color: #6c757d; }
+
+[data-bs-theme="dark"] .mysql-partition-bar { background: #343a40; }
+[data-bs-theme="dark"] .mysql-bar-free { background: #343a40; color: #adb5bd; }
+
+/* Dashboard: Progress bar track (partitions) */
+[data-bs-theme="dark"] .progress { --bs-progress-bg: #343a40; }

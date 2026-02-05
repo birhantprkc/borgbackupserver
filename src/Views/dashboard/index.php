@@ -9,7 +9,7 @@
                     </div>
                     <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
                         <div>
-                            <div class="fw-semibold small text-dark">Clients</div>
+                            <div class="fw-semibold small">Clients</div>
                             <div class="text-muted" style="font-size:.7rem;"><span id="stat-online"><?= $onlineCount ?></span> online</div>
                         </div>
                         <div class="fs-2 fw-bold" style="color:#4a90d9;" id="stat-agents"><?= $agentCount ?></div>
@@ -27,7 +27,7 @@
                     </div>
                     <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
                         <div>
-                            <div class="fw-semibold small text-dark">Backups Running</div>
+                            <div class="fw-semibold small">Backups Running</div>
                         </div>
                         <div class="fs-2 fw-bold" style="color:#48bb78;" id="stat-running"><?= $runningJobs ?></div>
                     </div>
@@ -44,7 +44,7 @@
                     </div>
                     <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
                         <div>
-                            <div class="fw-semibold small text-dark">Queue Waiting</div>
+                            <div class="fw-semibold small">Queue Waiting</div>
                         </div>
                         <div class="fs-2 fw-bold" style="color:#e67e22;" id="stat-queued"><?= $queuedJobs ?></div>
                     </div>
@@ -61,7 +61,7 @@
                     </div>
                     <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
                         <div>
-                            <div class="fw-semibold small text-dark">Errors (24h)</div>
+                            <div class="fw-semibold small">Errors (24h)</div>
                         </div>
                         <div class="fs-2 fw-bold" style="color:#c0392b;" id="stat-errors"><?= $errorCount ?></div>
                     </div>
@@ -101,27 +101,27 @@
                 <div class="d-flex justify-content-around">
                     <div class="text-center" style="width:120px;">
                         <svg viewBox="0 0 120 95" style="width:100%;height:auto;">
-                            <circle cx="60" cy="55" r="45" fill="none" stroke="#e9ecef" stroke-width="8"
+                            <circle cx="60" cy="55" r="45" fill="none" class="gauge-track" stroke-width="8"
                                 stroke-dasharray="<?= $arcLen ?> <?= $circum ?>" stroke-linecap="round"
                                 transform="rotate(135 60 55)"/>
                             <circle cx="60" cy="55" r="45" fill="none" stroke="<?= $cpuColor ?>" stroke-width="8"
                                 id="cpu-arc" stroke-dasharray="<?= $cpuDash ?> <?= $circum ?>" stroke-linecap="round"
                                 transform="rotate(135 60 55)" style="transition: stroke-dasharray .5s ease, stroke .5s ease;"/>
-                            <text x="60" y="48" text-anchor="middle" font-size="18" font-weight="bold" fill="#333" id="cpu-pct"><?= $cpuLoad['percent'] ?>%</text>
-                            <text x="60" y="62" text-anchor="middle" font-size="8" fill="#888" id="cpu-detail"><?= $cpuLoad['1min'] ?> / <?= $cpuLoad['cores'] ?> cores</text>
+                            <text x="60" y="48" text-anchor="middle" font-size="18" font-weight="bold" class="gauge-pct" id="cpu-pct"><?= $cpuLoad['percent'] ?>%</text>
+                            <text x="60" y="62" text-anchor="middle" font-size="8" class="gauge-detail" id="cpu-detail"><?= $cpuLoad['1min'] ?> / <?= $cpuLoad['cores'] ?> cores</text>
                         </svg>
                         <div class="text-muted" style="font-size:.75rem;margin-top:-8px;">CPU</div>
                     </div>
                     <div class="text-center" style="width:120px;">
                         <svg viewBox="0 0 120 95" style="width:100%;height:auto;">
-                            <circle cx="60" cy="55" r="45" fill="none" stroke="#e9ecef" stroke-width="8"
+                            <circle cx="60" cy="55" r="45" fill="none" class="gauge-track" stroke-width="8"
                                 stroke-dasharray="<?= $arcLen ?> <?= $circum ?>" stroke-linecap="round"
                                 transform="rotate(135 60 55)"/>
                             <circle cx="60" cy="55" r="45" fill="none" stroke="<?= $memColor ?>" stroke-width="8"
                                 id="mem-arc" stroke-dasharray="<?= $memDash ?> <?= $circum ?>" stroke-linecap="round"
                                 transform="rotate(135 60 55)" style="transition: stroke-dasharray .5s ease, stroke .5s ease;"/>
-                            <text x="60" y="48" text-anchor="middle" font-size="18" font-weight="bold" fill="#333" id="mem-pct"><?= $memory['percent'] ?>%</text>
-                            <text x="60" y="62" text-anchor="middle" font-size="8" fill="#888" id="mem-detail"><?= \BBS\Services\ServerStats::formatBytes($memory['used']) ?> / <?= \BBS\Services\ServerStats::formatBytes($memory['total']) ?></text>
+                            <text x="60" y="48" text-anchor="middle" font-size="18" font-weight="bold" class="gauge-pct" id="mem-pct"><?= $memory['percent'] ?>%</text>
+                            <text x="60" y="62" text-anchor="middle" font-size="8" class="gauge-detail" id="mem-detail"><?= \BBS\Services\ServerStats::formatBytes($memory['used']) ?> / <?= \BBS\Services\ServerStats::formatBytes($memory['total']) ?></text>
                         </svg>
                         <div class="text-muted" style="font-size:.75rem;margin-top:-8px;">Memory</div>
                     </div>
@@ -150,9 +150,9 @@
                             <tr>
                                 <td><i class="bi bi-device-hdd text-muted me-1"></i> <?= htmlspecialchars($part['mount']) ?></td>
                                 <td>
-                                    <div class="progress" style="height: 18px; background-color: #e9ecef;">
+                                    <div class="progress" style="height: 18px;">
                                         <div class="progress-bar progress-bar-striped <?= $part['percent'] > 90 ? 'bg-danger' : ($part['percent'] > 70 ? 'bg-warning' : '') ?>"
-                                             style="width: <?= $part['percent'] ?>%; background-color: <?= $part['percent'] <= 70 ? '#8faabe' : '' ?>;">
+                                             style="width: <?= $part['percent'] ?>%; <?= $part['percent'] <= 70 ? 'background-color:#8faabe;' : '' ?>">
                                         </div>
                                     </div>
                                 </td>
@@ -205,14 +205,14 @@
                             <div class="fw-semibold text-success" style="font-size:.6rem;">Repositories</div>
                             <div class="d-flex align-items-center">
                                 <i class="bi bi-archive text-muted me-1" style="font-size:.75rem;"></i>
-                                <span class="fw-bold" style="font-size:1rem;line-height:1;color:#333;"><?= $storage['repo_count'] ?></span>
+                                <span class="fw-bold" style="font-size:1rem;line-height:1;"><?= $storage['repo_count'] ?></span>
                             </div>
                         </div>
                         <div>
                             <div class="fw-semibold text-success" style="font-size:.6rem;">Recovery Points</div>
                             <div class="d-flex align-items-center">
                                 <i class="bi bi-clock-history text-muted me-1" style="font-size:.75rem;"></i>
-                                <span class="fw-bold" style="font-size:1rem;line-height:1;color:#333;"><?= number_format($storage['total_archives'] ?? 0) ?></span>
+                                <span class="fw-bold" style="font-size:1rem;line-height:1;"><?= number_format($storage['total_archives'] ?? 0) ?></span>
                             </div>
                         </div>
                     </div>
@@ -222,13 +222,13 @@
                             <div class="fw-semibold text-success" style="font-size:.6rem;">Protected Data</div>
                             <div class="d-flex align-items-center">
                                 <i class="bi bi-shield-check text-muted me-1" style="font-size:.75rem;"></i>
-                                <span class="fw-bold" style="font-size:1rem;line-height:1;color:#333;"><?= \BBS\Services\ServerStats::formatBytes($totalOrig) ?></span>
+                                <span class="fw-bold" style="font-size:1rem;line-height:1;"><?= \BBS\Services\ServerStats::formatBytes($totalOrig) ?></span>
                             </div>
                         </div>
                         <div>
                             <div class="fw-semibold text-success" style="font-size:.6rem;">Dedup Savings</div>
                             <div class="d-flex align-items-center">
-                                <span class="fw-bold" style="font-size:1rem;line-height:1;color:#333;"><?= $dedupSavings ?>%</span>
+                                <span class="fw-bold" style="font-size:1rem;line-height:1;"><?= $dedupSavings ?>%</span>
                                 <?php if ($dedupRatio >= 1): ?>
                                 <span class="text-muted ms-1" style="font-size:.55rem;">(<?= $dedupRatio == (int)$dedupRatio ? (int)$dedupRatio : $dedupRatio ?>:1)</span>
                                 <?php endif; ?>
@@ -239,7 +239,7 @@
                     <div class="d-flex align-items-center">
                         <div style="width:80px;flex-shrink:0;margin-top:-20px;">
                             <svg viewBox="0 0 120 120" style="width:100%;height:auto;transform:rotate(-90deg);">
-                                <circle cx="60" cy="60" r="<?= $r ?>" fill="none" stroke="#e9ecef" stroke-width="14"/>
+                                <circle cx="60" cy="60" r="<?= $r ?>" fill="none" class="donut-track" stroke-width="14"/>
                                 <?php if ($stRepoPct > 0): ?>
                                 <circle cx="60" cy="60" r="<?= $r ?>" fill="none" stroke="#48bb78" stroke-width="14"
                                     stroke-dasharray="<?= round($seg1, 2) ?> <?= round($c - $seg1, 2) ?>"
@@ -252,7 +252,7 @@
                                 <?php endif; ?>
                             </svg>
                             <div class="text-center" style="margin-top:-55px;position:relative;line-height:1.2;">
-                                <div class="fw-bold" style="font-size:.8rem;color:#333;"><?= $stUsedPct ?>%</div>
+                                <div class="fw-bold" style="font-size:.8rem;"><?= $stUsedPct ?>%</div>
                                 <div class="text-muted" style="font-size:.5rem;">used</div>
                             </div>
                         </div>
@@ -261,7 +261,7 @@
                             <?php if ($stOtherPct > 0): ?>
                             <div><span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:#6c757d;margin-right:3px;"></span>Other <?= \BBS\Services\ServerStats::formatBytes($stUsed - $storage['total_repo_bytes']) ?></div>
                             <?php endif; ?>
-                            <div><span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:#e9ecef;margin-right:3px;"></span>Free <?= \BBS\Services\ServerStats::formatBytes($storage['disk_free']) ?></div>
+                            <div><span class="donut-free-dot" style="display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:3px;"></span>Free <?= \BBS\Services\ServerStats::formatBytes($storage['disk_free']) ?></div>
                             <div class="text-muted">Total: <?= \BBS\Services\ServerStats::formatBytes($storage['disk_total']) ?></div>
                         </div>
                     </div>
@@ -287,25 +287,25 @@
                             $usedPct = round($ms['disk_used'] / $ms['disk_total'] * 100, 1);
                             $freePct = round($ms['disk_free'] / $ms['disk_total'] * 100, 1);
                         ?>
-                        <div class="rounded overflow-hidden d-flex" id="mysql-bar" style="height:22px;background:#e9ecef;font-size:.65rem;">
-                            <div style="width:<?= $dbPct ?>%;background:#0d6efd;color:#fff;overflow:hidden;white-space:nowrap;padding:0 4px;line-height:22px;"
+                        <div class="rounded overflow-hidden d-flex mysql-partition-bar" id="mysql-bar" style="height:22px;font-size:.65rem;">
+                            <div class="mysql-bar-db" style="width:<?= $dbPct ?>%;overflow:hidden;white-space:nowrap;padding:0 4px;line-height:22px;"
                                  title="MySQL Data: <?= \BBS\Services\ServerStats::formatBytes($ms['db_bytes']) ?>">
                                 DB <?= \BBS\Services\ServerStats::formatBytes($ms['db_bytes']) ?>
                             </div>
-                            <div style="width:<?= max($usedPct - $dbPct, 0) ?>%;background:#6c757d;color:#fff;overflow:hidden;white-space:nowrap;padding:0 4px;line-height:22px;"
+                            <div class="mysql-bar-other" style="width:<?= max($usedPct - $dbPct, 0) ?>%;overflow:hidden;white-space:nowrap;padding:0 4px;line-height:22px;"
                                  title="Other used: <?= \BBS\Services\ServerStats::formatBytes($ms['disk_used'] - $ms['db_bytes']) ?>">
                                 Other
                             </div>
-                            <div style="width:<?= $freePct ?>%;background:#e9ecef;color:#666;overflow:hidden;white-space:nowrap;padding:0 4px;line-height:22px;"
+                            <div class="mysql-bar-free" style="width:<?= $freePct ?>%;overflow:hidden;white-space:nowrap;padding:0 4px;line-height:22px;"
                                  title="Free: <?= \BBS\Services\ServerStats::formatBytes($ms['disk_free']) ?>">
                                 <?= \BBS\Services\ServerStats::formatBytes($ms['disk_free']) ?> free
                             </div>
                         </div>
-                        <div class="d-flex justify-content-between mt-1" style="font-size:.6rem;color:#999;">
+                        <div class="d-flex justify-content-between mt-1 text-muted" style="font-size:.6rem;">
                             <span>Total: <?= \BBS\Services\ServerStats::formatBytes($ms['disk_total']) ?></span>
                             <span id="mysql-free-text"><?= $freePct ?>% free</span>
                         </div>
-                        <div class="mt-2" style="font-size:.65rem;color:#888;line-height:1.4;">
+                        <div class="mt-2 text-muted" style="font-size:.65rem;line-height:1.4;">
                             <strong id="mysql-summary-text">MySQL Data: <?= \BBS\Services\ServerStats::formatBytes($ms['db_bytes']) ?> (<?= $dbPct ?>% of partition)</strong><br>
                             This chart shows disk usage on the MySQL partition. BBS stores file catalog data in MySQL, enabling fast search and restore operations without locking the Borg repository.
                         </div>
@@ -342,7 +342,7 @@
                         <div class="border-top pt-2 mt-1">
                             <div class="d-flex align-items-center mb-1">
                                 <i class="bi bi-activity me-1 text-muted" style="font-size:.7rem;"></i>
-                                <span class="fw-semibold" style="font-size:.65rem;text-transform:uppercase;letter-spacing:.5px;color:#6c757d;">MySQL Performance</span>
+                                <span class="fw-semibold text-muted" style="font-size:.65rem;text-transform:uppercase;letter-spacing:.5px;">MySQL Performance</span>
                             </div>
                             <div class="row g-1 text-center" style="font-size:.7rem;">
                                 <div class="col-3">
@@ -576,6 +576,9 @@
 <script>
 // Jobs Chart (stacked bar)
 const chartData = <?= json_encode($chartData) ?>;
+const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+const chartTextColor = isDark ? '#adb5bd' : '#6c757d';
+const chartGridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
 const ctx = document.getElementById('backupsChart').getContext('2d');
 new Chart(ctx, {
     type: 'bar',
@@ -609,20 +612,21 @@ new Chart(ctx, {
             legend: {
                 display: true,
                 position: 'bottom',
-                labels: { boxWidth: 10, font: { size: 9 }, padding: 8 },
+                labels: { boxWidth: 10, font: { size: 9 }, padding: 8, color: chartTextColor },
             },
         },
         scales: {
             y: {
                 beginAtZero: true,
                 stacked: true,
-                ticks: { stepSize: 1, font: { size: 10 } },
-                grid: { color: 'rgba(0,0,0,0.05)' },
+                ticks: { stepSize: 1, font: { size: 10 }, color: chartTextColor },
+                grid: { color: chartGridColor },
             },
             x: {
                 stacked: true,
                 ticks: {
                     font: { size: 9 },
+                    color: chartTextColor,
                     maxRotation: 45,
                     callback: function(val, index) {
                         return index % 3 === 0 ? this.getLabelForValue(val) : '';
