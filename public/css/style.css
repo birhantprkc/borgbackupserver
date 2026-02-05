@@ -876,3 +876,14 @@ body.bg-body-secondary {
 [data-bs-theme="dark"] .metric-card-success { background-color: rgba(25,135,84,0.08); }
 [data-bs-theme="dark"] .metric-card-warning { background-color: rgba(255,193,7,0.08); }
 [data-bs-theme="dark"] .metric-card-danger { background-color: rgba(220,53,69,0.08); }
+
+/* Dashed placeholder / "add" cards */
+.card-dashed {
+    border: 2px dashed var(--bs-border-color) !important;
+    background-color: var(--bs-tertiary-bg) !important;
+    cursor: pointer;
+}
+
+[data-bs-theme="dark"] body.bg-body-secondary {
+    background-color: #1a1d21 !important;
+}

@@ -671,7 +671,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         </div>
         <?php endforeach; ?>
         <div class="col-md-6 col-lg-4">
-            <div class="card border-0 shadow-sm h-100" style="cursor:pointer;border:2px dashed #ccc !important;background:#fafafa;" onclick="showCreateRepo()">
+            <div class="card border-0 shadow-sm h-100 card-dashed" onclick="showCreateRepo()">
                 <div class="card-body d-flex flex-column align-items-center justify-content-center text-muted p-4">
                     <i class="bi bi-plus-circle" style="font-size:2rem;"></i>
                     <div class="mt-2 fw-semibold">Add Repository</div>
@@ -718,7 +718,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     <?php endif; ?>
     <?php if (empty($repositories)): ?>
     <div id="add-repo-card-solo" style="cursor:pointer;" onclick="showCreateRepo()">
-        <div class="card border-0 shadow-sm mb-4" style="border:2px dashed #ccc !important;background:#fafafa;">
+        <div class="card border-0 shadow-sm mb-4 card-dashed">
             <div class="card-body d-flex flex-column align-items-center justify-content-center text-muted py-5">
                 <i class="bi bi-archive" style="font-size:2rem;"></i>
                 <div class="mt-2 fw-semibold">Create a Repository to get started</div>
@@ -957,7 +957,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         <?php endforeach; ?>
         <?php if (!empty($repositories)): ?>
         <div class="col-md-6 col-lg-4">
-            <div class="card border-0 shadow-sm h-100 schedule-card" id="add-plan-card" style="cursor:pointer;border:2px dashed #ccc !important;background:#fafafa;" onclick="showCreatePlan()">
+            <div class="card border-0 shadow-sm h-100 schedule-card card-dashed" id="add-plan-card" onclick="showCreatePlan()">
                 <div class="card-body d-flex flex-column align-items-center justify-content-center text-muted p-4">
                     <i class="bi bi-plus-circle" style="font-size:2rem;"></i>
                     <div class="mt-2 fw-semibold">Add Backup Plan</div>
@@ -969,7 +969,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     <?php endif; ?>
     <?php if (empty($plans) && !empty($repositories)): ?>
     <div id="add-plan-card-solo" style="cursor:pointer;" onclick="showCreatePlan()">
-        <div class="card border-0 shadow-sm mb-4" style="border:2px dashed #ccc !important;background:#fafafa;">
+        <div class="card border-0 shadow-sm mb-4 card-dashed">
             <div class="card-body d-flex flex-column align-items-center justify-content-center text-muted p-4">
                 <i class="bi bi-plus-circle" style="font-size:2rem;"></i>
                 <div class="mt-2 fw-semibold">Add Backup Plan</div>
@@ -977,7 +977,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         </div>
     </div>
     <?php elseif (empty($plans) && empty($repositories)): ?>
-    <div class="card border-0 shadow-sm mb-4" style="border:2px dashed #ccc !important;background:#fafafa;">
+    <div class="card border-0 shadow-sm mb-4 card-dashed">
         <div class="card-body d-flex flex-column align-items-center justify-content-center text-muted py-5">
             <i class="bi bi-exclamation-circle" style="font-size:2rem;"></i>
             <div class="mt-2 fw-semibold">You must create a Repository before creating a Backup Schedule.</div>
@@ -2303,7 +2303,7 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
             </div>
         </div>
         <?php endif; ?>
-        <div class="card border-0 shadow-sm mb-4" style="border:2px dashed #ccc !important;background:#fafafa;">
+        <div class="card border-0 shadow-sm mb-4 card-dashed">
             <div class="card-body d-flex flex-column align-items-center justify-content-center text-muted py-5">
                 <i class="bi bi-clock-history" style="font-size:2rem;"></i>
                 <div class="mt-2 fw-semibold">No archives available yet. Run a backup first.</div>
