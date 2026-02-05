@@ -35,7 +35,7 @@
                 </div>
                 <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
                     <div>
-                        <div class="fw-semibold small text-dark">In Queue</div>
+                        <div class="fw-semibold small">In Queue</div>
                         <div class="text-muted" style="font-size:.7rem;"><?= $runningCount ?> running</div>
                     </div>
                     <div class="fs-2 fw-bold" style="color:#4a90d9;"><?= $queuedCount ?></div>
@@ -51,7 +51,7 @@
                 </div>
                 <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
                     <div>
-                        <div class="fw-semibold small text-dark">Completed (24h)</div>
+                        <div class="fw-semibold small">Completed (24h)</div>
                         <div class="text-muted" style="font-size:.7rem;">avg duration: <?= $avgDur ?></div>
                     </div>
                     <div class="fs-2 fw-bold" style="color:#48bb78;"><?= $completed24h ?></div>
@@ -68,7 +68,7 @@
                 </div>
                 <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
                     <div>
-                        <div class="fw-semibold small text-dark">Failed (24h)</div>
+                        <div class="fw-semibold small">Failed (24h)</div>
                         <div class="text-muted" style="font-size:.7rem;"><?= $failed24h > 0 ? 'check logs for errors' : 'no failures' ?></div>
                     </div>
                     <div class="fs-2 fw-bold" style="color:<?= $failColor ?>;"><?= $failed24h ?></div>
@@ -84,7 +84,7 @@
                 </div>
                 <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
                     <div>
-                        <div class="fw-semibold small text-dark">Avg Duration</div>
+                        <div class="fw-semibold small">Avg Duration</div>
                         <div class="text-muted" style="font-size:.7rem;">last 24 hours</div>
                     </div>
                     <div class="fs-2 fw-bold" style="color:#e67e22;"><?= $avgDur ?></div>

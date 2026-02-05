@@ -10,7 +10,7 @@
                 </div>
                 <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
                     <div>
-                        <div class="fw-semibold small text-dark">Client Agents</div>
+                        <div class="fw-semibold small">Client Agents</div>
                         <div class="text-muted" style="font-size:.7rem;"><?= $onlineCount ?> online<?php if ($offlineCount): ?>, <?= $offlineCount ?> offline<?php endif; ?><?php if ($errorCount): ?>, <?= $errorCount ?> error<?php endif; ?></div>
                     </div>
                     <div class="fs-2 fw-bold" style="color:#4a90d9;"><?= $totalClients ?></div>
@@ -26,7 +26,7 @@
                 </div>
                 <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
                     <div>
-                        <div class="fw-semibold small text-dark">Repositories</div>
+                        <div class="fw-semibold small">Repositories</div>
                         <div class="text-muted" style="font-size:.7rem;"><?= $totalSizeFormatted ?> total</div>
                     </div>
                     <div class="fs-2 fw-bold" style="color:#48bb78;"><?= $totalRepos ?></div>
@@ -42,7 +42,7 @@
                 </div>
                 <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
                     <div>
-                        <div class="fw-semibold small text-dark">Active Schedules</div>
+                        <div class="fw-semibold small">Active Schedules</div>
                         <div class="text-muted" style="font-size:.7rem;"><?= $planCount ?> backup plan<?= $planCount !== 1 ? 's' : '' ?></div>
                     </div>
                     <div class="fs-2 fw-bold" style="color:#e67e22;"><?= $activeSchedules ?></div>
@@ -59,7 +59,7 @@
                 </div>
                 <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
                     <div>
-                        <div class="fw-semibold small text-dark">Out of Date</div>
+                        <div class="fw-semibold small">Out of Date</div>
                         <div class="text-muted" style="font-size:.7rem;"><?= $latestVersion ? 'latest: v' . htmlspecialchars($latestVersion) : 'no agents reporting' ?></div>
                     </div>
                     <div class="fs-2 fw-bold" style="color:<?= $outdatedColor ?>;"><?= $outdatedCount ?></div>
@@ -98,24 +98,24 @@
 </div>
 <?php endif; ?>
 
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <?php if (!empty($agents)): ?>
+    <div class="input-group input-group-sm" style="max-width: 280px;">
+        <span class="input-group-text bg-body border-end-0"><i class="bi bi-search text-muted"></i></span>
+        <input type="text" id="clientSearch" class="form-control border-start-0 ps-0" placeholder="Search clients...">
+    </div>
+    <?php else: ?>
+    <div></div>
+    <?php endif; ?>
+    <?php if (($_SESSION['user_role'] ?? '') === 'admin'): ?>
+    <a href="/clients/add" class="btn btn-sm btn-success">
+        <i class="bi bi-plus-circle me-1"></i><span class="d-none d-sm-inline"> Add Client</span>
+    </a>
+    <?php endif; ?>
+</div>
+
 <div class="card border-0 shadow-sm">
     <div class="card-body p-0">
-        <div class="d-flex justify-content-between align-items-center px-3 pt-3 pb-2">
-            <?php if (!empty($agents)): ?>
-            <div class="input-group input-group-sm" style="max-width: 280px;">
-                <span class="input-group-text bg-body border-end-0"><i class="bi bi-search text-muted"></i></span>
-                <input type="text" id="clientSearch" class="form-control border-start-0 ps-0" placeholder="Search clients...">
-            </div>
-            <?php else: ?>
-            <div></div>
-            <?php endif; ?>
-            <?php if (($_SESSION['user_role'] ?? '') === 'admin'): ?>
-            <a href="/clients/add" class="btn btn-sm btn-success">
-                <i class="bi bi-plus-circle me-1"></i><span class="d-none d-sm-inline"> Add Client</span>
-            </a>
-            <?php endif; ?>
-        </div>
-
         <!-- Desktop table view -->
         <div class="table-responsive d-none d-md-block">
             <table class="table table-hover table-sm mb-0 small" id="clientsTable">
@@ -238,6 +238,10 @@ document.getElementById('clientSearch').addEventListener('input', function() {
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script>
 (function() {
+    const _dk = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+    const _tc = _dk ? '#8b929a' : '#6c757d';
+    const _gc = _dk ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
+
     // Backup Activity Chart (7 days)
     const activityData = <?= json_encode($chartActivity) ?>;
     const actCtx = document.getElementById('activityChart');
@@ -264,10 +268,10 @@ document.getElementById('clientSearch').addEventListener('input', function() {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 15, font: { size: 11 } } } },
+                plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 15, font: { size: 11 }, color: _tc } } },
                 scales: {
-                    x: { stacked: true, grid: { display: false } },
-                    y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1, font: { size: 11 } } }
+                    x: { stacked: true, grid: { display: false }, ticks: { color: _tc } },
+                    y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1, font: { size: 11 }, color: _tc }, grid: { color: _gc } }
                 }
             }
         });
@@ -286,14 +290,14 @@ document.getElementById('clientSearch').addEventListener('input', function() {
                     data: storageData.map(d => d.size),
                     backgroundColor: colors.slice(0, storageData.length),
                     borderWidth: 2,
-                    borderColor: '#fff',
+                    borderColor: _dk ? '#212529' : '#fff',
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { position: 'right', labels: { boxWidth: 12, padding: 10, font: { size: 11 } } },
+                    legend: { position: 'right', labels: { boxWidth: 12, padding: 10, font: { size: 11 }, color: _tc } },
                     tooltip: {
                         callbacks: {
                             label: function(ctx) {
