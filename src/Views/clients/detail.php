@@ -33,8 +33,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     : ($totalSize >= 1024 ? round($totalSize / 1024, 1) . ' KB'
     : ($totalSize > 0 ? $totalSize . ' B' : '0')));
 ?>
-<div class="card border-0 shadow-sm mb-4 card-no-outline">
-    <div class="card-body pb-2">
+<div class="mb-4">
         <div class="d-flex justify-content-between align-items-start mb-3">
             <div class="flex-fill">
                 <div class="d-flex flex-wrap align-items-center gap-2">
@@ -165,11 +164,10 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 </div>
             </div>
         </div>
-    </div>
 
     <!-- Collapsible edit form -->
     <div class="collapse" id="edit-client">
-        <div class="card-body border-top bg-body-secondary">
+        <div class="border-top bg-body-secondary rounded p-3 mt-3">
             <form method="POST" action="/clients/<?= $agent['id'] ?>/edit" class="row g-3 align-items-end">
                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                 <div class="col-md-4">
