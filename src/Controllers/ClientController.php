@@ -245,7 +245,7 @@ class ClientController extends Controller
             'message' => "Client created. SSH provisioned: user {$sshResult['unix_user']}, home {$sshResult['home_dir']}",
         ]);
 
-        $this->flash('success', 'Client created. Install the agent using the command below.');
+        $this->flash('success', 'Client created. To install, copy the Install Agent code and run it in a terminal on the client machine.');
         $this->redirect("/clients/{$id}?tab=install");
     }
 
