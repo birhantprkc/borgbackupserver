@@ -140,9 +140,9 @@
                     <?php foreach ($agents as $agent): ?>
                     <tr style="cursor:pointer" onclick="window.location='/clients/<?= $agent['id'] ?>'">
                         <td>
-                            <i class="bi bi-pc-display me-2 text-muted"></i><strong><?= htmlspecialchars($agent['name']) ?></strong>
+                            <i class="bi bi-pc-display me-1 text-muted"></i><strong><?= htmlspecialchars($agent['name']) ?></strong>
                             <?php if ($agent['hostname']): ?>
-                                <br><small class="text-muted ps-4 ms-1"><?= htmlspecialchars($agent['hostname']) ?></small>
+                                <br><small class="text-muted ms-4"><?= htmlspecialchars($agent['hostname']) ?></small>
                             <?php endif; ?>
                         </td>
                         <td>
