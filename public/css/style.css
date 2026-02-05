@@ -217,7 +217,7 @@ html, body {
 }
 
 .topbar .navbar-brand {
-    background-color: #fff;
+    background-color: transparent;
     height: 56px;
     flex-shrink: 0;
 }
