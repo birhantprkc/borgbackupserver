@@ -13,10 +13,10 @@
             <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
             <div class="mb-4">
                 <label for="email" class="form-label fw-semibold">Email Address</label>
-                <input type="email" class="form-control form-control-lg" id="email" name="email" required autofocus>
+                <input type="email" class="form-control form-control" id="email" name="email" required autofocus>
             </div>
             <div class="d-flex justify-content-between align-items-center">
-                <button type="submit" class="btn btn-success btn-lg">
+                <button type="submit" class="btn btn-success">
                     <i class="bi bi-envelope me-1"></i> Send Reset Link
                 </button>
                 <a href="/login" class="text-muted small">Back to login</a>

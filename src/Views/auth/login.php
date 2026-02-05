@@ -11,14 +11,14 @@
         <form method="POST" action="/login">
             <div class="mb-3">
                 <label for="username" class="form-label fw-semibold">Username</label>
-                <input type="text" class="form-control form-control-lg" id="username" name="username" required autofocus>
+                <input type="text" class="form-control form-control" id="username" name="username" required autofocus>
             </div>
             <div class="mb-4">
                 <label for="password" class="form-label fw-semibold">Password</label>
-                <input type="password" class="form-control form-control-lg" id="password" name="password" required>
+                <input type="password" class="form-control form-control" id="password" name="password" required>
             </div>
             <div class="d-flex justify-content-between align-items-center">
-                <button type="submit" class="btn btn-success btn-lg">
+                <button type="submit" class="btn btn-success">
                     <i class="bi bi-lock-fill me-1"></i> Sign in
                 </button>
                 <a href="/forgot-password" class="text-muted small">Forgot password?</a>

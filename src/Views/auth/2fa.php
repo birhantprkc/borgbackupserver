@@ -16,7 +16,7 @@
                 <label for="code" class="form-label fw-semibold">Authentication Code</label>
                 <input
                     type="text"
-                    class="form-control form-control-lg text-center"
+                    class="form-control text-center"
                     id="code"
                     name="code"
                     placeholder="000000"
@@ -28,7 +28,7 @@
                 <div class="form-text">Or enter a recovery code (XXXX-XXXX).</div>
             </div>
             <div class="d-flex justify-content-between align-items-center">
-                <button type="submit" class="btn btn-success btn-lg">
+                <button type="submit" class="btn btn-success">
                     <i class="bi bi-shield-check me-1"></i> Verify
                 </button>
                 <a href="/login" class="text-muted small">Back to Login</a>
