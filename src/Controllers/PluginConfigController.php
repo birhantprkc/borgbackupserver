@@ -100,6 +100,19 @@ class PluginConfigController extends Controller
             $this->redirect('/clients');
         }
 
+        // Check if this S3 config is in use by any repository
+        $inUse = $this->db->fetchOne("
+            SELECT r.name FROM repository_s3_configs rsc
+            JOIN repositories r ON r.id = rsc.repository_id
+            WHERE rsc.plugin_config_id = ?
+            LIMIT 1
+        ", [$configId]);
+
+        if ($inUse) {
+            $this->flash('danger', "Cannot delete — this S3 config is in use by repository \"{$inUse['name']}\". Disable S3 sync on the repository first.");
+            $this->redirect("/clients/{$id}?tab=plugins");
+        }
+
         $pluginManager = new PluginManager();
         $pluginManager->deletePluginConfig($configId);
 
