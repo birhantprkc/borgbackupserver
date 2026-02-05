@@ -238,6 +238,62 @@ $updateAvailable = $updateService->isUpdateAvailable();
         </div>
     </div>
 
+    <div class="row g-4 mt-0">
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-body fw-semibold">
+                    <i class="bi bi-megaphone me-1"></i> Apprise Notifications
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">Send alerts to Discord, Telegram, Slack, Pushover, and <a href="https://github.com/caronc/apprise/wiki#notification-services" target="_blank">100+ other services</a> using <a href="https://github.com/caronc/apprise" target="_blank">Apprise</a>.</p>
+
+                    <?php
+                    $appriseInstalled = false;
+                    exec('which apprise 2>/dev/null', $appriseCheckOutput, $appriseCheckCode);
+                    $appriseInstalled = ($appriseCheckCode === 0);
+                    ?>
+
+                    <?php if (!$appriseInstalled): ?>
+                    <div class="alert alert-warning py-2 px-3 small mb-3">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        <strong>Apprise not installed.</strong> Install with: <code>pip3 install apprise</code>
+                    </div>
+                    <?php endif; ?>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Service URLs</label>
+                        <textarea class="form-control font-monospace small" name="apprise_urls" rows="4" placeholder="discord://webhook_id/webhook_token&#10;tgram://bot_token/chat_id&#10;slack://tokenA/tokenB/tokenC&#10;pover://user@token"><?= htmlspecialchars($settings['apprise_urls'] ?? '') ?></textarea>
+                        <div class="form-text">One URL per line. See <a href="https://github.com/caronc/apprise/wiki#notification-services" target="_blank">supported services <i class="bi bi-box-arrow-up-right"></i></a></div>
+                    </div>
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnTestApprise">
+                            <i class="bi bi-megaphone me-1"></i> Test Apprise
+                        </button>
+                        <span id="appriseTestResult" class="ms-2 small"></span>
+                    </div>
+                    <hr>
+                    <label class="form-label fw-semibold">Notify me when:</label>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" name="apprise_on_backup_failed" value="1" id="appriseBackupFailed" <?= ($settings['apprise_on_backup_failed'] ?? '1') === '1' ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="appriseBackupFailed">Backup fails</label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" name="apprise_on_agent_offline" value="1" id="appriseAgentOffline" <?= ($settings['apprise_on_agent_offline'] ?? '1') === '1' ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="appriseAgentOffline">Client goes offline</label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" name="apprise_on_storage_low" value="1" id="appriseStorageLow" <?= ($settings['apprise_on_storage_low'] ?? '1') === '1' ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="appriseStorageLow">Storage space is low</label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" name="apprise_on_missed_schedule" value="1" id="appriseMissedSchedule" <?= ($settings['apprise_on_missed_schedule'] ?? '0') === '1' ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="appriseMissedSchedule">Scheduled backup is missed</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="mt-4">
         <button type="submit" class="btn btn-warning">
             <i class="bi bi-check-lg me-1"></i> Save Notification Settings
@@ -1004,6 +1060,31 @@ document.getElementById('btnTestSmtp')?.addEventListener('click', function() {
             btn.disabled = false;
             if (data.success) {
                 result.textContent = 'Connected and authenticated successfully!';
+                result.className = 'ms-2 small text-success fw-semibold';
+            } else {
+                result.textContent = 'Failed: ' + data.error;
+                result.className = 'ms-2 small text-danger fw-semibold';
+            }
+        })
+        .catch(function() {
+            btn.disabled = false;
+            result.textContent = 'Request failed.';
+            result.className = 'ms-2 small text-danger fw-semibold';
+        });
+});
+
+document.getElementById('btnTestApprise')?.addEventListener('click', function() {
+    var btn = this;
+    var result = document.getElementById('appriseTestResult');
+    btn.disabled = true;
+    result.textContent = 'Sending...';
+    result.className = 'ms-2 small text-muted';
+    fetch('/settings/test-apprise', {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: 'csrf_token=' + encodeURIComponent(document.querySelector('input[name=csrf_token]').value)})
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            btn.disabled = false;
+            if (data.success) {
+                result.textContent = 'Notification sent successfully!';
                 result.className = 'ms-2 small text-success fw-semibold';
             } else {
                 result.textContent = 'Failed: ' + data.error;

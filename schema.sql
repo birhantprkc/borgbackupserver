@@ -281,7 +281,12 @@ INSERT INTO settings (`key`, `value`) VALUES
     ('s3_secret_key', ''),
     ('s3_path_prefix', ''),
     ('s3_sync_server_backups', '0'),
-    ('ssh_port', '22');
+    ('ssh_port', '22'),
+    ('apprise_urls', ''),
+    ('apprise_on_backup_failed', '1'),
+    ('apprise_on_agent_offline', '1'),
+    ('apprise_on_storage_low', '1'),
+    ('apprise_on_missed_schedule', '0');
 
 -- --------------------------------------------------------
 -- Notifications

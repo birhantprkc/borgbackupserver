@@ -148,11 +148,16 @@ PACKAGES=(
     mysql-server borgbackup composer git openssh-server
     memcached certbot python3-certbot-apache rclone
     dnsutils  # for dig
+    python3-pip  # for apprise
 )
 
 info "Installing ${#PACKAGES[@]} packages..."
 apt-get install -y -qq "${PACKAGES[@]}" > /dev/null 2>&1
 ok "System packages installed"
+
+info "Installing Apprise notification tool..."
+pip3 install --no-cache-dir apprise > /dev/null 2>&1
+ok "Apprise installed"
 
 # Enable Apache modules
 a2enmod rewrite ssl headers > /dev/null 2>&1

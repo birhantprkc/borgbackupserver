@@ -19,7 +19,11 @@ RUN apt-get update && apt-get install -y \
     rclone \
     openssh-client \
     openssh-server \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Apprise (notification tool supporting 100+ services)
+RUN pip3 install --break-system-packages --no-cache-dir apprise
 
 # Install PHP extensions
 RUN docker-php-ext-install pdo pdo_mysql mbstring
