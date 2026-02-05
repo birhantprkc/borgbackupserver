@@ -151,9 +151,14 @@ if command -v apprise &>/dev/null; then
 else
     echo "  Installing Apprise..."
     if ! command -v pip3 &>/dev/null; then
+        apt-get update -qq 2>/dev/null
         apt-get install -y python3-pip 2>/dev/null || true
     fi
-    pip3 install --break-system-packages --no-cache-dir apprise 2>/dev/null || echo "  Warning: Apprise install failed (push notifications will not work)"
+    if command -v pip3 &>/dev/null; then
+        pip3 install --break-system-packages --no-cache-dir apprise 2>/dev/null || echo "  Warning: Apprise install failed (push notifications will not work)"
+    else
+        echo "  Warning: pip3 not available, cannot install Apprise"
+    fi
 fi
 
 # 9. Run database migrations
