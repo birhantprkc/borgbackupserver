@@ -818,3 +818,7 @@ body.bg-light {
 [data-bs-theme="dark"] .table th {
     color: #9ca3af;
 }
+
+[data-bs-theme="dark"] .bg-white {
+    background-color: var(--bs-body-bg) !important;
+}
