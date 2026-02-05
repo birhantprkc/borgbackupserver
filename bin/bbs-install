@@ -156,7 +156,8 @@ apt-get install -y -qq "${PACKAGES[@]}" > /dev/null 2>&1
 ok "System packages installed"
 
 info "Installing Apprise notification tool..."
-pip3 install --break-system-packages --no-cache-dir apprise > /dev/null 2>&1
+pip3 install --break-system-packages --no-cache-dir apprise > /dev/null 2>&1 \
+    || pip3 install --no-cache-dir apprise > /dev/null 2>&1
 ok "Apprise installed"
 
 # Enable Apache modules
