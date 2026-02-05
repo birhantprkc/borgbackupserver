@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="<?= htmlspecialchars($_SESSION['theme'] ?? 'light') ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -82,6 +82,11 @@
                         <?php endif; ?>
                         <li><a class="dropdown-item" href="/profile"><i class="bi bi-person me-1"></i> Profile</a></li>
                         <li><a class="dropdown-item" href="/settings"><i class="bi bi-gear me-1"></i> Settings</a></li>
+                        <li>
+                            <a class="dropdown-item" href="#" onclick="toggleTheme(); return false;">
+                                <i class="bi bi-moon me-1" id="themeIcon"></i> <span id="themeLabel">Dark Mode</span>
+                            </a>
+                        </li>
                         <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item" href="/logout"><i class="bi bi-box-arrow-right me-1"></i> Logout</a></li>
                     </ul>
@@ -214,6 +219,23 @@
     <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer" style="z-index:1090;"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    function toggleTheme() {
+        var html = document.documentElement;
+        var newTheme = html.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        html.setAttribute('data-bs-theme', newTheme);
+        localStorage.setItem('bbs-theme', newTheme);
+        updateThemeUI(newTheme);
+        fetch('/profile/theme', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'theme='+newTheme, credentials:'same-origin'});
+    }
+    function updateThemeUI(theme) {
+        var icon = document.getElementById('themeIcon');
+        var label = document.getElementById('themeLabel');
+        if (icon) icon.className = 'bi ' + (theme === 'dark' ? 'bi-sun' : 'bi-moon') + ' me-1';
+        if (label) label.textContent = theme === 'dark' ? 'Light Mode' : 'Dark Mode';
+    }
+    updateThemeUI(document.documentElement.getAttribute('data-bs-theme') || 'light');
+    </script>
     <script>
     function confirmAction(message, callback, options) {
         options = options || {};

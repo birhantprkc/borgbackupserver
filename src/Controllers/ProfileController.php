@@ -164,6 +164,19 @@ class ProfileController extends Controller
     }
 
     /**
+     * POST /profile/theme — toggle dark/light mode.
+     */
+    public function theme(): void
+    {
+        $this->requireAuth();
+        $theme = ($_POST['theme'] ?? 'light') === 'dark' ? 'dark' : 'light';
+        $this->db->update('users', ['theme' => $theme], 'id = ?', [$_SESSION['user_id']]);
+        $_SESSION['theme'] = $theme;
+        http_response_code(204);
+        exit;
+    }
+
+    /**
      * POST /profile/detect-timezone — browser-detected fallback.
      */
     public function detectTimezone(): void

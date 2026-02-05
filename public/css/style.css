@@ -121,6 +121,19 @@ html, body {
     color: rgba(0, 0, 0, 0.4) !important;
 }
 
+[data-bs-theme="dark"] ::placeholder {
+    color: rgba(255, 255, 255, 0.4) !important;
+}
+[data-bs-theme="dark"] ::-webkit-input-placeholder {
+    color: rgba(255, 255, 255, 0.4) !important;
+}
+[data-bs-theme="dark"] ::-moz-placeholder {
+    color: rgba(255, 255, 255, 0.4) !important;
+}
+[data-bs-theme="dark"] :-ms-input-placeholder {
+    color: rgba(255, 255, 255, 0.4) !important;
+}
+
 /* Sidebar */
 .sidebar {
     width: 90px;
@@ -735,4 +748,73 @@ body.bg-light {
 }
 @media (min-width: 992px) {
     .border-top.border-lg-0 { border-top: none !important; }
+}
+
+/* Dark mode overrides */
+[data-bs-theme="dark"] .topbar .navbar-brand {
+    background-color: #1a1a2e;
+}
+
+[data-bs-theme="dark"] body.bg-light {
+    background-color: #1a1a2e !important;
+}
+
+[data-bs-theme="dark"] .card {
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2), 0 0 12px rgba(0, 0, 0, 0.1);
+}
+
+[data-bs-theme="dark"] .card-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+[data-bs-theme="dark"] .client-tabs .nav-link {
+    color: #adb5bd;
+    background-color: #2b3035;
+    border-color: #495057;
+}
+
+[data-bs-theme="dark"] .client-tabs .nav-link:hover {
+    background-color: #343a40;
+    color: #e9ecef;
+}
+
+[data-bs-theme="dark"] .client-tabs .nav-link.active {
+    background-color: var(--bs-body-bg);
+    color: #e9ecef;
+    border-color: #495057;
+    border-bottom-color: var(--bs-body-bg);
+}
+
+[data-bs-theme="dark"] .tree-item:nth-child(even) {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+[data-bs-theme="dark"] .tree-item:hover {
+    background: rgba(72, 187, 120, 0.1);
+}
+
+[data-bs-theme="dark"] .version-group-header {
+    background: #2b3035;
+}
+
+[data-bs-theme="dark"] .version-row:hover {
+    background: rgba(72, 187, 120, 0.1);
+}
+
+[data-bs-theme="dark"] .restore-actions {
+    background: #2b3035;
+}
+
+[data-bs-theme="dark"] .restore-panel-body {
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-bs-theme="dark"] .delete-warning-box {
+    background-color: #3b1c1c;
+    border-color: #6b2c2c;
+}
+
+[data-bs-theme="dark"] .table th {
+    color: #9ca3af;
 }

@@ -152,6 +152,7 @@ class App
         // Profile
         $this->router->map('GET', '/profile', 'ProfileController@index');
         $this->router->map('POST', '/profile', 'ProfileController@update');
+        $this->router->map('POST', '/profile/theme', 'ProfileController@theme');
         $this->router->map('POST', '/profile/detect-timezone', 'ProfileController@detectTimezone');
         $this->router->map('POST', '/profile/2fa/setup', 'ProfileController@twoFactorSetup');
         $this->router->map('POST', '/profile/2fa/enable', 'ProfileController@twoFactorEnable');
