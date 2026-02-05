@@ -901,7 +901,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
             <div class="card border-0 shadow-sm h-100 schedule-card">
                 <div class="card-body p-3 position-relative">
                     <div class="dropdown position-absolute" style="top:8px;right:8px;z-index:10;">
-                        <button class="btn btn-sm btn-light border-0" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <button class="btn btn-sm btn-link text-muted p-1 border-0" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi bi-three-dots-vertical"></i>
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end">

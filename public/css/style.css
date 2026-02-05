@@ -457,12 +457,12 @@ body.bg-body-secondary {
 }
 
 .repo-card-header {
-    background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+    background: linear-gradient(135deg, #4a90d9 0%, #357abd 100%);
     border-radius: 8px 8px 0 0;
 }
 
 .repo-icon-wrap {
-    background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+    background: linear-gradient(135deg, #4a90d9 0%, #357abd 100%);
     color: #fff;
 }
 
@@ -473,7 +473,7 @@ body.bg-body-secondary {
     padding: 6px 12px;
     color: #fff;
     border-radius: 0 0 8px 8px;
-    background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+    background: linear-gradient(135deg, #4a6a8a 0%, #3a5570 100%);
 }
 
 /* Schedule cards */
