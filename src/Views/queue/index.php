@@ -28,66 +28,58 @@
 ?>
 <div class="row g-3 mb-4">
     <div class="col-xl-3 col-md-6">
-        <div class="card stat-card border-0 shadow-sm overflow-hidden">
-            <div class="d-flex align-items-stretch">
-                <div class="d-flex align-items-center justify-content-center text-white" style="width:52px;font-size:1.4rem;background:#4a90d9;">
-                    <i class="bi bi-hourglass-split"></i>
+        <div class="card border-0 shadow-sm h-100 metric-card-blue">
+            <div class="card-body d-flex align-items-center">
+                <div class="stat-icon bg-primary bg-opacity-10 text-primary rounded-3 p-3 me-3">
+                    <i class="bi bi-hourglass-split fs-3"></i>
                 </div>
-                <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
-                    <div>
-                        <div class="fw-semibold small">In Queue</div>
-                        <div class="text-muted" style="font-size:.7rem;"><?= $runningCount ?> running</div>
-                    </div>
-                    <div class="fs-2 fw-bold" style="color:#4a90d9;"><?= $queuedCount ?></div>
+                <div>
+                    <div class="text-muted small">In Queue</div>
+                    <div class="fs-4 fw-bold"><?= $queuedCount ?></div>
+                    <div class="text-muted small"><?= $runningCount ?> running</div>
                 </div>
             </div>
         </div>
     </div>
     <div class="col-xl-3 col-md-6">
-        <div class="card stat-card border-0 shadow-sm overflow-hidden">
-            <div class="d-flex align-items-stretch">
-                <div class="d-flex align-items-center justify-content-center text-white" style="width:52px;font-size:1.4rem;background:#48bb78;">
-                    <i class="bi bi-check-circle"></i>
+        <div class="card border-0 shadow-sm h-100 metric-card-success">
+            <div class="card-body d-flex align-items-center">
+                <div class="stat-icon bg-success bg-opacity-10 text-success rounded-3 p-3 me-3">
+                    <i class="bi bi-check-circle fs-3"></i>
                 </div>
-                <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
-                    <div>
-                        <div class="fw-semibold small">Completed (24h)</div>
-                        <div class="text-muted" style="font-size:.7rem;">avg duration: <?= $avgDur ?></div>
-                    </div>
-                    <div class="fs-2 fw-bold" style="color:#48bb78;"><?= $completed24h ?></div>
+                <div>
+                    <div class="text-muted small">Completed (24h)</div>
+                    <div class="fs-4 fw-bold"><?= $completed24h ?></div>
+                    <div class="text-muted small">avg: <?= $avgDur ?></div>
                 </div>
             </div>
         </div>
     </div>
     <div class="col-xl-3 col-md-6">
-        <div class="card stat-card border-0 shadow-sm overflow-hidden">
-            <div class="d-flex align-items-stretch">
-                <?php $failColor = $failed24h > 0 ? '#c0392b' : '#48bb78'; ?>
-                <div class="d-flex align-items-center justify-content-center text-white" style="width:52px;font-size:1.4rem;background:<?= $failColor ?>;">
-                    <i class="bi bi-<?= $failed24h > 0 ? 'x-circle' : 'check-circle' ?>"></i>
+        <?php $failBs = $failed24h > 0 ? 'danger' : 'success'; ?>
+        <div class="card border-0 shadow-sm h-100 metric-card-<?= $failBs ?>">
+            <div class="card-body d-flex align-items-center">
+                <div class="stat-icon bg-<?= $failBs ?> bg-opacity-10 text-<?= $failBs ?> rounded-3 p-3 me-3">
+                    <i class="bi bi-<?= $failed24h > 0 ? 'x-circle' : 'check-circle' ?> fs-3"></i>
                 </div>
-                <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
-                    <div>
-                        <div class="fw-semibold small">Failed (24h)</div>
-                        <div class="text-muted" style="font-size:.7rem;"><?= $failed24h > 0 ? 'check logs for errors' : 'no failures' ?></div>
-                    </div>
-                    <div class="fs-2 fw-bold" style="color:<?= $failColor ?>;"><?= $failed24h ?></div>
+                <div>
+                    <div class="text-muted small">Failed (24h)</div>
+                    <div class="fs-4 fw-bold"><?= $failed24h ?></div>
+                    <div class="text-muted small"><?= $failed24h > 0 ? 'check logs' : 'no failures' ?></div>
                 </div>
             </div>
         </div>
     </div>
     <div class="col-xl-3 col-md-6">
-        <div class="card stat-card border-0 shadow-sm overflow-hidden">
-            <div class="d-flex align-items-stretch">
-                <div class="d-flex align-items-center justify-content-center text-white" style="width:52px;font-size:1.4rem;background:#e67e22;">
-                    <i class="bi bi-speedometer2"></i>
+        <div class="card border-0 shadow-sm h-100 metric-card-cyan">
+            <div class="card-body d-flex align-items-center">
+                <div class="stat-icon bg-info bg-opacity-10 text-info rounded-3 p-3 me-3">
+                    <i class="bi bi-speedometer2 fs-3"></i>
                 </div>
-                <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
-                    <div>
-                        <div class="fw-semibold small">Avg Duration</div>
-                        <div class="text-muted" style="font-size:.7rem;">last 24 hours</div>
-                    </div>
-                    <div class="fs-2 fw-bold" style="color:#e67e22;"><?= $avgDur ?></div>
+                <div>
+                    <div class="text-muted small">Avg Duration</div>
+                    <div class="fs-4 fw-bold"><?= $avgDur ?></div>
+                    <div class="text-muted small">last 24 hours</div>
                 </div>
             </div>
         </div>

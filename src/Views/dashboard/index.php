@@ -2,17 +2,15 @@
 <div class="row g-3 mb-4">
     <div class="col-xl-3 col-md-6">
         <a href="/clients" class="text-decoration-none">
-            <div class="card stat-card border-0 shadow-sm overflow-hidden">
-                <div class="d-flex align-items-stretch">
-                    <div class="d-flex align-items-center justify-content-center text-white" style="width:52px;font-size:1.4rem;background:#4a90d9;">
-                        <i class="bi bi-display"></i>
+            <div class="card border-0 shadow-sm h-100 metric-card-blue">
+                <div class="card-body d-flex align-items-center">
+                    <div class="stat-icon bg-primary bg-opacity-10 text-primary rounded-3 p-3 me-3">
+                        <i class="bi bi-display fs-3"></i>
                     </div>
-                    <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
-                        <div>
-                            <div class="fw-semibold small">Clients</div>
-                            <div class="text-muted" style="font-size:.7rem;"><span id="stat-online"><?= $onlineCount ?></span> online</div>
-                        </div>
-                        <div class="fs-2 fw-bold" style="color:#4a90d9;" id="stat-agents"><?= $agentCount ?></div>
+                    <div>
+                        <div class="text-muted small">Clients</div>
+                        <div class="fs-4 fw-bold" id="stat-agents"><?= $agentCount ?></div>
+                        <div class="text-muted small"><span id="stat-online"><?= $onlineCount ?></span> online</div>
                     </div>
                 </div>
             </div>
@@ -20,16 +18,15 @@
     </div>
     <div class="col-xl-3 col-md-6">
         <a href="/queue" class="text-decoration-none">
-            <div class="card stat-card border-0 shadow-sm overflow-hidden">
-                <div class="d-flex align-items-stretch">
-                    <div class="d-flex align-items-center justify-content-center text-white" style="width:52px;font-size:1.4rem;background:#48bb78;">
-                        <i class="bi bi-arrow-repeat"></i>
+            <div class="card border-0 shadow-sm h-100 metric-card-success">
+                <div class="card-body d-flex align-items-center">
+                    <div class="stat-icon bg-success bg-opacity-10 text-success rounded-3 p-3 me-3">
+                        <i class="bi bi-arrow-repeat fs-3"></i>
                     </div>
-                    <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
-                        <div>
-                            <div class="fw-semibold small">Backups Running</div>
-                        </div>
-                        <div class="fs-2 fw-bold" style="color:#48bb78;" id="stat-running"><?= $runningJobs ?></div>
+                    <div>
+                        <div class="text-muted small">Backups Running</div>
+                        <div class="fs-4 fw-bold" id="stat-running"><?= $runningJobs ?></div>
+                        <div class="text-muted small">active jobs</div>
                     </div>
                 </div>
             </div>
@@ -37,16 +34,15 @@
     </div>
     <div class="col-xl-3 col-md-6">
         <a href="/queue" class="text-decoration-none">
-            <div class="card stat-card border-0 shadow-sm overflow-hidden">
-                <div class="d-flex align-items-stretch">
-                    <div class="d-flex align-items-center justify-content-center text-white" style="width:52px;font-size:1.4rem;background:#e67e22;">
-                        <i class="bi bi-hourglass-split"></i>
+            <div class="card border-0 shadow-sm h-100 metric-card-warning">
+                <div class="card-body d-flex align-items-center">
+                    <div class="stat-icon bg-warning bg-opacity-10 text-warning rounded-3 p-3 me-3">
+                        <i class="bi bi-hourglass-split fs-3"></i>
                     </div>
-                    <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
-                        <div>
-                            <div class="fw-semibold small">Queue Waiting</div>
-                        </div>
-                        <div class="fs-2 fw-bold" style="color:#e67e22;" id="stat-queued"><?= $queuedJobs ?></div>
+                    <div>
+                        <div class="text-muted small">Queue Waiting</div>
+                        <div class="fs-4 fw-bold" id="stat-queued"><?= $queuedJobs ?></div>
+                        <div class="text-muted small">pending jobs</div>
                     </div>
                 </div>
             </div>
@@ -54,16 +50,15 @@
     </div>
     <div class="col-xl-3 col-md-6">
         <a href="/log?level=error" class="text-decoration-none">
-            <div class="card stat-card border-0 shadow-sm overflow-hidden">
-                <div class="d-flex align-items-stretch">
-                    <div class="d-flex align-items-center justify-content-center text-white" style="width:52px;font-size:1.4rem;background:#c0392b;">
-                        <i class="bi bi-exclamation-circle"></i>
+            <div class="card border-0 shadow-sm h-100 metric-card-danger">
+                <div class="card-body d-flex align-items-center">
+                    <div class="stat-icon bg-danger bg-opacity-10 text-danger rounded-3 p-3 me-3">
+                        <i class="bi bi-exclamation-circle fs-3"></i>
                     </div>
-                    <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
-                        <div>
-                            <div class="fw-semibold small">Errors (24h)</div>
-                        </div>
-                        <div class="fs-2 fw-bold" style="color:#c0392b;" id="stat-errors"><?= $errorCount ?></div>
+                    <div>
+                        <div class="text-muted small">Errors (24h)</div>
+                        <div class="fs-4 fw-bold" id="stat-errors"><?= $errorCount ?></div>
+                        <div class="text-muted small">check logs</div>
                     </div>
                 </div>
             </div>
