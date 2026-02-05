@@ -1241,6 +1241,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                         <label class="col-md-3 col-form-label fw-semibold">Plugins</label>
                         <div class="col-md-9">
                             <?php foreach ($enabledPluginsList as $plugin):
+                                if (($plugin['slug'] ?? '') === 's3_sync') continue;
                                 $configs = array_filter($pluginConfigs, fn($c) => $c['plugin_id'] == $plugin['id']);
                                 if (empty($configs)) continue;
                                 $currentConfigId = null;
@@ -1544,6 +1545,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     <label class="col-md-3 col-form-label fw-semibold">Plugins</label>
                     <div class="col-md-9">
                         <?php foreach ($enabledPluginsList as $plugin):
+                            if (($plugin['slug'] ?? '') === 's3_sync') continue;
                             $configs = array_filter($pluginConfigs, fn($c) => $c['plugin_id'] == $plugin['id']);
                             if (empty($configs)) continue;
                         ?>
