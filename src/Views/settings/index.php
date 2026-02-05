@@ -254,9 +254,9 @@ $updateAvailable = $updateService->isUpdateAvailable();
                     ?>
 
                     <?php if (!$appriseInstalled): ?>
-                    <div class="alert alert-warning py-2 px-3 small mb-3">
-                        <i class="bi bi-exclamation-triangle me-1"></i>
-                        <strong>Apprise not installed.</strong> Run the upgrade again from <a href="/settings?tab=updates">Settings &gt; Updates</a> to install it automatically.
+                    <div class="alert alert-info py-2 px-3 small mb-3">
+                        <i class="bi bi-arrow-repeat me-1"></i>
+                        <strong>Important:</strong> A new updater was detected. Click update again on the <a href="/settings?tab=updates">Updates</a> page to ensure your software is fully up-to-date.
                     </div>
                     <?php endif; ?>
 
