@@ -99,7 +99,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         ?>
         <div class="row g-2 border-top pt-3">
             <div class="col-6 col-sm-4 col-lg-2">
-                <div class="d-flex align-items-center p-2 rounded bg-light">
+                <div class="d-flex align-items-center p-2 rounded bg-body-secondary">
                     <div class="stat-icon-sm bg-primary bg-opacity-10 text-primary rounded-2 p-2 me-2">
                         <i class="bi bi-archive"></i>
                     </div>
@@ -110,7 +110,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 </div>
             </div>
             <div class="col-6 col-sm-4 col-lg-2">
-                <div class="d-flex align-items-center p-2 rounded bg-light">
+                <div class="d-flex align-items-center p-2 rounded bg-body-secondary">
                     <div class="stat-icon-sm bg-info bg-opacity-10 text-info rounded-2 p-2 me-2">
                         <i class="bi bi-stack"></i>
                     </div>
@@ -121,7 +121,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 </div>
             </div>
             <div class="col-6 col-sm-4 col-lg-2">
-                <div class="d-flex align-items-center p-2 rounded bg-light">
+                <div class="d-flex align-items-center p-2 rounded bg-body-secondary">
                     <div class="stat-icon-sm bg-success bg-opacity-10 text-success rounded-2 p-2 me-2">
                         <i class="bi bi-hdd"></i>
                     </div>
@@ -132,7 +132,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 </div>
             </div>
             <div class="col-6 col-sm-4 col-lg-2">
-                <div class="d-flex align-items-center p-2 rounded bg-light">
+                <div class="d-flex align-items-center p-2 rounded bg-body-secondary">
                     <div class="stat-icon-sm bg-warning bg-opacity-10 text-warning rounded-2 p-2 me-2">
                         <i class="bi bi-clipboard-check"></i>
                     </div>
@@ -143,7 +143,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 </div>
             </div>
             <div class="col-6 col-sm-4 col-lg-2">
-                <div class="d-flex align-items-center p-2 rounded bg-light">
+                <div class="d-flex align-items-center p-2 rounded bg-body-secondary">
                     <div class="stat-icon-sm bg-<?= $lastBackupColor ?> bg-opacity-10 text-<?= $lastBackupColor ?> rounded-2 p-2 me-2" id="stat-lastbackup-icon">
                         <i class="bi bi-<?= $lastBackupIcon ?>"></i>
                     </div>
@@ -154,7 +154,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 </div>
             </div>
             <div class="col-6 col-sm-4 col-lg-2">
-                <div class="d-flex align-items-center p-2 rounded bg-light" id="agent-last-seen-card">
+                <div class="d-flex align-items-center p-2 rounded bg-body-secondary" id="agent-last-seen-card">
                     <div class="stat-icon-sm bg-<?= $statusClass ?> bg-opacity-10 text-<?= $statusClass ?> rounded-2 p-2 me-2" id="agent-last-seen-icon">
                         <i class="bi bi-broadcast"></i>
                     </div>
@@ -169,7 +169,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
 
     <!-- Collapsible edit form -->
     <div class="collapse" id="edit-client">
-        <div class="card-body border-top bg-light">
+        <div class="card-body border-top bg-body-secondary">
             <form method="POST" action="/clients/<?= $agent['id'] ?>/edit" class="row g-3 align-items-end">
                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                 <div class="col-md-4">
@@ -274,7 +274,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     <!-- Row 1: Key Metrics -->
     <div class="row g-3 mb-4">
         <div class="col-md-3">
-            <div class="card border-0 shadow-sm h-100" style="background-color: rgba(13,110,253,0.05);">
+            <div class="card border-0 shadow-sm h-100 metric-card-blue">
                 <div class="card-body d-flex align-items-center position-relative">
                     <?php if ($nextBackup && $nextBackup['plan_id']): ?>
                     <div class="dropdown position-absolute top-0 end-0 mt-2 me-2">
@@ -318,7 +318,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card border-0 shadow-sm h-100" style="background-color: rgba(13,202,240,0.05);">
+            <div class="card border-0 shadow-sm h-100 metric-card-cyan">
                 <div class="card-body d-flex align-items-center">
                     <div class="stat-icon bg-info bg-opacity-10 text-info rounded-3 p-3 me-3">
                         <i class="bi bi-stopwatch fs-3"></i>
@@ -332,7 +332,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card border-0 shadow-sm h-100" id="metric-success-card" style="background-color: rgba(<?= $successColor === 'success' ? '25,135,84' : ($successColor === 'warning' ? '255,193,7' : '220,53,69') ?>,0.05);">
+            <div class="card border-0 shadow-sm h-100 metric-card-<?= $successColor ?>" id="metric-success-card">
                 <div class="card-body d-flex align-items-center">
                     <div class="stat-icon bg-<?= $successColor ?> bg-opacity-10 text-<?= $successColor ?> rounded-3 p-3 me-3" id="metric-success-icon">
                         <i class="bi bi-check2-all fs-3"></i>
@@ -347,7 +347,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         </div>
         <div class="col-md-3">
             <?php $errColor = $recentErrors > 0 ? 'danger' : 'success'; ?>
-            <div class="card border-0 shadow-sm h-100" id="metric-errors-card" style="background-color: rgba(<?= $errColor === 'danger' ? '220,53,69' : '25,135,84' ?>,0.05);">
+            <div class="card border-0 shadow-sm h-100 metric-card-<?= $errColor ?>" id="metric-errors-card">
                 <div class="card-body d-flex align-items-center">
                     <div class="stat-icon bg-<?= $errColor ?> bg-opacity-10 text-<?= $errColor ?> rounded-3 p-3 me-3" id="metric-errors-icon">
                         <i class="bi bi-exclamation-triangle fs-3"></i>
@@ -466,6 +466,10 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     <?php if (!empty($durationChart)): ?>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <script>
+    const _dk = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+    const _tc = _dk ? '#8b929a' : '#6c757d';
+    const _gc = _dk ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
+
     // Duration Chart
     const durData = <?= json_encode($durationChart) ?>;
     new Chart(document.getElementById('durationChart').getContext('2d'), {
@@ -490,15 +494,17 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     beginAtZero: true,
                     ticks: {
                         font: { size: 10 },
+                        color: _tc,
                         callback: function(v) {
                             return v >= 60 ? Math.floor(v/60) + 'm' : v + 's';
                         }
                     },
-                    grid: { color: 'rgba(0,0,0,0.05)' },
+                    grid: { color: _gc },
                 },
                 x: {
                     ticks: {
                         font: { size: 9 },
+                        color: _tc,
                         maxRotation: 45,
                         callback: function(val, index) {
                             return index % Math.ceil(durData.length / 10) === 0 ? this.getLabelForValue(val) : '';
@@ -522,7 +528,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 data: repoData.map(r => r.size),
                 backgroundColor: repoData.map((_, i) => colors[i % colors.length]),
                 borderWidth: 2,
-                borderColor: '#fff',
+                borderColor: _dk ? '#212529' : '#fff',
             }]
         },
         options: {
@@ -683,7 +689,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                         <p>PERMANENTLY delete repository <strong>"<?= htmlspecialchars($repo['name']) ?>"</strong>, all its archives, and the data on disk?</p>
                         <p class="text-danger fw-bold">This action is NOT reversible.</p>
-                        <div class="form-check mt-3 p-3 bg-light rounded">
+                        <div class="form-check mt-3 p-3 bg-body-secondary rounded">
                             <input class="form-check-input" type="checkbox" name="delete_from_s3" id="deleteFromS3_<?= $repo['id'] ?>" value="1">
                             <input type="hidden" name="plugin_config_id" value="<?= $s3SyncByRepo[$repo['id']]['plugin_config_id'] ?>">
                             <label class="form-check-label" for="deleteFromS3_<?= $repo['id'] ?>">
@@ -2029,7 +2035,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
             </div>
 
             <div class="collapse mt-3" id="newPluginConfig<?= $plugin['id'] ?>">
-                <div class="border rounded p-3 bg-light">
+                <div class="border rounded p-3 bg-body-secondary">
                     <form method="POST" action="/clients/<?= $agent['id'] ?>/plugin-configs" id="newConfigForm<?= $plugin['id'] ?>">
                         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                         <input type="hidden" name="plugin_id" value="<?= $plugin['id'] ?>">
@@ -2119,11 +2125,11 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                     <div class="card-body small">
                                         <p class="text-muted mb-2">Create a MySQL user on the client for backups:</p>
                                         <strong>Backup Only</strong> <span class="text-muted">(recommended)</span>
-                                        <pre class="bg-light border rounded p-2 mt-1 mb-2" style="font-size:0.78rem;white-space:pre-wrap;">CREATE USER '<span id="sqlUser1">bbs_backup</span>'@'localhost' IDENTIFIED BY '<span id="sqlPass1"><?= htmlspecialchars($randomPass) ?></span>';
+                                        <pre class="bg-body-secondary border rounded p-2 mt-1 mb-2" style="font-size:0.78rem;white-space:pre-wrap;">CREATE USER '<span id="sqlUser1">bbs_backup</span>'@'localhost' IDENTIFIED BY '<span id="sqlPass1"><?= htmlspecialchars($randomPass) ?></span>';
 GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER ON *.* TO '<span id="sqlUser1b">bbs_backup</span>'@'localhost';
 FLUSH PRIVILEGES;</pre>
                                         <strong>Backup + Restore</strong>
-                                        <pre class="bg-light border rounded p-2 mt-1 mb-0" style="font-size:0.78rem;white-space:pre-wrap;">CREATE USER '<span id="sqlUser2">bbs_backup</span>'@'localhost' IDENTIFIED BY '<span id="sqlPass2"><?= htmlspecialchars($randomPass) ?></span>';
+                                        <pre class="bg-body-secondary border rounded p-2 mt-1 mb-0" style="font-size:0.78rem;white-space:pre-wrap;">CREATE USER '<span id="sqlUser2">bbs_backup</span>'@'localhost' IDENTIFIED BY '<span id="sqlPass2"><?= htmlspecialchars($randomPass) ?></span>';
 GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER,
       CREATE, INSERT, DROP, ALTER, INDEX, REFERENCES
       ON *.* TO '<span id="sqlUser2b">bbs_backup</span>'@'localhost';
@@ -2138,13 +2144,13 @@ FLUSH PRIVILEGES;</pre>
                                     <div class="card-body small">
                                         <p class="text-muted mb-2">Create a PostgreSQL role on the client for backups:</p>
                                         <strong>Backup Only</strong> <span class="text-muted">(recommended)</span>
-                                        <pre class="bg-light border rounded p-2 mt-1 mb-2" style="font-size:0.78rem;white-space:pre-wrap;">CREATE ROLE <span id="pgUser1">bbs_backup</span> WITH LOGIN PASSWORD '<span id="pgPass1"><?= htmlspecialchars($randomPass) ?></span>';
+                                        <pre class="bg-body-secondary border rounded p-2 mt-1 mb-2" style="font-size:0.78rem;white-space:pre-wrap;">CREATE ROLE <span id="pgUser1">bbs_backup</span> WITH LOGIN PASSWORD '<span id="pgPass1"><?= htmlspecialchars($randomPass) ?></span>';
 GRANT CONNECT ON DATABASE mydb TO <span id="pgUser1b">bbs_backup</span>;
 GRANT USAGE ON SCHEMA public TO <span id="pgUser1c">bbs_backup</span>;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO <span id="pgUser1d">bbs_backup</span>;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO <span id="pgUser1e">bbs_backup</span>;</pre>
                                         <strong>Backup + Restore</strong>
-                                        <pre class="bg-light border rounded p-2 mt-1 mb-0" style="font-size:0.78rem;white-space:pre-wrap;">CREATE ROLE <span id="pgUser2">bbs_backup</span> WITH LOGIN PASSWORD '<span id="pgPass2"><?= htmlspecialchars($randomPass) ?></span>';
+                                        <pre class="bg-body-secondary border rounded p-2 mt-1 mb-0" style="font-size:0.78rem;white-space:pre-wrap;">CREATE ROLE <span id="pgUser2">bbs_backup</span> WITH LOGIN PASSWORD '<span id="pgPass2"><?= htmlspecialchars($randomPass) ?></span>';
 GRANT CONNECT ON DATABASE mydb TO <span id="pgUser2b">bbs_backup</span>;
 GRANT USAGE ON SCHEMA public TO <span id="pgUser2c">bbs_backup</span>;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO <span id="pgUser2d">bbs_backup</span>;

@@ -169,6 +169,11 @@ html, body {
 
 .sidebar-link i.d-block {
     margin-bottom: 2px !important;
+    font-size: 1.2rem !important;
+}
+
+.sidebar-link .small {
+    font-size: 0.7rem !important;
 }
 
 .sidebar-link:hover {
@@ -765,8 +770,8 @@ body.bg-body-secondary {
 /* Dark mode — low-contrast palette */
 [data-bs-theme="dark"] {
     --bs-body-bg: #1a1d21;
-    --bs-body-color: #dee2e6;
-    --bs-secondary-color: #adb5bd;
+    --bs-body-color: #b0b8c1;
+    --bs-secondary-color: #8b929a;
     --bs-secondary-bg: #23272b;
     --bs-tertiary-bg: #23272b;
     --bs-border-color: rgba(255, 255, 255, 0.08);
@@ -789,7 +794,7 @@ body.bg-body-secondary {
 }
 
 [data-bs-theme="dark"] .table th {
-    color: #adb5bd;
+    color: #8b929a;
 }
 
 [data-bs-theme="dark"] .table-light {
@@ -837,8 +842,8 @@ body.bg-body-secondary {
 .gauge-detail { fill: #6c757d; }
 
 [data-bs-theme="dark"] .gauge-track { stroke: #343a40; }
-[data-bs-theme="dark"] .gauge-pct { fill: #f8f9fa; }
-[data-bs-theme="dark"] .gauge-detail { fill: #adb5bd; }
+[data-bs-theme="dark"] .gauge-pct { fill: #b0b8c1; }
+[data-bs-theme="dark"] .gauge-detail { fill: #8b929a; }
 
 /* Dashboard: Storage pool donut */
 .donut-track { stroke: #e9ecef; }
@@ -854,7 +859,20 @@ body.bg-body-secondary {
 .mysql-bar-free { background: #e9ecef; color: #6c757d; }
 
 [data-bs-theme="dark"] .mysql-partition-bar { background: #343a40; }
-[data-bs-theme="dark"] .mysql-bar-free { background: #343a40; color: #adb5bd; }
+[data-bs-theme="dark"] .mysql-bar-free { background: #343a40; color: #8b929a; }
 
 /* Dashboard: Progress bar track (partitions) */
 [data-bs-theme="dark"] .progress { --bs-progress-bg: #343a40; }
+
+/* Client detail: metric card tint backgrounds */
+.metric-card-blue { background-color: rgba(13,110,253,0.05); }
+.metric-card-cyan { background-color: rgba(13,202,240,0.05); }
+.metric-card-success { background-color: rgba(25,135,84,0.05); }
+.metric-card-warning { background-color: rgba(255,193,7,0.05); }
+.metric-card-danger { background-color: rgba(220,53,69,0.05); }
+
+[data-bs-theme="dark"] .metric-card-blue { background-color: rgba(13,110,253,0.08); }
+[data-bs-theme="dark"] .metric-card-cyan { background-color: rgba(13,202,240,0.08); }
+[data-bs-theme="dark"] .metric-card-success { background-color: rgba(25,135,84,0.08); }
+[data-bs-theme="dark"] .metric-card-warning { background-color: rgba(255,193,7,0.08); }
+[data-bs-theme="dark"] .metric-card-danger { background-color: rgba(220,53,69,0.08); }

@@ -8,7 +8,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="/css/style.css" rel="stylesheet">
 </head>
-<body class="bg-light">
+<body class="bg-body-secondary">
     <div class="container">
         <div class="row justify-content-center mt-5">
             <div class="col-md-7 col-lg-6">

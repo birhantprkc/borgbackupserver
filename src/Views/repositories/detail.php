@@ -35,7 +35,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
         <!-- Stats Row -->
         <div class="row g-3 mt-3">
             <div class="col-6 col-md-3">
-                <div class="d-flex align-items-center p-2 rounded bg-light">
+                <div class="d-flex align-items-center p-2 rounded bg-body-secondary">
                     <div class="stat-icon-sm bg-primary bg-opacity-10 text-primary rounded-2 p-2 me-2">
                         <i class="bi bi-hdd"></i>
                     </div>
@@ -46,7 +46,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                 </div>
             </div>
             <div class="col-6 col-md-3">
-                <div class="d-flex align-items-center p-2 rounded bg-light">
+                <div class="d-flex align-items-center p-2 rounded bg-body-secondary">
                     <div class="stat-icon-sm bg-info bg-opacity-10 text-info rounded-2 p-2 me-2">
                         <i class="bi bi-stack"></i>
                     </div>
@@ -57,7 +57,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                 </div>
             </div>
             <div class="col-6 col-md-3">
-                <div class="d-flex align-items-center p-2 rounded bg-light">
+                <div class="d-flex align-items-center p-2 rounded bg-body-secondary">
                     <div class="stat-icon-sm bg-success bg-opacity-10 text-success rounded-2 p-2 me-2">
                         <i class="bi bi-calendar-check"></i>
                     </div>
@@ -68,7 +68,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                 </div>
             </div>
             <div class="col-6 col-md-3">
-                <div class="d-flex align-items-center p-2 rounded bg-light">
+                <div class="d-flex align-items-center p-2 rounded bg-body-secondary">
                     <div class="stat-icon-sm bg-warning bg-opacity-10 text-warning rounded-2 p-2 me-2">
                         <i class="bi bi-clock-history"></i>
                     </div>
@@ -92,7 +92,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
             <div class="card-body">
                 <div class="d-flex flex-column gap-3">
                     <!-- Check -->
-                    <div class="d-flex align-items-start gap-3 p-3 bg-light rounded">
+                    <div class="d-flex align-items-start gap-3 p-3 bg-body-secondary rounded">
                         <div class="text-primary" style="font-size: 1.5rem;">
                             <i class="bi bi-shield-check"></i>
                         </div>
@@ -110,7 +110,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                     </div>
 
                     <!-- Compact -->
-                    <div class="d-flex align-items-start gap-3 p-3 bg-light rounded">
+                    <div class="d-flex align-items-start gap-3 p-3 bg-body-secondary rounded">
                         <div class="text-success" style="font-size: 1.5rem;">
                             <i class="bi bi-arrows-collapse"></i>
                         </div>
@@ -128,7 +128,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                     </div>
 
                     <!-- Repair -->
-                    <div class="d-flex align-items-start gap-3 p-3 bg-light rounded">
+                    <div class="d-flex align-items-start gap-3 p-3 bg-body-secondary rounded">
                         <div class="text-warning" style="font-size: 1.5rem;">
                             <i class="bi bi-bandaid"></i>
                         </div>
@@ -146,7 +146,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                     </div>
 
                     <!-- Break Lock -->
-                    <div class="d-flex align-items-start gap-3 p-3 bg-light rounded">
+                    <div class="d-flex align-items-start gap-3 p-3 bg-body-secondary rounded">
                         <div class="text-danger" style="font-size: 1.5rem;">
                             <i class="bi bi-unlock"></i>
                         </div>
@@ -181,7 +181,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                 </form>
             </div>
             <div class="card-body">
-                <div class="d-flex align-items-start gap-3 p-3 bg-light rounded mb-3">
+                <div class="d-flex align-items-start gap-3 p-3 bg-body-secondary rounded mb-3">
                     <div class="text-info" style="font-size: 1.5rem;">
                         <i class="bi bi-cloud-check"></i>
                     </div>
@@ -196,7 +196,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                     </div>
                 </div>
 
-                <div class="d-flex align-items-start gap-3 p-3 bg-light rounded">
+                <div class="d-flex align-items-start gap-3 p-3 bg-body-secondary rounded">
                     <div class="text-primary" style="font-size: 1.5rem;">
                         <i class="bi bi-cloud-download"></i>
                     </div>

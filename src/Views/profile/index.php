@@ -194,7 +194,7 @@
                 </button>
 
                 <div class="collapse mt-3" id="disable2fa">
-                    <div class="card card-body bg-light">
+                    <div class="card card-body bg-body-secondary">
                         <form method="POST" action="/profile/2fa/disable">
                             <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                             <div class="mb-3">
@@ -274,7 +274,7 @@
                 these codes are your only way to log in.
             </div>
 
-            <div class="bg-light p-3 mb-3 rounded font-monospace" id="recovery-codes">
+            <div class="bg-body-secondary p-3 mb-3 rounded font-monospace" id="recovery-codes">
                 <?php foreach ($recoveryCodes as $code): ?>
                 <div><?= htmlspecialchars($code) ?></div>
                 <?php endforeach; ?>

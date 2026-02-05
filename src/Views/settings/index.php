@@ -378,7 +378,7 @@ $updateAvailable = $updateService->isUpdateAvailable();
                         <span id="server-borg-version">
                         <?php if ($serverBorgVersion): ?>
                             <span class="badge bg-success">v<?= htmlspecialchars($serverBorgVersion) ?></span>
-                            <span class="badge bg-light text-dark border small"><?= $updateMode === 'server' ? 'Server' : 'Official' ?></span>
+                            <span class="badge bg-body-secondary text-body border small"><?= $updateMode === 'server' ? 'Server' : 'Official' ?></span>
                         <?php else: ?>
                             <span class="badge bg-secondary"><i class="bi bi-hourglass-split"></i> checking...</span>
                         <?php endif; ?>
@@ -548,9 +548,9 @@ $updateAvailable = $updateService->isUpdateAvailable();
                                 <td class="text-muted"><?= htmlspecialchars($glibcDisplay ?: '-') ?></td>
                                 <td>
                                     <span class="badge bg-secondary"><?= htmlspecialchars($borgVer) ?></span>
-                                    <span class="badge bg-light text-dark border"><?= htmlspecialchars($installMethod) ?></span>
+                                    <span class="badge bg-body-secondary text-body border"><?= htmlspecialchars($installMethod) ?></span>
                                     <?php if ($borgSource !== 'unknown'): ?>
-                                    <span class="badge bg-light text-dark border"><?= ucfirst(htmlspecialchars($borgSource)) ?></span>
+                                    <span class="badge bg-body-secondary text-body border"><?= ucfirst(htmlspecialchars($borgSource)) ?></span>
                                     <?php endif; ?>
                                 </td>
                                 <td class="text-end">
@@ -594,7 +594,7 @@ $updateAvailable = $updateService->isUpdateAvailable();
                             <i class="bi bi-file-earmark-binary me-1 text-muted"></i>
                             <?= htmlspecialchars($bin['filename']) ?>
                         </span>
-                        <span class="badge bg-light text-dark border">
+                        <span class="badge bg-body-secondary text-body border">
                             glibc &ge; <?= htmlspecialchars(substr($bin['glibc'], 0, 1) . '.' . substr($bin['glibc'], 1)) ?>
                         </span>
                     </div>
@@ -620,7 +620,7 @@ $updateAvailable = $updateService->isUpdateAvailable();
                 if (serverEl && data.server_borg_version) {
                     var modeLabel = data.update_mode === 'server' ? 'Server' : 'Official';
                     serverEl.innerHTML = '<span class="badge bg-success">v' + data.server_borg_version.replace(/</g, '&lt;') + '</span> '
-                        + '<span class="badge bg-light text-dark border small">' + modeLabel + '</span>';
+                        + '<span class="badge bg-body-secondary text-body border small">' + modeLabel + '</span>';
                 } else if (serverEl && !data.server_borg_version) {
                     serverEl.innerHTML = '<span class="badge bg-danger">not installed</span>';
                 }
@@ -641,9 +641,9 @@ $updateAvailable = $updateService->isUpdateAvailable();
                         html += '<td class="text-muted">' + agent.glibc_display.replace(/</g, '&lt;') + '</td>';
                         html += '<td>';
                         html += '<span class="badge bg-secondary">' + agent.borg_version.replace(/</g, '&lt;') + '</span> ';
-                        html += '<span class="badge bg-light text-dark border">' + agent.install_method.replace(/</g, '&lt;') + '</span>';
+                        html += '<span class="badge bg-body-secondary text-body border">' + agent.install_method.replace(/</g, '&lt;') + '</span>';
                         if (agent.borg_source !== 'unknown') {
-                            html += ' <span class="badge bg-light text-dark border">' + agent.borg_source.charAt(0).toUpperCase() + agent.borg_source.slice(1) + '</span>';
+                            html += ' <span class="badge bg-body-secondary text-body border">' + agent.borg_source.charAt(0).toUpperCase() + agent.borg_source.slice(1) + '</span>';
                         }
                         html += '</td>';
                         html += '<td class="text-end">';

@@ -577,7 +577,7 @@
 // Jobs Chart (stacked bar)
 const chartData = <?= json_encode($chartData) ?>;
 const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
-const chartTextColor = isDark ? '#adb5bd' : '#6c757d';
+const chartTextColor = isDark ? '#8b929a' : '#6c757d';
 const chartGridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
 const ctx = document.getElementById('backupsChart').getContext('2d');
 new Chart(ctx, {
