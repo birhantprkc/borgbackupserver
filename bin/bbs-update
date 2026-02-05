@@ -150,7 +150,7 @@ if command -v apprise &>/dev/null; then
     echo "  OK ($(apprise --version 2>/dev/null || echo 'installed'))"
 else
     echo "  Installing Apprise..."
-    pip3 install --no-cache-dir apprise 2>/dev/null || echo "  Warning: Apprise install failed (push notifications will not work)"
+    pip3 install --break-system-packages --no-cache-dir apprise 2>/dev/null || echo "  Warning: Apprise install failed (push notifications will not work)"
 fi
 
 # 9. Run database migrations
