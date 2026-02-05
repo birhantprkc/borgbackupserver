@@ -169,7 +169,7 @@ class ProfileController extends Controller
     public function theme(): void
     {
         $this->requireAuth();
-        $theme = ($_POST['theme'] ?? 'light') === 'dark' ? 'dark' : 'light';
+        $theme = ($_POST['theme'] ?? 'dark') === 'dark' ? 'dark' : 'light';
         $this->db->update('users', ['theme' => $theme], 'id = ?', [$_SESSION['user_id']]);
         $_SESSION['theme'] = $theme;
         http_response_code(204);

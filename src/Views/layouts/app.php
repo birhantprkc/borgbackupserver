@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-bs-theme="<?= htmlspecialchars($_SESSION['theme'] ?? 'light') ?>">
+<html lang="en" data-bs-theme="<?= htmlspecialchars($_SESSION['theme'] ?? 'dark') ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -235,7 +235,7 @@
         if (icon) icon.className = 'bi ' + (theme === 'dark' ? 'bi-sun' : 'bi-moon') + ' me-1';
         if (label) label.textContent = theme === 'dark' ? 'Light Mode' : 'Dark Mode';
     }
-    updateThemeUI(document.documentElement.getAttribute('data-bs-theme') || 'light');
+    updateThemeUI(document.documentElement.getAttribute('data-bs-theme') || 'dark');
     </script>
     <script>
     function confirmAction(message, callback, options) {
