@@ -61,7 +61,7 @@ $eventColors = [
         </div>
         <div class="card-body">
             <form method="POST" action="/notification-services">
-                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
 
                 <div class="row g-3 mb-3">
                     <div class="col-md-4">
@@ -174,7 +174,7 @@ $eventColors = [
                             <i class="bi bi-lightning"></i>
                         </button>
                         <form method="POST" action="/notification-services/<?= $service['id'] ?>/duplicate" class="d-inline">
-                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                             <button type="submit" class="btn btn-sm btn-outline-secondary border-0" title="Duplicate">
                                 <i class="bi bi-copy"></i>
                             </button>
@@ -185,7 +185,7 @@ $eventColors = [
                         </button>
                         <form method="POST" action="/notification-services/<?= $service['id'] ?>/delete" class="d-inline"
                               data-confirm="Delete this notification service?" data-confirm-danger>
-                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                             <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Delete">
                                 <i class="bi bi-trash"></i>
                             </button>
@@ -196,7 +196,7 @@ $eventColors = [
                 <tr class="collapse" id="edit_<?= $service['id'] ?>">
                     <td colspan="5" class="bg-body-secondary">
                         <form method="POST" action="/notification-services/<?= $service['id'] ?>/update" class="p-3">
-                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
 
                             <div class="row g-3 mb-3">
                                 <div class="col-md-4">
@@ -241,7 +241,7 @@ $eventColors = [
                                 </div>
                                 <div>
                                     <form method="POST" action="/notification-services/<?= $service['id'] ?>/toggle" class="d-inline toggle-form">
-                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                         <button type="submit" class="btn btn-sm btn-outline-<?= $service['enabled'] ? 'warning' : 'success' ?>">
                                             <i class="bi bi-<?= $service['enabled'] ? 'pause-circle' : 'play-circle' ?> me-1"></i>
                                             <?= $service['enabled'] ? 'Disable' : 'Enable' ?>
