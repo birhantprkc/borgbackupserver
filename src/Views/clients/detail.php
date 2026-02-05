@@ -284,7 +284,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 <div class="card-body d-flex align-items-center position-relative">
                     <?php if ($nextBackup && $nextBackup['plan_id']): ?>
                     <div class="dropdown position-absolute top-0 end-0 mt-2 me-2">
-                        <button class="btn btn-sm btn-light border-0" type="button" data-bs-toggle="dropdown">
+                        <button class="btn btn-sm btn-link text-muted p-1 border-0" type="button" data-bs-toggle="dropdown">
                             <i class="bi bi-three-dots-vertical"></i>
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end">
