@@ -41,7 +41,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                         <i class="bi bi-display me-2 text-primary"></i><?= htmlspecialchars($agent['name']) ?>
                     </h3>
                     <span class="badge bg-<?= $statusClass ?>" id="agent-status-badge"><?= ucfirst($agent['status']) ?></span>
-                    <button class="btn btn-sm btn-outline-secondary border-0" data-bs-toggle="collapse" data-bs-target="#edit-client" title="Edit client">
+                    <button class="btn btn-sm btn-outline-secondary border-0" data-bs-toggle="modal" data-bs-target="#editClientModal" title="Edit client">
                         <i class="bi bi-pencil"></i>
                     </button>
                 </div>
@@ -165,31 +165,39 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
             </div>
         </div>
 
-    <!-- Collapsible edit form -->
-    <div class="collapse" id="edit-client">
-        <div class="border-top bg-body-secondary rounded p-3 mt-3">
-            <form method="POST" action="/clients/<?= $agent['id'] ?>/edit" class="row g-3 align-items-end">
-                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                <div class="col-md-4">
-                    <label class="form-label fw-semibold small">Client Name</label>
-                    <input type="text" class="form-control form-control-sm" name="name" value="<?= htmlspecialchars($agent['name']) ?>" required>
-                </div>
-                <?php if ($this->isAdmin() && !empty($users)): ?>
-                <div class="col-md-3">
-                    <label class="form-label fw-semibold small">Owner</label>
-                    <select name="user_id" class="form-select form-select-sm">
-                        <option value="">No owner</option>
-                        <?php foreach ($users as $u): ?>
-                        <option value="<?= $u['id'] ?>" <?= ($agent['user_id'] ?? '') == $u['id'] ? 'selected' : '' ?>><?= htmlspecialchars($u['username']) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <?php endif; ?>
-                <div class="col-auto">
-                    <button type="submit" class="btn btn-sm btn-primary">Save</button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#edit-client">Cancel</button>
-                </div>
-            </form>
+    <!-- Edit Client Modal -->
+    <div class="modal fade" id="editClientModal" tabindex="-1">
+        <div class="modal-dialog modal-sm modal-dialog-centered">
+            <div class="modal-content">
+                <form method="POST" action="/clients/<?= $agent['id'] ?>/edit">
+                    <div class="modal-header">
+                        <h6 class="modal-title">Edit Client</h6>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold small">Client Name</label>
+                            <input type="text" class="form-control form-control-sm" name="name" value="<?= htmlspecialchars($agent['name']) ?>" required>
+                        </div>
+                        <?php if ($this->isAdmin() && !empty($users)): ?>
+                        <div>
+                            <label class="form-label fw-semibold small">Owner</label>
+                            <select name="user_id" class="form-select form-select-sm">
+                                <option value="">No owner</option>
+                                <?php foreach ($users as $u): ?>
+                                <option value="<?= $u['id'] ?>" <?= ($agent['user_id'] ?? '') == $u['id'] ? 'selected' : '' ?>><?= htmlspecialchars($u['username']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 </div>
