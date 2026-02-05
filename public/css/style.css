@@ -1,3 +1,8 @@
+/* Font */
+:root {
+    --bs-body-font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
 /* Muted Bootstrap color overrides — buttons and badges only */
 .btn-primary {
     --bs-btn-bg: #4a6fa5;
