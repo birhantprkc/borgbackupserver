@@ -3,66 +3,58 @@
 <!-- Stat Cards -->
 <div class="row g-3 mb-4">
     <div class="col-xl-3 col-md-6">
-        <div class="card stat-card border-0 shadow-sm overflow-hidden">
-            <div class="d-flex align-items-stretch">
-                <div class="d-flex align-items-center justify-content-center text-white" style="width:52px;font-size:1.4rem;background:#4a90d9;">
-                    <i class="bi bi-display"></i>
+        <div class="card border-0 shadow-sm h-100 metric-card-blue">
+            <div class="card-body d-flex align-items-center">
+                <div class="stat-icon bg-primary bg-opacity-10 text-primary rounded-3 p-3 me-3">
+                    <i class="bi bi-display fs-3"></i>
                 </div>
-                <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
-                    <div>
-                        <div class="fw-semibold small">Client Agents</div>
-                        <div class="text-muted" style="font-size:.7rem;"><?= $onlineCount ?> online<?php if ($offlineCount): ?>, <?= $offlineCount ?> offline<?php endif; ?><?php if ($errorCount): ?>, <?= $errorCount ?> error<?php endif; ?></div>
-                    </div>
-                    <div class="fs-2 fw-bold" style="color:#4a90d9;"><?= $totalClients ?></div>
+                <div>
+                    <div class="text-muted small">Client Agents</div>
+                    <div class="fs-4 fw-bold"><?= $totalClients ?></div>
+                    <div class="text-muted small"><?= $onlineCount ?> online<?php if ($offlineCount): ?>, <?= $offlineCount ?> offline<?php endif; ?><?php if ($errorCount): ?>, <?= $errorCount ?> error<?php endif; ?></div>
                 </div>
             </div>
         </div>
     </div>
     <div class="col-xl-3 col-md-6">
-        <div class="card stat-card border-0 shadow-sm overflow-hidden">
-            <div class="d-flex align-items-stretch">
-                <div class="d-flex align-items-center justify-content-center text-white" style="width:52px;font-size:1.4rem;background:#48bb78;">
-                    <i class="bi bi-archive"></i>
+        <div class="card border-0 shadow-sm h-100 metric-card-success">
+            <div class="card-body d-flex align-items-center">
+                <div class="stat-icon bg-success bg-opacity-10 text-success rounded-3 p-3 me-3">
+                    <i class="bi bi-archive fs-3"></i>
                 </div>
-                <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
-                    <div>
-                        <div class="fw-semibold small">Repositories</div>
-                        <div class="text-muted" style="font-size:.7rem;"><?= $totalSizeFormatted ?> total</div>
-                    </div>
-                    <div class="fs-2 fw-bold" style="color:#48bb78;"><?= $totalRepos ?></div>
+                <div>
+                    <div class="text-muted small">Repositories</div>
+                    <div class="fs-4 fw-bold"><?= $totalRepos ?></div>
+                    <div class="text-muted small"><?= $totalSizeFormatted ?> total</div>
                 </div>
             </div>
         </div>
     </div>
     <div class="col-xl-3 col-md-6">
-        <div class="card stat-card border-0 shadow-sm overflow-hidden">
-            <div class="d-flex align-items-stretch">
-                <div class="d-flex align-items-center justify-content-center text-white" style="width:52px;font-size:1.4rem;background:#e67e22;">
-                    <i class="bi bi-calendar-check"></i>
+        <div class="card border-0 shadow-sm h-100 metric-card-warning">
+            <div class="card-body d-flex align-items-center">
+                <div class="stat-icon bg-warning bg-opacity-10 text-warning rounded-3 p-3 me-3">
+                    <i class="bi bi-calendar-check fs-3"></i>
                 </div>
-                <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
-                    <div>
-                        <div class="fw-semibold small">Active Schedules</div>
-                        <div class="text-muted" style="font-size:.7rem;"><?= $planCount ?> backup plan<?= $planCount !== 1 ? 's' : '' ?></div>
-                    </div>
-                    <div class="fs-2 fw-bold" style="color:#e67e22;"><?= $activeSchedules ?></div>
+                <div>
+                    <div class="text-muted small">Active Schedules</div>
+                    <div class="fs-4 fw-bold"><?= $activeSchedules ?></div>
+                    <div class="text-muted small"><?= $planCount ?> backup plan<?= $planCount !== 1 ? 's' : '' ?></div>
                 </div>
             </div>
         </div>
     </div>
     <div class="col-xl-3 col-md-6">
-        <div class="card stat-card border-0 shadow-sm overflow-hidden">
-            <div class="d-flex align-items-stretch">
-                <?php $outdatedColor = $outdatedCount > 0 ? '#c0392b' : '#48bb78'; ?>
-                <div class="d-flex align-items-center justify-content-center text-white" style="width:52px;font-size:1.4rem;background:<?= $outdatedColor ?>;">
-                    <i class="bi bi-<?= $outdatedCount > 0 ? 'exclamation-triangle' : 'check-circle' ?>"></i>
+        <?php $outdatedBs = $outdatedCount > 0 ? 'danger' : 'success'; ?>
+        <div class="card border-0 shadow-sm h-100 metric-card-<?= $outdatedBs ?>">
+            <div class="card-body d-flex align-items-center">
+                <div class="stat-icon bg-<?= $outdatedBs ?> bg-opacity-10 text-<?= $outdatedBs ?> rounded-3 p-3 me-3">
+                    <i class="bi bi-<?= $outdatedCount > 0 ? 'exclamation-triangle' : 'check-circle' ?> fs-3"></i>
                 </div>
-                <div class="d-flex align-items-center justify-content-between flex-fill px-3 py-2">
-                    <div>
-                        <div class="fw-semibold small">Out of Date</div>
-                        <div class="text-muted" style="font-size:.7rem;"><?= $latestVersion ? 'latest: v' . htmlspecialchars($latestVersion) : 'no agents reporting' ?></div>
-                    </div>
-                    <div class="fs-2 fw-bold" style="color:<?= $outdatedColor ?>;"><?= $outdatedCount ?></div>
+                <div>
+                    <div class="text-muted small">Out of Date</div>
+                    <div class="fs-4 fw-bold"><?= $outdatedCount ?></div>
+                    <div class="text-muted small"><?= $latestVersion ? 'latest: v' . htmlspecialchars($latestVersion) : 'no agents reporting' ?></div>
                 </div>
             </div>
         </div>
