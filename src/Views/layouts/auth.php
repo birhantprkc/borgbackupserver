@@ -15,7 +15,7 @@
         <div class="row justify-content-center mt-5">
             <div class="col-md-5">
                 <div class="text-center mb-4">
-                    <img src="/images/bbs-logo.png" alt="Borg Backup Server" class="img-fluid" style="max-width: 350px;">
+                    <img src="/images/borg_icon_dark.png" alt="Borg Backup Server" class="img-fluid" style="max-width: 120px;">
                 </div>
                 <?php require $viewPath . $template . '.php'; ?>
             </div>

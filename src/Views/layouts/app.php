@@ -17,7 +17,7 @@
     <nav class="navbar navbar-expand navbar-dark topbar p-0">
         <div class="container-fluid p-0">
             <a href="/" class="navbar-brand d-flex align-items-center justify-content-center m-0 p-0 topbar-logo">
-                <img src="/images/bbs-logo-small.png" alt="BBS" style="height: 36px;">
+                <img src="/images/borg_icon_dark.png" alt="BBS" style="height: 36px;">
             </a>
             <span class="navbar-text fw-semibold ms-3 d-none d-sm-inline"><?= htmlspecialchars($pageTitle ?? '') ?></span>
             <span class="navbar-text fw-semibold ms-2 d-sm-none small"><?= htmlspecialchars($pageTitle ?? '') ?></span>
