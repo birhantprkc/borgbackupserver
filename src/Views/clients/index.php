@@ -118,7 +118,7 @@
     <div class="card-body p-0">
         <!-- Desktop table view -->
         <div class="table-responsive d-none d-md-block">
-            <table class="table table-hover table-sm mb-0 small" id="clientsTable">
+            <table class="table table-hover mb-0 small" id="clientsTable">
                 <thead class="table-light">
                     <tr>
                         <th>Name</th>
