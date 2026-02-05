@@ -70,12 +70,14 @@ $columnLabels = [
             <h6 class="mb-0"><i class="bi bi-pc-display me-2"></i>Client Access & Permissions</h6>
         </div>
         <div class="card-body">
-            <div class="form-check mb-3">
-                <input class="form-check-input" type="checkbox" name="all_clients" id="allClientsCheck" value="1" <?= $user['all_clients'] ? 'checked' : '' ?>>
-                <label class="form-check-label fw-semibold" for="allClientsCheck">
-                    Access All Clients
-                </label>
-                <div class="form-text">User will have access to all current and future clients</div>
+            <div class="rounded-3 p-3 mb-3 d-flex align-items-center <?= $user['all_clients'] ? 'bg-info bg-opacity-10 border border-info border-opacity-25' : 'bg-body-secondary' ?>" id="allClientsCallout">
+                <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" name="all_clients" id="allClientsCheck" value="1" <?= $user['all_clients'] ? 'checked' : '' ?>>
+                    <label class="form-check-label fw-semibold" for="allClientsCheck">
+                        Access All Clients
+                    </label>
+                    <div class="text-muted small">User will have access to all current and future clients</div>
+                </div>
             </div>
 
             <!-- All Clients Permissions (shown when all_clients is checked) -->
@@ -218,9 +220,15 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Toggle between all clients and specific clients
+    const allClientsCallout = document.getElementById('allClientsCallout');
     allClientsCheck.addEventListener('change', function() {
         allClientsPermsDiv.style.display = this.checked ? '' : 'none';
         specificClientsDiv.style.display = this.checked ? 'none' : '';
+        if (this.checked) {
+            allClientsCallout.className = 'rounded-3 p-3 mb-3 d-flex align-items-center bg-info bg-opacity-10 border border-info border-opacity-25';
+        } else {
+            allClientsCallout.className = 'rounded-3 p-3 mb-3 d-flex align-items-center bg-body-secondary';
+        }
     });
 
     // Handle client checkbox changes - enable/disable permission checkboxes
