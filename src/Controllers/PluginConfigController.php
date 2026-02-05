@@ -43,6 +43,16 @@ class PluginConfigController extends Controller
         $pluginManager = new PluginManager();
         $pluginManager->savePluginConfig($id, $pluginId, $name, $config);
 
+        // Warn if S3 config uses global credentials but globals are empty
+        $plugin = $this->db->fetchOne("SELECT slug FROM plugins WHERE id = ?", [$pluginId]);
+        if ($plugin && $plugin['slug'] === 's3_sync' && ($config['credential_source'] ?? 'global') === 'global') {
+            $bucket = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 's3_bucket'");
+            if (empty($bucket['value'])) {
+                $this->flash('warning', "S3 config saved, but Global S3 Settings are not configured yet. Go to <a href='/settings#s3'>Settings &rarr; S3</a> to set them up.");
+                $this->redirect("/clients/{$id}?tab=plugins");
+            }
+        }
+
         $this->flash('success', "Plugin configuration \"{$name}\" created.");
         $this->redirect("/clients/{$id}?tab=plugins");
     }

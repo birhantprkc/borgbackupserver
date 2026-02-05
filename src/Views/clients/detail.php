@@ -1933,6 +1933,9 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     </div>
                 </div>
                 <div id="test-result-<?= $cfg['id'] ?>" class="mt-1"></div>
+                <?php if ($plugin['slug'] === 's3_sync' && ($cfgData['credential_source'] ?? 'global') === 'global' && empty($globalS3Configured)): ?>
+                <div class="alert alert-warning small mb-0 mt-2"><i class="bi bi-exclamation-triangle me-1"></i> Global S3 settings are not configured. <a href="/settings#s3">Configure in Settings</a></div>
+                <?php endif; ?>
 
                 <!-- Edit form (collapsed) -->
                 <div class="collapse mt-3" id="editConfig<?= $cfg['id'] ?>" onclick="event.stopPropagation();">

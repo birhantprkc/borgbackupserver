@@ -359,6 +359,10 @@ class ClientController extends Controller
         $allPlugins = $pluginManager->getAllPlugins();
         $pluginConfigs = $pluginManager->getPluginConfigs($id);
 
+        // Check if global S3 settings have a bucket configured
+        $globalS3Bucket = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 's3_bucket'");
+        $globalS3Configured = !empty($globalS3Bucket['value']);
+
         // Repos with S3 sync enabled (via repository_s3_configs)
         $s3SyncRepos = $this->db->fetchAll("
             SELECT rsc.repository_id, rsc.plugin_config_id, rsc.last_sync_at as last_s3_sync, rsc.enabled
@@ -436,6 +440,7 @@ class ClientController extends Controller
             's3SyncByRepo' => $s3SyncByRepo,
             's3Orphans' => $s3Orphans,
             's3PluginConfigId' => $s3PluginConfigId,
+            'globalS3Configured' => $globalS3Configured,
         ]);
     }
 
