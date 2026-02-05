@@ -256,7 +256,7 @@ $updateAvailable = $updateService->isUpdateAvailable();
                     <?php if (!$appriseInstalled): ?>
                     <div class="alert alert-warning py-2 px-3 small mb-3">
                         <i class="bi bi-exclamation-triangle me-1"></i>
-                        <strong>Apprise not installed.</strong> Install with: <code>pip3 install apprise</code>
+                        <strong>Apprise not installed.</strong> Run the upgrade again from <a href="/settings?tab=updates">Settings &gt; Updates</a> to install it automatically.
                     </div>
                     <?php endif; ?>
 
