@@ -18,6 +18,8 @@ services:
       - APP_URL=http://localhost:8080
       # SSH port — MUST match the host-side port mapping above (left side of 2222:22)
       - SSH_PORT=2222
+      # Version — "latest" pulls the newest release tag. Can also be a specific tag (e.g. v1.0.0-RC5) or "main".
+      # - BBS_VERSION=latest
       # Admin password — only used on first run. Omit to auto-generate (shown in logs).
       # - ADMIN_PASS=changeme
     volumes:

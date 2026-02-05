@@ -74,9 +74,12 @@ Edit `docker-compose.yml` to customize:
 |---|---|---|
 | `APP_URL` | `http://localhost:8080` | Public URL (used by browsers and agents) |
 | `SSH_PORT` | `2222` | SSH port — must match the host-side port mapping |
+| `BBS_VERSION` | `latest` | Release tag, e.g. `v1.0.0-RC5`, or `main` for dev |
 | `ADMIN_PASS` | *(random)* | Admin password (first run only) |
 
 BBS needs two ports: **HTTP** for the web UI and API, and **SSH** for borg backup data transfer. The `SSH_PORT` environment variable must match the host port in your SSH port mapping so agents know which port to connect to.
+
+Updates can be applied from the Settings page in the web UI, or by restarting the container (`docker compose restart`).
 
 All data is stored in the `bbs-data` Docker volume (`/var/bbs`): borg repositories, MariaDB database, SSH keys, and configuration. Back up this volume to protect your data.
 

@@ -24,6 +24,9 @@ RUN apt-get update && apt-get install -y \
 # Install PHP extensions
 RUN docker-php-ext-install pdo pdo_mysql mbstring
 
+# Install Composer
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
 # Enable Apache modules
 RUN a2enmod rewrite
 
@@ -51,22 +54,8 @@ RUN mkdir -p /var/www/bbs /var/bbs/home /var/bbs/backups /var/bbs/cache /run/mys
     && chown -R www-data:www-data /var/www/bbs /var/bbs \
     && chown mysql:mysql /run/mysqld
 
-# Install Composer
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-
-# Copy application code and install dependencies
-COPY . /var/www/bbs/
-RUN cd /var/www/bbs && composer install --no-dev --optimize-autoloader --no-interaction
-
-# Install bbs-ssh-helper
-RUN cp /var/www/bbs/bin/bbs-ssh-helper /usr/local/bin/bbs-ssh-helper \
-    && chmod 755 /usr/local/bin/bbs-ssh-helper
-
-# Set ownership
-RUN chown -R www-data:www-data /var/www/bbs
-
 # Configure scoped sudoers for www-data
-RUN echo "www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper" > /etc/sudoers.d/bbs-ssh-helper \
+RUN echo "www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper, /var/www/bbs/bin/bbs-update" > /etc/sudoers.d/bbs-ssh-helper \
     && echo "www-data ALL=(bbs-*) NOPASSWD: /usr/bin/borg, /usr/local/bin/borg, /usr/bin/rclone, /usr/bin/env" > /etc/sudoers.d/bbs-borg \
     && chmod 440 /etc/sudoers.d/bbs-ssh-helper /etc/sudoers.d/bbs-borg
 
