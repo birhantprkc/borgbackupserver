@@ -168,7 +168,41 @@ class ServerStats
             }
         }
 
+        // Ensure /var/bbs is represented if it exists (df deduplicates by device,
+        // so in Docker with XFS project quotas /var/bbs may be hidden behind
+        // another mount from the same device like /entrypoint.sh)
+        $hasVarBbs = false;
+        foreach ($partitions as $p) {
+            if ($p['mount'] === '/var/bbs') {
+                $hasVarBbs = true;
+                break;
+            }
+        }
+        if (!$hasVarBbs && is_dir('/var/bbs')) {
+            $total = @disk_total_space('/var/bbs');
+            $free = @disk_free_space('/var/bbs');
+            if ($total && $total > 0) {
+                $used = $total - $free;
+                $pct = (int) round(($used / $total) * 100);
+                $partitions[] = [
+                    'mount' => '/var/bbs',
+                    'size' => self::formatDfSize($total),
+                    'used' => self::formatDfSize($used),
+                    'free' => self::formatDfSize($free),
+                    'percent' => $pct,
+                ];
+            }
+        }
+
         return $partitions;
+    }
+
+    private static function formatDfSize(float $bytes): string
+    {
+        if ($bytes >= 1099511627776) return round($bytes / 1099511627776, 1) . 'T';
+        if ($bytes >= 1073741824) return round($bytes / 1073741824) . 'G';
+        if ($bytes >= 1048576) return round($bytes / 1048576) . 'M';
+        return round($bytes / 1024) . 'K';
     }
 
     /**
