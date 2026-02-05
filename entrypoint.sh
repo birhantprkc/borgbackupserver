@@ -74,17 +74,28 @@ if [ "$BBS_VERSION" = "latest" ]; then
     fi
 fi
 
+git config --global --add safe.directory /var/www/bbs
+
 if [ ! -d "/var/www/bbs/.git" ]; then
     echo "Cloning BBS repository ($BBS_VERSION)..."
     rm -rf /var/www/bbs/*
-    git clone --branch "$BBS_VERSION" --depth 1 "$BBS_REPO" /var/www/bbs
+    # Clone main branch first so bbs-update can reference origin/main
+    git clone --depth 1 "$BBS_REPO" /var/www/bbs
+    if [ "$BBS_VERSION" != "main" ]; then
+        cd /var/www/bbs
+        git fetch --depth 1 origin tag "$BBS_VERSION"
+        git checkout "$BBS_VERSION"
+    fi
 else
     echo "Updating BBS repository ($BBS_VERSION)..."
     cd /var/www/bbs
     git config --global --add safe.directory /var/www/bbs
     git fetch origin --tags
-    git checkout "$BBS_VERSION"
-    git pull origin "$BBS_VERSION" 2>/dev/null || true
+    git checkout main 2>/dev/null || true
+    git pull origin main 2>/dev/null || true
+    if [ "$BBS_VERSION" != "main" ]; then
+        git checkout "$BBS_VERSION"
+    fi
 fi
 
 # Install Composer dependencies
