@@ -21,6 +21,9 @@
             </div>
         </div>
     </div>
+    <div class="text-center text-muted small mt-4" style="font-size:.75rem;">
+        &copy; <?= date('Y') ?> Borg Backup Server &mdash; <a href="https://github.com/marcpope/borgbackupserver/blob/main/LICENSE" class="text-muted">MIT Open Source License</a>
+    </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
