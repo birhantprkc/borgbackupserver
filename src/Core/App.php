@@ -126,8 +126,16 @@ class App
         $this->router->map('POST', '/settings/templates/[i:id]/edit', 'SettingsController@editTemplate');
         $this->router->map('POST', '/settings/templates/[i:id]/delete', 'SettingsController@deleteTemplate');
         $this->router->map('POST', '/settings/test-smtp', 'SettingsController@testSmtp');
-        $this->router->map('POST', '/settings/test-apprise', 'SettingsController@testApprise');
         $this->router->map('POST', '/settings/check-update', 'SettingsController@checkUpdate');
+
+        // Notification Services
+        $this->router->map('GET', '/notification-services', 'NotificationServiceController@index');
+        $this->router->map('POST', '/notification-services', 'NotificationServiceController@store');
+        $this->router->map('POST', '/notification-services/[i:id]/update', 'NotificationServiceController@update');
+        $this->router->map('POST', '/notification-services/[i:id]/delete', 'NotificationServiceController@delete');
+        $this->router->map('POST', '/notification-services/[i:id]/toggle', 'NotificationServiceController@toggle');
+        $this->router->map('POST', '/notification-services/[i:id]/test', 'NotificationServiceController@test');
+        $this->router->map('POST', '/notification-services/[i:id]/duplicate', 'NotificationServiceController@duplicate');
         $this->router->map('POST', '/settings/upgrade', 'SettingsController@upgrade');
         $this->router->map('POST', '/settings/sync', 'SettingsController@sync');
         $this->router->map('POST', '/settings/upgrade-agents', 'SettingsController@upgradeAgents');

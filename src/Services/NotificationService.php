@@ -88,16 +88,8 @@ class NotificationService
 
     private function sendAppriseIfEnabled(string $type, string $message): void
     {
-        $settingKey = 'apprise_on_' . $type;
-        $setting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = ?", [$settingKey]);
-
-        if (($setting['value'] ?? '0') !== '1') {
-            return;
-        }
-
         try {
             $apprise = new AppriseService();
-            if (!$apprise->isEnabled()) return;
 
             $labels = [
                 'backup_failed' => 'Backup Failed',
@@ -107,7 +99,8 @@ class NotificationService
             ];
             $title = '[BBS] ' . ($labels[$type] ?? ucfirst($type));
 
-            $apprise->send($title, $message);
+            // Use the new per-service event filtering
+            $apprise->sendForEvent($type, $title, $message);
         } catch (\Exception $e) {
             // Don't let Apprise failures break notification flow
         }
