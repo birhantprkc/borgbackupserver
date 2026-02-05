@@ -1,0 +1,9 @@
+.git
+.gitignore
+.DS_Store
+design/
+CLAUDE.md
+*.swp
+__pycache__
+*.pyc
+config/.env

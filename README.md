@@ -48,6 +48,40 @@ See the **[full documentation on the Wiki](https://github.com/marcpope/borgbacku
 
 ---
 
+## Docker
+
+Run BBS in a Docker container — no OS dependencies to install:
+
+```bash
+git clone https://github.com/marcpope/borgbackupserver.git
+cd borgbackupserver
+docker compose up -d
+```
+
+Get admin credentials from the container logs:
+
+```bash
+docker compose logs bbs
+```
+
+Open `http://localhost:8080` and log in.
+
+### Configuration
+
+Edit `docker-compose.yml` to customize:
+
+| Variable | Default | Description |
+|---|---|---|
+| `APP_URL` | `http://localhost:8080` | Public URL (used by browsers and agents) |
+| `SSH_PORT` | `2222` | SSH port — must match the host-side port mapping |
+| `ADMIN_PASS` | *(random)* | Admin password (first run only) |
+
+BBS needs two ports: **HTTP** for the web UI and API, and **SSH** for borg backup data transfer. The `SSH_PORT` environment variable must match the host port in your SSH port mapping so agents know which port to connect to.
+
+All data is stored in the `bbs-data` Docker volume (`/var/bbs`): borg repositories, MariaDB database, SSH keys, and configuration. Back up this volume to protect your data.
+
+---
+
 ## Documentation
 
 All documentation lives on the **[GitHub Wiki](https://github.com/marcpope/borgbackupserver/wiki)**:

@@ -1,0 +1,28 @@
+# Borg Backup Server — Docker Compose
+#
+# Quick start:
+#   docker compose up -d
+#   docker compose logs bbs          # view admin credentials
+#
+# All data (database, repositories, SSH keys) is stored in the bbs-data volume.
+
+services:
+  bbs:
+    build: .
+    container_name: bbs
+    ports:
+      - "8080:80"      # Web UI
+      - "2222:22"      # SSH for borg agent connections
+    environment:
+      # Public URL — used by browsers and agents to reach BBS
+      - APP_URL=http://localhost:8080
+      # SSH port — MUST match the host-side port mapping above (left side of 2222:22)
+      - SSH_PORT=2222
+      # Admin password — only used on first run. Omit to auto-generate (shown in logs).
+      # - ADMIN_PASS=changeme
+    volumes:
+      - bbs-data:/var/bbs
+    restart: unless-stopped
+
+volumes:
+  bbs-data:
