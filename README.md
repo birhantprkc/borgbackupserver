@@ -1,5 +1,7 @@
 # Borg Backup Server
 
+![Dashboard](public/images/borgbackupserver.png)
+
 A self-hosted web application for centrally managing [BorgBackup](https://borgbackup.readthedocs.io/) across multiple Linux and macOS endpoints. A lightweight agent polls the server for tasks over HTTPS, backs up over SSH to the server, and reports progress back. No inbound connections to endpoints required — works behind firewalls and NAT. Includes a setup wizard for zero-config installation.
 
 ## View our website and spin up a demo if you want to try it out:
@@ -29,9 +31,6 @@ Website: [Borg Backup Server](https://www.borgbackupserver.com/)
 - **Dashboard** — backup charts, server stats, active jobs, auto-refresh
 - **Server self-backup** — daily automated backup of BBS itself with optional S3 sync
 
-## Screenshots
-
-![Dashboard](website/borgbackupserver.png)
 
 ---
 
