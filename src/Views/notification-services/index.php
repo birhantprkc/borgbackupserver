@@ -220,16 +220,25 @@ $eventColors = [
                         <?php endif; ?>
                     </td>
                     <td>
+                        <?php
+                        $enabledEvents = array_keys(array_filter($service['events']));
+                        $maxShow = 3;
+                        $shown = 0;
+                        ?>
                         <div class="d-flex flex-wrap gap-1">
-                            <?php foreach ($service['events'] as $event => $enabled): ?>
-                                <?php if ($enabled): ?>
+                            <?php foreach ($enabledEvents as $event): ?>
+                                <?php if ($shown < $maxShow): ?>
                                 <?php $color = $eventColors[$event] ?? 'secondary'; ?>
                                 <span class="badge bg-<?= $color ?>-subtle text-<?= $color ?> border border-<?= $color ?>-subtle">
                                     <?= htmlspecialchars($eventTypes[$event] ?? ucfirst(str_replace('_', ' ', $event))) ?>
                                 </span>
-                                <?php endif; ?>
+                                <?php $shown++; endif; ?>
                             <?php endforeach; ?>
-                            <?php if (empty(array_filter($service['events']))): ?>
+                            <?php if (count($enabledEvents) > $maxShow): ?>
+                            <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle" title="<?= htmlspecialchars(implode(', ', array_map(fn($e) => $eventTypes[$e] ?? $e, array_slice($enabledEvents, $maxShow)))) ?>">
+                                +<?= count($enabledEvents) - $maxShow ?> more
+                            </span>
+                            <?php elseif (empty($enabledEvents)): ?>
                             <span class="text-muted small">No events selected</span>
                             <?php endif; ?>
                         </div>
