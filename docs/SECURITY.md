@@ -101,7 +101,7 @@ If you discover a security vulnerability in Borg Backup Server, **please do not 
 
 Instead, report it privately:
 
-- **Email:** marc@marcpope.com
+- **Email:** marcpope@me.com
 - **Subject line:** `[BBS Security] <brief description>`
 
 Please include:
