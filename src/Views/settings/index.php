@@ -618,6 +618,13 @@ function testPushService(id, btn) {
 
     if (!serviceType || !appriseUrl) return;
 
+    // Build list of default names from dropdown options
+    const defaultNames = [];
+    for (let i = 0; i < serviceType.options.length; i++) {
+        const name = serviceType.options[i].dataset.name;
+        if (name) defaultNames.push(name);
+    }
+
     serviceType.addEventListener('change', function() {
         const option = this.options[this.selectedIndex];
         const urlTemplate = option.dataset.url || '';
@@ -636,9 +643,12 @@ function testPushService(id, btn) {
             appriseUrl.placeholder = 'Select a service type above or enter a custom URL';
         }
 
-        // Auto-fill service name if empty
-        if (serviceName && !serviceName.value && defaultName) {
-            serviceName.value = defaultName;
+        // Auto-fill service name if empty or still a default name
+        if (serviceName && defaultName) {
+            const currentName = serviceName.value.trim();
+            if (!currentName || defaultNames.includes(currentName)) {
+                serviceName.value = defaultName;
+            }
         }
     });
 })();
