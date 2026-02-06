@@ -67,13 +67,35 @@ $updateAvailable = $updateService->isUpdateAvailable();
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Server Host / IP</label>
-                        <input type="text" class="form-control" name="server_host" value="<?= htmlspecialchars($settings['server_host'] ?? '') ?>">
-                        <div class="form-text">The address agents use to reach this server.</div>
+                        <?php $currentUrl = \BBS\Core\Config::get('APP_URL', 'https://'); $sslEnabled = str_starts_with($currentUrl, 'https://'); ?>
+                        <div class="input-group">
+                            <select class="form-select" name="url_protocol" style="max-width: 110px;">
+                                <option value="https" <?= $sslEnabled ? 'selected' : '' ?>>https://</option>
+                                <option value="http" <?= !$sslEnabled ? 'selected' : '' ?>>http://</option>
+                            </select>
+                            <input type="text" class="form-control" name="server_host" value="<?= htmlspecialchars($settings['server_host'] ?? '') ?>">
+                        </div>
+                        <div class="form-text">The address agents use to reach this server. Use https:// for public servers, http:// for LAN/internal installs.
+                            <?php if (!$sslEnabled): ?>
+                                <br>To enable SSL, first obtain a certificate: <code>sudo certbot --apache -d <?= htmlspecialchars($settings['server_host'] ?? 'your-hostname') ?></code>
+                            <?php endif; ?>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Storage Path</label>
                         <input type="text" class="form-control" name="storage_path" value="<?= htmlspecialchars($settings['storage_path'] ?? '') ?>" readonly>
                         <div class="form-text">Base directory for agent home directories and borg repositories. Set during installation.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Storage Alert Threshold</label>
+                        <div class="d-flex align-items-center gap-2">
+                            <input type="range" class="form-range flex-grow-1" name="storage_alert_threshold"
+                                   id="storageAlertSlider" min="50" max="99"
+                                   value="<?= htmlspecialchars($settings['storage_alert_threshold'] ?? '90') ?>"
+                                   oninput="document.getElementById('storageAlertValue').textContent = this.value + '%'">
+                            <span id="storageAlertValue" class="badge bg-body-secondary text-body border" style="min-width: 50px;"><?= htmlspecialchars($settings['storage_alert_threshold'] ?? '90') ?>%</span>
+                        </div>
+                        <div class="form-text">Alert when storage usage exceeds this percentage.</div>
                     </div>
                     <?php $sshPort = (int) ($settings['ssh_port'] ?? 22); if ($sshPort !== 22): ?>
                     <div class="mb-3">
@@ -82,20 +104,6 @@ $updateAvailable = $updateService->isUpdateAvailable();
                         <div class="form-text"><i class="bi bi-info-circle me-1"></i>Agents connect via SSH on this non-standard port. Ensure client firewalls allow <strong>outbound TCP <?= $sshPort ?></strong>.</div>
                     </div>
                     <?php endif; ?>
-                    <div class="mb-3">
-                        <div class="form-check">
-                            <?php $currentUrl = \BBS\Core\Config::get('APP_URL', 'https://'); $sslEnabled = str_starts_with($currentUrl, 'https://'); ?>
-                            <input class="form-check-input" type="checkbox" name="enable_ssl" value="1" id="enableSsl" <?= $sslEnabled ? 'checked' : '' ?>>
-                            <label class="form-check-label fw-semibold" for="enableSsl">
-                                Enable SSL (HTTPS)
-                            </label>
-                        </div>
-                        <div class="form-text">Recommended for public servers. Uncheck for LAN/internal installs without a certificate.
-                            <?php if (!$sslEnabled): ?>
-                                To enable SSL, first obtain a certificate: <code>sudo certbot --apache -d <?= htmlspecialchars($settings['server_host'] ?? 'your-hostname') ?></code>
-                            <?php endif; ?>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -161,94 +169,105 @@ $updateAvailable = $updateService->isUpdateAvailable();
 </form>
 <?php endif; ?>
 
-<!-- Notifications Tab -->
+<!-- Email Settings Tab -->
 <?php if ($activeTab === 'notifications'): ?>
-<form method="POST" action="/settings">
-    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-    <input type="hidden" name="_tab" value="notifications">
-
-    <div class="row g-4">
-        <div class="col-lg-6">
-            <div class="card border-0 shadow-sm">
-                <div class="card-header bg-body fw-semibold">
-                    <i class="bi bi-bell me-1"></i> Notification Settings
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Notification Retention (days)</label>
-                        <input type="number" class="form-control" name="notification_retention_days" value="<?= htmlspecialchars($settings['notification_retention_days'] ?? '30') ?>" min="1" max="365">
-                        <div class="form-text">Resolved notifications older than this are automatically purged.</div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Storage Alert Threshold (%)</label>
-                        <input type="number" class="form-control" name="storage_alert_threshold" value="<?= htmlspecialchars($settings['storage_alert_threshold'] ?? '90') ?>" min="50" max="99">
-                        <div class="form-text">Alert when storage usage exceeds this percentage.</div>
-                    </div>
-                </div>
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-body fw-semibold">
+                <i class="bi bi-envelope me-1"></i> SMTP Configuration
             </div>
-        </div>
+            <div class="card-body">
+                <form method="POST" action="/settings">
+                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                    <input type="hidden" name="_tab" value="notifications">
 
-        <div class="col-lg-6">
-            <div class="card border-0 shadow-sm">
-                <div class="card-header bg-body fw-semibold">
-                    <i class="bi bi-envelope me-1"></i> Email Notifications
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">SMTP Host</label>
-                        <input type="text" class="form-control" name="smtp_host" value="<?= htmlspecialchars($settings['smtp_host'] ?? '') ?>">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-8">
+                            <label class="form-label fw-semibold">SMTP Host</label>
+                            <input type="text" class="form-control" name="smtp_host" value="<?= htmlspecialchars($settings['smtp_host'] ?? '') ?>" placeholder="smtp.example.com">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Port</label>
+                            <input type="number" class="form-control" name="smtp_port" value="<?= htmlspecialchars($settings['smtp_port'] ?? '587') ?>">
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">SMTP Port</label>
-                        <input type="number" class="form-control" name="smtp_port" value="<?= htmlspecialchars($settings['smtp_port'] ?? '587') ?>">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">SMTP User</label>
-                        <input type="text" class="form-control" name="smtp_user" value="<?= htmlspecialchars($settings['smtp_user'] ?? '') ?>">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">SMTP Password</label>
-                        <input type="password" class="form-control" name="smtp_pass" value="<?= htmlspecialchars($settings['smtp_pass'] ?? '') ?>">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">SMTP User</label>
+                            <input type="text" class="form-control" name="smtp_user" value="<?= htmlspecialchars($settings['smtp_user'] ?? '') ?>">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">SMTP Password</label>
+                            <input type="password" class="form-control" name="smtp_pass" value="<?= htmlspecialchars($settings['smtp_pass'] ?? '') ?>">
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">From Address</label>
-                        <input type="email" class="form-control" name="smtp_from" value="<?= htmlspecialchars($settings['smtp_from'] ?? '') ?>">
+                        <input type="email" class="form-control" name="smtp_from" value="<?= htmlspecialchars($settings['smtp_from'] ?? '') ?>" placeholder="backups@example.com">
                     </div>
-                    <div class="mb-3">
-                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnTestSmtp">
-                            <i class="bi bi-envelope-check me-1"></i> Test SMTP Connection
-                        </button>
-                        <span id="smtpTestResult" class="ms-2 small"></span>
-                    </div>
+
                     <hr>
+
                     <label class="form-label fw-semibold">Email me when:</label>
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" name="email_on_backup_failed" value="1" id="emailBackupFailed" <?= ($settings['email_on_backup_failed'] ?? '1') === '1' ? 'checked' : '' ?>>
-                        <label class="form-check-label" for="emailBackupFailed">Backup fails</label>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" name="email_on_backup_failed" value="1" id="emailBackupFailed" <?= ($settings['email_on_backup_failed'] ?? '1') === '1' ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="emailBackupFailed">Backup fails</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" name="email_on_agent_offline" value="1" id="emailAgentOffline" <?= ($settings['email_on_agent_offline'] ?? '1') === '1' ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="emailAgentOffline">Client goes offline</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" name="email_on_storage_low" value="1" id="emailStorageLow" <?= ($settings['email_on_storage_low'] ?? '1') === '1' ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="emailStorageLow">Storage space is low</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" name="email_on_missed_schedule" value="1" id="emailMissedSchedule" <?= ($settings['email_on_missed_schedule'] ?? '0') === '1' ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="emailMissedSchedule">Scheduled backup is missed</label>
+                            </div>
+                        </div>
                     </div>
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" name="email_on_agent_offline" value="1" id="emailAgentOffline" <?= ($settings['email_on_agent_offline'] ?? '1') === '1' ? 'checked' : '' ?>>
-                        <label class="form-check-label" for="emailAgentOffline">Client goes offline</label>
+
+                    <hr>
+
+                    <div class="d-flex align-items-center gap-3">
+                        <button type="submit" class="btn btn-warning">
+                            <i class="bi bi-check-lg me-1"></i> Save Email Settings
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="btnTestSmtp">
+                            <i class="bi bi-envelope-check me-1"></i> Test SMTP
+                        </button>
+                        <span id="smtpTestResult" class="small"></span>
                     </div>
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" name="email_on_storage_low" value="1" id="emailStorageLow" <?= ($settings['email_on_storage_low'] ?? '1') === '1' ? 'checked' : '' ?>>
-                        <label class="form-check-label" for="emailStorageLow">Storage space is low</label>
-                    </div>
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" name="email_on_missed_schedule" value="1" id="emailMissedSchedule" <?= ($settings['email_on_missed_schedule'] ?? '0') === '1' ? 'checked' : '' ?>>
-                        <label class="form-check-label" for="emailMissedSchedule">Scheduled backup is missed</label>
-                    </div>
-                </div>
+                </form>
             </div>
         </div>
     </div>
 
-    <div class="mt-4">
-        <button type="submit" class="btn btn-warning">
-            <i class="bi bi-check-lg me-1"></i> Save Email Settings
-        </button>
+    <div class="col-lg-5">
+        <div class="card border-0 bg-body-secondary">
+            <div class="card-body">
+                <h6 class="card-title"><i class="bi bi-lightbulb me-1 text-warning"></i> Tip</h6>
+                <p class="card-text small text-muted mb-2">
+                    Email settings are used to send important notifications to administrators about backup failures,
+                    offline clients, and storage alerts.
+                </p>
+                <p class="card-text small text-muted mb-2">
+                    Emails are sent to all users with the <strong>Admin</strong> role who have an email address configured.
+                </p>
+                <p class="card-text small text-muted mb-0">
+                    For real-time alerts via Discord, Slack, Telegram, or 100+ other services, configure
+                    <a href="/settings?tab=push">Push Notifications</a>.
+                </p>
+            </div>
+        </div>
     </div>
-</form>
+</div>
 <?php endif; ?>
 
 
