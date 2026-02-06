@@ -190,6 +190,30 @@ foreach ($serverJobs as $sj) {
             ], 'repository_id = ?', [$sj['repository_id']]);
         }
 
+        // Send notifications for S3 sync results
+        $notificationService = new \BBS\Services\NotificationService();
+        if ($s3Result === 'failed') {
+            $repoName = $s3Repo['name'] ?? 'unknown';
+            $agentName = $s3Agent['name'] ?? 'unknown';
+            $notificationService->notify(
+                's3_sync_failed',
+                $sj['agent_id'],
+                $sj['repository_id'] ? (int)$sj['repository_id'] : null,
+                "S3 sync failed for repository \"{$repoName}\" on client \"{$agentName}\" — " . ($s3Error ?? 'unknown error'),
+                'critical'
+            );
+        } elseif ($s3Result === 'completed') {
+            $repoName = $s3Repo['name'] ?? 'unknown';
+            $agentName = $s3Agent['name'] ?? 'unknown';
+            $notificationService->notify(
+                's3_sync_done',
+                $sj['agent_id'],
+                $sj['repository_id'] ? (int)$sj['repository_id'] : null,
+                "S3 sync completed for repository \"{$repoName}\" on client \"{$agentName}\"" . (!empty($s3Output) ? " — {$s3Output}" : ''),
+                'info'
+            );
+        }
+
         // Generate and upload manifest after successful sync (streams to file for large catalogs)
         if ($s3Result === 'completed' && $s3Repo && $s3Agent) {
             $passphrase = '';

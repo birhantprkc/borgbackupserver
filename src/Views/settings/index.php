@@ -244,17 +244,55 @@ $updateAvailable = $updateService->isUpdateAvailable();
 <!-- Push Notifications Tab -->
 <?php if ($activeTab === 'push'): ?>
 <?php
-$eventTypes = [
-    'backup_failed' => 'Backup Failed',
-    'agent_offline' => 'Client Offline',
-    'storage_low' => 'Storage Low',
-    'missed_schedule' => 'Missed Schedule',
+// Event types grouped by category
+$eventGroups = [
+    'Backups' => [
+        'backup_completed' => 'Backup Completed',
+        'backup_failed' => 'Backup Failed',
+    ],
+    'Restores' => [
+        'restore_completed' => 'Restore Completed',
+        'restore_failed' => 'Restore Failed',
+    ],
+    'Clients' => [
+        'agent_offline' => 'Client Offline',
+        'agent_online' => 'Client Online',
+    ],
+    'Repositories' => [
+        'repo_check_failed' => 'Check Failed',
+        'repo_compact_done' => 'Compact Done',
+    ],
+    'Storage' => [
+        'storage_low' => 'Storage Low',
+        's3_sync_failed' => 'S3 Sync Failed',
+        's3_sync_done' => 'S3 Sync Done',
+    ],
+    'Schedules' => [
+        'missed_schedule' => 'Missed Schedule',
+    ],
 ];
+// Flatten for easy lookup
+$eventTypes = [];
+foreach ($eventGroups as $events) {
+    $eventTypes = array_merge($eventTypes, $events);
+}
+// Colors by event type
 $eventColors = [
+    // Success events - green
+    'backup_completed' => 'success',
+    'restore_completed' => 'success',
+    'agent_online' => 'success',
+    'repo_compact_done' => 'success',
+    's3_sync_done' => 'success',
+    // Failure events - red
     'backup_failed' => 'danger',
+    'restore_failed' => 'danger',
+    'repo_check_failed' => 'danger',
+    's3_sync_failed' => 'danger',
+    // Warning events - orange/warning
     'agent_offline' => 'warning',
-    'storage_low' => 'info',
-    'missed_schedule' => 'secondary',
+    'storage_low' => 'warning',
+    'missed_schedule' => 'warning',
 ];
 $notifServices = $this->db->fetchAll("SELECT * FROM notification_services ORDER BY name ASC");
 foreach ($notifServices as &$ns) {
@@ -359,18 +397,23 @@ unset($ns);
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Notify on:</label>
                     <div class="row">
-                        <?php foreach ($eventTypes as $event => $label): ?>
-                        <div class="col-md-3 col-6 mb-2">
+                        <?php foreach ($eventGroups as $groupName => $events): ?>
+                        <div class="col-lg-4 col-md-6 mb-3">
+                            <div class="small text-muted fw-semibold mb-1"><?= htmlspecialchars($groupName) ?></div>
+                            <?php foreach ($events as $event => $label): ?>
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" name="events[<?= $event ?>]"
-                                       value="1" id="addEvent_<?= $event ?>" checked>
+                                       value="1" id="addEvent_<?= $event ?>"
+                                       <?= str_contains($event, 'failed') || $event === 'agent_offline' || $event === 'storage_low' || $event === 'missed_schedule' ? 'checked' : '' ?>>
                                 <label class="form-check-label" for="addEvent_<?= $event ?>">
                                     <?= htmlspecialchars($label) ?>
                                 </label>
                             </div>
+                            <?php endforeach; ?>
                         </div>
                         <?php endforeach; ?>
                     </div>
+                    <div class="form-text">Failure and warning events are selected by default. Enable success events if you want confirmation of successful operations.</div>
                 </div>
 
                 <div>
@@ -490,8 +533,10 @@ unset($ns);
                             <div class="mb-3">
                                 <label class="form-label fw-semibold">Notify on:</label>
                                 <div class="row">
-                                    <?php foreach ($eventTypes as $event => $label): ?>
-                                    <div class="col-md-3 col-6 mb-2">
+                                    <?php foreach ($eventGroups as $groupName => $events): ?>
+                                    <div class="col-lg-4 col-md-6 mb-2">
+                                        <div class="small text-muted fw-semibold mb-1"><?= htmlspecialchars($groupName) ?></div>
+                                        <?php foreach ($events as $event => $label): ?>
                                         <div class="form-check">
                                             <input class="form-check-input" type="checkbox" name="events[<?= $event ?>]"
                                                    value="1" id="editEvent_<?= $service['id'] ?>_<?= $event ?>"
@@ -500,6 +545,7 @@ unset($ns);
                                                 <?= htmlspecialchars($label) ?>
                                             </label>
                                         </div>
+                                        <?php endforeach; ?>
                                     </div>
                                     <?php endforeach; ?>
                                 </div>

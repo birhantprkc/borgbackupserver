@@ -44,7 +44,26 @@ class AgentApiController extends Controller
         );
 
         // Auto-resolve agent_offline notification on heartbeat
-        (new NotificationService())->resolve('agent_offline', $agent['id'], null);
+        $notifService = new NotificationService();
+
+        // Check if there was an unresolved agent_offline notification (means agent was offline)
+        $wasOffline = $this->db->fetchOne(
+            "SELECT id FROM notifications WHERE type = 'agent_offline' AND agent_id = ? AND resolved_at IS NULL",
+            [$agent['id']]
+        );
+
+        $notifService->resolve('agent_offline', $agent['id'], null);
+
+        // If agent was offline and is now back online, send agent_online notification
+        if ($wasOffline) {
+            $notifService->notify(
+                'agent_online',
+                $agent['id'],
+                null,
+                "Client \"{$agent['name']}\" is back online",
+                'info'
+            );
+        }
 
         return $agent;
     }
@@ -258,23 +277,83 @@ class AgentApiController extends Controller
             ]);
         }
 
-        // Notification system: backup failed / resolved
+        // Notification system: task-based notifications
         $notificationService = new NotificationService();
-        if ($result === 'failed' && $job['task_type'] === 'backup') {
-            $planName = '';
-            if ($job['backup_plan_id']) {
-                $plan = $this->db->fetchOne("SELECT name FROM backup_plans WHERE id = ?", [$job['backup_plan_id']]);
-                $planName = $plan['name'] ?? '';
-            }
-            $notificationService->notify(
-                'backup_failed',
-                $agent['id'],
-                $job['backup_plan_id'] ? (int)$job['backup_plan_id'] : null,
-                "Backup failed for plan \"{$planName}\" on client \"{$agent['name']}\" — " . ($input['error_log'] ?? 'unknown error'),
-                'critical'
-            );
-        } elseif ($result === 'completed' && $job['task_type'] === 'backup' && $job['backup_plan_id']) {
-            $notificationService->resolve('backup_failed', $agent['id'], (int)$job['backup_plan_id']);
+        $planName = '';
+        if ($job['backup_plan_id']) {
+            $plan = $this->db->fetchOne("SELECT name FROM backup_plans WHERE id = ?", [$job['backup_plan_id']]);
+            $planName = $plan['name'] ?? '';
+        }
+
+        // Handle notifications by task type
+        switch ($job['task_type']) {
+            case 'backup':
+                if ($result === 'failed') {
+                    $notificationService->notify(
+                        'backup_failed',
+                        $agent['id'],
+                        $job['backup_plan_id'] ? (int)$job['backup_plan_id'] : null,
+                        "Backup failed for plan \"{$planName}\" on client \"{$agent['name']}\" — " . ($input['error_log'] ?? 'unknown error'),
+                        'critical'
+                    );
+                } elseif ($result === 'completed' && $job['backup_plan_id']) {
+                    $notificationService->resolve('backup_failed', $agent['id'], (int)$job['backup_plan_id']);
+                    $notificationService->notify(
+                        'backup_completed',
+                        $agent['id'],
+                        (int)$job['backup_plan_id'],
+                        "Backup completed for plan \"{$planName}\" on client \"{$agent['name']}\"" .
+                            (($data['files_total'] ?? 0) > 0 ? " — {$data['files_total']} files in {$duration}s" : ''),
+                        'info'
+                    );
+                }
+                break;
+
+            case 'restore':
+                if ($result === 'failed') {
+                    $notificationService->notify(
+                        'restore_failed',
+                        $agent['id'],
+                        $job['backup_plan_id'] ? (int)$job['backup_plan_id'] : null,
+                        "Restore failed on client \"{$agent['name']}\"" . ($planName ? " for plan \"{$planName}\"" : '') .
+                            " — " . ($input['error_log'] ?? 'unknown error'),
+                        'critical'
+                    );
+                } elseif ($result === 'completed') {
+                    $notificationService->notify(
+                        'restore_completed',
+                        $agent['id'],
+                        $job['backup_plan_id'] ? (int)$job['backup_plan_id'] : null,
+                        "Restore completed on client \"{$agent['name']}\"" . ($planName ? " for plan \"{$planName}\"" : ''),
+                        'info'
+                    );
+                }
+                break;
+
+            case 'check':
+                if ($result === 'failed') {
+                    $notificationService->notify(
+                        'repo_check_failed',
+                        $agent['id'],
+                        $job['repository_id'] ? (int)$job['repository_id'] : null,
+                        "Repository check failed on client \"{$agent['name']}\"" . ($planName ? " for plan \"{$planName}\"" : '') .
+                            " — " . ($input['error_log'] ?? 'unknown error'),
+                        'critical'
+                    );
+                }
+                break;
+
+            case 'compact':
+                if ($result === 'completed') {
+                    $notificationService->notify(
+                        'repo_compact_done',
+                        $agent['id'],
+                        $job['repository_id'] ? (int)$job['repository_id'] : null,
+                        "Repository compact completed on client \"{$agent['name']}\"" . ($planName ? " for plan \"{$planName}\"" : ''),
+                        'info'
+                    );
+                }
+                break;
         }
 
         // Email notification on failure

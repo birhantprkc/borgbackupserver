@@ -52,6 +52,33 @@ class NotificationService
         }
     }
 
+    /**
+     * Get friendly labels for all notification event types.
+     */
+    public static function getEventLabels(): array
+    {
+        return [
+            // Backups
+            'backup_completed' => 'Backup Completed',
+            'backup_failed' => 'Backup Failed',
+            // Restores
+            'restore_completed' => 'Restore Completed',
+            'restore_failed' => 'Restore Failed',
+            // Clients
+            'agent_offline' => 'Client Offline',
+            'agent_online' => 'Client Online',
+            // Repositories
+            'repo_check_failed' => 'Check Failed',
+            'repo_compact_done' => 'Compact Done',
+            // Storage
+            'storage_low' => 'Storage Low',
+            's3_sync_failed' => 'S3 Sync Failed',
+            's3_sync_done' => 'S3 Sync Done',
+            // Schedules
+            'missed_schedule' => 'Missed Schedule',
+        ];
+    }
+
     private function sendEmailIfEnabled(string $type, string $message): void
     {
         $settingKey = 'email_on_' . $type;
@@ -65,12 +92,7 @@ class NotificationService
             $mailer = new Mailer();
             if (!$mailer->isEnabled()) return;
 
-            $labels = [
-                'backup_failed' => 'Backup Failed',
-                'agent_offline' => 'Client Offline',
-                'storage_low' => 'Storage Low',
-                'missed_schedule' => 'Missed Schedule',
-            ];
+            $labels = self::getEventLabels();
             $subject = '[BBS] ' . ($labels[$type] ?? ucfirst($type));
 
             $body = $message . "\n\n"
@@ -90,13 +112,7 @@ class NotificationService
     {
         try {
             $apprise = new AppriseService();
-
-            $labels = [
-                'backup_failed' => 'Backup Failed',
-                'agent_offline' => 'Client Offline',
-                'storage_low' => 'Storage Low',
-                'missed_schedule' => 'Missed Schedule',
-            ];
+            $labels = self::getEventLabels();
             $title = '[BBS] ' . ($labels[$type] ?? ucfirst($type));
 
             // Use the new per-service event filtering
