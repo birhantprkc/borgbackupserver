@@ -93,26 +93,26 @@
         <div class="p-4 text-muted text-center">No jobs in progress.</div>
         <?php else: ?>
         <div class="table-responsive">
-            <table class="table table-hover table-sm small mb-0">
+            <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                     <tr>
                         <th>Date</th>
                         <th>Client</th>
                         <th>Task</th>
-                        <th class="d-th-md">Files</th>
+                        <th class="d-none d-md-table-cell">Files</th>
                         <th>Progress</th>
-                        <th class="d-th-md">Repo</th>
+                        <th class="d-none d-md-table-cell">Repo</th>
                         <th>Status</th>
-                        <th></th>
+                        <th style="width: 80px;"></th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php foreach ($inProgress as $job): ?>
                     <tr style="cursor: pointer;" onclick="window.location='/queue/<?= $job['id'] ?>'">
-                        <td class="small"><?= \BBS\Core\TimeHelper::format($job['queued_at'], 'M j, g:i A') ?></td>
+                        <td class="small text-nowrap"><?= \BBS\Core\TimeHelper::format($job['queued_at'], 'M j, g:i A') ?></td>
                         <td><?= htmlspecialchars($job['agent_name']) ?></td>
                         <td class="text-nowrap"><?= jobTypeIcon($job['task_type']) ?><?= $job['task_type'] ?></td>
-                        <td class="d-table-cell-md"><?= number_format($job['files_total'] ?? 0) ?></td>
+                        <td class="d-none d-md-table-cell"><?= number_format($job['files_total'] ?? 0) ?></td>
                         <td>
                             <?php if ($job['status'] === 'queued'): ?>
                                 <span class="text-muted">Waiting</span>
@@ -131,7 +131,7 @@
                                 </div>
                             <?php endif; ?>
                         </td>
-                        <td class="d-table-cell-md"><?= htmlspecialchars($job['repo_name'] ?? '--') ?></td>
+                        <td class="d-none d-md-table-cell"><?= htmlspecialchars($job['repo_name'] ?? '--') ?></td>
                         <td>
                             <?php
                             $sc = match($job['status']) {
@@ -142,7 +142,7 @@
                             ?>
                             <span class="badge bg-<?= $sc ?>"><?= $job['status'] ?></span>
                         </td>
-                        <td class="text-nowrap" onclick="event.stopPropagation()">
+                        <td class="text-end" onclick="event.stopPropagation()">
                             <a href="/queue/<?= $job['id'] ?>" class="btn btn-sm btn-outline-secondary" title="View Details"><i class="bi bi-eye"></i></a>
                             <?php if (in_array($job['status'], ['queued', 'sent'])): ?>
                             <form method="POST" action="/queue/<?= $job['id'] ?>/cancel" class="d-inline"
@@ -170,28 +170,28 @@
         <div class="p-4 text-muted text-center">No completed jobs yet.</div>
         <?php else: ?>
         <div class="table-responsive">
-            <table class="table table-hover table-sm small mb-0">
+            <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                     <tr>
                         <th>Date</th>
                         <th>Client</th>
                         <th>Task</th>
-                        <th class="d-th-md">Files</th>
-                        <th class="d-th-md">Repo</th>
-                        <th class="d-th-md">Duration</th>
-                        <th>Status</th>
-                        <th></th>
+                        <th class="d-none d-md-table-cell">Files</th>
+                        <th class="d-none d-md-table-cell">Repo</th>
+                        <th class="d-none d-md-table-cell">Duration</th>
+                        <th class="text-center">Status</th>
+                        <th style="width: 80px;"></th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php foreach ($completed as $job): ?>
                     <tr style="cursor: pointer;" onclick="window.location='/queue/<?= $job['id'] ?>'">
-                        <td class="small" title="<?= \BBS\Core\TimeHelper::format($job['completed_at'], 'M j, Y g:i A') ?>"><?= \BBS\Core\TimeHelper::ago($job['completed_at']) ?></td>
+                        <td class="small text-nowrap" title="<?= \BBS\Core\TimeHelper::format($job['completed_at'], 'M j, Y g:i A') ?>"><?= \BBS\Core\TimeHelper::ago($job['completed_at']) ?></td>
                         <td><?= htmlspecialchars($job['agent_name']) ?></td>
                         <td class="text-nowrap"><?= jobTypeIcon($job['task_type']) ?><?= $job['task_type'] ?></td>
-                        <td class="d-table-cell-md"><?= number_format($job['files_total'] ?? 0) ?></td>
-                        <td class="d-table-cell-md"><?= htmlspecialchars($job['repo_name'] ?? '--') ?></td>
-                        <td class="d-table-cell-md">
+                        <td class="d-none d-md-table-cell"><?= number_format($job['files_total'] ?? 0) ?></td>
+                        <td class="d-none d-md-table-cell"><?= htmlspecialchars($job['repo_name'] ?? '--') ?></td>
+                        <td class="d-none d-md-table-cell">
                             <?php
                             $d = $job['duration_seconds'] ?? 0;
                             echo $d >= 60 ? floor($d / 60) . 'm ' . ($d % 60) . 's' : $d . 's';
@@ -207,7 +207,7 @@
                                 <?php endif; ?>
                             <?php endif; ?>
                         </td>
-                        <td class="text-nowrap" onclick="event.stopPropagation()">
+                        <td class="text-end" onclick="event.stopPropagation()">
                             <a href="/queue/<?= $job['id'] ?>" class="btn btn-sm btn-outline-secondary" title="View Details"><i class="bi bi-eye"></i></a>
                             <?php if ($job['status'] === 'failed'): ?>
                             <form method="POST" action="/queue/<?= $job['id'] ?>/retry" class="d-inline"
@@ -295,14 +295,14 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
         }
 
         return '<tr style="cursor:pointer;" onclick="window.location=\'/queue/' + job.id + '\'">' +
-            '<td class="small">' + formatDate(job.queued_at) + '</td>' +
+            '<td class="small text-nowrap">' + formatDate(job.queued_at) + '</td>' +
             '<td>' + esc(job.agent_name) + '</td>' +
             '<td class="text-nowrap">' + jobTypeIcon(job.task_type) + esc(job.task_type) + '</td>' +
-            '<td class="d-table-cell-md">' + Number(job.files_total || 0).toLocaleString() + '</td>' +
+            '<td class="d-none d-md-table-cell">' + Number(job.files_total || 0).toLocaleString() + '</td>' +
             '<td>' + progress + '</td>' +
-            '<td class="d-table-cell-md">' + esc(job.repo_name || '--') + '</td>' +
+            '<td class="d-none d-md-table-cell">' + esc(job.repo_name || '--') + '</td>' +
             '<td>' + statusBadge(job.status) + '</td>' +
-            '<td class="text-nowrap" onclick="event.stopPropagation()">' + actions + '</td></tr>';
+            '<td class="text-end" onclick="event.stopPropagation()">' + actions + '</td></tr>';
     }
 
     function buildCompletedRow(job) {
@@ -324,14 +324,14 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
         }
 
         return '<tr style="cursor:pointer;" onclick="window.location=\'/queue/' + job.id + '\'">' +
-            '<td class="small">' + formatDate(job.completed_at) + '</td>' +
+            '<td class="small text-nowrap">' + formatDate(job.completed_at) + '</td>' +
             '<td>' + esc(job.agent_name) + '</td>' +
             '<td class="text-nowrap">' + jobTypeIcon(job.task_type) + esc(job.task_type) + '</td>' +
-            '<td class="d-table-cell-md">' + Number(job.files_total || 0).toLocaleString() + '</td>' +
-            '<td class="d-table-cell-md">' + esc(job.repo_name || '--') + '</td>' +
-            '<td class="d-table-cell-md">' + formatDuration(job.duration_seconds) + '</td>' +
-            '<td>' + statusHtml + '</td>' +
-            '<td class="text-nowrap" onclick="event.stopPropagation()">' + actions + '</td></tr>';
+            '<td class="d-none d-md-table-cell">' + Number(job.files_total || 0).toLocaleString() + '</td>' +
+            '<td class="d-none d-md-table-cell">' + esc(job.repo_name || '--') + '</td>' +
+            '<td class="d-none d-md-table-cell">' + formatDuration(job.duration_seconds) + '</td>' +
+            '<td class="text-center">' + statusHtml + '</td>' +
+            '<td class="text-end" onclick="event.stopPropagation()">' + actions + '</td></tr>';
     }
 
     function refreshQueue() {
@@ -343,8 +343,8 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
                 if (data.inProgress.length === 0) {
                     ipCard.innerHTML = '<div class="p-4 text-muted text-center">No jobs in progress.</div>';
                 } else {
-                    let html = '<div class="table-responsive"><table class="table table-hover table-sm small mb-0"><thead class="table-light"><tr>' +
-                        '<th>Date</th><th>Client</th><th>Task</th><th class="d-th-md">Files</th><th>Progress</th><th class="d-th-md">Repo</th><th>Status</th><th></th>' +
+                    let html = '<div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr>' +
+                        '<th>Date</th><th>Client</th><th>Task</th><th class="d-none d-md-table-cell">Files</th><th>Progress</th><th class="d-none d-md-table-cell">Repo</th><th>Status</th><th style="width:80px;"></th>' +
                         '</tr></thead><tbody>';
                     data.inProgress.forEach(j => html += buildInProgressRow(j));
                     html += '</tbody></table></div>';
@@ -356,8 +356,8 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
                 if (data.completed.length === 0) {
                     cCard.innerHTML = '<div class="p-4 text-muted text-center">No completed jobs yet.</div>';
                 } else {
-                    let html = '<div class="table-responsive"><table class="table table-hover table-sm small mb-0"><thead class="table-light"><tr>' +
-                        '<th>Date</th><th>Client</th><th>Task</th><th class="d-th-md">Files</th><th class="d-th-md">Repo</th><th class="d-th-md">Duration</th><th>Status</th><th></th>' +
+                    let html = '<div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr>' +
+                        '<th>Date</th><th>Client</th><th>Task</th><th class="d-none d-md-table-cell">Files</th><th class="d-none d-md-table-cell">Repo</th><th class="d-none d-md-table-cell">Duration</th><th class="text-center">Status</th><th style="width:80px;"></th>' +
                         '</tr></thead><tbody>';
                     data.completed.forEach(j => html += buildCompletedRow(j));
                     html += '</tbody></table></div>';
