@@ -406,27 +406,6 @@ body.bg-body-secondary {
     background-color: var(--bs-tertiary-bg) !important;
 }
 
-/* Storage alert threshold slider */
-.storage-slider-container {
-    height: 24px;
-}
-.storage-slider-container .progress {
-    background-color: var(--bs-secondary-bg);
-}
-.storage-slider-overlay {
-    margin: 0;
-    padding: 0;
-}
-.threshold-marker {
-    pointer-events: none;
-    z-index: 2;
-    box-shadow: 0 0 4px rgba(0,0,0,0.3);
-}
-.threshold-tooltip {
-    pointer-events: none;
-    z-index: 3;
-}
-
 /* Mobile: icon-focused tabs */
 @media (max-width: 767.98px) {
     .client-tabs {

@@ -83,57 +83,21 @@ $updateAvailable = $updateService->isUpdateAvailable();
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Storage Path</label>
-                        <input type="text" class="form-control" name="storage_path" value="<?= htmlspecialchars($settings['storage_path'] ?? '') ?>" readonly>
-                        <div class="form-text">Base directory for agent home directories and borg repositories. Set during installation.</div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Storage Alert Threshold</label>
-                        <?php
-                        $threshold = (int) ($settings['storage_alert_threshold'] ?? 90);
-                        $currentUsage = $storageUsagePercent ?? 0;
-                        $usageColor = $currentUsage >= $threshold ? 'danger' : ($currentUsage >= 70 ? 'warning' : 'primary');
-                        ?>
-                        <div class="storage-slider-container position-relative mb-2">
-                            <div class="progress" style="height: 24px; border-radius: 12px;">
-                                <!-- Current usage bar -->
-                                <div class="progress-bar bg-<?= $usageColor ?>" id="storageUsageBar"
-                                     role="progressbar" style="width: <?= $currentUsage ?>%;"
-                                     aria-valuenow="<?= $currentUsage ?>" aria-valuemin="0" aria-valuemax="100">
+                        <div class="row g-2">
+                            <div class="col">
+                                <input type="text" class="form-control" name="storage_path" value="<?= htmlspecialchars($settings['storage_path'] ?? '') ?>" readonly>
+                            </div>
+                            <div class="col-auto">
+                                <div class="input-group" style="width: 140px;">
+                                    <span class="input-group-text small">Alert at</span>
+                                    <input type="number" class="form-control text-center" name="storage_alert_threshold"
+                                           value="<?= htmlspecialchars($settings['storage_alert_threshold'] ?? '90') ?>" min="50" max="99" style="width: 60px;">
+                                    <span class="input-group-text">%</span>
                                 </div>
                             </div>
-                            <!-- Threshold marker -->
-                            <div class="threshold-marker position-absolute" id="thresholdMarker"
-                                 style="left: <?= $threshold ?>%; top: 0; height: 24px; width: 3px; background: var(--bs-danger); border-radius: 2px; transform: translateX(-50%);">
-                            </div>
-                            <!-- Threshold tooltip -->
-                            <div class="threshold-tooltip position-absolute text-center" id="thresholdTooltip"
-                                 style="left: <?= $threshold ?>%; top: -28px; transform: translateX(-50%);">
-                                <span class="badge bg-dark"><?= $threshold ?>%</span>
-                            </div>
-                            <!-- Slider overlay -->
-                            <input type="range" class="form-range storage-slider-overlay position-absolute" name="storage_alert_threshold"
-                                   id="storageAlertSlider" min="50" max="99" value="<?= $threshold ?>"
-                                   style="top: 0; left: 0; width: 100%; height: 24px; opacity: 0; cursor: pointer;">
                         </div>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div class="form-text mb-0">
-                                Current usage: <strong><?= $currentUsage ?>%</strong>
-                                <?php if ($currentUsage >= $threshold): ?>
-                                <span class="text-danger ms-1"><i class="bi bi-exclamation-triangle"></i> Above threshold</span>
-                                <?php endif; ?>
-                            </div>
-                            <div class="form-text mb-0">Alert at: <strong id="storageAlertValue"><?= $threshold ?>%</strong></div>
-                        </div>
+                        <div class="form-text">Base directory for borg repositories. Currently <?= $storageUsagePercent ?? 0 ?>% used.</div>
                     </div>
-                    <script>
-                    document.getElementById('storageAlertSlider').addEventListener('input', function() {
-                        var val = this.value;
-                        document.getElementById('thresholdMarker').style.left = val + '%';
-                        document.getElementById('thresholdTooltip').style.left = val + '%';
-                        document.getElementById('thresholdTooltip').querySelector('.badge').textContent = val + '%';
-                        document.getElementById('storageAlertValue').textContent = val + '%';
-                    });
-                    </script>
                     <?php $sshPort = (int) ($settings['ssh_port'] ?? 22); if ($sshPort !== 22): ?>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">SSH Port</label>
