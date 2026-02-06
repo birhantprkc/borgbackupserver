@@ -494,8 +494,8 @@ unset($ns);
                     <td>
                         <?php if ($service['last_used_at']): ?>
                         <span class="small text-muted" title="<?= htmlspecialchars($service['last_used_at']) ?>">
-                            <?= date('M j, Y', strtotime($service['last_used_at'])) ?><br>
-                            <?= date('g:i A', strtotime($service['last_used_at'])) ?>
+                            <?= \BBS\Core\TimeHelper::format($service['last_used_at'], 'M j, Y') ?><br>
+                            <?= \BBS\Core\TimeHelper::format($service['last_used_at'], 'g:i A') ?>
                         </span>
                         <?php else: ?>
                         <span class="text-muted small">Never</span>
@@ -644,7 +644,7 @@ unset($ns);
                 <?php endif; ?>
             </div>
             <?php if ($service['last_used_at']): ?>
-            <div class="text-muted small"><i class="bi bi-clock me-1"></i><?= date('M j, Y g:i A', strtotime($service['last_used_at'])) ?></div>
+            <div class="text-muted small"><i class="bi bi-clock me-1"></i><?= \BBS\Core\TimeHelper::format($service['last_used_at'], 'M j, Y g:i A') ?></div>
             <?php endif; ?>
             <!-- Mobile edit form -->
             <div class="collapse mt-3" id="editMobile_<?= $service['id'] ?>">
