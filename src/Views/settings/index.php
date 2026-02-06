@@ -512,7 +512,7 @@ unset($ns);
     </div>
 </div>
 <?php else: ?>
-<div class="card border-0 shadow-sm">
+<div class="card border-0 shadow-sm" id="noServicesCard">
     <div class="card-body p-5 text-center">
         <i class="bi bi-megaphone text-muted" style="font-size: 3rem;"></i>
         <h5 class="mt-3">No Notification Services</h5>
@@ -572,6 +572,20 @@ function testPushService(id, btn) {
         console.error(err);
     });
 }
+
+// Hide empty state card when add form is shown
+(function() {
+    const addForm = document.getElementById('addServiceForm');
+    const emptyCard = document.getElementById('noServicesCard');
+    if (addForm && emptyCard) {
+        addForm.addEventListener('show.bs.collapse', function() {
+            emptyCard.style.display = 'none';
+        });
+        addForm.addEventListener('hide.bs.collapse', function() {
+            emptyCard.style.display = '';
+        });
+    }
+})();
 </script>
 <?php endif; ?>
 
