@@ -1225,23 +1225,24 @@ $outdatedCount = count($outdatedAgents);
         <div id="agent-updates-card">
         <?php if ($bundledAgentVersion): ?>
         <div class="card border-0 shadow-sm mt-4">
-            <div class="card-header bg-body fw-semibold">
-                <i class="bi bi-incognito me-1"></i> Agent Updates
-                <span class="text-muted fw-normal small ms-2" id="agent-bundled-ver">v<?= htmlspecialchars($bundledAgentVersion) ?></span>
+            <div class="card-header bg-body fw-semibold d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-pc-display me-1"></i> BBS Client</span>
+                <span class="badge bg-primary" id="agent-bundled-ver">v<?= htmlspecialchars($bundledAgentVersion) ?></span>
             </div>
             <div class="card-body" id="agent-updates-body">
+                <p class="text-muted small mb-3">The BBS Client receives commands from the server to initiate backups, perform restores, and update Borg software.</p>
                 <?php if ($totalAgents === 0): ?>
-                    <p class="text-muted small mb-0">No agents connected yet.</p>
+                    <p class="text-muted small mb-0">No clients connected yet.</p>
                 <?php elseif ($outdatedCount === 0): ?>
                     <div class="d-flex align-items-center small">
                         <span class="badge rounded-pill me-2" style="background-color: #e8f5e9; color: #2e7d32;"><i class="bi bi-check-circle me-1"></i>Up to date</span>
-                        All <?= $totalAgents ?> agent(s) running v<?= htmlspecialchars($bundledAgentVersion) ?>
+                        All <?= $totalAgents ?> client(s) running v<?= htmlspecialchars($bundledAgentVersion) ?>
                     </div>
                 <?php else: ?>
                     <div class="d-flex align-items-center justify-content-between mb-3">
                         <div class="small">
                             <span class="badge rounded-pill text-dark me-1" style="background-color: #fff3cd;"><?= $outdatedCount ?> outdated</span>
-                            of <?= $totalAgents ?> agent(s)
+                            of <?= $totalAgents ?> client(s)
                         </div>
                         <form method="POST" action="/settings/upgrade-agents" data-confirm="Queue agent updates for <?= $outdatedCount ?> client(s)?">
                             <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
@@ -1252,7 +1253,7 @@ $outdatedCount = count($outdatedAgents);
                     </div>
                     <?php foreach ($outdatedAgents as $oa): ?>
                     <div class="d-flex justify-content-between align-items-center small py-1">
-                        <span><i class="bi bi-incognito me-1 text-muted"></i><?= htmlspecialchars($oa['name']) ?></span>
+                        <span><i class="bi bi-pc-display me-1 text-muted"></i><?= htmlspecialchars($oa['name']) ?></span>
                         <span class="text-muted">v<?= htmlspecialchars($oa['agent_version']) ?></span>
                     </div>
                     <?php endforeach; ?>
