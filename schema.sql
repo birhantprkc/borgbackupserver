@@ -294,10 +294,10 @@ INSERT INTO settings (`key`, `value`) VALUES
 
 CREATE TABLE notifications (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    type ENUM('backup_failed', 'agent_offline', 'storage_low', 'missed_schedule') NOT NULL,
+    type VARCHAR(50) NOT NULL,
     agent_id INT DEFAULT NULL,
     reference_id INT DEFAULT NULL,
-    severity ENUM('warning', 'critical') NOT NULL DEFAULT 'warning',
+    severity VARCHAR(20) NOT NULL DEFAULT 'warning',
     message TEXT NOT NULL,
     occurrence_count INT NOT NULL DEFAULT 1,
     first_occurred_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
