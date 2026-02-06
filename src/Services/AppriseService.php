@@ -54,13 +54,29 @@ class AppriseService
             $bodyEscaped = escapeshellarg($body);
             $urlEscaped = escapeshellarg($service['apprise_url']);
 
-            $cmd = "apprise -t {$titleEscaped} -b {$bodyEscaped} {$urlEscaped} > /dev/null 2>&1 &";
-            exec($cmd);
+            // Run synchronously so we can capture success/failure
+            $cmd = "apprise -t {$titleEscaped} -b {$bodyEscaped} {$urlEscaped} 2>&1";
+            exec($cmd, $output, $exitCode);
 
             // Update last_used_at
             $this->db->update('notification_services', ['last_used_at' => date('Y-m-d H:i:s')], 'id = ?', [$serviceId]);
 
-            return true;
+            // Log the send attempt
+            $serviceName = $service['name'];
+            if ($exitCode === 0) {
+                $this->db->insert('server_log', [
+                    'level' => 'info',
+                    'message' => "Push notification sent via \"{$serviceName}\": {$title}",
+                ]);
+            } else {
+                $outputStr = implode("\n", $output);
+                $this->db->insert('server_log', [
+                    'level' => 'error',
+                    'message' => "Push notification failed via \"{$serviceName}\": {$title} — " . substr($outputStr, 0, 500),
+                ]);
+            }
+
+            return $exitCode === 0;
         } catch (\Exception $e) {
             error_log("Apprise error: " . $e->getMessage());
             return false;
