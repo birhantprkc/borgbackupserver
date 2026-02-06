@@ -50,6 +50,8 @@
                 <td>
                     <?php if ($n['severity'] === 'critical'): ?>
                         <span class="badge bg-danger">Critical</span>
+                    <?php elseif ($n['severity'] === 'info'): ?>
+                        <span class="badge bg-info text-dark">Info</span>
                     <?php else: ?>
                         <span class="badge bg-warning text-dark">Warning</span>
                     <?php endif; ?>
