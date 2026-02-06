@@ -13,8 +13,26 @@ class NotificationService
         $this->db = Database::getInstance();
     }
 
+    // Success/info events should always send (not deduplicate) since users want
+    // to know every time a backup completes. Failure events deduplicate to avoid spam.
+    private const ALWAYS_SEND_EVENTS = [
+        'backup_completed',
+        'restore_completed',
+        'agent_online',
+        'repo_compact_done',
+        's3_sync_done',
+    ];
+
     public function notify(string $type, ?int $agentId, ?int $referenceId, string $message, string $severity = 'warning'): void
     {
+        $alwaysSend = in_array($type, self::ALWAYS_SEND_EVENTS, true);
+
+        // For success events, resolve any previous unresolved notification first
+        // so a fresh one is always created and notifications always fire
+        if ($alwaysSend) {
+            $this->resolve($type, $agentId, $referenceId);
+        }
+
         // Look for existing unresolved notification with same grouping key
         $params = [$type];
         $agentClause = $agentId !== null ? 'agent_id = ?' : 'agent_id IS NULL';
@@ -45,7 +63,8 @@ class NotificationService
             $isNew = true;
         }
 
-        // Send notifications on first occurrence only (avoid spamming on repeats)
+        // Send push/email notifications on first occurrence (failure events deduplicate,
+        // success events always create a new record so they always send)
         if ($isNew) {
             $this->sendEmailIfEnabled($type, $message);
             $this->sendAppriseIfEnabled($type, $message);
