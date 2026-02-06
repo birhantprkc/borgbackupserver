@@ -82,21 +82,21 @@ $updateAvailable = $updateService->isUpdateAvailable();
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-semibold">Storage Path</label>
                         <div class="row g-2">
                             <div class="col">
+                                <label class="form-label fw-semibold">Storage Path</label>
                                 <input type="text" class="form-control" name="storage_path" value="<?= htmlspecialchars($settings['storage_path'] ?? '') ?>" readonly>
+                                <div class="form-text">Base directory for borg repositories. Currently <?= $storageUsagePercent ?? 0 ?>% used.</div>
                             </div>
-                            <div class="col-auto">
-                                <div class="input-group" style="width: 140px;">
-                                    <span class="input-group-text small">Alert at</span>
+                            <div class="col-auto text-center">
+                                <label class="form-label fw-semibold">Alert at</label>
+                                <div class="input-group" style="width: 90px;">
                                     <input type="number" class="form-control text-center" name="storage_alert_threshold"
-                                           value="<?= htmlspecialchars($settings['storage_alert_threshold'] ?? '90') ?>" min="50" max="99" style="width: 60px;">
+                                           value="<?= htmlspecialchars($settings['storage_alert_threshold'] ?? '90') ?>" min="50" max="99">
                                     <span class="input-group-text">%</span>
                                 </div>
                             </div>
                         </div>
-                        <div class="form-text">Base directory for borg repositories. Currently <?= $storageUsagePercent ?? 0 ?>% used.</div>
                     </div>
                     <?php $sshPort = (int) ($settings['ssh_port'] ?? 22); if ($sshPort !== 22): ?>
                     <div class="mb-3">
