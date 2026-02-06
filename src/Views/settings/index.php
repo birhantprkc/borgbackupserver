@@ -1228,7 +1228,7 @@ $outdatedCount = count($outdatedAgents);
         <div class="card border-0 shadow-sm mt-4">
             <div class="card-header bg-body fw-semibold d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-pc-display me-1"></i> BBS Client</span>
-                <span class="badge bg-primary" id="agent-bundled-ver">v<?= htmlspecialchars($bundledAgentVersion) ?></span>
+                <span class="badge bg-success" id="agent-bundled-ver">v<?= htmlspecialchars($bundledAgentVersion) ?></span>
             </div>
             <div class="card-body" id="agent-updates-body">
                 <p class="text-muted small mb-3">The BBS Client receives commands from the server to initiate backups, perform restores, and update Borg software.</p>
