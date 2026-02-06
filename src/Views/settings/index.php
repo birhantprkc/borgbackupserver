@@ -202,38 +202,10 @@ $updateAvailable = $updateService->isUpdateAvailable();
                             <input type="password" class="form-control" name="smtp_pass" value="<?= htmlspecialchars($settings['smtp_pass'] ?? '') ?>">
                         </div>
                     </div>
-                    <div class="mb-3">
+                    <div class="mb-4">
                         <label class="form-label fw-semibold">From Address</label>
                         <input type="email" class="form-control" name="smtp_from" value="<?= htmlspecialchars($settings['smtp_from'] ?? '') ?>" placeholder="backups@example.com">
                     </div>
-
-                    <hr>
-
-                    <label class="form-label fw-semibold">Email me when:</label>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-check mb-2">
-                                <input class="form-check-input" type="checkbox" name="email_on_backup_failed" value="1" id="emailBackupFailed" <?= ($settings['email_on_backup_failed'] ?? '1') === '1' ? 'checked' : '' ?>>
-                                <label class="form-check-label" for="emailBackupFailed">Backup fails</label>
-                            </div>
-                            <div class="form-check mb-2">
-                                <input class="form-check-input" type="checkbox" name="email_on_agent_offline" value="1" id="emailAgentOffline" <?= ($settings['email_on_agent_offline'] ?? '1') === '1' ? 'checked' : '' ?>>
-                                <label class="form-check-label" for="emailAgentOffline">Client goes offline</label>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-check mb-2">
-                                <input class="form-check-input" type="checkbox" name="email_on_storage_low" value="1" id="emailStorageLow" <?= ($settings['email_on_storage_low'] ?? '1') === '1' ? 'checked' : '' ?>>
-                                <label class="form-check-label" for="emailStorageLow">Storage space is low</label>
-                            </div>
-                            <div class="form-check mb-2">
-                                <input class="form-check-input" type="checkbox" name="email_on_missed_schedule" value="1" id="emailMissedSchedule" <?= ($settings['email_on_missed_schedule'] ?? '0') === '1' ? 'checked' : '' ?>>
-                                <label class="form-check-label" for="emailMissedSchedule">Scheduled backup is missed</label>
-                            </div>
-                        </div>
-                    </div>
-
-                    <hr>
 
                     <div class="d-flex align-items-center gap-3">
                         <button type="submit" class="btn btn-warning">
@@ -254,15 +226,11 @@ $updateAvailable = $updateService->isUpdateAvailable();
             <div class="card-body">
                 <h6 class="card-title"><i class="bi bi-lightbulb me-1 text-warning"></i> Tip</h6>
                 <p class="card-text small text-muted mb-2">
-                    Email settings are used to send important notifications to administrators about backup failures,
-                    offline clients, and storage alerts.
-                </p>
-                <p class="card-text small text-muted mb-2">
-                    Emails are sent to all users with the <strong>Admin</strong> role who have an email address configured.
+                    Email settings are used for password resets, upgrade notices, and other system messages.
                 </p>
                 <p class="card-text small text-muted mb-0">
-                    For real-time alerts via Discord, Slack, Telegram, or 100+ other services, configure
-                    <a href="/settings?tab=push">Push Notifications</a>.
+                    For backup alerts (failures, offline clients, storage warnings), configure
+                    <a href="/settings?tab=push">Push Notifications</a> using Discord, Slack, Telegram, or 100+ other services.
                 </p>
             </div>
         </div>
