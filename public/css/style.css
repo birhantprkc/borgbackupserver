@@ -363,12 +363,12 @@ body.bg-body-secondary {
 
 .client-tabs .nav-link {
     color: var(--bs-secondary-color);
-    background-color: var(--bs-tertiary-bg);
+    background-color: transparent;
     border-radius: 6px 6px 0 0 !important;
     padding: 8px 16px;
     font-weight: 500;
     font-size: 0.9rem;
-    border: 1px solid var(--bs-border-color);
+    border: 1px solid transparent;
     border-bottom: none;
     margin-bottom: -1px;
     white-space: nowrap;
@@ -376,15 +376,17 @@ body.bg-body-secondary {
 }
 
 .client-tabs .nav-link:hover {
-    background-color: var(--bs-secondary-bg);
+    background-color: var(--bs-tertiary-bg);
     color: var(--bs-body-color);
+    border-color: var(--bs-border-color);
+    border-bottom-color: transparent;
 }
 
 .client-tabs .nav-link.active {
-    background-color: var(--bs-body-bg);
+    background-color: var(--bs-tertiary-bg);
     color: var(--bs-body-color);
     border-color: var(--bs-border-color);
-    border-bottom-color: var(--bs-body-bg);
+    border-bottom-color: var(--bs-tertiary-bg);
     position: relative;
     z-index: 1;
 }
@@ -395,12 +397,13 @@ body.bg-body-secondary {
 
 .client-tabs .nav-link.text-danger.active {
     color: #dc3545 !important;
-    background-color: var(--bs-body-bg);
+    background-color: var(--bs-tertiary-bg);
 }
 
 .client-tab-content {
     border-radius: 0 0 8px 8px;
     overflow-x: hidden;
+    background-color: var(--bs-tertiary-bg) !important;
 }
 
 /* Mobile: icon-focused tabs */

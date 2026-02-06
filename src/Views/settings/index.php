@@ -45,7 +45,7 @@ $updateAvailable = $updateService->isUpdateAvailable();
         </a>
     </li>
 </ul>
-<div class="client-tab-content border rounded-bottom bg-body p-4 mb-4 shadow-sm">
+<div class="client-tab-content border rounded-bottom p-4 mb-4 shadow-sm">
 
 <!-- General Tab -->
 <?php if ($activeTab === 'general'): ?>
