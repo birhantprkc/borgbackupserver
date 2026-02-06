@@ -88,15 +88,52 @@ $updateAvailable = $updateService->isUpdateAvailable();
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Storage Alert Threshold</label>
-                        <div class="d-flex align-items-center gap-2">
-                            <input type="range" class="form-range flex-grow-1" name="storage_alert_threshold"
-                                   id="storageAlertSlider" min="50" max="99"
-                                   value="<?= htmlspecialchars($settings['storage_alert_threshold'] ?? '90') ?>"
-                                   oninput="document.getElementById('storageAlertValue').textContent = this.value + '%'">
-                            <span id="storageAlertValue" class="badge bg-body-secondary text-body border" style="min-width: 50px;"><?= htmlspecialchars($settings['storage_alert_threshold'] ?? '90') ?>%</span>
+                        <?php
+                        $threshold = (int) ($settings['storage_alert_threshold'] ?? 90);
+                        $currentUsage = $storageUsagePercent ?? 0;
+                        $usageColor = $currentUsage >= $threshold ? 'danger' : ($currentUsage >= 70 ? 'warning' : 'primary');
+                        ?>
+                        <div class="storage-slider-container position-relative mb-2">
+                            <div class="progress" style="height: 24px; border-radius: 12px;">
+                                <!-- Current usage bar -->
+                                <div class="progress-bar bg-<?= $usageColor ?>" id="storageUsageBar"
+                                     role="progressbar" style="width: <?= $currentUsage ?>%;"
+                                     aria-valuenow="<?= $currentUsage ?>" aria-valuemin="0" aria-valuemax="100">
+                                </div>
+                            </div>
+                            <!-- Threshold marker -->
+                            <div class="threshold-marker position-absolute" id="thresholdMarker"
+                                 style="left: <?= $threshold ?>%; top: 0; height: 24px; width: 3px; background: var(--bs-danger); border-radius: 2px; transform: translateX(-50%);">
+                            </div>
+                            <!-- Threshold tooltip -->
+                            <div class="threshold-tooltip position-absolute text-center" id="thresholdTooltip"
+                                 style="left: <?= $threshold ?>%; top: -28px; transform: translateX(-50%);">
+                                <span class="badge bg-dark"><?= $threshold ?>%</span>
+                            </div>
+                            <!-- Slider overlay -->
+                            <input type="range" class="form-range storage-slider-overlay position-absolute" name="storage_alert_threshold"
+                                   id="storageAlertSlider" min="50" max="99" value="<?= $threshold ?>"
+                                   style="top: 0; left: 0; width: 100%; height: 24px; opacity: 0; cursor: pointer;">
                         </div>
-                        <div class="form-text">Alert when storage usage exceeds this percentage.</div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="form-text mb-0">
+                                Current usage: <strong><?= $currentUsage ?>%</strong>
+                                <?php if ($currentUsage >= $threshold): ?>
+                                <span class="text-danger ms-1"><i class="bi bi-exclamation-triangle"></i> Above threshold</span>
+                                <?php endif; ?>
+                            </div>
+                            <div class="form-text mb-0">Alert at: <strong id="storageAlertValue"><?= $threshold ?>%</strong></div>
+                        </div>
                     </div>
+                    <script>
+                    document.getElementById('storageAlertSlider').addEventListener('input', function() {
+                        var val = this.value;
+                        document.getElementById('thresholdMarker').style.left = val + '%';
+                        document.getElementById('thresholdTooltip').style.left = val + '%';
+                        document.getElementById('thresholdTooltip').querySelector('.badge').textContent = val + '%';
+                        document.getElementById('storageAlertValue').textContent = val + '%';
+                    });
+                    </script>
                     <?php $sshPort = (int) ($settings['ssh_port'] ?? 22); if ($sshPort !== 22): ?>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">SSH Port</label>

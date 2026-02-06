@@ -18,10 +18,22 @@ class SettingsController extends Controller
 
         $templates = $this->db->fetchAll("SELECT * FROM backup_templates ORDER BY name");
 
+        // Get current storage usage for the storage path
+        $storagePath = $settings['storage_path'] ?? '/var/bbs';
+        $storageUsagePercent = 0;
+        if (is_dir($storagePath)) {
+            $total = @disk_total_space($storagePath);
+            $free = @disk_free_space($storagePath);
+            if ($total && $total > 0) {
+                $storageUsagePercent = (int) round((($total - $free) / $total) * 100);
+            }
+        }
+
         $this->view('settings/index', [
             'pageTitle' => 'Settings',
             'settings' => $settings,
             'templates' => $templates,
+            'storageUsagePercent' => $storageUsagePercent,
         ]);
     }
 
