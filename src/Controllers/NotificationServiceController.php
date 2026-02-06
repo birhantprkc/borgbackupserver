@@ -34,23 +34,8 @@ class NotificationServiceController extends Controller
 
     public function index(): void
     {
-        $this->requireAdmin();
-
-        $services = $this->db->fetchAll(
-            "SELECT * FROM notification_services ORDER BY name ASC"
-        );
-
-        // Decode events JSON for each service
-        foreach ($services as &$service) {
-            $service['events'] = json_decode($service['events'] ?? '{}', true) ?: [];
-            $service['service_type_name'] = $this->getServiceName($service['service_type']);
-        }
-
-        $this->view('notification-services/index', [
-            'pageTitle' => 'Notification Services',
-            'services' => $services,
-            'eventTypes' => $this->eventTypes,
-        ]);
+        // Redirect to settings push tab
+        $this->redirect('/settings?tab=push');
     }
 
     public function store(): void
@@ -63,7 +48,7 @@ class NotificationServiceController extends Controller
 
         if (empty($name) || empty($appriseUrl)) {
             $this->flash('danger', 'Name and Apprise URL are required.');
-            $this->redirect('/notification-services');
+            $this->redirect('/settings?tab=push');
         }
 
         // Build events JSON from checkboxes
@@ -83,7 +68,7 @@ class NotificationServiceController extends Controller
         ]);
 
         $this->flash('success', "Notification service \"{$name}\" created.");
-        $this->redirect('/notification-services');
+        $this->redirect('/settings?tab=push');
     }
 
     public function update(int $id): void
@@ -94,7 +79,7 @@ class NotificationServiceController extends Controller
         $service = $this->db->fetchOne("SELECT id FROM notification_services WHERE id = ?", [$id]);
         if (!$service) {
             $this->flash('danger', 'Service not found.');
-            $this->redirect('/notification-services');
+            $this->redirect('/settings?tab=push');
         }
 
         $name = trim($_POST['name'] ?? '');
@@ -102,7 +87,7 @@ class NotificationServiceController extends Controller
 
         if (empty($name) || empty($appriseUrl)) {
             $this->flash('danger', 'Name and Apprise URL are required.');
-            $this->redirect('/notification-services');
+            $this->redirect('/settings?tab=push');
         }
 
         // Build events JSON from checkboxes
@@ -121,7 +106,7 @@ class NotificationServiceController extends Controller
         ], 'id = ?', [$id]);
 
         $this->flash('success', "Notification service updated.");
-        $this->redirect('/notification-services');
+        $this->redirect('/settings?tab=push');
     }
 
     public function delete(int $id): void
@@ -132,13 +117,13 @@ class NotificationServiceController extends Controller
         $service = $this->db->fetchOne("SELECT name FROM notification_services WHERE id = ?", [$id]);
         if (!$service) {
             $this->flash('danger', 'Service not found.');
-            $this->redirect('/notification-services');
+            $this->redirect('/settings?tab=push');
         }
 
         $this->db->delete('notification_services', 'id = ?', [$id]);
 
         $this->flash('success', "Notification service \"{$service['name']}\" deleted.");
-        $this->redirect('/notification-services');
+        $this->redirect('/settings?tab=push');
     }
 
     public function toggle(int $id): void
@@ -148,13 +133,14 @@ class NotificationServiceController extends Controller
 
         $service = $this->db->fetchOne("SELECT enabled FROM notification_services WHERE id = ?", [$id]);
         if (!$service) {
-            $this->json(['error' => 'Service not found'], 404);
+            $this->flash('danger', 'Service not found.');
+            $this->redirect('/settings?tab=push');
         }
 
         $newEnabled = $service['enabled'] ? 0 : 1;
         $this->db->update('notification_services', ['enabled' => $newEnabled], 'id = ?', [$id]);
 
-        $this->json(['status' => 'ok', 'enabled' => $newEnabled]);
+        $this->redirect('/settings?tab=push');
     }
 
     public function test(int $id): void
@@ -199,7 +185,7 @@ class NotificationServiceController extends Controller
         $service = $this->db->fetchOne("SELECT * FROM notification_services WHERE id = ?", [$id]);
         if (!$service) {
             $this->flash('danger', 'Service not found.');
-            $this->redirect('/notification-services');
+            $this->redirect('/settings?tab=push');
         }
 
         $this->db->insert('notification_services', [
@@ -211,7 +197,7 @@ class NotificationServiceController extends Controller
         ]);
 
         $this->flash('success', "Service duplicated.");
-        $this->redirect('/notification-services');
+        $this->redirect('/settings?tab=push');
     }
 
     private function detectServiceType(string $url): string
