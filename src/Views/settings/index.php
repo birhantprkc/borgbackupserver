@@ -56,7 +56,7 @@ $updateAvailable = $updateService->isUpdateAvailable();
     <div class="row g-4">
         <div class="col-lg-6">
             <div class="card border-0 shadow-sm">
-                <div class="card-header bg-body fw-semibold">
+                <div class="card-header bg-primary bg-opacity-10 fw-semibold">
                     <i class="bi bi-server me-1"></i> Server
                 </div>
                 <div class="card-body">
@@ -112,7 +112,7 @@ $updateAvailable = $updateService->isUpdateAvailable();
 
         <div class="col-lg-6">
             <div class="card border-0 shadow-sm">
-                <div class="card-header bg-body fw-semibold">
+                <div class="card-header bg-primary bg-opacity-10 fw-semibold">
                     <i class="bi bi-shield-lock me-1"></i> Security
                 </div>
                 <div class="card-body">
@@ -149,7 +149,7 @@ $updateAvailable = $updateService->isUpdateAvailable();
             </div>
 
             <div class="card border-0 shadow-sm mt-4">
-                <div class="card-header bg-body fw-semibold">
+                <div class="card-header bg-primary bg-opacity-10 fw-semibold">
                     <i class="bi bi-incognito me-1"></i> Agent
                 </div>
                 <div class="card-body">
@@ -176,7 +176,7 @@ $updateAvailable = $updateService->isUpdateAvailable();
 <div class="row g-4">
     <div class="col-lg-7">
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-body fw-semibold">
+            <div class="card-header bg-primary bg-opacity-10 fw-semibold">
                 <i class="bi bi-envelope me-1"></i> SMTP Configuration
             </div>
             <div class="card-body">
@@ -310,7 +310,7 @@ unset($ns);
 <!-- Add Service Form (Collapse) -->
 <div class="collapse mb-4" id="addServiceForm">
     <div class="card border-0 shadow-sm">
-        <div class="card-header bg-body fw-semibold">
+        <div class="card-header bg-primary bg-opacity-10 fw-semibold">
             <i class="bi bi-plus-circle me-1"></i> Add Notification Service
         </div>
         <div class="card-body">
@@ -579,7 +579,7 @@ function testPushService(id, btn) {
 <!-- Templates Tab -->
 <?php if ($activeTab === 'templates'): ?>
 <div class="card border-0 shadow-sm">
-    <div class="card-header bg-body fw-semibold">
+    <div class="card-header bg-primary bg-opacity-10 fw-semibold">
         <i class="bi bi-clipboard-check me-1"></i> Backup Templates
     </div>
     <div class="card-body">
@@ -696,7 +696,7 @@ function testPushService(id, btn) {
 <div class="row g-4">
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-body fw-semibold">
+            <div class="card-header bg-primary bg-opacity-10 fw-semibold">
                 <i class="bi bi-box-seam me-1"></i> Borg Version Updater
             </div>
             <div class="card-body">
@@ -810,7 +810,7 @@ function testPushService(id, btn) {
 
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-body fw-semibold d-flex justify-content-between align-items-center">
+            <div class="card-header bg-primary bg-opacity-10 fw-semibold d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-pc-display me-1"></i> Client Borg Versions</span>
                 <?php if (!empty($allAgents)): ?>
                 <form method="POST" action="/settings/borg/update-all"
@@ -903,7 +903,7 @@ function testPushService(id, btn) {
         <?php if ($updateMode === 'server' && !empty($serverVersions)): ?>
         <!-- Server-hosted binaries info -->
         <div class="card border-0 shadow-sm mt-4">
-            <div class="card-header bg-body fw-semibold">
+            <div class="card-header bg-primary bg-opacity-10 fw-semibold">
                 <i class="bi bi-hdd me-1"></i> Available Server Binaries
             </div>
             <div class="card-body">
@@ -1008,7 +1008,7 @@ function testPushService(id, btn) {
     <div class="row g-4">
         <div class="col-lg-6">
             <div class="card border-0 shadow-sm">
-                <div class="card-header bg-body fw-semibold">
+                <div class="card-header bg-primary bg-opacity-10 fw-semibold">
                     <i class="bi bi-cloud-arrow-up me-1"></i> Global S3 Settings
                 </div>
                 <div class="card-body">
@@ -1083,7 +1083,7 @@ function testPushService(id, btn) {
 
         <div class="col-lg-6">
             <div class="card border-0 shadow-sm">
-                <div class="card-header bg-body fw-semibold">
+                <div class="card-header bg-primary bg-opacity-10 fw-semibold">
                     <i class="bi bi-info-circle me-1"></i> How It Works
                 </div>
                 <div class="card-body">
@@ -1170,7 +1170,7 @@ $outdatedCount = count($outdatedAgents);
 <div class="row g-4">
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-body fw-semibold">
+            <div class="card-header bg-primary bg-opacity-10 fw-semibold">
                 Borg Backup Server Version
             </div>
             <div class="card-body">
@@ -1226,7 +1226,7 @@ $outdatedCount = count($outdatedAgents);
         <div id="agent-updates-card">
         <?php if ($bundledAgentVersion): ?>
         <div class="card border-0 shadow-sm mt-4">
-            <div class="card-header bg-body fw-semibold d-flex justify-content-between align-items-center">
+            <div class="card-header bg-primary bg-opacity-10 fw-semibold d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-pc-display me-1"></i> BBS Client</span>
                 <span class="badge bg-success" id="agent-bundled-ver">v<?= htmlspecialchars($bundledAgentVersion) ?></span>
             </div>
@@ -1268,7 +1268,7 @@ $outdatedCount = count($outdatedAgents);
     <?php if (!empty($latest['notes'])): ?>
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-body fw-semibold">
+            <div class="card-header bg-primary bg-opacity-10 fw-semibold">
                 <i class="bi bi-journal-text me-1"></i> Release Notes
                 <?php if (!empty($latest['url'])): ?>
                     <a href="<?= htmlspecialchars($latest['url']) ?>" target="_blank" class="float-end small text-decoration-none">
@@ -1289,7 +1289,7 @@ $outdatedCount = count($outdatedAgents);
 <div class="row g-4">
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-body fw-semibold">
+            <div class="card-header bg-primary bg-opacity-10 fw-semibold">
                 <i class="bi bi-git me-1"></i> Developer Sync
             </div>
             <div class="card-body">
@@ -1310,7 +1310,7 @@ $outdatedCount = count($outdatedAgents);
 
 <?php if ($upgradeResult): ?>
 <div class="card border-0 shadow-sm mt-4">
-    <div class="card-header bg-body fw-semibold">
+    <div class="card-header bg-primary bg-opacity-10 fw-semibold">
         <i class="bi bi-terminal me-1"></i> Upgrade Log
     </div>
     <div class="card-body">
