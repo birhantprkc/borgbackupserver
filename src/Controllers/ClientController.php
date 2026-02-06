@@ -96,18 +96,24 @@ class ClientController extends Controller
             ", array_merge([$latestVersion], $params))['cnt'];
         }
 
-        // 7-day backup activity chart — group by user's local date (backups only)
+        // 7-day backup activity chart — group by user's local date, segmented by category
         $utcTz = new \DateTimeZone('UTC');
         $userTz = new \DateTimeZone($_SESSION['timezone'] ?? 'UTC');
         $recentJobs = $this->db->fetchAll("
-            SELECT bj.completed_at, bj.status
+            SELECT bj.completed_at, bj.status, bj.task_type
             FROM backup_jobs bj
             JOIN agents a ON a.id = bj.agent_id
             WHERE bj.completed_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
               AND bj.status IN ('completed', 'failed')
-              AND bj.task_type = 'backup'
               {$jobScope}
         ", $jobParams);
+
+        // Group task types into categories
+        $categoryMap = [
+            'backup' => 'backups',
+            'restore' => 'restores', 'restore_mysql' => 'restores', 'restore_pg' => 'restores',
+            's3_sync' => 's3_sync',
+        ];
 
         // Convert each timestamp to user's local date, then tally
         $byDay = [];
@@ -115,8 +121,15 @@ class ClientController extends Controller
             $dt = new \DateTime($job['completed_at'], $utcTz);
             $dt->setTimezone($userTz);
             $dayKey = $dt->format('Y-m-d');
-            if (!isset($byDay[$dayKey])) $byDay[$dayKey] = ['completed' => 0, 'failed' => 0];
-            $byDay[$dayKey][$job['status']]++;
+            if (!isset($byDay[$dayKey])) $byDay[$dayKey] = ['backups' => 0, 's3_sync' => 0, 'failed' => 0];
+            if ($job['status'] === 'failed') {
+                $byDay[$dayKey]['failed']++;
+            } else {
+                $cat = $categoryMap[$job['task_type']] ?? null;
+                if ($cat && $cat !== 'restores') {
+                    $byDay[$dayKey][$cat] = ($byDay[$dayKey][$cat] ?? 0) + 1;
+                }
+            }
         }
 
         // Build 7-day series anchored to "today" in user's timezone
@@ -128,7 +141,8 @@ class ClientController extends Controller
             $dayKey = $dt->format('Y-m-d');
             $chartActivity[] = [
                 'label' => $dt->format('D'),
-                'completed' => $byDay[$dayKey]['completed'] ?? 0,
+                'backups' => $byDay[$dayKey]['backups'] ?? 0,
+                's3_sync' => $byDay[$dayKey]['s3_sync'] ?? 0,
                 'failed' => $byDay[$dayKey]['failed'] ?? 0,
             ];
         }

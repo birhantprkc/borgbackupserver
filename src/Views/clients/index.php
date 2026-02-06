@@ -244,9 +244,15 @@ document.getElementById('clientSearch').addEventListener('input', function() {
                 labels: activityData.map(d => d.label),
                 datasets: [
                     {
-                        label: 'Completed',
-                        data: activityData.map(d => d.completed),
-                        backgroundColor: '#48bb78',
+                        label: 'Backups',
+                        data: activityData.map(d => d.backups),
+                        backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                        borderRadius: 3,
+                    },
+                    {
+                        label: 'S3 Sync',
+                        data: activityData.map(d => d.s3_sync),
+                        backgroundColor: 'rgba(75, 192, 192, 0.7)',
                         borderRadius: 3,
                     },
                     {
