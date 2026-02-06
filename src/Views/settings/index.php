@@ -82,19 +82,20 @@ $updateAvailable = $updateService->isUpdateAvailable();
                         </div>
                     </div>
                     <div class="mb-3">
-                        <div class="row g-2">
-                            <div class="col">
+                        <div class="row g-3">
+                            <div class="col-7">
                                 <label class="form-label fw-semibold">Storage Path</label>
                                 <input type="text" class="form-control" name="storage_path" value="<?= htmlspecialchars($settings['storage_path'] ?? '') ?>" readonly>
                                 <div class="form-text">Base directory for borg repositories. Currently <?= $storageUsagePercent ?? 0 ?>% used.</div>
                             </div>
-                            <div class="col-auto text-center">
+                            <div class="col-5">
                                 <label class="form-label fw-semibold">Alert at</label>
-                                <div class="input-group" style="width: 90px;">
+                                <div class="input-group">
                                     <input type="number" class="form-control text-center" name="storage_alert_threshold"
                                            value="<?= htmlspecialchars($settings['storage_alert_threshold'] ?? '90') ?>" min="50" max="99">
                                     <span class="input-group-text">%</span>
                                 </div>
+                                <div class="form-text">Send alert when storage exceeds this threshold.</div>
                             </div>
                         </div>
                     </div>
