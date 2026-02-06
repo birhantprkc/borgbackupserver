@@ -319,18 +319,40 @@ unset($ns);
 
                 <div class="row g-3 mb-3">
                     <div class="col-md-4">
-                        <label class="form-label fw-semibold">Service Name</label>
-                        <input type="text" class="form-control" name="name" placeholder="e.g., Discord Alerts" required>
-                        <div class="form-text">A friendly name to identify this service</div>
+                        <label class="form-label fw-semibold">Service Type</label>
+                        <select class="form-select" id="addServiceType">
+                            <option value="">-- Select a service --</option>
+                            <option value="discord" data-url="discord://{webhook_id}/{webhook_token}" data-name="Discord">Discord</option>
+                            <option value="slack" data-url="slack://{token_a}/{token_b}/{token_c}/#{channel}" data-name="Slack">Slack</option>
+                            <option value="tgram" data-url="tgram://{bot_token}/{chat_id}" data-name="Telegram">Telegram</option>
+                            <option value="pover" data-url="pover://{user_key}@{api_token}" data-name="Pushover">Pushover</option>
+                            <option value="ntfy" data-url="ntfy://{topic}" data-name="ntfy">ntfy</option>
+                            <option value="gotify" data-url="gotify://{hostname}/{token}" data-name="Gotify">Gotify</option>
+                            <option value="msteams" data-url="msteams://{token_a}/{token_b}/{token_c}" data-name="MS Teams">Microsoft Teams</option>
+                            <option value="matrix" data-url="matrix://{user}:{password}@{hostname}/{room}" data-name="Matrix">Matrix</option>
+                            <option value="rocket" data-url="rocket://{user}:{password}@{hostname}/{channel}" data-name="Rocket.Chat">Rocket.Chat</option>
+                            <option value="email" data-url="mailto://{user}:{password}@{smtp_host}?to={to_email}" data-name="Email (SMTP)">Email (SMTP)</option>
+                            <option value="ses" data-url="ses://{from_email}/{access_key}/{secret_key}/{region}" data-name="AWS SES">AWS SES</option>
+                            <option value="json" data-url="json://{hostname}/{path}" data-name="Webhook">Webhook (JSON)</option>
+                            <option value="custom" data-url="" data-name="">Other / Custom</option>
+                        </select>
+                        <div class="form-text">Choose a service or select "Other" for custom URLs</div>
                     </div>
                     <div class="col-md-8">
                         <label class="form-label fw-semibold">Apprise URL</label>
-                        <input type="text" class="form-control font-monospace" name="apprise_url"
-                               placeholder="discord://webhook_id/webhook_token" required>
-                        <div class="form-text">
+                        <input type="text" class="form-control font-monospace" name="apprise_url" id="addAppriseUrl"
+                               placeholder="Select a service type above or enter a custom URL" required>
+                        <div class="form-text" id="addUrlHelp">
                             See <a href="https://github.com/caronc/apprise/wiki#notification-services" target="_blank">
                             Apprise documentation</a> for URL formats
                         </div>
+                    </div>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Service Name</label>
+                        <input type="text" class="form-control" name="name" id="addServiceName" placeholder="e.g., Discord Alerts" required>
+                        <div class="form-text">A friendly name to identify this service</div>
                     </div>
                 </div>
 
@@ -585,6 +607,40 @@ function testPushService(id, btn) {
             emptyCard.style.display = '';
         });
     }
+})();
+
+// Service type dropdown auto-fill
+(function() {
+    const serviceType = document.getElementById('addServiceType');
+    const appriseUrl = document.getElementById('addAppriseUrl');
+    const serviceName = document.getElementById('addServiceName');
+    const urlHelp = document.getElementById('addUrlHelp');
+
+    if (!serviceType || !appriseUrl) return;
+
+    serviceType.addEventListener('change', function() {
+        const option = this.options[this.selectedIndex];
+        const urlTemplate = option.dataset.url || '';
+        const defaultName = option.dataset.name || '';
+
+        if (urlTemplate) {
+            appriseUrl.value = urlTemplate;
+            appriseUrl.placeholder = 'Replace {placeholders} with your values';
+            urlHelp.innerHTML = 'Replace the <code>{placeholders}</code> with your actual values from ' + defaultName;
+        } else if (this.value === 'custom') {
+            appriseUrl.value = '';
+            appriseUrl.placeholder = 'Enter your Apprise URL';
+            urlHelp.innerHTML = 'See <a href="https://github.com/caronc/apprise/wiki#notification-services" target="_blank">Apprise documentation</a> for URL formats';
+        } else {
+            appriseUrl.value = '';
+            appriseUrl.placeholder = 'Select a service type above or enter a custom URL';
+        }
+
+        // Auto-fill service name if empty
+        if (serviceName && !serviceName.value && defaultName) {
+            serviceName.value = defaultName;
+        }
+    });
 })();
 </script>
 <?php endif; ?>
