@@ -185,47 +185,36 @@ $eventColors = [
     </div>
 </div>
 
-<!-- Services Table -->
+<!-- Services List -->
 <?php if (!empty($services)): ?>
-<div class="card border-0 shadow-sm">
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th>Service</th>
-                    <th class="text-center" style="width: 100px;">Status</th>
-                    <th>Events</th>
-                    <th style="width: 150px;">Last Used</th>
-                    <th class="text-end" style="width: 150px;">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($services as $service): ?>
-                <tr>
-                    <td>
-                        <div class="fw-semibold"><?= htmlspecialchars($service['name']) ?></div>
-                        <div class="text-muted small font-monospace text-truncate" style="max-width: 300px;" title="<?= htmlspecialchars($service['apprise_url']) ?>">
+<div class="row g-3">
+    <?php foreach ($services as $service): ?>
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body py-3">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="min-width-0 flex-grow-1">
+                        <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                            <h6 class="mb-0 fw-semibold"><?= htmlspecialchars($service['name']) ?></h6>
+                            <?php if ($service['enabled']): ?>
+                            <span class="badge bg-success-subtle text-success border border-success-subtle">
+                                <i class="bi bi-check-circle me-1"></i>Enabled
+                            </span>
+                            <?php else: ?>
+                            <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">
+                                <i class="bi bi-pause-circle me-1"></i>Disabled
+                            </span>
+                            <?php endif; ?>
+                        </div>
+                        <div class="text-muted small font-monospace text-truncate mb-2" title="<?= htmlspecialchars($service['apprise_url']) ?>">
                             <?= htmlspecialchars($service['apprise_url']) ?>
                         </div>
-                    </td>
-                    <td class="text-center">
-                        <?php if ($service['enabled']): ?>
-                        <span class="badge bg-success-subtle text-success border border-success-subtle">
-                            <i class="bi bi-check-circle me-1"></i>Enabled
-                        </span>
-                        <?php else: ?>
-                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">
-                            <i class="bi bi-pause-circle me-1"></i>Disabled
-                        </span>
-                        <?php endif; ?>
-                    </td>
-                    <td>
-                        <?php
-                        $enabledEvents = array_keys(array_filter($service['events']));
-                        $maxShow = 3;
-                        $shown = 0;
-                        ?>
-                        <div class="d-flex flex-wrap gap-1">
+                        <div class="d-flex flex-wrap gap-1 align-items-center">
+                            <?php
+                            $enabledEvents = array_keys(array_filter($service['events']));
+                            $maxShow = 3;
+                            $shown = 0;
+                            ?>
                             <?php foreach ($enabledEvents as $event): ?>
                                 <?php if ($shown < $maxShow): ?>
                                 <?php $color = $eventColors[$event] ?? 'secondary'; ?>
@@ -241,19 +230,14 @@ $eventColors = [
                             <?php elseif (empty($enabledEvents)): ?>
                             <span class="text-muted small">No events selected</span>
                             <?php endif; ?>
+                            <?php if ($service['last_used_at']): ?>
+                            <span class="text-muted small ms-2" title="<?= htmlspecialchars($service['last_used_at']) ?>">
+                                <i class="bi bi-clock me-1"></i><?= date('M j, Y g:i A', strtotime($service['last_used_at'])) ?>
+                            </span>
+                            <?php endif; ?>
                         </div>
-                    </td>
-                    <td>
-                        <?php if ($service['last_used_at']): ?>
-                        <span class="small text-muted" title="<?= htmlspecialchars($service['last_used_at']) ?>">
-                            <?= date('M j, Y', strtotime($service['last_used_at'])) ?><br>
-                            <?= date('g:i A', strtotime($service['last_used_at'])) ?>
-                        </span>
-                        <?php else: ?>
-                        <span class="text-muted small">Never</span>
-                        <?php endif; ?>
-                    </td>
-                    <td class="text-end text-nowrap">
+                    </div>
+                    <div class="text-nowrap ms-3">
                         <button class="btn btn-sm btn-outline-primary border-0" onclick="testService(<?= $service['id'] ?>, this)" title="Test">
                             <i class="bi bi-lightning"></i>
                         </button>
@@ -274,75 +258,75 @@ $eventColors = [
                                 <i class="bi bi-trash"></i>
                             </button>
                         </form>
-                    </td>
-                </tr>
-                <!-- Edit form (collapsed row) -->
-                <tr class="collapse" id="edit_<?= $service['id'] ?>">
-                    <td colspan="5" class="bg-body-secondary">
-                        <form method="POST" action="/notification-services/<?= $service['id'] ?>/update" class="p-3">
-                            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                    </div>
+                </div>
+            </div>
+            <!-- Edit form (collapse) -->
+            <div class="collapse" id="edit_<?= $service['id'] ?>">
+                <div class="card-footer bg-body-secondary">
+                    <form method="POST" action="/notification-services/<?= $service['id'] ?>/update" class="p-2">
+                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
 
-                            <div class="row g-3 mb-3">
-                                <div class="col-md-4">
-                                    <label class="form-label fw-semibold">Service Name</label>
-                                    <input type="text" class="form-control form-control-sm" name="name"
-                                           value="<?= htmlspecialchars($service['name']) ?>" required>
-                                </div>
-                                <div class="col-md-8">
-                                    <label class="form-label fw-semibold">Apprise URL</label>
-                                    <input type="text" class="form-control form-control-sm font-monospace" name="apprise_url"
-                                           value="<?= htmlspecialchars($service['apprise_url']) ?>" required>
-                                </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold">Service Name</label>
+                                <input type="text" class="form-control form-control-sm" name="name"
+                                       value="<?= htmlspecialchars($service['name']) ?>" required>
                             </div>
+                            <div class="col-md-8">
+                                <label class="form-label fw-semibold">Apprise URL</label>
+                                <input type="text" class="form-control form-control-sm font-monospace" name="apprise_url"
+                                       value="<?= htmlspecialchars($service['apprise_url']) ?>" required>
+                            </div>
+                        </div>
 
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">Notify on:</label>
-                                <div class="row">
-                                    <?php foreach ($eventGroups as $groupName => $events): ?>
-                                    <div class="col-lg-4 col-md-6 mb-2">
-                                        <div class="small text-muted fw-semibold mb-1"><?= htmlspecialchars($groupName) ?></div>
-                                        <?php foreach ($events as $event => $label): ?>
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" name="events[<?= $event ?>]"
-                                                   value="1" id="editEvent_<?= $service['id'] ?>_<?= $event ?>"
-                                                   <?= ($service['events'][$event] ?? false) ? 'checked' : '' ?>>
-                                            <label class="form-check-label" for="editEvent_<?= $service['id'] ?>_<?= $event ?>">
-                                                <?= htmlspecialchars($label) ?>
-                                            </label>
-                                        </div>
-                                        <?php endforeach; ?>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Notify on:</label>
+                            <div class="row">
+                                <?php foreach ($eventGroups as $groupName => $events): ?>
+                                <div class="col-lg-4 col-md-6 mb-2">
+                                    <div class="small text-muted fw-semibold mb-1"><?= htmlspecialchars($groupName) ?></div>
+                                    <?php foreach ($events as $event => $label): ?>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="events[<?= $event ?>]"
+                                               value="1" id="editEvent_<?= $service['id'] ?>_<?= $event ?>"
+                                               <?= ($service['events'][$event] ?? false) ? 'checked' : '' ?>>
+                                        <label class="form-check-label" for="editEvent_<?= $service['id'] ?>_<?= $event ?>">
+                                            <?= htmlspecialchars($label) ?>
+                                        </label>
                                     </div>
                                     <?php endforeach; ?>
                                 </div>
+                                <?php endforeach; ?>
                             </div>
+                        </div>
 
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <button type="submit" class="btn btn-sm btn-primary">
-                                        <i class="bi bi-check-circle me-1"></i> Save Changes
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-outline-secondary ms-2"
-                                            data-bs-toggle="collapse" data-bs-target="#edit_<?= $service['id'] ?>">
-                                        Cancel
-                                    </button>
-                                </div>
-                                <div>
-                                    <form method="POST" action="/notification-services/<?= $service['id'] ?>/toggle" class="d-inline toggle-form">
-                                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                        <button type="submit" class="btn btn-sm btn-outline-<?= $service['enabled'] ? 'warning' : 'success' ?>">
-                                            <i class="bi bi-<?= $service['enabled'] ? 'pause-circle' : 'play-circle' ?> me-1"></i>
-                                            <?= $service['enabled'] ? 'Disable' : 'Enable' ?>
-                                        </button>
-                                    </form>
-                                </div>
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <div>
+                                <button type="submit" class="btn btn-sm btn-primary">
+                                    <i class="bi bi-check-circle me-1"></i> Save Changes
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary ms-2"
+                                        data-bs-toggle="collapse" data-bs-target="#edit_<?= $service['id'] ?>">
+                                    Cancel
+                                </button>
                             </div>
-                        </form>
-                    </td>
-                </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
+                            <div>
+                                <form method="POST" action="/notification-services/<?= $service['id'] ?>/toggle" class="d-inline toggle-form">
+                                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                    <button type="submit" class="btn btn-sm btn-outline-<?= $service['enabled'] ? 'warning' : 'success' ?>">
+                                        <i class="bi bi-<?= $service['enabled'] ? 'pause-circle' : 'play-circle' ?> me-1"></i>
+                                        <?= $service['enabled'] ? 'Disable' : 'Enable' ?>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
     </div>
+    <?php endforeach; ?>
 </div>
 <?php else: ?>
 <div class="card border-0 shadow-sm">
@@ -423,6 +407,7 @@ const serviceSchemas = {
             { name: 'smtp_user', label: 'Username', type: 'text', required: true, placeholder: 'user@gmail.com', width: 'col-md-6' },
             { name: 'smtp_pass', label: 'Password', type: 'password', required: true, placeholder: 'App password', width: 'col-md-6' },
             { name: 'smtp_to', label: 'Send To', type: 'email', required: true, placeholder: 'recipient@example.com', width: 'col-md-6' },
+            { name: 'smtp_from', label: 'From Address', type: 'email', placeholder: 'Same as username', width: 'col-md-6', help: 'Leave blank to use username' },
             { name: 'smtp_secure', label: 'Security', type: 'select', width: 'col-md-3', default: 'starttls', options: [
                 { value: 'starttls', label: 'STARTTLS (587)' },
                 { value: 'ssl', label: 'SSL/TLS (465)' },
@@ -435,11 +420,12 @@ const serviceSchemas = {
             const host = f.smtp_host || '';
             const port = f.smtp_port || '587';
             const to = encodeURIComponent(f.smtp_to || '');
+            const from = encodeURIComponent(f.smtp_from || f.smtp_user || '');
             let mode = '';
             if (f.smtp_secure === 'ssl') mode = 'mailtos';
             else if (f.smtp_secure === 'none') mode = 'mailto';
             else mode = 'mailto';
-            return `${mode}://${user}:${pass}@${host}:${port}?to=${to}`;
+            return `${mode}://${user}:${pass}@${host}:${port}?to=${to}&from=${from}`;
         }
     },
     discord: {
