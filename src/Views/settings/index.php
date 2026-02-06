@@ -433,36 +433,47 @@ unset($ns);
     </div>
 </div>
 
-<!-- Services List -->
+<!-- Services Table -->
 <?php if (!empty($notifServices)): ?>
-<div class="row g-3">
-    <?php foreach ($notifServices as $service): ?>
-    <div class="col-12">
-        <div class="card border-0 shadow-sm">
-            <div class="card-body py-3">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div class="min-width-0 flex-grow-1">
-                        <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
-                            <h6 class="mb-0 fw-semibold"><?= htmlspecialchars($service['name']) ?></h6>
-                            <?php if ($service['enabled']): ?>
-                            <span class="badge bg-success-subtle text-success border border-success-subtle">
-                                <i class="bi bi-check-circle me-1"></i>Enabled
-                            </span>
-                            <?php else: ?>
-                            <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">
-                                <i class="bi bi-pause-circle me-1"></i>Disabled
-                            </span>
-                            <?php endif; ?>
-                        </div>
-                        <div class="text-muted small font-monospace text-truncate mb-2" title="<?= htmlspecialchars($service['apprise_url']) ?>">
+<div class="card border-0 shadow-sm">
+    <div class="table-responsive d-none d-md-block">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Service</th>
+                    <th class="text-center" style="width: 100px;">Status</th>
+                    <th>Events</th>
+                    <th style="width: 150px;">Last Used</th>
+                    <th class="text-end" style="width: 150px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($notifServices as $service): ?>
+                <tr>
+                    <td>
+                        <div class="fw-semibold"><?= htmlspecialchars($service['name']) ?></div>
+                        <div class="text-muted small font-monospace text-truncate" style="max-width: 300px;" title="<?= htmlspecialchars($service['apprise_url']) ?>">
                             <?= htmlspecialchars($service['apprise_url']) ?>
                         </div>
-                        <div class="d-flex flex-wrap gap-1 align-items-center">
-                            <?php
-                            $enabledEvents = array_keys(array_filter($service['events']));
-                            $maxShow = 3;
-                            $shown = 0;
-                            ?>
+                    </td>
+                    <td class="text-center">
+                        <?php if ($service['enabled']): ?>
+                        <span class="badge bg-success-subtle text-success border border-success-subtle">
+                            <i class="bi bi-check-circle me-1"></i>Enabled
+                        </span>
+                        <?php else: ?>
+                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">
+                            <i class="bi bi-pause-circle me-1"></i>Disabled
+                        </span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php
+                        $enabledEvents = array_keys(array_filter($service['events']));
+                        $maxShow = 3;
+                        $shown = 0;
+                        ?>
+                        <div class="d-flex flex-wrap gap-1">
                             <?php foreach ($enabledEvents as $event): ?>
                                 <?php if ($shown < $maxShow): ?>
                                 <?php $color = $eventColors[$event] ?? 'secondary'; ?>
@@ -478,14 +489,19 @@ unset($ns);
                             <?php elseif (empty($enabledEvents)): ?>
                             <span class="text-muted small">No events selected</span>
                             <?php endif; ?>
-                            <?php if ($service['last_used_at']): ?>
-                            <span class="text-muted small ms-2" title="<?= htmlspecialchars($service['last_used_at']) ?>">
-                                <i class="bi bi-clock me-1"></i><?= date('M j, Y g:i A', strtotime($service['last_used_at'])) ?>
-                            </span>
-                            <?php endif; ?>
                         </div>
-                    </div>
-                    <div class="text-nowrap ms-3">
+                    </td>
+                    <td>
+                        <?php if ($service['last_used_at']): ?>
+                        <span class="small text-muted" title="<?= htmlspecialchars($service['last_used_at']) ?>">
+                            <?= date('M j, Y', strtotime($service['last_used_at'])) ?><br>
+                            <?= date('g:i A', strtotime($service['last_used_at'])) ?>
+                        </span>
+                        <?php else: ?>
+                        <span class="text-muted small">Never</span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="text-end text-nowrap">
                         <button class="btn btn-sm btn-outline-primary border-0" onclick="testPushService(<?= $service['id'] ?>, this)" title="Test">
                             <i class="bi bi-lightning"></i>
                         </button>
@@ -506,75 +522,178 @@ unset($ns);
                                 <i class="bi bi-trash"></i>
                             </button>
                         </form>
-                    </div>
-                </div>
-            </div>
-            <!-- Edit form (collapse) -->
-            <div class="collapse" id="edit_<?= $service['id'] ?>">
-                <div class="card-footer bg-body-secondary">
-                    <form method="POST" action="/notification-services/<?= $service['id'] ?>/update" class="p-2">
-                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                    </td>
+                </tr>
+                <!-- Edit form (collapsed row) -->
+                <tr class="collapse" id="edit_<?= $service['id'] ?>">
+                    <td colspan="5" class="bg-body-secondary">
+                        <form method="POST" action="/notification-services/<?= $service['id'] ?>/update" class="p-3">
+                            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
 
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-4">
-                                <label class="form-label fw-semibold">Service Name</label>
-                                <input type="text" class="form-control form-control-sm" name="name"
-                                       value="<?= htmlspecialchars($service['name']) ?>" required>
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-4">
+                                    <label class="form-label fw-semibold">Service Name</label>
+                                    <input type="text" class="form-control form-control-sm" name="name"
+                                           value="<?= htmlspecialchars($service['name']) ?>" required>
+                                </div>
+                                <div class="col-md-8">
+                                    <label class="form-label fw-semibold">Apprise URL</label>
+                                    <input type="text" class="form-control form-control-sm font-monospace" name="apprise_url"
+                                           value="<?= htmlspecialchars($service['apprise_url']) ?>" required>
+                                </div>
                             </div>
-                            <div class="col-md-8">
-                                <label class="form-label fw-semibold">Apprise URL</label>
-                                <input type="text" class="form-control form-control-sm font-monospace" name="apprise_url"
-                                       value="<?= htmlspecialchars($service['apprise_url']) ?>" required>
-                            </div>
-                        </div>
 
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Notify on:</label>
-                            <div class="row">
-                                <?php foreach ($eventGroups as $groupName => $events): ?>
-                                <div class="col-lg-4 col-md-6 mb-2">
-                                    <div class="small text-muted fw-semibold mb-1"><?= htmlspecialchars($groupName) ?></div>
-                                    <?php foreach ($events as $event => $label): ?>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" name="events[<?= $event ?>]"
-                                               value="1" id="editEvent_<?= $service['id'] ?>_<?= $event ?>"
-                                               <?= ($service['events'][$event] ?? false) ? 'checked' : '' ?>>
-                                        <label class="form-check-label" for="editEvent_<?= $service['id'] ?>_<?= $event ?>">
-                                            <?= htmlspecialchars($label) ?>
-                                        </label>
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Notify on:</label>
+                                <div class="row">
+                                    <?php foreach ($eventGroups as $groupName => $events): ?>
+                                    <div class="col-lg-4 col-md-6 mb-2">
+                                        <div class="small text-muted fw-semibold mb-1"><?= htmlspecialchars($groupName) ?></div>
+                                        <?php foreach ($events as $event => $label): ?>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="events[<?= $event ?>]"
+                                                   value="1" id="editEvent_<?= $service['id'] ?>_<?= $event ?>"
+                                                   <?= ($service['events'][$event] ?? false) ? 'checked' : '' ?>>
+                                            <label class="form-check-label" for="editEvent_<?= $service['id'] ?>_<?= $event ?>">
+                                                <?= htmlspecialchars($label) ?>
+                                            </label>
+                                        </div>
+                                        <?php endforeach; ?>
                                     </div>
                                     <?php endforeach; ?>
                                 </div>
-                                <?php endforeach; ?>
                             </div>
-                        </div>
 
-                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                            <div>
-                                <button type="submit" class="btn btn-sm btn-primary">
-                                    <i class="bi bi-check-circle me-1"></i> Save Changes
-                                </button>
-                                <button type="button" class="btn btn-sm btn-outline-secondary ms-2"
-                                        data-bs-toggle="collapse" data-bs-target="#edit_<?= $service['id'] ?>">
-                                    Cancel
-                                </button>
-                            </div>
-                            <div>
-                                <form method="POST" action="/notification-services/<?= $service['id'] ?>/toggle" class="d-inline">
-                                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                    <button type="submit" class="btn btn-sm btn-outline-<?= $service['enabled'] ? 'warning' : 'success' ?>">
-                                        <i class="bi bi-<?= $service['enabled'] ? 'pause-circle' : 'play-circle' ?> me-1"></i>
-                                        <?= $service['enabled'] ? 'Disable' : 'Enable' ?>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <button type="submit" class="btn btn-sm btn-primary">
+                                        <i class="bi bi-check-circle me-1"></i> Save Changes
                                     </button>
-                                </form>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary ms-2"
+                                            data-bs-toggle="collapse" data-bs-target="#edit_<?= $service['id'] ?>">
+                                        Cancel
+                                    </button>
+                                </div>
+                                <div>
+                                    <form method="POST" action="/notification-services/<?= $service['id'] ?>/toggle" class="d-inline">
+                                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                        <button type="submit" class="btn btn-sm btn-outline-<?= $service['enabled'] ? 'warning' : 'success' ?>">
+                                            <i class="bi bi-<?= $service['enabled'] ? 'pause-circle' : 'play-circle' ?> me-1"></i>
+                                            <?= $service['enabled'] ? 'Disable' : 'Enable' ?>
+                                        </button>
+                                    </form>
+                                </div>
                             </div>
-                        </div>
+                        </form>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+    <!-- Mobile card view -->
+    <div class="d-md-none">
+        <?php foreach ($notifServices as $service): ?>
+        <div class="p-3 <?= $service !== end($notifServices) ? 'border-bottom' : '' ?>">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div>
+                    <span class="fw-semibold"><?= htmlspecialchars($service['name']) ?></span>
+                    <?php if ($service['enabled']): ?>
+                    <span class="badge bg-success-subtle text-success border border-success-subtle ms-2">Enabled</span>
+                    <?php else: ?>
+                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle ms-2">Disabled</span>
+                    <?php endif; ?>
+                </div>
+                <div class="text-nowrap">
+                    <button class="btn btn-sm btn-outline-primary border-0" onclick="testPushService(<?= $service['id'] ?>, this)" title="Test">
+                        <i class="bi bi-lightning"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary border-0" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#editMobile_<?= $service['id'] ?>" title="Edit">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <form method="POST" action="/notification-services/<?= $service['id'] ?>/delete" class="d-inline"
+                          data-confirm="Delete this notification service?" data-confirm-danger>
+                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                        <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Delete">
+                            <i class="bi bi-trash"></i>
+                        </button>
                     </form>
                 </div>
             </div>
+            <?php
+            $enabledEvents = array_keys(array_filter($service['events']));
+            $maxShow = 3;
+            $shown = 0;
+            ?>
+            <div class="d-flex flex-wrap gap-1 mb-1">
+                <?php foreach ($enabledEvents as $event): ?>
+                    <?php if ($shown < $maxShow): ?>
+                    <?php $color = $eventColors[$event] ?? 'secondary'; ?>
+                    <span class="badge bg-<?= $color ?>-subtle text-<?= $color ?> border border-<?= $color ?>-subtle">
+                        <?= htmlspecialchars($eventTypes[$event] ?? ucfirst(str_replace('_', ' ', $event))) ?>
+                    </span>
+                    <?php $shown++; endif; ?>
+                <?php endforeach; ?>
+                <?php if (count($enabledEvents) > $maxShow): ?>
+                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">
+                    +<?= count($enabledEvents) - $maxShow ?> more
+                </span>
+                <?php elseif (empty($enabledEvents)): ?>
+                <span class="text-muted small">No events selected</span>
+                <?php endif; ?>
+            </div>
+            <?php if ($service['last_used_at']): ?>
+            <div class="text-muted small"><i class="bi bi-clock me-1"></i><?= date('M j, Y g:i A', strtotime($service['last_used_at'])) ?></div>
+            <?php endif; ?>
+            <!-- Mobile edit form -->
+            <div class="collapse mt-3" id="editMobile_<?= $service['id'] ?>">
+                <form method="POST" action="/notification-services/<?= $service['id'] ?>/update">
+                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Service Name</label>
+                        <input type="text" class="form-control form-control-sm" name="name"
+                               value="<?= htmlspecialchars($service['name']) ?>" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Apprise URL</label>
+                        <input type="text" class="form-control form-control-sm font-monospace" name="apprise_url"
+                               value="<?= htmlspecialchars($service['apprise_url']) ?>" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Notify on:</label>
+                        <?php foreach ($eventGroups as $groupName => $events): ?>
+                        <div class="small text-muted fw-semibold mb-1 mt-2"><?= htmlspecialchars($groupName) ?></div>
+                        <?php foreach ($events as $event => $label): ?>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="events[<?= $event ?>]"
+                                   value="1" id="editMobileEvent_<?= $service['id'] ?>_<?= $event ?>"
+                                   <?= ($service['events'][$event] ?? false) ? 'checked' : '' ?>>
+                            <label class="form-check-label" for="editMobileEvent_<?= $service['id'] ?>_<?= $event ?>">
+                                <?= htmlspecialchars($label) ?>
+                            </label>
+                        </div>
+                        <?php endforeach; ?>
+                        <?php endforeach; ?>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-check-circle me-1"></i>Save</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary ms-2"
+                                    data-bs-toggle="collapse" data-bs-target="#editMobile_<?= $service['id'] ?>">Cancel</button>
+                        </div>
+                        <form method="POST" action="/notification-services/<?= $service['id'] ?>/toggle" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                            <button type="submit" class="btn btn-sm btn-outline-<?= $service['enabled'] ? 'warning' : 'success' ?>">
+                                <?= $service['enabled'] ? 'Disable' : 'Enable' ?>
+                            </button>
+                        </form>
+                    </div>
+                </form>
+            </div>
         </div>
+        <?php endforeach; ?>
     </div>
-    <?php endforeach; ?>
 </div>
 <?php else: ?>
 <div class="card border-0 shadow-sm" id="noServicesCard">
