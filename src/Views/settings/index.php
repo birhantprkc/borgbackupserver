@@ -1362,23 +1362,24 @@ document.getElementById('btnTestSmtp')?.addEventListener('click', function() {
                 var verEl = document.getElementById('agent-bundled-ver');
                 if (verEl) verEl.textContent = 'v' + data.bundled_version;
                 var html = '';
+                var descHtml = '<p class="text-muted small mb-3">The BBS Client receives commands from the server to initiate backups, perform restores, and update Borg software.</p>';
                 if (data.total === 0) {
-                    html = '<p class="text-muted small mb-0">No agents connected yet.</p>';
+                    html = descHtml + '<p class="text-muted small mb-0">No clients connected yet.</p>';
                 } else if (data.outdated.length === 0) {
-                    html = '<div class="d-flex align-items-center small">'
+                    html = descHtml + '<div class="d-flex align-items-center small">'
                          + '<span class="badge rounded-pill me-2" style="background-color: #e8f5e9; color: #2e7d32;"><i class="bi bi-check-circle me-1"></i>Up to date</span>'
-                         + 'All ' + data.total + ' agent(s) running v' + data.bundled_version
+                         + 'All ' + data.total + ' client(s) running v' + data.bundled_version
                          + '</div>';
                 } else {
-                    html = '<div class="d-flex align-items-center justify-content-between mb-3">'
-                         + '<div class="small"><span class="badge rounded-pill text-dark me-1" style="background-color: #fff3cd;">' + data.outdated.length + ' outdated</span> of ' + data.total + ' agent(s)</div>'
+                    html = descHtml + '<div class="d-flex align-items-center justify-content-between mb-3">'
+                         + '<div class="small"><span class="badge rounded-pill text-dark me-1" style="background-color: #fff3cd;">' + data.outdated.length + ' outdated</span> of ' + data.total + ' client(s)</div>'
                          + '<form method="POST" action="/settings/upgrade-agents" data-confirm="Queue agent updates for ' + data.outdated.length + ' client(s)?">'
                          + '<input type="hidden" name="csrf_token" value="' + csrfToken + '">'
                          + '<button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-arrow-up-circle me-1"></i> Update All</button>'
                          + '</form></div>';
                     data.outdated.forEach(function(a) {
                         html += '<div class="d-flex justify-content-between align-items-center small py-1">'
-                              + '<span><i class="bi bi-incognito me-1 text-muted"></i>' + a.name.replace(/</g, '&lt;') + '</span>'
+                              + '<span><i class="bi bi-pc-display me-1 text-muted"></i>' + a.name.replace(/</g, '&lt;') + '</span>'
                               + '<span class="text-muted">v' + a.agent_version.replace(/</g, '&lt;') + '</span></div>';
                     });
                 }
