@@ -352,45 +352,49 @@ unset($ns);
             <i class="bi bi-plus-circle me-1"></i> Add Notification Service
         </div>
         <div class="card-body">
-            <form method="POST" action="/notification-services">
+            <form method="POST" action="/notification-services" id="addServiceFormEl">
                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
 
                 <div class="row g-3 mb-3">
                     <div class="col-md-4">
                         <label class="form-label fw-semibold">Service Type</label>
-                        <select class="form-select" id="addServiceType">
+                        <select class="form-select" id="addServiceType" name="service_type">
                             <option value="">-- Select a service --</option>
-                            <option value="discord" data-url="discord://{webhook_id}/{webhook_token}" data-name="Discord">Discord</option>
-                            <option value="slack" data-url="slack://{token_a}/{token_b}/{token_c}/#{channel}" data-name="Slack">Slack</option>
-                            <option value="tgram" data-url="tgram://{bot_token}/{chat_id}" data-name="Telegram">Telegram</option>
-                            <option value="pover" data-url="pover://{user_key}@{api_token}" data-name="Pushover">Pushover</option>
-                            <option value="ntfy" data-url="ntfy://{topic}" data-name="ntfy">ntfy</option>
-                            <option value="gotify" data-url="gotify://{hostname}/{token}" data-name="Gotify">Gotify</option>
-                            <option value="msteams" data-url="msteams://{token_a}/{token_b}/{token_c}" data-name="MS Teams">Microsoft Teams</option>
-                            <option value="matrix" data-url="matrix://{user}:{password}@{hostname}/{room}" data-name="Matrix">Matrix</option>
-                            <option value="rocket" data-url="rocket://{user}:{password}@{hostname}/{channel}" data-name="Rocket.Chat">Rocket.Chat</option>
-                            <option value="email" data-url="mailto://{user}:{password}@{smtp_host}?to={to_email}" data-name="Email (SMTP)">Email (SMTP)</option>
-                            <option value="ses" data-url="ses://{from_email}/{access_key}/{secret_key}/{region}" data-name="AWS SES">AWS SES</option>
-                            <option value="json" data-url="json://{hostname}/{path}" data-name="Webhook">Webhook (JSON)</option>
-                            <option value="custom" data-url="" data-name="">Other / Custom</option>
+                            <option value="email">Email (SMTP)</option>
+                            <option value="discord">Discord</option>
+                            <option value="slack">Slack</option>
+                            <option value="tgram">Telegram</option>
+                            <option value="pover">Pushover</option>
+                            <option value="ntfy">ntfy</option>
+                            <option value="gotify">Gotify</option>
+                            <option value="msteams">Microsoft Teams</option>
+                            <option value="custom">Other / Custom URL</option>
                         </select>
                         <div class="form-text">Choose a service or select "Other" for custom URLs</div>
                     </div>
                     <div class="col-md-8">
-                        <label class="form-label fw-semibold">Apprise URL</label>
-                        <input type="text" class="form-control font-monospace" name="apprise_url" id="addAppriseUrl"
-                               placeholder="Select a service type above or enter a custom URL" required>
-                        <div class="form-text" id="addUrlHelp">
-                            See <a href="https://github.com/caronc/apprise/wiki#notification-services" target="_blank">
-                            Apprise documentation</a> for URL formats
-                        </div>
-                    </div>
-                </div>
-                <div class="row g-3 mb-3">
-                    <div class="col-md-4">
                         <label class="form-label fw-semibold">Service Name</label>
                         <input type="text" class="form-control" name="name" id="addServiceName" placeholder="e.g., Discord Alerts" required>
                         <div class="form-text">A friendly name to identify this service</div>
+                    </div>
+                </div>
+
+                <!-- Dynamic form fields container -->
+                <div id="addServiceFields" class="mb-3" style="display:none;"></div>
+
+                <!-- Raw URL field (shown for custom or as toggle) -->
+                <div id="addUrlContainer" class="mb-3" style="display:none;">
+                    <div class="d-flex align-items-center mb-2">
+                        <label class="form-label fw-semibold mb-0">Apprise URL</label>
+                        <button type="button" class="btn btn-sm btn-link text-decoration-none ms-auto" id="toggleAddUrlMode" style="display:none;">
+                            <i class="bi bi-code-slash me-1"></i>Edit Raw URL
+                        </button>
+                    </div>
+                    <input type="text" class="form-control font-monospace" name="apprise_url" id="addAppriseUrl"
+                           placeholder="Enter your Apprise URL" required>
+                    <div class="form-text" id="addUrlHelp">
+                        See <a href="https://github.com/caronc/apprise/wiki#notification-services" target="_blank">
+                        Apprise documentation</a> for URL formats
                     </div>
                 </div>
 
@@ -655,48 +659,281 @@ function testPushService(id, btn) {
     }
 })();
 
-// Service type dropdown auto-fill
-(function() {
-    const serviceType = document.getElementById('addServiceType');
-    const appriseUrl = document.getElementById('addAppriseUrl');
-    const serviceName = document.getElementById('addServiceName');
-    const urlHelp = document.getElementById('addUrlHelp');
+// Service schemas for form builder
+const serviceSchemas = {
+    email: {
+        label: 'Email (SMTP)',
+        fields: [
+            { name: 'smtp_host', label: 'SMTP Server', type: 'text', required: true, placeholder: 'smtp.gmail.com', width: 'col-md-4' },
+            { name: 'smtp_port', label: 'Port', type: 'number', placeholder: '587', width: 'col-md-2', default: '587' },
+            { name: 'smtp_user', label: 'Username', type: 'text', required: true, placeholder: 'user@gmail.com', width: 'col-md-6' },
+            { name: 'smtp_pass', label: 'Password', type: 'password', required: true, placeholder: 'App password', width: 'col-md-6' },
+            { name: 'smtp_to', label: 'Send To', type: 'email', required: true, placeholder: 'recipient@example.com', width: 'col-md-6' },
+            { name: 'smtp_secure', label: 'Security', type: 'select', width: 'col-md-3', default: 'starttls', options: [
+                { value: 'starttls', label: 'STARTTLS (587)' },
+                { value: 'ssl', label: 'SSL/TLS (465)' },
+                { value: 'none', label: 'None (25)' }
+            ]}
+        ],
+        build: function(f) {
+            const user = encodeURIComponent(f.smtp_user || '');
+            const pass = encodeURIComponent(f.smtp_pass || '');
+            const host = f.smtp_host || '';
+            const port = f.smtp_port || '587';
+            const to = encodeURIComponent(f.smtp_to || '');
+            let mode = '';
+            if (f.smtp_secure === 'ssl') mode = 'mailtos';
+            else if (f.smtp_secure === 'none') mode = 'mailto';
+            else mode = 'mailto'; // starttls is default
+            return `${mode}://${user}:${pass}@${host}:${port}?to=${to}`;
+        }
+    },
+    discord: {
+        label: 'Discord',
+        fields: [
+            { name: 'webhook_id', label: 'Webhook ID', type: 'text', required: true, placeholder: '123456789012345678', width: 'col-md-4' },
+            { name: 'webhook_token', label: 'Webhook Token', type: 'text', required: true, placeholder: 'abcdefg...', width: 'col-md-8' }
+        ],
+        help: 'Get these from Discord: Server Settings → Integrations → Webhooks → Copy Webhook URL, then extract the ID and token from: discord.com/api/webhooks/<strong>ID</strong>/<strong>TOKEN</strong>',
+        build: function(f) {
+            return `discord://${f.webhook_id || ''}/${f.webhook_token || ''}`;
+        }
+    },
+    slack: {
+        label: 'Slack',
+        fields: [
+            { name: 'token_a', label: 'Token A', type: 'text', required: true, placeholder: 'T1234567', width: 'col-md-4' },
+            { name: 'token_b', label: 'Token B', type: 'text', required: true, placeholder: 'B1234567', width: 'col-md-4' },
+            { name: 'token_c', label: 'Token C', type: 'text', required: true, placeholder: 'AbCdEf123...', width: 'col-md-4' },
+            { name: 'channel', label: 'Channel (optional)', type: 'text', placeholder: '#alerts', width: 'col-md-4' }
+        ],
+        help: 'Get tokens from your Slack Incoming Webhook URL: hooks.slack.com/services/<strong>A</strong>/<strong>B</strong>/<strong>C</strong>',
+        build: function(f) {
+            let url = `slack://${f.token_a || ''}/${f.token_b || ''}/${f.token_c || ''}`;
+            if (f.channel) url += `/${encodeURIComponent(f.channel.replace(/^#/, ''))}`;
+            return url;
+        }
+    },
+    tgram: {
+        label: 'Telegram',
+        fields: [
+            { name: 'bot_token', label: 'Bot Token', type: 'text', required: true, placeholder: '123456789:ABCdefGHI...', width: 'col-md-6' },
+            { name: 'chat_id', label: 'Chat ID', type: 'text', required: true, placeholder: '-1001234567890', width: 'col-md-6' }
+        ],
+        help: 'Create a bot via @BotFather, then get chat ID by messaging @userinfobot or from group info',
+        build: function(f) {
+            return `tgram://${f.bot_token || ''}/${f.chat_id || ''}`;
+        }
+    },
+    pover: {
+        label: 'Pushover',
+        fields: [
+            { name: 'user_key', label: 'User Key', type: 'text', required: true, placeholder: 'Your user key', width: 'col-md-6' },
+            { name: 'api_token', label: 'API Token', type: 'text', required: true, placeholder: 'Your app API token', width: 'col-md-6' }
+        ],
+        help: 'Find these in your <a href="https://pushover.net/" target="_blank">Pushover dashboard</a>',
+        build: function(f) {
+            return `pover://${f.user_key || ''}@${f.api_token || ''}`;
+        }
+    },
+    ntfy: {
+        label: 'ntfy',
+        fields: [
+            { name: 'topic', label: 'Topic', type: 'text', required: true, placeholder: 'my-backup-alerts', width: 'col-md-6' },
+            { name: 'server', label: 'Server (optional)', type: 'text', placeholder: 'ntfy.sh', width: 'col-md-6' }
+        ],
+        help: 'Subscribe to the topic in your ntfy app. Default server is ntfy.sh',
+        build: function(f) {
+            if (f.server && f.server !== 'ntfy.sh') {
+                return `ntfy://${f.server}/${f.topic || ''}`;
+            }
+            return `ntfy://${f.topic || ''}`;
+        }
+    },
+    gotify: {
+        label: 'Gotify',
+        fields: [
+            { name: 'hostname', label: 'Server', type: 'text', required: true, placeholder: 'gotify.example.com', width: 'col-md-6' },
+            { name: 'token', label: 'App Token', type: 'text', required: true, placeholder: 'AbCdEf123...', width: 'col-md-6' }
+        ],
+        build: function(f) {
+            return `gotify://${f.hostname || ''}/${f.token || ''}`;
+        }
+    },
+    msteams: {
+        label: 'Microsoft Teams',
+        fields: [
+            { name: 'webhook_url', label: 'Webhook URL', type: 'text', required: true, placeholder: 'https://outlook.office.com/webhook/...', width: 'col-12' }
+        ],
+        help: 'Get the Incoming Webhook URL from your Teams channel connector settings',
+        build: function(f) {
+            // Parse webhook URL to extract tokens or use json:// format
+            const url = f.webhook_url || '';
+            if (url.startsWith('https://')) {
+                return `msteams://${url.replace('https://', '')}`;
+            }
+            return url;
+        }
+    }
+};
 
-    if (!serviceType || !appriseUrl) return;
+// Form builder function
+function buildServiceForm(containerId, schema, prefix, existingValues) {
+    const container = document.getElementById(containerId);
+    if (!container || !schema) return;
 
-    // Build list of default names from dropdown options
-    const defaultNames = [];
-    for (let i = 0; i < serviceType.options.length; i++) {
-        const name = serviceType.options[i].dataset.name;
-        if (name) defaultNames.push(name);
+    existingValues = existingValues || {};
+    let html = '<div class="row g-3">';
+
+    schema.fields.forEach(function(field) {
+        const fieldId = prefix + '_' + field.name;
+        const value = existingValues[field.name] || field.default || '';
+        const required = field.required ? 'required' : '';
+        const width = field.width || 'col-md-6';
+
+        html += `<div class="${width}">`;
+        html += `<label class="form-label small fw-semibold" for="${fieldId}">${field.label}${field.required ? ' <span class="text-danger">*</span>' : ''}</label>`;
+
+        if (field.type === 'select') {
+            html += `<select class="form-select form-select-sm" id="${fieldId}" name="${field.name}" ${required}>`;
+            field.options.forEach(function(opt) {
+                const selected = opt.value === value ? 'selected' : '';
+                html += `<option value="${opt.value}" ${selected}>${opt.label}</option>`;
+            });
+            html += '</select>';
+        } else {
+            html += `<input type="${field.type}" class="form-control form-control-sm" id="${fieldId}" name="${field.name}" `;
+            html += `placeholder="${field.placeholder || ''}" value="${value.replace(/"/g, '&quot;')}" ${required}>`;
+        }
+
+        html += '</div>';
+    });
+
+    html += '</div>';
+
+    if (schema.help) {
+        html += `<div class="form-text mt-2">${schema.help}</div>`;
     }
 
+    container.innerHTML = html;
+    container.style.display = 'block';
+
+    // Add event listeners to rebuild URL on field change
+    container.querySelectorAll('input, select').forEach(function(el) {
+        el.addEventListener('input', function() {
+            updateBuiltUrl(containerId, schema, prefix);
+        });
+        el.addEventListener('change', function() {
+            updateBuiltUrl(containerId, schema, prefix);
+        });
+    });
+}
+
+// Update the hidden URL field based on form values
+function updateBuiltUrl(containerId, schema, prefix) {
+    const container = document.getElementById(containerId);
+    const urlField = document.getElementById(prefix === 'add' ? 'addAppriseUrl' : 'editAppriseUrl');
+    if (!container || !urlField || !schema.build) return;
+
+    const values = {};
+    container.querySelectorAll('input, select').forEach(function(el) {
+        values[el.name] = el.value;
+    });
+
+    urlField.value = schema.build(values);
+}
+
+// Service type dropdown handler
+(function() {
+    const serviceType = document.getElementById('addServiceType');
+    const fieldsContainer = document.getElementById('addServiceFields');
+    const urlContainer = document.getElementById('addUrlContainer');
+    const appriseUrl = document.getElementById('addAppriseUrl');
+    const serviceName = document.getElementById('addServiceName');
+    const toggleBtn = document.getElementById('toggleAddUrlMode');
+
+    if (!serviceType) return;
+
+    let rawUrlMode = false;
+
     serviceType.addEventListener('change', function() {
-        const option = this.options[this.selectedIndex];
-        const urlTemplate = option.dataset.url || '';
-        const defaultName = option.dataset.name || '';
+        const type = this.value;
+        const schema = serviceSchemas[type];
 
-        if (urlTemplate) {
-            appriseUrl.value = urlTemplate;
-            appriseUrl.placeholder = 'Replace {placeholders} with your values';
-            urlHelp.innerHTML = 'Replace the <code>{placeholders}</code> with your actual values from ' + defaultName;
-        } else if (this.value === 'custom') {
-            appriseUrl.value = '';
-            appriseUrl.placeholder = 'Enter your Apprise URL';
-            urlHelp.innerHTML = 'See <a href="https://github.com/caronc/apprise/wiki#notification-services" target="_blank">Apprise documentation</a> for URL formats';
-        } else {
-            appriseUrl.value = '';
-            appriseUrl.placeholder = 'Select a service type above or enter a custom URL';
-        }
-
-        // Auto-fill service name if empty or still a default name
-        if (serviceName && defaultName) {
+        // Auto-fill service name
+        if (serviceName) {
             const currentName = serviceName.value.trim();
+            const defaultNames = Object.values(serviceSchemas).map(s => s.label);
             if (!currentName || defaultNames.includes(currentName)) {
-                serviceName.value = defaultName;
+                serviceName.value = schema ? schema.label : '';
             }
         }
+
+        if (type === 'custom') {
+            // Show raw URL field only
+            fieldsContainer.style.display = 'none';
+            fieldsContainer.innerHTML = '';
+            urlContainer.style.display = 'block';
+            appriseUrl.value = '';
+            appriseUrl.readOnly = false;
+            appriseUrl.required = true;
+            if (toggleBtn) toggleBtn.style.display = 'none';
+            rawUrlMode = true;
+        } else if (schema) {
+            // Show form builder
+            buildServiceForm('addServiceFields', schema, 'add', {});
+            urlContainer.style.display = 'none';
+            appriseUrl.required = true;
+            if (toggleBtn) toggleBtn.style.display = 'inline-block';
+            rawUrlMode = false;
+
+            // Initial URL build
+            updateBuiltUrl('addServiceFields', schema, 'add');
+        } else {
+            // No selection
+            fieldsContainer.style.display = 'none';
+            fieldsContainer.innerHTML = '';
+            urlContainer.style.display = 'none';
+            if (toggleBtn) toggleBtn.style.display = 'none';
+        }
     });
+
+    // Toggle between form and raw URL mode
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', function() {
+            rawUrlMode = !rawUrlMode;
+            if (rawUrlMode) {
+                urlContainer.style.display = 'block';
+                appriseUrl.readOnly = false;
+                this.innerHTML = '<i class="bi bi-ui-checks me-1"></i>Use Form';
+            } else {
+                urlContainer.style.display = 'none';
+                this.innerHTML = '<i class="bi bi-code-slash me-1"></i>Edit Raw URL';
+                // Rebuild URL from form
+                const type = serviceType.value;
+                const schema = serviceSchemas[type];
+                if (schema) {
+                    updateBuiltUrl('addServiceFields', schema, 'add');
+                }
+            }
+        });
+    }
+
+    // Before form submit, ensure URL is populated
+    const form = document.getElementById('addServiceFormEl');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            const type = serviceType.value;
+            const schema = serviceSchemas[type];
+            if (schema && !rawUrlMode) {
+                updateBuiltUrl('addServiceFields', schema, 'add');
+            }
+            if (!appriseUrl.value.trim()) {
+                e.preventDefault();
+                alert('Please fill in the required fields.');
+            }
+        });
+    }
 })();
 </script>
 <?php endif; ?>
