@@ -1974,19 +1974,6 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
             </div>
         </div>
     </div>
-    <!-- rsync.net -->
-    <div class="col-md-6 col-lg-3">
-        <div class="card border-0 shadow-sm h-100 text-center" style="opacity:0.6">
-            <div class="card-body py-4">
-                <div class="rounded-circle bg-secondary bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width:48px;height:48px">
-                    <i class="bi bi-hdd-rack fs-4 text-secondary"></i>
-                </div>
-                <h6 class="mb-1">rsync.net</h6>
-                <p class="text-muted small mb-2">Cloud storage for borg</p>
-                <span class="badge bg-secondary">Coming Soon</span>
-            </div>
-        </div>
-    </div>
     <!-- Hetzner -->
     <div class="col-md-6 col-lg-3">
         <div class="card border-0 shadow-sm h-100 text-center" style="cursor:pointer" onclick="showWizardForm('hetzner')">
@@ -1997,6 +1984,19 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
                 <h6 class="mb-1">Hetzner Storage Box</h6>
                 <p class="text-muted small mb-2">Affordable storage boxes</p>
                 <span class="btn btn-sm btn-danger">Setup</span>
+            </div>
+        </div>
+    </div>
+    <!-- rsync.net -->
+    <div class="col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100 text-center" style="opacity:0.6">
+            <div class="card-body py-4">
+                <div class="rounded-circle bg-secondary bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width:48px;height:48px">
+                    <i class="bi bi-hdd-rack fs-4 text-secondary"></i>
+                </div>
+                <h6 class="mb-1">rsync.net</h6>
+                <p class="text-muted small mb-2">Cloud storage for borg</p>
+                <span class="badge bg-secondary">Coming Soon</span>
             </div>
         </div>
     </div>
