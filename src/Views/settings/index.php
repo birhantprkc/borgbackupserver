@@ -2000,7 +2000,7 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
             <div class="card-body py-4">
                 <img src="/images/hetzner-h.png" alt="Hetzner" class="mb-3" style="width:48px;height:48px;border-radius:50%">
                 <h6 class="mb-1">Hetzner Storage Box</h6>
-                <p class="text-muted small mb-2">Affordable storage boxes</p>
+                <p class="text-muted small mb-2">Affordable Storage Boxes</p>
                 <span class="btn btn-sm btn-danger">Setup</span>
             </div>
         </div>
