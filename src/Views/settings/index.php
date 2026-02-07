@@ -27,6 +27,11 @@ $updateAvailable = $updateService->isUpdateAvailable();
         </a>
     </li>
     <li class="nav-item">
+        <a class="nav-link <?= $activeTab === 'remote' ? 'active' : '' ?>" href="/settings?tab=remote">
+            <i class="bi bi-hdd-network me-1"></i><span class="tab-label"><span class="d-none d-sm-inline">Remote Storage</span><span class="d-sm-none">Remote</span></span>
+        </a>
+    </li>
+    <li class="nav-item">
         <a class="nav-link <?= $activeTab === 'offsite' ? 'active' : '' ?>" href="/settings?tab=offsite">
             <i class="bi bi-bucket me-1"></i><span class="tab-label"><span class="d-none d-sm-inline">S3 Backups</span><span class="d-sm-none">S3</span></span>
         </a>
@@ -42,11 +47,6 @@ $updateAvailable = $updateService->isUpdateAvailable();
     <li class="nav-item">
         <a class="nav-link <?= $activeTab === 'borg' ? 'active' : '' ?>" href="/settings?tab=borg">
             <i class="bi bi-box-seam me-1"></i><span class="tab-label"><span class="d-none d-sm-inline">Borg Version</span><span class="d-sm-none">Borg</span></span>
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link <?= $activeTab === 'remote' ? 'active' : '' ?>" href="/settings?tab=remote">
-            <i class="bi bi-hdd-network me-1"></i><span class="tab-label"><span class="d-none d-sm-inline">Remote Storage</span><span class="d-sm-none">Remote</span></span>
         </a>
     </li>
 </ul>
@@ -1483,6 +1483,192 @@ function updateBuiltUrl(containerId, schema, prefix) {
 </script>
 <?php endif; ?>
 
+<!-- Remote Storage Tab -->
+<?php if ($activeTab === 'remote'): ?>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h5 class="mb-1">Remote SSH Storage Hosts</h5>
+        <p class="text-muted small mb-0">Configure remote SSH hosts for offsite borg repositories (rsync.net, BorgBase, Hetzner Storage Box, etc.)</p>
+    </div>
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addRemoteSshModal">
+        <i class="bi bi-plus-lg me-1"></i> Add Host
+    </button>
+</div>
+
+<?php if (empty($remoteSshConfigs)): ?>
+<div class="card border-0 shadow-sm">
+    <div class="card-body text-center py-5 text-muted">
+        <i class="bi bi-hdd-network display-4 mb-3 d-block opacity-50"></i>
+        <p>No remote SSH storage hosts configured yet.</p>
+        <p class="small">Add a remote host to create repositories on providers like rsync.net, BorgBase, or Hetzner Storage Box.</p>
+    </div>
+</div>
+<?php else: ?>
+<div class="row g-3">
+    <?php foreach ($remoteSshConfigs as $rsc): ?>
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><i class="bi bi-hdd-network me-1"></i> <?= htmlspecialchars($rsc['name']) ?></span>
+                <div class="btn-group btn-group-sm">
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="testRemoteSsh(<?= $rsc['id'] ?>, this)"
+                            title="Test Connection"><i class="bi bi-plug"></i></button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm"
+                            data-bs-toggle="modal" data-bs-target="#editRemoteSshModal<?= $rsc['id'] ?>"
+                            title="Edit"><i class="bi bi-pencil"></i></button>
+                    <button type="button" class="btn btn-outline-danger btn-sm"
+                            onclick="deleteRemoteSsh(<?= $rsc['id'] ?>, '<?= htmlspecialchars(addslashes($rsc['name'])) ?>')"
+                            title="Delete"><i class="bi bi-trash"></i></button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row g-2 small">
+                    <div class="col-4 text-muted">Host</div>
+                    <div class="col-8"><span class="text-info"><?= htmlspecialchars($rsc['remote_user']) ?>@<?= htmlspecialchars($rsc['remote_host']) ?><?= (int)$rsc['remote_port'] !== 22 ? ':' . (int)$rsc['remote_port'] : '' ?></span></div>
+                    <div class="col-4 text-muted">Base Path</div>
+                    <div class="col-8"><?= htmlspecialchars($rsc['remote_base_path']) ?></div>
+                    <?php if (!empty($rsc['borg_remote_path'])): ?>
+                    <div class="col-4 text-muted">Borg Binary</div>
+                    <div class="col-8"><?= htmlspecialchars($rsc['borg_remote_path']) ?></div>
+                    <?php endif; ?>
+                    <div class="col-4 text-muted">SSH Key</div>
+                    <div class="col-8"><span class="badge bg-success"><i class="bi bi-key me-1"></i>Configured</span></div>
+                </div>
+                <div id="remoteSshTestResult<?= $rsc['id'] ?>" class="mt-2"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Modal for this config -->
+    <div class="modal fade" id="editRemoteSshModal<?= $rsc['id'] ?>" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="/remote-ssh-configs/<?= $rsc['id'] ?>/update">
+                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Edit Remote SSH Host</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Name</label>
+                            <input type="text" class="form-control" name="name" value="<?= htmlspecialchars($rsc['name']) ?>" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Provider Preset</label>
+                            <select class="form-select" onchange="applyRemotePreset(this, this.closest('form'))">
+                                <option value="">Custom</option>
+                                <option value="rsync.net">rsync.net</option>
+                                <option value="borgbase">BorgBase</option>
+                                <option value="hetzner">Hetzner Storage Box</option>
+                            </select>
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-8">
+                                <label class="form-label fw-semibold">Host</label>
+                                <input type="text" class="form-control" name="remote_host" value="<?= htmlspecialchars($rsc['remote_host']) ?>" required>
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label fw-semibold">Port</label>
+                                <input type="number" class="form-control" name="remote_port" value="<?= (int)$rsc['remote_port'] ?>" min="1" max="65535">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Username</label>
+                            <input type="text" class="form-control" name="remote_user" value="<?= htmlspecialchars($rsc['remote_user']) ?>" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Base Path</label>
+                            <input type="text" class="form-control" name="remote_base_path" value="<?= htmlspecialchars($rsc['remote_base_path']) ?>">
+                            <div class="form-text">Base directory on the remote host. Use <code>./</code> for relative paths (rsync.net default).</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">SSH Private Key</label>
+                            <textarea class="form-control font-monospace" name="ssh_private_key" rows="4" placeholder="Leave blank to keep existing key"></textarea>
+                            <div class="form-text">Paste the private key (PEM format). Leave blank to keep the current key.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Remote Borg Path <span class="text-muted fw-normal">(optional)</span></label>
+                            <input type="text" class="form-control" name="borg_remote_path" value="<?= htmlspecialchars($rsc['borg_remote_path'] ?? '') ?>">
+                            <div class="form-text">Custom borg binary on the remote host (e.g., <code>borg1</code> for rsync.net). Leave blank for default <code>borg</code>.</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <?php endforeach; ?>
+</div>
+<?php endif; ?>
+
+<!-- Add Remote SSH Host Modal -->
+<div class="modal fade" id="addRemoteSshModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="/remote-ssh-configs/create">
+                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Remote SSH Host</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Name</label>
+                        <input type="text" class="form-control" name="name" placeholder="e.g., rsync.net Production" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Provider Preset</label>
+                        <select class="form-select" onchange="applyRemotePreset(this, this.closest('form'))">
+                            <option value="">Custom</option>
+                            <option value="rsync.net">rsync.net</option>
+                            <option value="borgbase">BorgBase</option>
+                            <option value="hetzner">Hetzner Storage Box</option>
+                        </select>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-8">
+                            <label class="form-label fw-semibold">Host</label>
+                            <input type="text" class="form-control" name="remote_host" placeholder="ch-s010.rsync.net" required>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label fw-semibold">Port</label>
+                            <input type="number" class="form-control" name="remote_port" value="22" min="1" max="65535">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Username</label>
+                        <input type="text" class="form-control" name="remote_user" placeholder="12345" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Base Path</label>
+                        <input type="text" class="form-control" name="remote_base_path" value="./">
+                        <div class="form-text">Base directory on the remote host. Use <code>./</code> for relative paths (rsync.net default).</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">SSH Private Key</label>
+                        <textarea class="form-control font-monospace" name="ssh_private_key" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;..." required></textarea>
+                        <div class="form-text">Paste the private key (PEM format). The corresponding public key must be authorized on the remote host.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Remote Borg Path <span class="text-muted fw-normal">(optional)</span></label>
+                        <input type="text" class="form-control" name="borg_remote_path" placeholder="">
+                        <div class="form-text">Custom borg binary on the remote host (e.g., <code>borg1</code> for rsync.net). Leave blank for default <code>borg</code>.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Host</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
 <!-- Offsite Storage Tab -->
 <?php if ($activeTab === 'offsite'): ?>
 <form method="POST" action="/settings/offsite-storage">
@@ -1801,192 +1987,6 @@ $outdatedCount = count($outdatedAgents);
     </div>
 </div>
 <?php endif; ?>
-<?php endif; ?>
-
-<!-- Remote Storage Tab -->
-<?php if ($activeTab === 'remote'): ?>
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        <h5 class="mb-1">Remote SSH Storage Hosts</h5>
-        <p class="text-muted small mb-0">Configure remote SSH hosts for offsite borg repositories (rsync.net, BorgBase, Hetzner Storage Box, etc.)</p>
-    </div>
-    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addRemoteSshModal">
-        <i class="bi bi-plus-lg me-1"></i> Add Host
-    </button>
-</div>
-
-<?php if (empty($remoteSshConfigs)): ?>
-<div class="card border-0 shadow-sm">
-    <div class="card-body text-center py-5 text-muted">
-        <i class="bi bi-hdd-network display-4 mb-3 d-block opacity-50"></i>
-        <p>No remote SSH storage hosts configured yet.</p>
-        <p class="small">Add a remote host to create repositories on providers like rsync.net, BorgBase, or Hetzner Storage Box.</p>
-    </div>
-</div>
-<?php else: ?>
-<div class="row g-3">
-    <?php foreach ($remoteSshConfigs as $rsc): ?>
-    <div class="col-lg-6">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center">
-                <span class="fw-semibold"><i class="bi bi-hdd-network me-1"></i> <?= htmlspecialchars($rsc['name']) ?></span>
-                <div class="btn-group btn-group-sm">
-                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="testRemoteSsh(<?= $rsc['id'] ?>, this)"
-                            title="Test Connection"><i class="bi bi-plug"></i></button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm"
-                            data-bs-toggle="modal" data-bs-target="#editRemoteSshModal<?= $rsc['id'] ?>"
-                            title="Edit"><i class="bi bi-pencil"></i></button>
-                    <button type="button" class="btn btn-outline-danger btn-sm"
-                            onclick="deleteRemoteSsh(<?= $rsc['id'] ?>, '<?= htmlspecialchars(addslashes($rsc['name'])) ?>')"
-                            title="Delete"><i class="bi bi-trash"></i></button>
-                </div>
-            </div>
-            <div class="card-body">
-                <div class="row g-2 small">
-                    <div class="col-4 text-muted">Host</div>
-                    <div class="col-8"><span class="text-info"><?= htmlspecialchars($rsc['remote_user']) ?>@<?= htmlspecialchars($rsc['remote_host']) ?><?= (int)$rsc['remote_port'] !== 22 ? ':' . (int)$rsc['remote_port'] : '' ?></span></div>
-                    <div class="col-4 text-muted">Base Path</div>
-                    <div class="col-8"><?= htmlspecialchars($rsc['remote_base_path']) ?></div>
-                    <?php if (!empty($rsc['borg_remote_path'])): ?>
-                    <div class="col-4 text-muted">Borg Binary</div>
-                    <div class="col-8"><?= htmlspecialchars($rsc['borg_remote_path']) ?></div>
-                    <?php endif; ?>
-                    <div class="col-4 text-muted">SSH Key</div>
-                    <div class="col-8"><span class="badge bg-success"><i class="bi bi-key me-1"></i>Configured</span></div>
-                </div>
-                <div id="remoteSshTestResult<?= $rsc['id'] ?>" class="mt-2"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Edit Modal for this config -->
-    <div class="modal fade" id="editRemoteSshModal<?= $rsc['id'] ?>" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <form method="POST" action="/remote-ssh-configs/<?= $rsc['id'] ?>/update">
-                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Edit Remote SSH Host</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Name</label>
-                            <input type="text" class="form-control" name="name" value="<?= htmlspecialchars($rsc['name']) ?>" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Provider Preset</label>
-                            <select class="form-select" onchange="applyRemotePreset(this, this.closest('form'))">
-                                <option value="">Custom</option>
-                                <option value="rsync.net">rsync.net</option>
-                                <option value="borgbase">BorgBase</option>
-                                <option value="hetzner">Hetzner Storage Box</option>
-                            </select>
-                        </div>
-                        <div class="row g-3 mb-3">
-                            <div class="col-8">
-                                <label class="form-label fw-semibold">Host</label>
-                                <input type="text" class="form-control" name="remote_host" value="<?= htmlspecialchars($rsc['remote_host']) ?>" required>
-                            </div>
-                            <div class="col-4">
-                                <label class="form-label fw-semibold">Port</label>
-                                <input type="number" class="form-control" name="remote_port" value="<?= (int)$rsc['remote_port'] ?>" min="1" max="65535">
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Username</label>
-                            <input type="text" class="form-control" name="remote_user" value="<?= htmlspecialchars($rsc['remote_user']) ?>" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Base Path</label>
-                            <input type="text" class="form-control" name="remote_base_path" value="<?= htmlspecialchars($rsc['remote_base_path']) ?>">
-                            <div class="form-text">Base directory on the remote host. Use <code>./</code> for relative paths (rsync.net default).</div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">SSH Private Key</label>
-                            <textarea class="form-control font-monospace" name="ssh_private_key" rows="4" placeholder="Leave blank to keep existing key"></textarea>
-                            <div class="form-text">Paste the private key (PEM format). Leave blank to keep the current key.</div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Remote Borg Path <span class="text-muted fw-normal">(optional)</span></label>
-                            <input type="text" class="form-control" name="borg_remote_path" value="<?= htmlspecialchars($rsc['borg_remote_path'] ?? '') ?>">
-                            <div class="form-text">Custom borg binary on the remote host (e.g., <code>borg1</code> for rsync.net). Leave blank for default <code>borg</code>.</div>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Save Changes</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-    <?php endforeach; ?>
-</div>
-<?php endif; ?>
-
-<!-- Add Remote SSH Host Modal -->
-<div class="modal fade" id="addRemoteSshModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST" action="/remote-ssh-configs/create">
-                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                <div class="modal-header">
-                    <h5 class="modal-title">Add Remote SSH Host</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Name</label>
-                        <input type="text" class="form-control" name="name" placeholder="e.g., rsync.net Production" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Provider Preset</label>
-                        <select class="form-select" onchange="applyRemotePreset(this, this.closest('form'))">
-                            <option value="">Custom</option>
-                            <option value="rsync.net">rsync.net</option>
-                            <option value="borgbase">BorgBase</option>
-                            <option value="hetzner">Hetzner Storage Box</option>
-                        </select>
-                    </div>
-                    <div class="row g-3 mb-3">
-                        <div class="col-8">
-                            <label class="form-label fw-semibold">Host</label>
-                            <input type="text" class="form-control" name="remote_host" placeholder="ch-s010.rsync.net" required>
-                        </div>
-                        <div class="col-4">
-                            <label class="form-label fw-semibold">Port</label>
-                            <input type="number" class="form-control" name="remote_port" value="22" min="1" max="65535">
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Username</label>
-                        <input type="text" class="form-control" name="remote_user" placeholder="12345" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Base Path</label>
-                        <input type="text" class="form-control" name="remote_base_path" value="./">
-                        <div class="form-text">Base directory on the remote host. Use <code>./</code> for relative paths (rsync.net default).</div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">SSH Private Key</label>
-                        <textarea class="form-control font-monospace" name="ssh_private_key" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;..." required></textarea>
-                        <div class="form-text">Paste the private key (PEM format). The corresponding public key must be authorized on the remote host.</div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Remote Borg Path <span class="text-muted fw-normal">(optional)</span></label>
-                        <input type="text" class="form-control" name="borg_remote_path" placeholder="">
-                        <div class="form-text">Custom borg binary on the remote host (e.g., <code>borg1</code> for rsync.net). Leave blank for default <code>borg</code>.</div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Add Host</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
 <?php endif; ?>
 </div><!-- /client-tab-content -->
 
