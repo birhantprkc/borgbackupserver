@@ -2097,7 +2097,7 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                 <input type="hidden" name="provider" value="hetzner">
                 <input type="hidden" name="remote_port" value="23">
-                <input type="hidden" name="remote_base_path" value="./backups">
+                <input type="hidden" name="remote_base_path" value="./">
                 <input type="hidden" name="append_repo_name" value="1">
 
                 <div class="row g-3 mb-3">
@@ -2141,7 +2141,7 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
                         <div class="col-sm-6"><strong>Host:</strong> <span id="hzParsedHost"></span></div>
                         <div class="col-sm-6"><strong>User:</strong> <span id="hzParsedUser"></span></div>
                         <div class="col-sm-6"><strong>Port:</strong> 23</div>
-                        <div class="col-sm-6"><strong>Path:</strong> ./backups/<em>&lt;repo-name&gt;</em></div>
+                        <div class="col-sm-6"><strong>Path:</strong> ./<em>&lt;repo-name&gt;</em></div>
                         <div class="col-sm-6"><strong>Borg:</strong> <span id="hzParsedBorg"></span></div>
                     </div>
                 </div>
