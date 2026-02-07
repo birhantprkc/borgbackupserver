@@ -1244,11 +1244,15 @@ class ClientController extends Controller
                     $sshKey = $archive['remote_ssh_key_encrypted'];
                 }
                 $remoteSshKeyFile = tempnam(sys_get_temp_dir(), 'bbs-ssh-');
+                // Normalize line endings (Windows \r\n → Unix \n) and ensure trailing newline
+                $sshKey = str_replace("\r\n", "\n", $sshKey);
+                $sshKey = str_replace("\r", "\n", $sshKey);
+                $sshKey = rtrim($sshKey) . "\n";
                 file_put_contents($remoteSshKeyFile, $sshKey);
                 chmod($remoteSshKeyFile, 0600);
 
                 $port = (int) ($archive['remote_port'] ?? 22);
-                $env['BORG_RSH'] = "ssh -i {$remoteSshKeyFile} -p {$port} -o StrictHostKeyChecking=no -o BatchMode=yes";
+                $env['BORG_RSH'] = "ssh -i {$remoteSshKeyFile} -p {$port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes";
 
                 $cmd = ['borg', 'extract'];
                 if (!empty($archive['borg_remote_path'])) {
