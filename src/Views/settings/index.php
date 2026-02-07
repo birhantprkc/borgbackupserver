@@ -1,4 +1,10 @@
-<?php $activeTab = $_GET['tab'] ?? 'general'; ?>
+<?php
+$activeTab = $_GET['tab'] ?? 'general';
+// Backwards compat: map old tab names to new consolidated storage tab
+if ($activeTab === 'remote') { $activeTab = 'storage'; $storageSection = 'remote'; }
+elseif ($activeTab === 'offsite') { $activeTab = 'storage'; $storageSection = 's3'; }
+if ($activeTab === 'storage') { $storageSection = $storageSection ?? ($_GET['section'] ?? 'overview'); }
+?>
 
 <!-- Tab Navigation -->
 <?php
@@ -27,13 +33,8 @@ $updateAvailable = $updateService->isUpdateAvailable();
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link <?= $activeTab === 'remote' ? 'active' : '' ?>" href="/settings?tab=remote">
-            <i class="bi bi-hdd-network me-1"></i><span class="tab-label"><span class="d-none d-sm-inline">Remote Storage</span><span class="d-sm-none">Remote</span></span>
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link <?= $activeTab === 'offsite' ? 'active' : '' ?>" href="/settings?tab=offsite">
-            <i class="bi bi-bucket me-1"></i><span class="tab-label"><span class="d-none d-sm-inline">S3 Backups</span><span class="d-sm-none">S3</span></span>
+        <a class="nav-link <?= $activeTab === 'storage' ? 'active' : '' ?>" href="/settings?tab=storage">
+            <i class="bi bi-hdd-stack me-1"></i><span class="tab-label">Storage</span>
         </a>
     </li>
     <li class="nav-item">
@@ -103,7 +104,7 @@ $updateAvailable = $updateService->isUpdateAvailable();
                                 <div class="form-text">Send alert when storage exceeds this threshold.</div>
                             </div>
                         </div>
-                        <div class="form-text mt-2">Want to backup to a remote store? <a href="/settings?tab=remote">Configure Remote Storage</a></div>
+                        <div class="form-text mt-2">Want to backup to a remote store? <a href="/settings?tab=storage&section=remote">Configure Remote Storage</a></div>
                     </div>
                     <?php $sshPort = (int) ($settings['ssh_port'] ?? 22); if ($sshPort !== 22): ?>
                     <div class="mb-3">
@@ -1483,8 +1484,165 @@ function updateBuiltUrl(containerId, schema, prefix) {
 </script>
 <?php endif; ?>
 
-<!-- Remote Storage Tab -->
-<?php if ($activeTab === 'remote'): ?>
+<!-- Storage Tab -->
+<?php if ($activeTab === 'storage'): ?>
+<?php
+$_storagePath = $settings['storage_path'] ?? '/var/bbs';
+$_storageTotalBytes = $storageTotalBytes ?? 0;
+$_storageFreeBytes = $storageFreeBytes ?? 0;
+$_storageUsedBytes = $_storageTotalBytes - $_storageFreeBytes;
+$_localRepoCount = $localRepoCount ?? 0;
+$_remoteRepoCount = $remoteRepoCount ?? 0;
+$_s3Configured = !empty($settings['s3_endpoint']) && !empty($settings['s3_bucket']);
+$_s3SyncServerBackups = ($settings['s3_sync_server_backups'] ?? '0') === '1';
+
+// Helper to format bytes
+function _formatBytes($bytes) {
+    if ($bytes >= 1099511627776) return round($bytes / 1099511627776, 1) . ' TB';
+    if ($bytes >= 1073741824) return round($bytes / 1073741824, 1) . ' GB';
+    if ($bytes >= 1048576) return round($bytes / 1048576, 1) . ' MB';
+    return round($bytes / 1024, 1) . ' KB';
+}
+?>
+
+<!-- Storage Sub-Navigation -->
+<ul class="nav nav-pills mb-4">
+    <li class="nav-item">
+        <a class="nav-link <?= $storageSection === 'overview' ? 'active' : '' ?>" href="/settings?tab=storage">
+            <i class="bi bi-grid me-1"></i> Overview
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link <?= $storageSection === 's3' ? 'active' : '' ?>" href="/settings?tab=storage&section=s3">
+            <i class="bi bi-bucket me-1"></i> S3 Sync
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link <?= $storageSection === 'remote' ? 'active' : '' ?>" href="/settings?tab=storage&section=remote">
+            <i class="bi bi-hdd-network me-1"></i> Remote SSH Hosts
+        </a>
+    </li>
+</ul>
+
+<?php if ($storageSection === 'overview'): ?>
+<!-- Storage Overview -->
+<div class="row g-4">
+    <!-- Local Storage Card -->
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+                <i class="bi bi-hdd me-1"></i> Local Storage
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between small mb-1">
+                        <span class="text-muted">Disk Usage</span>
+                        <span class="fw-semibold"><?= $storageUsagePercent ?>%</span>
+                    </div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar <?= $storageUsagePercent >= 90 ? 'bg-danger' : ($storageUsagePercent >= 75 ? 'bg-warning' : 'bg-success') ?>" style="width: <?= $storageUsagePercent ?>%"></div>
+                    </div>
+                </div>
+                <div class="row g-2 small">
+                    <div class="col-5 text-muted">Path</div>
+                    <div class="col-7"><code class="small"><?= htmlspecialchars($_storagePath) ?></code></div>
+                    <div class="col-5 text-muted">Total</div>
+                    <div class="col-7"><?= $_storageTotalBytes ? _formatBytes($_storageTotalBytes) : 'N/A' ?></div>
+                    <div class="col-5 text-muted">Used</div>
+                    <div class="col-7"><?= $_storageTotalBytes ? _formatBytes($_storageUsedBytes) : 'N/A' ?></div>
+                    <div class="col-5 text-muted">Free</div>
+                    <div class="col-7"><?= $_storageTotalBytes ? _formatBytes($_storageFreeBytes) : 'N/A' ?></div>
+                    <div class="col-5 text-muted">Alert Threshold</div>
+                    <div class="col-7"><?= htmlspecialchars($settings['storage_alert_threshold'] ?? '90') ?>%</div>
+                    <div class="col-5 text-muted">Local Repos</div>
+                    <div class="col-7"><span class="badge bg-primary"><?= $_localRepoCount ?></span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Remote SSH Hosts Card -->
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+                <i class="bi bi-hdd-network me-1"></i> Remote SSH Hosts
+            </div>
+            <div class="card-body">
+                <?php if (empty($remoteSshConfigs)): ?>
+                <div class="text-center text-muted py-3">
+                    <i class="bi bi-hdd-network d-block mb-2 opacity-50" style="font-size: 2rem;"></i>
+                    <p class="small mb-2">No remote hosts configured</p>
+                </div>
+                <?php else: ?>
+                <div class="small mb-3">
+                    <span class="fw-semibold"><?= count($remoteSshConfigs) ?></span> host<?= count($remoteSshConfigs) !== 1 ? 's' : '' ?> configured,
+                    <span class="fw-semibold"><?= $_remoteRepoCount ?></span> remote repo<?= $_remoteRepoCount !== 1 ? 's' : '' ?>
+                </div>
+                <div class="list-group list-group-flush small">
+                    <?php foreach ($remoteSshConfigs as $rsc): ?>
+                    <div class="list-group-item px-0 py-1 border-0 d-flex justify-content-between">
+                        <span><i class="bi bi-hdd-network text-muted me-1"></i> <?= htmlspecialchars($rsc['name']) ?></span>
+                        <span class="text-muted"><?= htmlspecialchars($rsc['remote_user']) ?>@<?= htmlspecialchars($rsc['remote_host']) ?></span>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
+                <div class="mt-3">
+                    <a href="/settings?tab=storage&section=remote" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-gear me-1"></i> Manage Hosts
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- S3 Offsite Sync Card -->
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+                <i class="bi bi-bucket me-1"></i> S3 Offsite Sync
+            </div>
+            <div class="card-body">
+                <?php if ($_s3Configured): ?>
+                <div class="row g-2 small">
+                    <div class="col-5 text-muted">Status</div>
+                    <div class="col-7"><span class="badge bg-success">Configured</span></div>
+                    <div class="col-5 text-muted">Endpoint</div>
+                    <div class="col-7"><?= htmlspecialchars($settings['s3_endpoint'] ?? '') ?></div>
+                    <div class="col-5 text-muted">Bucket</div>
+                    <div class="col-7"><?= htmlspecialchars($settings['s3_bucket'] ?? '') ?></div>
+                    <?php if (!empty($settings['s3_region'])): ?>
+                    <div class="col-5 text-muted">Region</div>
+                    <div class="col-7"><?= htmlspecialchars($settings['s3_region']) ?></div>
+                    <?php endif; ?>
+                    <div class="col-5 text-muted">Server Sync</div>
+                    <div class="col-7">
+                        <?php if ($_s3SyncServerBackups): ?>
+                        <span class="badge bg-success">Enabled</span>
+                        <?php else: ?>
+                        <span class="badge bg-secondary">Disabled</span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php else: ?>
+                <div class="text-center text-muted py-3">
+                    <i class="bi bi-bucket d-block mb-2 opacity-50" style="font-size: 2rem;"></i>
+                    <p class="small mb-2">S3 sync not configured</p>
+                </div>
+                <?php endif; ?>
+                <div class="mt-3">
+                    <a href="/settings?tab=storage&section=s3" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-gear me-1"></i> Configure S3
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if ($storageSection === 'remote'): ?>
+<!-- Remote SSH Hosts Section -->
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
         <h5 class="mb-1">Remote SSH Storage Hosts</h5>
@@ -1679,8 +1837,8 @@ function updateBuiltUrl(containerId, schema, prefix) {
 </div>
 <?php endif; ?>
 
-<!-- Offsite Storage Tab -->
-<?php if ($activeTab === 'offsite'): ?>
+<?php if ($storageSection === 's3'): ?>
+<!-- S3 Sync Section -->
 <form method="POST" action="/settings/offsite-storage">
     <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
 
@@ -1814,6 +1972,8 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
     });
 });
 </script>
+<?php endif; ?>
+
 <?php endif; ?>
 
 <!-- Updates Tab -->

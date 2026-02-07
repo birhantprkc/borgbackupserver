@@ -21,11 +21,15 @@ class SettingsController extends Controller
         // Get current storage usage for the storage path
         $storagePath = $settings['storage_path'] ?? '/var/bbs';
         $storageUsagePercent = 0;
+        $storageTotalBytes = 0;
+        $storageFreeBytes = 0;
         if (is_dir($storagePath)) {
             $total = @disk_total_space($storagePath);
             $free = @disk_free_space($storagePath);
             if ($total && $total > 0) {
                 $storageUsagePercent = (int) round((($total - $free) / $total) * 100);
+                $storageTotalBytes = $total;
+                $storageFreeBytes = $free;
             }
         }
 
@@ -33,11 +37,19 @@ class SettingsController extends Controller
         $remoteSshService = new \BBS\Services\RemoteSshService();
         $remoteSshConfigs = $remoteSshService->getAll();
 
+        // Repo counts by storage type
+        $localRepoCount = (int) ($this->db->fetchOne("SELECT COUNT(*) as cnt FROM repositories WHERE storage_type = 'local' OR storage_type IS NULL")['cnt'] ?? 0);
+        $remoteRepoCount = (int) ($this->db->fetchOne("SELECT COUNT(*) as cnt FROM repositories WHERE storage_type = 'remote_ssh'")['cnt'] ?? 0);
+
         $this->view('settings/index', [
             'pageTitle' => 'Settings',
             'settings' => $settings,
             'templates' => $templates,
             'storageUsagePercent' => $storageUsagePercent,
+            'storageTotalBytes' => $storageTotalBytes,
+            'storageFreeBytes' => $storageFreeBytes,
+            'localRepoCount' => $localRepoCount,
+            'remoteRepoCount' => $remoteRepoCount,
             'remoteSshConfigs' => $remoteSshConfigs,
         ]);
     }
@@ -719,7 +731,7 @@ class SettingsController extends Controller
         }
 
         $this->flash('success', 'S3 settings saved.');
-        $this->redirect('/settings?tab=offsite');
+        $this->redirect('/settings?tab=storage&section=s3');
     }
 
     /**
