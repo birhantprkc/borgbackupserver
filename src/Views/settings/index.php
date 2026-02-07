@@ -1650,9 +1650,11 @@ function _formatBytes($bytes) {
                         <?php endif; ?>
                     </div>
                 </div>
-                <a href="/settings?tab=storage&section=s3" class="btn btn-sm btn-outline-primary mt-3">
-                    <i class="bi bi-gear me-1"></i> Configure S3
-                </a>
+                <div class="d-flex align-items-center gap-2 mt-3">
+                    <a href="/settings?tab=storage&section=s3" class="btn btn-sm btn-outline-primary text-nowrap">
+                        <i class="bi bi-gear me-1"></i> Configure S3
+                    </a>
+                </div>
                 <?php else: ?>
                 <div class="text-center py-3">
                     <i class="bi bi-bucket d-block opacity-50" style="font-size: 2rem;"></i>
