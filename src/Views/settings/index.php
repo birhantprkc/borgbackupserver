@@ -1711,7 +1711,16 @@ function _formatBytes($bytes) {
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center">
-                <span class="fw-semibold"><i class="bi bi-hdd-network me-1"></i> <?= htmlspecialchars($rsc['name']) ?></span>
+                <span class="fw-semibold"><?php
+                    $provider = $rsc['provider'] ?? null;
+                    if ($provider === 'borgbase') {
+                        echo '<i class="bi bi-device-hdd me-1"></i> ';
+                    } elseif ($provider === 'hetzner') {
+                        echo '<img src="/images/hetzner-h.png" alt="" style="width:16px;height:16px;border-radius:50%;vertical-align:text-bottom" class="me-1"> ';
+                    } else {
+                        echo '<i class="bi bi-hdd-network me-1"></i> ';
+                    }
+                ?><?= htmlspecialchars($rsc['name']) ?></span>
                 <div class="btn-group btn-group-sm">
                     <button type="button" class="btn btn-outline-primary btn-sm" onclick="testRemoteSsh(<?= $rsc['id'] ?>, this)"
                             title="Test Connection"><i class="bi bi-plug"></i></button>
@@ -1725,6 +1734,13 @@ function _formatBytes($bytes) {
             </div>
             <div class="card-body">
                 <div class="row g-2 small">
+                    <?php if (!empty($rsc['provider'])): ?>
+                    <div class="col-4 text-muted">Provider</div>
+                    <div class="col-8"><?php
+                        $providerNames = ['borgbase' => 'BorgBase', 'hetzner' => 'Hetzner Storage Box', 'rsync.net' => 'rsync.net'];
+                        echo htmlspecialchars($providerNames[$rsc['provider']] ?? ucfirst($rsc['provider']));
+                    ?></div>
+                    <?php endif; ?>
                     <div class="col-4 text-muted">Host</div>
                     <div class="col-8"><span class="text-info"><?= htmlspecialchars($rsc['remote_user']) ?>@<?= htmlspecialchars($rsc['remote_host']) ?><?= (int)$rsc['remote_port'] !== 22 ? ':' . (int)$rsc['remote_port'] : '' ?></span></div>
                     <div class="col-4 text-muted">Base Path</div>
