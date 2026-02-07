@@ -1571,7 +1571,7 @@ function _formatBytes($bytes) {
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-7">
-                        <p class="small text-muted mb-2">Using SSH for storage has the benefit of using cloud providers like rsync.net, BorgBase, and Hetzner Storage Box to save your repositories off-site. Agents back up directly to the remote host over SSH &mdash; no data passes through the BBS server.</p>
+                        <p class="small text-muted mb-2">Remote Storage via SSH offers an affordable and low-impact way of having backups that are offsite and secure. Requires less infrastructure and gives peace of mind knowing your backups are off-site. The borg client must be executable on the remote server. Setup wizards for BorgBase, Hetzner Storage Box, and rsync.net are available.</p>
                     </div>
                     <div class="col-md-5">
                         <?php if (empty($remoteSshConfigs)): ?>
