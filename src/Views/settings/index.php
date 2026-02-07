@@ -1966,7 +1966,7 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
         <div class="card border-0 shadow-sm h-100 text-center" style="cursor:pointer" onclick="showWizardForm('borgbase')">
             <div class="card-body py-4">
                 <div class="rounded-circle bg-primary bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width:48px;height:48px">
-                    <i class="bi bi-shield-lock fs-4 text-primary"></i>
+                    <i class="bi bi-device-hdd fs-4 text-primary"></i>
                 </div>
                 <h6 class="mb-1">BorgBase</h6>
                 <p class="text-muted small mb-2">Managed borg hosting</p>
@@ -2019,7 +2019,7 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
 <div id="wizardBorgbase" style="display:none">
     <div class="card border-0 shadow-sm">
         <div class="card-header bg-primary bg-opacity-10 fw-semibold">
-            <i class="bi bi-shield-lock me-1"></i> BorgBase Setup
+            <i class="bi bi-device-hdd me-1"></i> BorgBase Setup
         </div>
         <div class="card-body">
             <p class="text-muted small mb-3">Paste the SSH connection string from your <a href="https://www.borgbase.com" target="_blank">BorgBase</a> repository page, then paste your SSH private key below.</p>
