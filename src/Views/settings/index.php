@@ -1536,10 +1536,10 @@ function _formatBytes($bytes) {
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-7">
-                        <p class="small text-muted mb-2">BBS is primarily designed as a backup server with storage on the server itself. Local repositories give you the most features including file-level browsing, browser-based restore, S3 offsite sync, and the fastest backup and restore performance.</p>
+                        <p class="small text-muted mb-2">BBS is primarily designed as a backup server with storage on the server itself. Local repositories offer the fastest backup and restore performance, and support S3 offsite sync for disaster recovery.</p>
                     </div>
                     <div class="col-md-5">
-                        <div class="mb-3">
+                        <div class="mb-2">
                             <div class="d-flex justify-content-between small mb-1">
                                 <span class="text-muted">Disk Usage</span>
                                 <span class="fw-semibold"><?= $storageUsagePercent ?>%</span>
@@ -1548,17 +1548,11 @@ function _formatBytes($bytes) {
                                 <div class="progress-bar <?= $storageUsagePercent >= 90 ? 'bg-danger' : ($storageUsagePercent >= 75 ? 'bg-warning' : 'bg-success') ?>" style="width: <?= $storageUsagePercent ?>%"></div>
                             </div>
                         </div>
-                        <div class="row g-2 small">
+                        <div class="row g-1 small">
                             <div class="col-5 text-muted">Path</div>
                             <div class="col-7"><code class="small"><?= htmlspecialchars($_storagePath) ?></code></div>
-                            <div class="col-5 text-muted">Total</div>
-                            <div class="col-7"><?= $_storageTotalBytes ? _formatBytes($_storageTotalBytes) : 'N/A' ?></div>
-                            <div class="col-5 text-muted">Used</div>
-                            <div class="col-7"><?= $_storageTotalBytes ? _formatBytes($_storageUsedBytes) : 'N/A' ?></div>
-                            <div class="col-5 text-muted">Free</div>
-                            <div class="col-7"><?= $_storageTotalBytes ? _formatBytes($_storageFreeBytes) : 'N/A' ?></div>
-                            <div class="col-5 text-muted">Alert Threshold</div>
-                            <div class="col-7"><?= htmlspecialchars($settings['storage_alert_threshold'] ?? '90') ?>%</div>
+                            <div class="col-5 text-muted">Disk</div>
+                            <div class="col-7"><?= $_storageTotalBytes ? _formatBytes($_storageUsedBytes) . ' used / ' . _formatBytes($_storageFreeBytes) . ' free' : 'N/A' ?></div>
                             <div class="col-5 text-muted">Local Repos</div>
                             <div class="col-7"><span class="badge bg-primary"><?= $_localRepoCount ?></span></div>
                         </div>
