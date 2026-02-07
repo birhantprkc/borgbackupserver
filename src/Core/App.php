@@ -133,6 +133,7 @@ class App
         $this->router->map('POST', '/remote-ssh-configs/[i:id]/update', 'RemoteSshConfigController@update');
         $this->router->map('POST', '/remote-ssh-configs/[i:id]/delete', 'RemoteSshConfigController@delete');
         $this->router->map('POST', '/remote-ssh-configs/[i:id]/test', 'RemoteSshConfigController@test');
+        $this->router->map('POST', '/remote-ssh-configs/test-new', 'RemoteSshConfigController@testNew');
 
         // Notification Services
         $this->router->map('GET', '/notification-services', 'NotificationServiceController@index');

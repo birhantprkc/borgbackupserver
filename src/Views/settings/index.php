@@ -2067,8 +2067,13 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
                     <div class="form-text">A friendly name to identify this host in BBS.</div>
                 </div>
 
-                <div class="d-flex gap-2">
-                    <button type="submit" class="btn btn-sm btn-primary" id="bbSubmitBtn" disabled>
+                <div id="bbTestResult" style="display:none" class="mb-3"></div>
+
+                <div class="d-flex gap-2 align-items-center">
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="bbTestBtn" disabled onclick="testBorgbaseConnection()">
+                        <i class="bi bi-plug me-1"></i> Test Connection
+                    </button>
+                    <button type="submit" class="btn btn-sm btn-primary" id="bbSubmitBtn" style="display:none">
                         <i class="bi bi-plus-lg me-1"></i> Add Host
                     </button>
                     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="hideWizardForm()">Cancel</button>
@@ -2092,7 +2097,9 @@ function hideWizardForm() {
     document.getElementById('borgbaseWizardForm').reset();
     document.getElementById('bbParsedDetails').style.display = 'none';
     document.getElementById('bbParseError').style.display = 'none';
-    document.getElementById('bbSubmitBtn').disabled = true;
+    document.getElementById('bbTestBtn').disabled = true;
+    document.getElementById('bbSubmitBtn').style.display = 'none';
+    document.getElementById('bbTestResult').style.display = 'none';
 }
 
 // BorgBase connection string parser
@@ -2147,15 +2154,70 @@ document.getElementById('bbName').addEventListener('input', function() {
     this.dataset.userEdited = '1';
 });
 
-// Enable submit only when all fields are filled
+// Enable test button when connection string is parsed and key is provided
 function updateBbSubmit() {
     var host = document.getElementById('bbFieldHost').value;
     var key = document.getElementById('bbSshKey').value.trim();
     var name = document.getElementById('bbName').value.trim();
-    document.getElementById('bbSubmitBtn').disabled = !(host && key && name);
+    var canTest = !!(host && key);
+    document.getElementById('bbTestBtn').disabled = !canTest;
+    // Hide Add Host if inputs changed after a previous test
+    document.getElementById('bbSubmitBtn').style.display = 'none';
+    document.getElementById('bbTestResult').style.display = 'none';
 }
 document.getElementById('bbSshKey').addEventListener('input', updateBbSubmit);
 document.getElementById('bbName').addEventListener('input', updateBbSubmit);
+
+function testBorgbaseConnection() {
+    var btn = document.getElementById('bbTestBtn');
+    var resultDiv = document.getElementById('bbTestResult');
+    var submitBtn = document.getElementById('bbSubmitBtn');
+    var nameField = document.getElementById('bbName');
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Testing...';
+    resultDiv.style.display = 'none';
+    submitBtn.style.display = 'none';
+
+    var formData = new URLSearchParams();
+    formData.append('csrf_token', document.querySelector('#borgbaseWizardForm [name=csrf_token]').value);
+    formData.append('remote_host', document.getElementById('bbFieldHost').value);
+    formData.append('remote_port', document.getElementById('bbFieldPort').value);
+    formData.append('remote_user', document.getElementById('bbFieldUser').value);
+    formData.append('ssh_private_key', document.getElementById('bbSshKey').value);
+    formData.append('borg_remote_path', '');
+
+    fetch('/remote-ssh-configs/test-new', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: formData.toString()
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        resultDiv.style.display = 'block';
+        if (data.status === 'ok') {
+            resultDiv.innerHTML = '<div class="alert alert-success small py-2 px-3 mb-0"><i class="bi bi-check-circle me-1"></i> Connected — ' + (data.version || 'borg detected').replace(/</g, '&lt;') + '</div>';
+            // Show Add Host button if name is filled
+            if (nameField.value.trim()) {
+                submitBtn.style.display = '';
+            }
+            // Watch name field to show/hide Add Host
+            nameField.addEventListener('input', function showSubmit() {
+                submitBtn.style.display = nameField.value.trim() ? '' : 'none';
+            });
+        } else {
+            resultDiv.innerHTML = '<div class="alert alert-danger small py-2 px-3 mb-0"><i class="bi bi-x-circle me-1"></i> ' + (data.error || 'Connection failed').replace(/</g, '&lt;') + '</div>';
+        }
+    })
+    .catch(function() {
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = '<div class="alert alert-danger small py-2 px-3 mb-0"><i class="bi bi-x-circle me-1"></i> Request failed</div>';
+    })
+    .finally(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-plug me-1"></i> Test Connection';
+    });
+}
 </script>
 <?php endif; ?>
 

@@ -179,4 +179,44 @@ class RemoteSshConfigController extends Controller
             $this->json(['status' => 'error', 'error' => $result['error'] ?? 'Connection failed']);
         }
     }
+
+    /**
+     * Test connection with raw (unsaved) config data.
+     */
+    public function testNew(): void
+    {
+        $this->requireAuth();
+        $this->requireAdmin();
+        $this->verifyCsrf();
+
+        $remoteHost = trim($_POST['remote_host'] ?? '');
+        $remotePort = (int) ($_POST['remote_port'] ?? 22);
+        $remoteUser = trim($_POST['remote_user'] ?? '');
+        $sshPrivateKey = trim($_POST['ssh_private_key'] ?? '');
+        $borgRemotePath = trim($_POST['borg_remote_path'] ?? '') ?: null;
+
+        if (empty($remoteHost) || empty($remoteUser) || empty($sshPrivateKey)) {
+            $this->json(['status' => 'error', 'error' => 'Host, user, and SSH key are required']);
+            return;
+        }
+
+        // Build a fake config array with the key stored as "encrypted" so
+        // decryptKey() falls back to using it as-is (plaintext fallback).
+        $config = [
+            'remote_host' => $remoteHost,
+            'remote_port' => $remotePort,
+            'remote_user' => $remoteUser,
+            'ssh_private_key_encrypted' => $sshPrivateKey,
+            'borg_remote_path' => $borgRemotePath,
+        ];
+
+        $remoteSshService = new RemoteSshService();
+        $result = $remoteSshService->testConnection($config);
+
+        if ($result['success']) {
+            $this->json(['status' => 'ok', 'version' => $result['version'] ?? '']);
+        } else {
+            $this->json(['status' => 'error', 'error' => $result['error'] ?? 'Connection failed']);
+        }
+    }
 }
