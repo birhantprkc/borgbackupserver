@@ -1980,7 +1980,7 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
 </a>
 
 <h5 class="mt-3 mb-1">Add Remote Storage Host</h5>
-<p class="text-muted small mb-4">Choose your provider to get started, or use Custom for any SSH-accessible server.</p>
+<p class="text-muted small mb-4">Choose your provider to get started, or use Custom for any SSH-accessible server with borg client.</p>
 
 <div id="wizardProviders" class="row g-3 mb-4">
     <!-- BorgBase -->
