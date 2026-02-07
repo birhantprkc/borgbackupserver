@@ -2031,7 +2031,7 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
 
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Connection String</label>
-                    <input type="text" class="form-control" id="bbConnString" placeholder="ssh://e1k7t00x@e1k7t00x.repo.borgbase.com/./repo" required>
+                    <input type="text" class="form-control" id="bbConnString" placeholder="ssh://e1k7t00x@e1k7t00x.repo.borgbase.com/./repo">
                     <div class="form-text">Find this on your BorgBase repo page under "Repository".</div>
                 </div>
 
