@@ -122,6 +122,7 @@ CREATE TABLE remote_ssh_configs (
     remote_base_path VARCHAR(500) NOT NULL DEFAULT './',
     ssh_private_key_encrypted TEXT NOT NULL,
     borg_remote_path VARCHAR(255) DEFAULT NULL,
+    append_repo_name TINYINT(1) NOT NULL DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;

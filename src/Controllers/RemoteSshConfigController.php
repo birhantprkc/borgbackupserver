@@ -24,6 +24,7 @@ class RemoteSshConfigController extends Controller
         $remoteBasePath = trim($_POST['remote_base_path'] ?? './');
         $sshPrivateKey = trim($_POST['ssh_private_key'] ?? '');
         $borgRemotePath = trim($_POST['borg_remote_path'] ?? '') ?: null;
+        $appendRepoName = isset($_POST['append_repo_name']) ? 1 : 0;
 
         if (empty($name) || empty($remoteHost) || empty($remoteUser) || empty($sshPrivateKey)) {
             $this->flash('danger', 'Name, host, user, and SSH private key are required.');
@@ -46,6 +47,7 @@ class RemoteSshConfigController extends Controller
             'remote_base_path' => $remoteBasePath,
             'ssh_private_key_encrypted' => Encryption::encrypt($sshPrivateKey),
             'borg_remote_path' => $borgRemotePath,
+            'append_repo_name' => $appendRepoName,
         ]);
 
         $this->db->insert('server_log', [
@@ -79,6 +81,7 @@ class RemoteSshConfigController extends Controller
         $remoteBasePath = trim($_POST['remote_base_path'] ?? './');
         $sshPrivateKey = trim($_POST['ssh_private_key'] ?? '');
         $borgRemotePath = trim($_POST['borg_remote_path'] ?? '') ?: null;
+        $appendRepoName = isset($_POST['append_repo_name']) ? 1 : 0;
 
         if (empty($name) || empty($remoteHost) || empty($remoteUser)) {
             $this->flash('danger', 'Name, host, and user are required.');
@@ -100,6 +103,7 @@ class RemoteSshConfigController extends Controller
             'remote_user' => $remoteUser,
             'remote_base_path' => $remoteBasePath,
             'borg_remote_path' => $borgRemotePath,
+            'append_repo_name' => $appendRepoName,
         ];
 
         // Only update SSH key if a new one was provided

@@ -1592,6 +1592,11 @@ function updateBuiltUrl(containerId, schema, prefix) {
                             <input type="text" class="form-control" name="borg_remote_path" value="<?= htmlspecialchars($rsc['borg_remote_path'] ?? '') ?>">
                             <div class="form-text">Custom borg binary on the remote host (e.g., <code>borg1</code> for rsync.net). Leave blank for default <code>borg</code>.</div>
                         </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" name="append_repo_name" value="1" id="editAppendRepoName<?= $rsc['id'] ?>" <?= ($rsc['append_repo_name'] ?? 1) ? 'checked' : '' ?>>
+                            <label class="form-check-label" for="editAppendRepoName<?= $rsc['id'] ?>">Append repository name to base path</label>
+                            <div class="form-text">Uncheck for providers like BorgBase where each SSH user maps to a single fixed repo path.</div>
+                        </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -1657,6 +1662,11 @@ function updateBuiltUrl(containerId, schema, prefix) {
                         <label class="form-label fw-semibold">Remote Borg Path <span class="text-muted fw-normal">(optional)</span></label>
                         <input type="text" class="form-control" name="borg_remote_path" placeholder="">
                         <div class="form-text">Custom borg binary on the remote host (e.g., <code>borg1</code> for rsync.net). Leave blank for default <code>borg</code>.</div>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="append_repo_name" value="1" id="addAppendRepoName" checked>
+                        <label class="form-check-label" for="addAppendRepoName">Append repository name to base path</label>
+                        <div class="form-text">Uncheck for providers like BorgBase where each SSH user maps to a single fixed repo path.</div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -2036,18 +2046,20 @@ function deleteRemoteSsh(id, name) {
 
 function applyRemotePreset(select, form) {
     var presets = {
-        'rsync.net': { port: 22, base_path: './', borg_remote_path: 'borg1' },
-        'borgbase': { port: 22, base_path: './repo', borg_remote_path: '' },
-        'hetzner': { port: 23, base_path: './backups', borg_remote_path: '' }
+        'rsync.net': { port: 22, base_path: './', borg_remote_path: 'borg1', append_repo_name: true },
+        'borgbase': { port: 22, base_path: './repo', borg_remote_path: '', append_repo_name: false },
+        'hetzner': { port: 23, base_path: './backups', borg_remote_path: '', append_repo_name: true }
     };
     var preset = presets[select.value];
     if (!preset) return;
     var portInput = form.querySelector('[name=remote_port]');
     var baseInput = form.querySelector('[name=remote_base_path]');
     var borgInput = form.querySelector('[name=borg_remote_path]');
+    var appendInput = form.querySelector('[name=append_repo_name]');
     if (portInput) portInput.value = preset.port;
     if (baseInput) baseInput.value = preset.base_path;
     if (borgInput) borgInput.value = preset.borg_remote_path;
+    if (appendInput) appendInput.checked = preset.append_repo_name;
 }
 </script>
 

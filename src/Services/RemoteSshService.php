@@ -54,12 +54,15 @@ class RemoteSshService
     {
         $basePath = rtrim($config['remote_base_path'] ?? './', '/');
         $port = (int) ($config['remote_port'] ?? 22);
+        $appendName = (int) ($config['append_repo_name'] ?? 1);
+
+        $path = $appendName ? "{$basePath}/{$repoName}" : $basePath;
 
         if ($port === 22) {
-            return "ssh://{$config['remote_user']}@{$config['remote_host']}/{$basePath}/{$repoName}";
+            return "ssh://{$config['remote_user']}@{$config['remote_host']}/{$path}";
         }
 
-        return "ssh://{$config['remote_user']}@{$config['remote_host']}:{$port}/{$basePath}/{$repoName}";
+        return "ssh://{$config['remote_user']}@{$config['remote_host']}:{$port}/{$path}";
     }
 
     /**
