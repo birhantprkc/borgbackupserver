@@ -436,6 +436,9 @@ body.bg-body-secondary {
     gap: 2px;
     border-bottom: 2px solid var(--bs-border-color);
     padding-bottom: 0;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 .storage-subnav .nav-link {
     color: var(--bs-secondary-color);
@@ -446,6 +449,7 @@ body.bg-body-secondary {
     border: none;
     margin-bottom: -2px;
     background: transparent;
+    white-space: nowrap;
 }
 .storage-subnav .nav-link:hover {
     color: var(--bs-body-color);
@@ -456,6 +460,15 @@ body.bg-body-secondary {
     background: transparent;
     border-bottom: 2px solid var(--bs-primary);
     font-weight: 600;
+}
+@media (max-width: 767.98px) {
+    .storage-subnav .nav-link {
+        font-size: 0.75rem;
+        padding: 5px 10px;
+    }
+    .storage-subnav .nav-link i {
+        display: none;
+    }
 }
 
 /* Header stat icon cards */
