@@ -2161,8 +2161,8 @@ $outdatedCount = count($outdatedAgents);
                     </a>
                 <?php endif; ?>
             </div>
-            <div class="card-body">
-                <pre class="mb-0 small" style="white-space: pre-wrap;"><?= htmlspecialchars($latest['notes']) ?></pre>
+            <div class="card-body small release-notes-md">
+                <?php $parsedown = new \Parsedown(); $parsedown->setSafeMode(true); echo $parsedown->text($latest['notes']); ?>
             </div>
         </div>
     </div>
