@@ -1483,3 +1483,61 @@ if ($hourOfDay === 3) {
         }
     }
 }
+
+// Step 14: Auto-update agents when bundled version is newer than reported version
+// Runs every scheduler tick but only queues once — skips agents that already have a pending update_agent job
+{
+    $agentFile = __DIR__ . '/agent/bbs-agent.py';
+    $bundledAgentVersion = null;
+    if (file_exists($agentFile)) {
+        $fh = fopen($agentFile, 'r');
+        if ($fh) {
+            for ($i = 0; $i < 50 && ($line = fgets($fh)) !== false; $i++) {
+                if (preg_match('/^AGENT_VERSION\s*=\s*["\']([^"\']+)["\']/m', $line, $m)) {
+                    $bundledAgentVersion = $m[1];
+                    break;
+                }
+            }
+            fclose($fh);
+        }
+    }
+
+    if ($bundledAgentVersion) {
+        $outdatedAgents = $db->fetchAll(
+            "SELECT id, name, agent_version FROM agents
+             WHERE agent_version IS NOT NULL AND agent_version != ? AND status = 'online'",
+            [$bundledAgentVersion]
+        );
+
+        if (!empty($outdatedAgents)) {
+            $pending = $db->fetchAll(
+                "SELECT agent_id FROM backup_jobs WHERE task_type = 'update_agent' AND status IN ('queued', 'sent', 'running')"
+            );
+            $pendingIds = array_column($pending, 'agent_id');
+
+            $queued = 0;
+            foreach ($outdatedAgents as $agent) {
+                if (in_array($agent['id'], $pendingIds)) {
+                    continue;
+                }
+
+                $jobId = $db->insert('backup_jobs', [
+                    'agent_id' => $agent['id'],
+                    'task_type' => 'update_agent',
+                    'status' => 'queued',
+                ]);
+                $db->insert('server_log', [
+                    'agent_id' => $agent['id'],
+                    'backup_job_id' => $jobId,
+                    'level' => 'info',
+                    'message' => "Auto-update agent queued: v{$agent['agent_version']} → v{$bundledAgentVersion}",
+                ]);
+                $queued++;
+            }
+
+            if ($queued > 0) {
+                echo date('Y-m-d H:i:s') . " Auto-update: queued agent updates for {$queued} client(s) to v{$bundledAgentVersion}\n";
+            }
+        }
+    }
+}
