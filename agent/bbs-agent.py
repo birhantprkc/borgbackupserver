@@ -20,7 +20,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.9.0"
+AGENT_VERSION = "1.9.1"
 CONFIG_PATH = "/etc/bbs-agent/config.ini"
 LOG_PATH = "/var/log/bbs-agent.log"
 SSH_KEY_PATH = "/etc/bbs-agent/ssh_key"
@@ -1193,6 +1193,23 @@ def execute_restore_pg(config, task):
         })
         return
 
+    # Write temporary SSH key for remote SSH repos
+    remote_ssh_key = task.get("remote_ssh_key")
+    remote_key_path = "/tmp/bbs-remote-ssh-key"
+    if remote_ssh_key:
+        try:
+            with open(remote_key_path, "w") as kf:
+                kf.write(remote_ssh_key)
+            os.chmod(remote_key_path, 0o600)
+            logger.info("Wrote temporary SSH key for remote repo")
+        except Exception as e:
+            logger.error(f"Failed to write remote SSH key: {e}")
+            api_request(config, "/api/agent/status", method="POST", data={
+                "job_id": job_id, "result": "failed",
+                "error_log": f"Failed to write remote SSH key: {e}",
+            })
+            return
+
     pg_env = os.environ.copy()
     pg_env["PGPASSWORD"] = password
 
@@ -1222,6 +1239,13 @@ def execute_restore_pg(config, task):
             "error_log": f"borg extract error: {e}",
         })
         return
+    finally:
+        # Clean up temporary SSH key
+        if remote_ssh_key and os.path.exists(remote_key_path):
+            try:
+                os.unlink(remote_key_path)
+            except Exception:
+                pass
 
     # Step 2: Import each database
     imported = []
@@ -1336,6 +1360,23 @@ def execute_restore_mysql(config, task):
         })
         return
 
+    # Write temporary SSH key for remote SSH repos
+    remote_ssh_key = task.get("remote_ssh_key")
+    remote_key_path = "/tmp/bbs-remote-ssh-key"
+    if remote_ssh_key:
+        try:
+            with open(remote_key_path, "w") as kf:
+                kf.write(remote_ssh_key)
+            os.chmod(remote_key_path, 0o600)
+            logger.info("Wrote temporary SSH key for remote repo")
+        except Exception as e:
+            logger.error(f"Failed to write remote SSH key: {e}")
+            api_request(config, "/api/agent/status", method="POST", data={
+                "job_id": job_id, "result": "failed",
+                "error_log": f"Failed to write remote SSH key: {e}",
+            })
+            return
+
     # Step 1: Extract dump files from borg archive
     logger.info(f"Job #{job_id}: Extracting MySQL dumps from archive")
     if cwd:
@@ -1362,6 +1403,13 @@ def execute_restore_mysql(config, task):
             "error_log": f"borg extract error: {e}",
         })
         return
+    finally:
+        # Clean up temporary SSH key
+        if remote_ssh_key and os.path.exists(remote_key_path):
+            try:
+                os.unlink(remote_key_path)
+            except Exception:
+                pass
 
     # Step 2: Import each database
     imported = []
