@@ -2095,6 +2095,7 @@ function hideWizardForm() {
     });
     // Reset form
     document.getElementById('borgbaseWizardForm').reset();
+    bbTestPassed = false;
     document.getElementById('bbParsedDetails').style.display = 'none';
     document.getElementById('bbParseError').style.display = 'none';
     document.getElementById('bbTestBtn').disabled = true;
@@ -2104,6 +2105,7 @@ function hideWizardForm() {
 
 // BorgBase connection string parser
 document.getElementById('bbConnString').addEventListener('input', function() {
+    bbTestPassed = false;
     var value = this.value.trim();
     var match = value.match(/^ssh:\/\/([^@]+)@([^:\/]+)(?::(\d+))?(\/.*)?$/);
     var detailsEl = document.getElementById('bbParsedDetails');
@@ -2154,6 +2156,8 @@ document.getElementById('bbName').addEventListener('input', function() {
     this.dataset.userEdited = '1';
 });
 
+var bbTestPassed = false;
+
 // Enable test button when connection string is parsed and key is provided
 function updateBbSubmit() {
     var host = document.getElementById('bbFieldHost').value;
@@ -2161,11 +2165,16 @@ function updateBbSubmit() {
     var name = document.getElementById('bbName').value.trim();
     var canTest = !!(host && key);
     document.getElementById('bbTestBtn').disabled = !canTest;
-    // Hide Add Host if inputs changed after a previous test
-    document.getElementById('bbSubmitBtn').style.display = 'none';
-    document.getElementById('bbTestResult').style.display = 'none';
+    // If connection string or key changed, require re-test
+    if (!bbTestPassed) {
+        document.getElementById('bbSubmitBtn').style.display = 'none';
+        document.getElementById('bbTestResult').style.display = 'none';
+    } else {
+        // Test passed — show/hide Add Host based on name
+        document.getElementById('bbSubmitBtn').style.display = name ? '' : 'none';
+    }
 }
-document.getElementById('bbSshKey').addEventListener('input', updateBbSubmit);
+document.getElementById('bbSshKey').addEventListener('input', function() { bbTestPassed = false; updateBbSubmit(); });
 document.getElementById('bbName').addEventListener('input', updateBbSubmit);
 
 function testBorgbaseConnection() {
@@ -2174,6 +2183,7 @@ function testBorgbaseConnection() {
     var submitBtn = document.getElementById('bbSubmitBtn');
     var nameField = document.getElementById('bbName');
 
+    bbTestPassed = false;
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Testing...';
     resultDiv.style.display = 'none';
@@ -2196,15 +2206,11 @@ function testBorgbaseConnection() {
     .then(function(data) {
         resultDiv.style.display = 'block';
         if (data.status === 'ok') {
+            bbTestPassed = true;
             resultDiv.innerHTML = '<div class="alert alert-success small py-2 px-3 mb-0"><i class="bi bi-check-circle me-1"></i> Connected — ' + (data.version || 'borg detected').replace(/</g, '&lt;') + '</div>';
-            // Show Add Host button if name is filled
             if (nameField.value.trim()) {
                 submitBtn.style.display = '';
             }
-            // Watch name field to show/hide Add Host
-            nameField.addEventListener('input', function showSubmit() {
-                submitBtn.style.display = nameField.value.trim() ? '' : 'none';
-            });
         } else {
             resultDiv.innerHTML = '<div class="alert alert-danger small py-2 px-3 mb-0"><i class="bi bi-x-circle me-1"></i> ' + (data.error || 'Connection failed').replace(/</g, '&lt;') + '</div>';
         }
