@@ -2082,7 +2082,7 @@ $outdatedCount = count($outdatedAgents);
                         <span class="badge rounded-pill" style="background-color: #e8f5e9; color: #2e7d32;"><i class="bi bi-check-circle me-1"></i>Up to date</span>
                     <?php endif; ?>
                     <?php if (!empty($latest['checked_at'])): ?>
-                        <span class="text-muted small ms-2">Checked <?= \BBS\Core\TimeHelper::format($latest['checked_at'], 'M j, Y g:i A') ?></span>
+                        <span class="text-muted small ms-2">Checked <?= \BBS\Core\TimeHelper::ago($latest['checked_at']) ?></span>
                     <?php endif; ?>
                 </div>
                 <?php else: ?>
