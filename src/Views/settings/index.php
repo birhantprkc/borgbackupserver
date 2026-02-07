@@ -1587,7 +1587,7 @@ function _formatBytes($bytes) {
                 <div class="row">
                     <div class="col-md-7">
                         <p class="small text-muted mb-2">Remote Storage via SSH offers an affordable and low-impact way of having backups that are offsite and secure. Requires less infrastructure and gives peace of mind knowing your backups are off-site. The borg client must be executable on the remote server. Setup wizards for BorgBase, Hetzner Storage Box, and rsync.net are available.</p>
-                        <div class="d-flex flex-wrap align-items-center gap-2">
+                        <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
                             <a href="/settings?tab=storage&section=remote" class="btn btn-sm <?= empty($remoteSshConfigs) ? 'btn-primary' : 'btn-outline-primary' ?> text-nowrap">
                                 <?php if (empty($remoteSshConfigs)): ?>
                                 <i class="bi bi-plus-lg me-1"></i> Add SSH Host
