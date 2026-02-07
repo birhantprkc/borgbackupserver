@@ -81,6 +81,7 @@ class RemoteSshService
                 '-i', $keyFile,
                 '-p', (string) $port,
                 '-o', 'StrictHostKeyChecking=no',
+                '-o', 'UserKnownHostsFile=/dev/null',
                 '-o', 'BatchMode=yes',
                 '-o', 'ConnectTimeout=10',
                 "{$config['remote_user']}@{$config['remote_host']}",
@@ -177,7 +178,7 @@ class RemoteSshService
             $keyFile = $this->writeTempKey($sshKey);
 
             $port = (int) ($config['remote_port'] ?? 22);
-            $env['BORG_RSH'] = "ssh -i {$keyFile} -p {$port} -o StrictHostKeyChecking=no -o BatchMode=yes";
+            $env['BORG_RSH'] = "ssh -i {$keyFile} -p {$port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes";
 
             $proc = proc_open($cmd, [
                 0 => ['pipe', 'r'],
@@ -228,6 +229,10 @@ class RemoteSshService
     private function writeTempKey(string $key): string
     {
         $tmpFile = tempnam(sys_get_temp_dir(), 'bbs-ssh-');
+        // Normalize line endings (Windows \r\n → Unix \n) and ensure trailing newline
+        $key = str_replace("\r\n", "\n", $key);
+        $key = str_replace("\r", "\n", $key);
+        $key = rtrim($key) . "\n";
         file_put_contents($tmpFile, $key);
         chmod($tmpFile, 0600);
         return $tmpFile;

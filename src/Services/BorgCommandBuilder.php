@@ -180,7 +180,7 @@ class BorgCommandBuilder
             if ($remoteSshConfig) {
                 // Remote SSH repo: agent uses a temp key file written from the task payload
                 $port = (int) ($remoteSshConfig['remote_port'] ?? 22);
-                $env['BORG_RSH'] = "ssh -i /tmp/bbs-remote-ssh-key -p {$port} -o StrictHostKeyChecking=no -o BatchMode=yes";
+                $env['BORG_RSH'] = "ssh -i /tmp/bbs-remote-ssh-key -p {$port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes";
             } elseif (self::isSshRepo($repo['path'] ?? '')) {
                 // Local repo on BBS server: agent uses its installed SSH key
                 $port = $sshPort ?? 22;
