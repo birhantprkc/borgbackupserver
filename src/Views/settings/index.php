@@ -1978,9 +1978,7 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
     <div class="col-md-6 col-lg-3">
         <div class="card border-0 shadow-sm h-100 text-center" style="cursor:pointer" onclick="showWizardForm('hetzner')">
             <div class="card-body py-4">
-                <div class="rounded-circle bg-danger bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width:48px;height:48px">
-                    <i class="bi bi-box-seam fs-4 text-danger"></i>
-                </div>
+                <img src="/images/hetzner-h.png" alt="Hetzner" class="mb-3" style="width:48px;height:48px;border-radius:50%">
                 <h6 class="mb-1">Hetzner Storage Box</h6>
                 <p class="text-muted small mb-2">Affordable storage boxes</p>
                 <span class="btn btn-sm btn-danger">Setup</span>
@@ -2088,7 +2086,7 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
 <div id="wizardHetzner" style="display:none">
     <div class="card border-0 shadow-sm">
         <div class="card-header bg-danger bg-opacity-10 fw-semibold">
-            <i class="bi bi-box-seam me-1"></i> Hetzner Storage Box Setup
+            <img src="/images/hetzner-h.png" alt="" style="width:18px;height:18px;border-radius:50%;vertical-align:text-bottom" class="me-1"> Hetzner Storage Box Setup
         </div>
         <div class="card-body">
             <p class="text-muted small mb-3">Enter the connection details from your <a href="https://www.hetzner.com/storage/storage-box" target="_blank">Hetzner Storage Box</a> control panel.</p>
