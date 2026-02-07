@@ -1614,8 +1614,14 @@ function _formatBytes($bytes) {
                         <div class="card border mb-2">
                             <div class="card-body py-2 px-3">
                                 <div class="d-flex align-items-center gap-2" style="min-width: 0;">
-                                    <div class="text-primary opacity-75 flex-shrink-0" style="font-size: 1.4rem;">
-                                        <i class="bi bi-server"></i>
+                                    <div class="flex-shrink-0" style="font-size: 1.4rem;">
+                                        <?php if (($rsc['provider'] ?? '') === 'borgbase'): ?>
+                                        <i class="bi bi-device-hdd text-primary opacity-75"></i>
+                                        <?php elseif (($rsc['provider'] ?? '') === 'hetzner'): ?>
+                                        <img src="/images/hetzner-h.png" alt="" style="width:24px;height:24px;border-radius:50%">
+                                        <?php else: ?>
+                                        <i class="bi bi-server text-primary opacity-75"></i>
+                                        <?php endif; ?>
                                     </div>
                                     <div class="flex-grow-1" style="min-width: 0;">
                                         <span class="fw-semibold small"><?= htmlspecialchars($rsc['name']) ?></span>
