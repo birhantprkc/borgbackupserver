@@ -1985,7 +1985,7 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
 <div id="wizardProviders" class="row g-3 mb-4">
     <!-- BorgBase -->
     <div class="col-md-6 col-lg-3">
-        <div class="card border-0 shadow-sm h-100 text-center" style="cursor:pointer" onclick="showWizardForm('borgbase')">
+        <div class="card border-0 shadow-sm h-100 text-center" style="cursor:pointer;background:rgba(200,170,50,0.10)" onclick="showWizardForm('borgbase')">
             <div class="card-body py-4">
                 <img src="/images/borgbase.svg" alt="BorgBase" class="mb-3" style="width:48px;height:48px;border-radius:50%">
                 <h6 class="mb-1">BorgBase</h6>
@@ -1996,7 +1996,7 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
     </div>
     <!-- Hetzner -->
     <div class="col-md-6 col-lg-3">
-        <div class="card border-0 shadow-sm h-100 text-center" style="cursor:pointer" onclick="showWizardForm('hetzner')">
+        <div class="card border-0 shadow-sm h-100 text-center" style="cursor:pointer;background:rgba(220,50,50,0.08)" onclick="showWizardForm('hetzner')">
             <div class="card-body py-4">
                 <img src="/images/hetzner-h.png" alt="Hetzner" class="mb-3" style="width:48px;height:48px;border-radius:50%">
                 <h6 class="mb-1">Hetzner Storage Box</h6>
