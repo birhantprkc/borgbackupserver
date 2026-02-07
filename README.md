@@ -50,7 +50,7 @@ See the **[full documentation on the Wiki](https://github.com/marcpope/borgbacku
 
 ## Docker
 
-Run BBS in a Docker container — no OS dependencies to install:
+Pre-built images are published to [Docker Hub](https://hub.docker.com/r/marcpope/borgbackupserver) on every release:
 
 ```bash
 curl -sO https://raw.githubusercontent.com/marcpope/borgbackupserver/main/docker-compose.yml
@@ -63,9 +63,7 @@ Get admin credentials from the container logs:
 docker compose logs bbs
 ```
 
-Open `http://localhost:8080` and log in.
-
-Edit `docker-compose.yml` to set your `APP_URL`, `SSH_PORT`, and other options. See the **[Docker Installation guide](https://github.com/marcpope/borgbackupserver/wiki/Docker-Installation)** on the wiki for full configuration, storage, reverse proxy, and update documentation.
+Open `http://localhost:8080` and log in. See the **[Docker Installation guide](https://github.com/marcpope/borgbackupserver/wiki/Docker-Installation)** for full configuration, storage, reverse proxy, and update documentation.
 
 ---
 
