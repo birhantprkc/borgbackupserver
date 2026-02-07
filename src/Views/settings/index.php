@@ -1989,14 +1989,14 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
     </div>
     <!-- Hetzner -->
     <div class="col-md-6 col-lg-3">
-        <div class="card border-0 shadow-sm h-100 text-center" style="opacity:0.6">
+        <div class="card border-0 shadow-sm h-100 text-center" style="cursor:pointer" onclick="showWizardForm('hetzner')">
             <div class="card-body py-4">
-                <div class="rounded-circle bg-secondary bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width:48px;height:48px">
-                    <i class="bi bi-box-seam fs-4 text-secondary"></i>
+                <div class="rounded-circle bg-danger bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width:48px;height:48px">
+                    <i class="bi bi-box-seam fs-4 text-danger"></i>
                 </div>
                 <h6 class="mb-1">Hetzner Storage Box</h6>
                 <p class="text-muted small mb-2">Affordable storage boxes</p>
-                <span class="badge bg-secondary">Coming Soon</span>
+                <span class="btn btn-sm btn-danger">Setup</span>
             </div>
         </div>
     </div>
@@ -2084,6 +2084,84 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
     </div>
 </div>
 
+<!-- Hetzner Storage Box Wizard Form -->
+<div id="wizardHetzner" style="display:none">
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-danger bg-opacity-10 fw-semibold">
+            <i class="bi bi-box-seam me-1"></i> Hetzner Storage Box Setup
+        </div>
+        <div class="card-body">
+            <p class="text-muted small mb-3">Enter the connection details from your <a href="https://www.hetzner.com/storage/storage-box" target="_blank">Hetzner Storage Box</a> control panel.</p>
+
+            <form method="POST" action="/remote-ssh-configs/create" id="hetznerWizardForm">
+                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                <input type="hidden" name="provider" value="hetzner">
+                <input type="hidden" name="remote_port" value="23">
+                <input type="hidden" name="remote_base_path" value="./backups">
+                <input type="hidden" name="append_repo_name" value="1">
+
+                <div class="row g-3 mb-3">
+                    <div class="col-sm-6">
+                        <label class="form-label fw-semibold">Hostname</label>
+                        <input type="text" class="form-control" id="hzHostname" name="remote_host" placeholder="uXXXXXX.your-storagebox.de" required>
+                        <div class="form-text">Found in your Hetzner Robot panel.</div>
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="form-label fw-semibold">Username</label>
+                        <input type="text" class="form-control" id="hzUsername" name="remote_user" placeholder="uXXXXXX" required>
+                        <div class="form-text">Your Storage Box username.</div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">SSH Private Key</label>
+                    <textarea class="form-control font-monospace" name="ssh_private_key" id="hzSshKey" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;..." required></textarea>
+                    <div class="form-text">Paste the private key that matches the public key you added to your Storage Box.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Borg Version</label>
+                    <select class="form-select" id="hzBorgVersion" name="borg_remote_path">
+                        <option value="borg-1.4">borg 1.4 (Recommended)</option>
+                        <option value="borg-1.2">borg 1.2</option>
+                        <option value="borg-1.1">borg 1.1</option>
+                    </select>
+                    <div class="form-text">Hetzner provides multiple borg versions. This is passed as <code>--remote-path</code> in all borg commands.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Name</label>
+                    <input type="text" class="form-control" name="name" id="hzName" placeholder="e.g., Hetzner - uXXXXXX" required>
+                    <div class="form-text">A friendly name to identify this host in BBS.</div>
+                </div>
+
+                <!-- Parsed summary -->
+                <div id="hzParsedDetails" class="alert alert-light border small py-2 px-3 mb-3" style="display:none">
+                    <div class="row g-2">
+                        <div class="col-sm-6"><strong>Host:</strong> <span id="hzParsedHost"></span></div>
+                        <div class="col-sm-6"><strong>User:</strong> <span id="hzParsedUser"></span></div>
+                        <div class="col-sm-6"><strong>Port:</strong> 23</div>
+                        <div class="col-sm-6"><strong>Path:</strong> ./backups/<em>&lt;repo-name&gt;</em></div>
+                        <div class="col-sm-6"><strong>Borg:</strong> <span id="hzParsedBorg"></span></div>
+                    </div>
+                </div>
+
+                <div id="hzTestResult" style="display:none" class="mb-3"></div>
+
+                <div class="d-flex gap-2 align-items-center">
+                    <button type="button" class="btn btn-sm btn-outline-danger" id="hzTestBtn" disabled onclick="testHetznerConnection()">
+                        <i class="bi bi-plug me-1"></i> Test Connection
+                    </button>
+                    <button type="submit" class="btn btn-sm btn-danger" id="hzSubmitBtn" style="display:none">
+                        <i class="bi bi-plus-lg me-1"></i> Add Host
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="hideWizardForm()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
 function showWizardForm(provider) {
     document.getElementById('wizardProviders').style.display = 'none';
@@ -2094,7 +2172,7 @@ function hideWizardForm() {
         if (el.id === 'wizardProviders') { el.style.display = ''; }
         else if (el.id.startsWith('wizard') && el.id !== 'wizardProviders') { el.style.display = 'none'; }
     });
-    // Reset form
+    // Reset BorgBase form
     document.getElementById('borgbaseWizardForm').reset();
     bbTestPassed = false;
     document.getElementById('bbParsedDetails').style.display = 'none';
@@ -2102,6 +2180,14 @@ function hideWizardForm() {
     document.getElementById('bbTestBtn').disabled = true;
     document.getElementById('bbSubmitBtn').style.display = 'none';
     document.getElementById('bbTestResult').style.display = 'none';
+    // Reset Hetzner form
+    document.getElementById('hetznerWizardForm').reset();
+    hzTestPassed = false;
+    document.getElementById('hzParsedDetails').style.display = 'none';
+    document.getElementById('hzTestBtn').disabled = true;
+    document.getElementById('hzSubmitBtn').style.display = 'none';
+    document.getElementById('hzTestResult').style.display = 'none';
+    hzNameUserEdited = false;
 }
 
 // BorgBase connection string parser
@@ -2208,6 +2294,125 @@ function testBorgbaseConnection() {
         resultDiv.style.display = 'block';
         if (data.status === 'ok') {
             bbTestPassed = true;
+            resultDiv.innerHTML = '<div class="alert alert-success small py-2 px-3 mb-0"><i class="bi bi-check-circle me-1"></i> Connected — ' + (data.version || 'borg detected').replace(/</g, '&lt;') + '</div>';
+            if (nameField.value.trim()) {
+                submitBtn.style.display = '';
+            }
+        } else {
+            resultDiv.innerHTML = '<div class="alert alert-danger small py-2 px-3 mb-0"><i class="bi bi-x-circle me-1"></i> ' + (data.error || 'Connection failed').replace(/</g, '&lt;') + '</div>';
+        }
+    })
+    .catch(function() {
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = '<div class="alert alert-danger small py-2 px-3 mb-0"><i class="bi bi-x-circle me-1"></i> Request failed</div>';
+    })
+    .finally(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-plug me-1"></i> Test Connection';
+    });
+}
+
+// ---- Hetzner Storage Box wizard ----
+var hzTestPassed = false;
+var hzNameUserEdited = false;
+
+function updateHzParsedDetails() {
+    var host = document.getElementById('hzHostname').value.trim();
+    var user = document.getElementById('hzUsername').value.trim();
+    var borg = document.getElementById('hzBorgVersion').value;
+    var detailsEl = document.getElementById('hzParsedDetails');
+
+    if (host && user) {
+        document.getElementById('hzParsedHost').textContent = host;
+        document.getElementById('hzParsedUser').textContent = user;
+        document.getElementById('hzParsedBorg').textContent = borg;
+        detailsEl.style.display = 'block';
+    } else {
+        detailsEl.style.display = 'none';
+    }
+}
+
+function updateHzSubmit() {
+    var host = document.getElementById('hzHostname').value.trim();
+    var user = document.getElementById('hzUsername').value.trim();
+    var key = document.getElementById('hzSshKey').value.trim();
+    var name = document.getElementById('hzName').value.trim();
+    var canTest = !!(host && user && key);
+    document.getElementById('hzTestBtn').disabled = !canTest;
+    if (!hzTestPassed) {
+        document.getElementById('hzSubmitBtn').style.display = 'none';
+        document.getElementById('hzTestResult').style.display = 'none';
+    } else {
+        document.getElementById('hzSubmitBtn').style.display = name ? '' : 'none';
+    }
+}
+
+// Auto-fill name from hostname
+function updateHzName() {
+    if (!hzNameUserEdited) {
+        var user = document.getElementById('hzUsername').value.trim();
+        if (user) {
+            document.getElementById('hzName').value = 'Hetzner - ' + user;
+        }
+    }
+}
+
+document.getElementById('hzHostname').addEventListener('input', function() {
+    hzTestPassed = false;
+    updateHzParsedDetails();
+    updateHzName();
+    updateHzSubmit();
+});
+document.getElementById('hzUsername').addEventListener('input', function() {
+    hzTestPassed = false;
+    updateHzParsedDetails();
+    updateHzName();
+    updateHzSubmit();
+});
+document.getElementById('hzSshKey').addEventListener('input', function() {
+    hzTestPassed = false;
+    updateHzSubmit();
+});
+document.getElementById('hzBorgVersion').addEventListener('change', function() {
+    hzTestPassed = false;
+    updateHzParsedDetails();
+    updateHzSubmit();
+});
+document.getElementById('hzName').addEventListener('input', function() {
+    hzNameUserEdited = true;
+    updateHzSubmit();
+});
+
+function testHetznerConnection() {
+    var btn = document.getElementById('hzTestBtn');
+    var resultDiv = document.getElementById('hzTestResult');
+    var submitBtn = document.getElementById('hzSubmitBtn');
+    var nameField = document.getElementById('hzName');
+
+    hzTestPassed = false;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Testing...';
+    resultDiv.style.display = 'none';
+    submitBtn.style.display = 'none';
+
+    var formData = new URLSearchParams();
+    formData.append('csrf_token', document.querySelector('#hetznerWizardForm [name=csrf_token]').value);
+    formData.append('remote_host', document.getElementById('hzHostname').value.trim());
+    formData.append('remote_port', '23');
+    formData.append('remote_user', document.getElementById('hzUsername').value.trim());
+    formData.append('ssh_private_key', document.getElementById('hzSshKey').value);
+    formData.append('borg_remote_path', document.getElementById('hzBorgVersion').value);
+
+    fetch('/remote-ssh-configs/test-new', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: formData.toString()
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        resultDiv.style.display = 'block';
+        if (data.status === 'ok') {
+            hzTestPassed = true;
             resultDiv.innerHTML = '<div class="alert alert-success small py-2 px-3 mb-0"><i class="bi bi-check-circle me-1"></i> Connected — ' + (data.version || 'borg detected').replace(/</g, '&lt;') + '</div>';
             if (nameField.value.trim()) {
                 submitBtn.style.display = '';
