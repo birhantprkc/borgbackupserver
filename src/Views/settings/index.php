@@ -1536,7 +1536,7 @@ function _formatBytes($bytes) {
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-7">
-                        <p class="small text-muted mb-2">BBS is primarily designed as a backup server with storage on the server itself. Local repositories offer the fastest backup and restore performance, and support S3 offsite sync for disaster recovery.</p>
+                        <p class="small text-muted mb-2">Generally using local storage repos as your first line of defense in your backup strategy is going to give you the maximum benefit when you need to restore a lot of data quickly. Pair local storage with S3 Sync for bullet-proof backups.</p>
                     </div>
                     <div class="col-md-5">
                         <div class="mb-2">
