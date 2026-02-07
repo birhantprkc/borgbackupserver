@@ -1692,7 +1692,7 @@ function _formatBytes($bytes) {
         <h5 class="mb-1">Remote Storage (SSH)</h5>
         <p class="text-muted small mb-0">Configure remote SSH hosts for offsite borg repositories (rsync.net, BorgBase, Hetzner Storage Box, etc.)</p>
     </div>
-    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addRemoteSshModal">
+    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addRemoteSshModal">
         <i class="bi bi-plus-lg me-1"></i> Add Host
     </button>
 </div>
@@ -1950,10 +1950,10 @@ function _formatBytes($bytes) {
                     </div>
 
                     <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-warning">
+                        <button type="submit" class="btn btn-sm btn-warning">
                             <i class="bi bi-check-lg me-1"></i> Save S3 Settings
                         </button>
-                        <button type="button" class="btn btn-outline-secondary" id="btnTestS3">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnTestS3">
                             <i class="bi bi-plug me-1"></i> Test Connection
                         </button>
                         <span id="s3TestResult" class="d-flex align-items-center ms-2 small"></span>
