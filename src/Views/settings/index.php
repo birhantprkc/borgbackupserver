@@ -1519,7 +1519,7 @@ function _formatBytes($bytes) {
     </li>
     <li class="nav-item">
         <a class="nav-link <?= $storageSection === 'remote' ? 'active' : '' ?>" href="/settings?tab=storage&section=remote">
-            <i class="bi bi-hdd-network me-1"></i> Remote Storage (SSH)
+            <i class="bi bi-hdd-network me-1"></i> Remote Storage
         </a>
     </li>
 </ul>
