@@ -1497,6 +1497,8 @@ function updateBuiltUrl(containerId, schema, prefix) {
 </script>
 <?php endif; ?>
 
+<?php endif; ?><!-- /updates tab -->
+
 <!-- Storage Tab -->
 <?php if ($activeTab === 'storage'): ?>
 <?php
@@ -2016,7 +2018,24 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
 </script>
 <?php endif; ?>
 
-<?php endif; ?>
+<?php endif; ?><!-- /storage tab -->
+
+<!-- Updates Tab (Software Updates section) -->
+<?php if ($activeTab === 'updates'): ?>
+
+<!-- Updates Sub-Navigation -->
+<ul class="nav storage-subnav mb-4">
+    <li class="nav-item">
+        <a class="nav-link <?= $updatesSection === 'software' ? 'active' : '' ?>" href="/settings?tab=updates">
+            <i class="bi bi-cloud-arrow-down me-1"></i> Software Updates
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link <?= $updatesSection === 'borg' ? 'active' : '' ?>" href="/settings?tab=updates&section=borg">
+            <i class="bi bi-box-seam me-1"></i> Borg Clients
+        </a>
+    </li>
+</ul>
 
 <?php if ($updatesSection === 'software'):
     $updateSvc = new \BBS\Services\UpdateService();
