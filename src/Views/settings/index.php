@@ -1692,9 +1692,9 @@ function _formatBytes($bytes) {
         <h5 class="mb-1">Remote Storage (SSH)</h5>
         <p class="text-muted small mb-0">Configure remote SSH hosts for offsite borg repositories (rsync.net, BorgBase, Hetzner Storage Box, etc.)</p>
     </div>
-    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addRemoteSshModal">
+    <a href="/settings?tab=storage&section=wizard" class="btn btn-sm btn-primary">
         <i class="bi bi-plus-lg me-1"></i> Add Host
-    </button>
+    </a>
 </div>
 
 <?php if (empty($remoteSshConfigs)): ?>
@@ -1812,73 +1812,6 @@ function _formatBytes($bytes) {
 </div>
 <?php endif; ?>
 
-<!-- Add Remote SSH Host Modal -->
-<div class="modal fade" id="addRemoteSshModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST" action="/remote-ssh-configs/create">
-                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                <div class="modal-header">
-                    <h5 class="modal-title">Add Remote SSH Host</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Name</label>
-                        <input type="text" class="form-control" name="name" placeholder="e.g., rsync.net Production" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Provider Preset</label>
-                        <select class="form-select" onchange="applyRemotePreset(this, this.closest('form'))">
-                            <option value="">Custom</option>
-                            <option value="rsync.net">rsync.net</option>
-                            <option value="borgbase">BorgBase</option>
-                            <option value="hetzner">Hetzner Storage Box</option>
-                        </select>
-                    </div>
-                    <div class="row g-3 mb-3">
-                        <div class="col-8">
-                            <label class="form-label fw-semibold">Host</label>
-                            <input type="text" class="form-control" name="remote_host" placeholder="ch-s010.rsync.net" required>
-                        </div>
-                        <div class="col-4">
-                            <label class="form-label fw-semibold">Port</label>
-                            <input type="number" class="form-control" name="remote_port" value="22" min="1" max="65535">
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Username</label>
-                        <input type="text" class="form-control" name="remote_user" placeholder="12345" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Base Path</label>
-                        <input type="text" class="form-control" name="remote_base_path" value="./">
-                        <div class="form-text">Base directory on the remote host. Use <code>./</code> for relative paths (rsync.net default).</div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">SSH Private Key</label>
-                        <textarea class="form-control font-monospace" name="ssh_private_key" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;..." required></textarea>
-                        <div class="form-text">Paste the private key (PEM format). The corresponding public key must be authorized on the remote host.</div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Remote Borg Path <span class="text-muted fw-normal">(optional)</span></label>
-                        <input type="text" class="form-control" name="borg_remote_path" placeholder="">
-                        <div class="form-text">Custom borg binary on the remote host (e.g., <code>borg1</code> for rsync.net). Leave blank for default <code>borg</code>.</div>
-                    </div>
-                    <div class="form-check mb-3">
-                        <input class="form-check-input" type="checkbox" name="append_repo_name" value="1" id="addAppendRepoName" checked>
-                        <label class="form-check-label" for="addAppendRepoName">Append repository name to base path</label>
-                        <div class="form-text">Uncheck for providers like BorgBase where each SSH user maps to a single fixed repo path.</div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Add Host</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
 <?php endif; ?>
 
 <?php if ($storageSection === 's3'): ?>
@@ -2017,6 +1950,282 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
 });
 </script>
 <?php endif; ?>
+
+<?php if ($storageSection === 'wizard'): ?>
+<!-- Add Remote Storage Host Wizard -->
+<a href="/settings?tab=storage&section=remote" class="text-decoration-none small">
+    <i class="bi bi-arrow-left me-1"></i> Back to Remote Storage
+</a>
+
+<h5 class="mt-3 mb-1">Add Remote Storage Host</h5>
+<p class="text-muted small mb-4">Choose your provider to get started, or use Custom for any SSH-accessible server.</p>
+
+<div id="wizardProviders" class="row g-3 mb-4">
+    <!-- BorgBase -->
+    <div class="col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100 text-center" style="cursor:pointer" onclick="showWizardForm('borgbase')">
+            <div class="card-body py-4">
+                <div class="rounded-circle bg-primary bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width:48px;height:48px">
+                    <i class="bi bi-shield-lock fs-4 text-primary"></i>
+                </div>
+                <h6 class="mb-1">BorgBase</h6>
+                <p class="text-muted small mb-2">Managed borg hosting</p>
+                <span class="btn btn-sm btn-primary">Setup</span>
+            </div>
+        </div>
+    </div>
+    <!-- rsync.net -->
+    <div class="col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100 text-center" style="opacity:0.6">
+            <div class="card-body py-4">
+                <div class="rounded-circle bg-secondary bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width:48px;height:48px">
+                    <i class="bi bi-hdd-rack fs-4 text-secondary"></i>
+                </div>
+                <h6 class="mb-1">rsync.net</h6>
+                <p class="text-muted small mb-2">Cloud storage for borg</p>
+                <span class="badge bg-secondary">Coming Soon</span>
+            </div>
+        </div>
+    </div>
+    <!-- Hetzner -->
+    <div class="col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100 text-center" style="opacity:0.6">
+            <div class="card-body py-4">
+                <div class="rounded-circle bg-secondary bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width:48px;height:48px">
+                    <i class="bi bi-box-seam fs-4 text-secondary"></i>
+                </div>
+                <h6 class="mb-1">Hetzner Storage Box</h6>
+                <p class="text-muted small mb-2">Affordable storage boxes</p>
+                <span class="badge bg-secondary">Coming Soon</span>
+            </div>
+        </div>
+    </div>
+    <!-- Custom -->
+    <div class="col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100 text-center" style="cursor:pointer" data-bs-toggle="modal" data-bs-target="#addRemoteSshModal">
+            <div class="card-body py-4">
+                <div class="rounded-circle bg-secondary bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width:48px;height:48px">
+                    <i class="bi bi-gear fs-4 text-secondary"></i>
+                </div>
+                <h6 class="mb-1">Custom</h6>
+                <p class="text-muted small mb-2">Any SSH server with borg</p>
+                <span class="btn btn-sm btn-outline-secondary">Setup</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- BorgBase Wizard Form -->
+<div id="wizardBorgbase" style="display:none">
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+            <i class="bi bi-shield-lock me-1"></i> BorgBase Setup
+        </div>
+        <div class="card-body">
+            <p class="text-muted small mb-3">Paste the SSH connection string from your <a href="https://www.borgbase.com" target="_blank">BorgBase</a> repository page, then paste your SSH private key below.</p>
+
+            <form method="POST" action="/remote-ssh-configs/create" id="borgbaseWizardForm">
+                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                <input type="hidden" name="borg_remote_path" value="">
+                <!-- append_repo_name intentionally omitted = 0 for BorgBase -->
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Connection String</label>
+                    <input type="text" class="form-control" id="bbConnString" placeholder="ssh://e1k7t00x@e1k7t00x.repo.borgbase.com/./repo" required>
+                    <div class="form-text">Find this on your BorgBase repo page under "Repository".</div>
+                </div>
+
+                <!-- Parsed details -->
+                <div id="bbParsedDetails" class="alert alert-light border small py-2 px-3 mb-3" style="display:none">
+                    <div class="row g-2">
+                        <div class="col-sm-6"><strong>Host:</strong> <span id="bbParsedHost"></span></div>
+                        <div class="col-sm-6"><strong>User:</strong> <span id="bbParsedUser"></span></div>
+                        <div class="col-sm-6"><strong>Port:</strong> <span id="bbParsedPort"></span></div>
+                        <div class="col-sm-6"><strong>Path:</strong> <span id="bbParsedPath"></span></div>
+                    </div>
+                </div>
+
+                <div id="bbParseError" class="alert alert-danger small py-2 px-3 mb-3" style="display:none">
+                    <i class="bi bi-exclamation-triangle me-1"></i> Could not parse connection string. Expected format: <code>ssh://user@host/path</code>
+                </div>
+
+                <!-- Hidden fields populated by JS -->
+                <input type="hidden" name="remote_host" id="bbFieldHost">
+                <input type="hidden" name="remote_port" id="bbFieldPort" value="22">
+                <input type="hidden" name="remote_user" id="bbFieldUser">
+                <input type="hidden" name="remote_base_path" id="bbFieldPath" value="./repo">
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">SSH Private Key</label>
+                    <textarea class="form-control font-monospace" name="ssh_private_key" id="bbSshKey" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;..." required></textarea>
+                    <div class="form-text">Paste the private key that matches the public key you added to BorgBase.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Name</label>
+                    <input type="text" class="form-control" name="name" id="bbName" placeholder="e.g., BorgBase - my-repo" required>
+                    <div class="form-text">A friendly name to identify this host in BBS.</div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-sm btn-primary" id="bbSubmitBtn" disabled>
+                        <i class="bi bi-plus-lg me-1"></i> Add Host
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="hideWizardForm()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function showWizardForm(provider) {
+    document.getElementById('wizardProviders').style.display = 'none';
+    document.getElementById('wizard' + provider.charAt(0).toUpperCase() + provider.slice(1)).style.display = 'block';
+}
+function hideWizardForm() {
+    document.querySelectorAll('[id^="wizard"]').forEach(function(el) {
+        if (el.id === 'wizardProviders') { el.style.display = ''; }
+        else if (el.id.startsWith('wizard') && el.id !== 'wizardProviders') { el.style.display = 'none'; }
+    });
+    // Reset form
+    document.getElementById('borgbaseWizardForm').reset();
+    document.getElementById('bbParsedDetails').style.display = 'none';
+    document.getElementById('bbParseError').style.display = 'none';
+    document.getElementById('bbSubmitBtn').disabled = true;
+}
+
+// BorgBase connection string parser
+document.getElementById('bbConnString').addEventListener('input', function() {
+    var value = this.value.trim();
+    var match = value.match(/^ssh:\/\/([^@]+)@([^:\/]+)(?::(\d+))?(\/.*)?$/);
+    var detailsEl = document.getElementById('bbParsedDetails');
+    var errorEl = document.getElementById('bbParseError');
+
+    if (match) {
+        var user = match[1];
+        var host = match[2];
+        var port = match[3] || '22';
+        var path = match[4] || '/./repo';
+        // Normalize path: /./repo -> ./repo
+        if (path.startsWith('/./')) path = '.' + path.slice(2);
+        else if (path.startsWith('/')) path = '.' + path;
+
+        document.getElementById('bbParsedHost').textContent = host;
+        document.getElementById('bbParsedUser').textContent = user;
+        document.getElementById('bbParsedPort').textContent = port;
+        document.getElementById('bbParsedPath').textContent = path;
+
+        document.getElementById('bbFieldHost').value = host;
+        document.getElementById('bbFieldPort').value = port;
+        document.getElementById('bbFieldUser').value = user;
+        document.getElementById('bbFieldPath').value = path;
+
+        // Auto-fill name
+        var nameField = document.getElementById('bbName');
+        if (!nameField.dataset.userEdited) {
+            nameField.value = 'BorgBase - ' + user;
+        }
+
+        detailsEl.style.display = 'block';
+        errorEl.style.display = 'none';
+        updateBbSubmit();
+    } else if (value.length > 5) {
+        detailsEl.style.display = 'none';
+        errorEl.style.display = 'block';
+        document.getElementById('bbFieldHost').value = '';
+        document.getElementById('bbSubmitBtn').disabled = true;
+    } else {
+        detailsEl.style.display = 'none';
+        errorEl.style.display = 'none';
+        document.getElementById('bbSubmitBtn').disabled = true;
+    }
+});
+
+// Track if user manually edited the name
+document.getElementById('bbName').addEventListener('input', function() {
+    this.dataset.userEdited = '1';
+});
+
+// Enable submit only when all fields are filled
+function updateBbSubmit() {
+    var host = document.getElementById('bbFieldHost').value;
+    var key = document.getElementById('bbSshKey').value.trim();
+    var name = document.getElementById('bbName').value.trim();
+    document.getElementById('bbSubmitBtn').disabled = !(host && key && name);
+}
+document.getElementById('bbSshKey').addEventListener('input', updateBbSubmit);
+document.getElementById('bbName').addEventListener('input', updateBbSubmit);
+</script>
+<?php endif; ?>
+
+<!-- Add Remote SSH Host Modal (Custom) -->
+<div class="modal fade" id="addRemoteSshModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="/remote-ssh-configs/create">
+                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Remote SSH Host</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Name</label>
+                        <input type="text" class="form-control" name="name" placeholder="e.g., rsync.net Production" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Provider Preset</label>
+                        <select class="form-select" onchange="applyRemotePreset(this, this.closest('form'))">
+                            <option value="">Custom</option>
+                            <option value="rsync.net">rsync.net</option>
+                            <option value="borgbase">BorgBase</option>
+                            <option value="hetzner">Hetzner Storage Box</option>
+                        </select>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-8">
+                            <label class="form-label fw-semibold">Host</label>
+                            <input type="text" class="form-control" name="remote_host" placeholder="ch-s010.rsync.net" required>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label fw-semibold">Port</label>
+                            <input type="number" class="form-control" name="remote_port" value="22" min="1" max="65535">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Username</label>
+                        <input type="text" class="form-control" name="remote_user" placeholder="12345" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Base Path</label>
+                        <input type="text" class="form-control" name="remote_base_path" value="./">
+                        <div class="form-text">Base directory on the remote host. Use <code>./</code> for relative paths (rsync.net default).</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">SSH Private Key</label>
+                        <textarea class="form-control font-monospace" name="ssh_private_key" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;..." required></textarea>
+                        <div class="form-text">Paste the private key (PEM format). The corresponding public key must be authorized on the remote host.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Remote Borg Path <span class="text-muted fw-normal">(optional)</span></label>
+                        <input type="text" class="form-control" name="borg_remote_path" placeholder="">
+                        <div class="form-text">Custom borg binary on the remote host (e.g., <code>borg1</code> for rsync.net). Leave blank for default <code>borg</code>.</div>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="append_repo_name" value="1" id="addAppendRepoName" checked>
+                        <label class="form-check-label" for="addAppendRepoName">Append repository name to base path</label>
+                        <div class="form-text">Uncheck for providers like BorgBase where each SSH user maps to a single fixed repo path.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Host</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <?php endif; ?><!-- /storage tab -->
 
