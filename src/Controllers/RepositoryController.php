@@ -181,17 +181,7 @@ class RepositoryController extends Controller
         // Build the SSH repo path
         $repoPath = $remoteSshService->buildRepoPath($config, $name);
 
-        $repoId = $this->db->insert('repositories', [
-            'agent_id' => $agentId,
-            'storage_type' => 'remote_ssh',
-            'remote_ssh_config_id' => $remoteSshConfigId,
-            'name' => $name,
-            'path' => $repoPath,
-            'encryption' => $encryption,
-            'passphrase_encrypted' => $encryption !== 'none' ? Encryption::encrypt($passphrase) : null,
-        ]);
-
-        // Run borg init over SSH from the BBS server
+        // Run borg init over SSH first — only save to DB if it succeeds
         $result = $remoteSshService->initRepo($config, $repoPath, $encryption, $passphrase);
 
         if (!$result['success']) {
@@ -201,9 +191,19 @@ class RepositoryController extends Controller
                 'level' => 'error',
                 'message' => "borg init failed for remote repo \"{$name}\" on {$config['remote_host']}: {$errorMsg}",
             ]);
-            $this->flash('warning', "Repository \"{$name}\" created in database but borg init on remote host failed: {$errorMsg}");
+            $this->flash('danger', "Failed to initialize repository \"{$name}\" on {$config['remote_host']}: {$errorMsg}");
             $this->redirect("/clients/{$agentId}?tab=repos");
         }
+
+        $repoId = $this->db->insert('repositories', [
+            'agent_id' => $agentId,
+            'storage_type' => 'remote_ssh',
+            'remote_ssh_config_id' => $remoteSshConfigId,
+            'name' => $name,
+            'path' => $repoPath,
+            'encryption' => $encryption,
+            'passphrase_encrypted' => $encryption !== 'none' ? Encryption::encrypt($passphrase) : null,
+        ]);
 
         $this->db->insert('server_log', [
             'agent_id' => $agentId,
