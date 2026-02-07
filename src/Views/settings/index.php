@@ -1616,7 +1616,7 @@ function _formatBytes($bytes) {
                                 <div class="d-flex align-items-center gap-2" style="min-width: 0;">
                                     <div class="flex-shrink-0" style="font-size: 1.4rem;">
                                         <?php if (($rsc['provider'] ?? '') === 'borgbase'): ?>
-                                        <i class="bi bi-device-hdd text-primary opacity-75"></i>
+                                        <i class="bi bi-hdd-fill opacity-75" style="color:#e67e22"></i>
                                         <?php elseif (($rsc['provider'] ?? '') === 'hetzner'): ?>
                                         <img src="/images/hetzner-h.png" alt="" style="width:24px;height:24px;border-radius:50%">
                                         <?php else: ?>
@@ -1720,7 +1720,7 @@ function _formatBytes($bytes) {
                 <span class="fw-semibold"><?php
                     $provider = $rsc['provider'] ?? null;
                     if ($provider === 'borgbase') {
-                        echo '<i class="bi bi-device-hdd me-1"></i> ';
+                        echo '<i class="bi bi-hdd-fill me-1" style="color:#e67e22"></i> ';
                     } elseif ($provider === 'hetzner') {
                         echo '<img src="/images/hetzner-h.png" alt="" style="width:16px;height:16px;border-radius:50%;vertical-align:text-bottom" class="me-1"> ';
                     } else {
@@ -1987,12 +1987,12 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
     <div class="col-md-6 col-lg-3">
         <div class="card border-0 shadow-sm h-100 text-center" style="cursor:pointer" onclick="showWizardForm('borgbase')">
             <div class="card-body py-4">
-                <div class="rounded-circle bg-primary bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width:48px;height:48px">
-                    <i class="bi bi-device-hdd fs-4 text-primary"></i>
+                <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width:48px;height:48px;background:rgba(230,126,34,0.12)">
+                    <i class="bi bi-hdd-fill fs-4" style="color:#e67e22"></i>
                 </div>
                 <h6 class="mb-1">BorgBase</h6>
                 <p class="text-muted small mb-2">Managed borg hosting</p>
-                <span class="btn btn-sm btn-primary">Setup</span>
+                <span class="btn btn-sm" style="background:#e67e22;color:#fff">Setup</span>
             </div>
         </div>
     </div>
@@ -2038,8 +2038,8 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
 <!-- BorgBase Wizard Form -->
 <div id="wizardBorgbase" style="display:none">
     <div class="card border-0 shadow-sm">
-        <div class="card-header bg-primary bg-opacity-10 fw-semibold">
-            <i class="bi bi-device-hdd me-1"></i> BorgBase Setup
+        <div class="card-header fw-semibold" style="background:rgba(230,126,34,0.12)">
+            <i class="bi bi-hdd-fill me-1" style="color:#e67e22"></i> BorgBase Setup
         </div>
         <div class="card-body">
             <p class="text-muted small mb-3">Paste the SSH connection string from your <a href="https://www.borgbase.com" target="_blank">BorgBase</a> repository page, then paste your SSH private key below.</p>
