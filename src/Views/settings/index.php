@@ -2026,6 +2026,7 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
 
             <form method="POST" action="/remote-ssh-configs/create" id="borgbaseWizardForm">
                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                <input type="hidden" name="provider" value="borgbase">
                 <input type="hidden" name="borg_remote_path" value="">
                 <!-- append_repo_name intentionally omitted = 0 for BorgBase -->
 

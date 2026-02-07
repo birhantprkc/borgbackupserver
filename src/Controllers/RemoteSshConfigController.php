@@ -18,6 +18,7 @@ class RemoteSshConfigController extends Controller
         $this->verifyCsrf();
 
         $name = trim($_POST['name'] ?? '');
+        $provider = trim($_POST['provider'] ?? '') ?: null;
         $remoteHost = trim($_POST['remote_host'] ?? '');
         $remotePort = (int) ($_POST['remote_port'] ?? 22);
         $remoteUser = trim($_POST['remote_user'] ?? '');
@@ -41,6 +42,7 @@ class RemoteSshConfigController extends Controller
 
         $this->db->insert('remote_ssh_configs', [
             'name' => $name,
+            'provider' => $provider,
             'remote_host' => $remoteHost,
             'remote_port' => $remotePort,
             'remote_user' => $remoteUser,

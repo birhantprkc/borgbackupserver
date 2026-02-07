@@ -116,6 +116,7 @@ CREATE TABLE agents (
 CREATE TABLE remote_ssh_configs (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
+    provider VARCHAR(50) DEFAULT NULL,
     remote_host VARCHAR(255) NOT NULL,
     remote_port INT NOT NULL DEFAULT 22,
     remote_user VARCHAR(100) NOT NULL,
