@@ -75,10 +75,14 @@ class QueueManager
                    bp.prune_minutes, bp.prune_hours, bp.prune_days,
                    bp.prune_weeks, bp.prune_months, bp.prune_years,
                    r.path as repo_path, r.encryption, r.passphrase_encrypted, r.name as repo_name,
-                   r.agent_id as repo_agent_id
+                   r.agent_id as repo_agent_id, r.storage_type, r.remote_ssh_config_id,
+                   rsc.remote_host, rsc.remote_port, rsc.remote_user, rsc.remote_base_path,
+                   rsc.ssh_private_key_encrypted as remote_ssh_key_encrypted,
+                   rsc.borg_remote_path
             FROM backup_jobs bj
             LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
             LEFT JOIN repositories r ON r.id = bj.repository_id
+            LEFT JOIN remote_ssh_configs rsc ON rsc.id = r.remote_ssh_config_id
             WHERE bj.status = 'queued'
             ORDER BY bj.queued_at ASC
         ");
@@ -153,7 +157,18 @@ class QueueManager
                 }
 
                 $cmd = BorgCommandBuilder::buildCreateCommand($plan, $repo, $archiveName);
-                $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPort());
+
+                // For remote SSH repos, add --remote-path and include SSH key in payload
+                $remoteSshConfig = null;
+                if (($job['storage_type'] ?? 'local') === 'remote_ssh' && !empty($job['remote_ssh_key_encrypted'])) {
+                    $remoteSshConfig = [
+                        'remote_port' => $job['remote_port'] ?? 22,
+                        'borg_remote_path' => $job['borg_remote_path'] ?? null,
+                    ];
+                    $cmd = BorgCommandBuilder::appendRemotePath($cmd, $job['borg_remote_path'] ?? null);
+                }
+
+                $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPort(), $remoteSshConfig);
 
                 $extra = [
                     'job_id' => $job['id'],
@@ -162,6 +177,15 @@ class QueueManager
                 ];
                 if (!empty($plugins)) {
                     $extra['plugins'] = $plugins;
+                }
+
+                // Include decrypted SSH key for remote repos
+                if ($remoteSshConfig && !empty($job['remote_ssh_key_encrypted'])) {
+                    try {
+                        $extra['remote_ssh_key'] = Encryption::decrypt($job['remote_ssh_key_encrypted']);
+                    } catch (\Exception $e) {
+                        $extra['remote_ssh_key'] = $job['remote_ssh_key_encrypted'];
+                    }
                 }
 
                 $taskPayload = BorgCommandBuilder::toTaskPayload('backup', $cmd, $env, $extra);
@@ -238,10 +262,14 @@ class QueueManager
             SELECT bj.*, bj.plugin_config_id, bp.directories, bp.excludes, bp.advanced_options,
                    bp.prune_minutes, bp.prune_hours, bp.prune_days,
                    bp.prune_weeks, bp.prune_months, bp.prune_years,
-                   r.path as repo_path, r.encryption, r.passphrase_encrypted, r.name as repo_name
+                   r.path as repo_path, r.encryption, r.passphrase_encrypted, r.name as repo_name,
+                   r.storage_type, r.remote_ssh_config_id,
+                   rsc.remote_port, rsc.ssh_private_key_encrypted as remote_ssh_key_encrypted,
+                   rsc.borg_remote_path
             FROM backup_jobs bj
             LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
             LEFT JOIN repositories r ON r.id = bj.repository_id
+            LEFT JOIN remote_ssh_configs rsc ON rsc.id = r.remote_ssh_config_id
             WHERE bj.agent_id = ?
               AND bj.status = 'sent'
               AND bj.task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'catalog_sync', 'catalog_rebuild')
@@ -285,7 +313,18 @@ class QueueManager
                 }
 
                 $cmd = BorgCommandBuilder::buildCreateCommand($plan, $repo, $archiveName);
-                $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPort());
+
+                // For remote SSH repos, add --remote-path and include SSH key
+                $remoteSshConfig = null;
+                if (($job['storage_type'] ?? 'local') === 'remote_ssh' && !empty($job['remote_ssh_key_encrypted'])) {
+                    $remoteSshConfig = [
+                        'remote_port' => $job['remote_port'] ?? 22,
+                        'borg_remote_path' => $job['borg_remote_path'] ?? null,
+                    ];
+                    $cmd = BorgCommandBuilder::appendRemotePath($cmd, $job['borg_remote_path'] ?? null);
+                }
+
+                $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPort(), $remoteSshConfig);
                 $extra = [
                     'job_id' => $job['id'],
                     'archive_name' => $archiveName,
@@ -293,6 +332,13 @@ class QueueManager
                 ];
                 if (!empty($plugins)) {
                     $extra['plugins'] = $plugins;
+                }
+                if ($remoteSshConfig && !empty($job['remote_ssh_key_encrypted'])) {
+                    try {
+                        $extra['remote_ssh_key'] = Encryption::decrypt($job['remote_ssh_key_encrypted']);
+                    } catch (\Exception $e) {
+                        $extra['remote_ssh_key'] = $job['remote_ssh_key_encrypted'];
+                    }
                 }
                 $tasks[] = BorgCommandBuilder::toTaskPayload('backup', $cmd, $env, $extra);
             } elseif ($job['task_type'] === 'restore') {
@@ -335,11 +381,17 @@ class QueueManager
                    bp.prune_weeks, bp.prune_months, bp.prune_years,
                    r.path as repo_path, r.encryption, r.passphrase_encrypted,
                    r.name as repo_name, r.agent_id as repo_agent_id,
-                   a.ssh_unix_user
+                   r.storage_type, r.remote_ssh_config_id,
+                   a.ssh_unix_user,
+                   rsc.id as rsc_id, rsc.name as rsc_name, rsc.remote_host, rsc.remote_port,
+                   rsc.remote_user, rsc.remote_base_path,
+                   rsc.ssh_private_key_encrypted as remote_ssh_key_encrypted,
+                   rsc.borg_remote_path
             FROM backup_jobs bj
             LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
             LEFT JOIN repositories r ON r.id = bj.repository_id
             LEFT JOIN agents a ON a.id = bj.agent_id
+            LEFT JOIN remote_ssh_configs rsc ON rsc.id = r.remote_ssh_config_id
             WHERE bj.status = 'sent'
               AND bj.task_type IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild')
             ORDER BY bj.queued_at ASC
@@ -355,9 +407,13 @@ class QueueManager
         if (!$archiveId) return null;
 
         $archive = $this->db->fetchOne("
-            SELECT ar.archive_name, r.path as repo_path, r.passphrase_encrypted
+            SELECT ar.archive_name, r.path as repo_path, r.passphrase_encrypted,
+                   r.storage_type, r.remote_ssh_config_id,
+                   rsc.remote_port, rsc.ssh_private_key_encrypted as remote_ssh_key_encrypted,
+                   rsc.borg_remote_path
             FROM archives ar
             JOIN repositories r ON r.id = ar.repository_id
+            LEFT JOIN remote_ssh_configs rsc ON rsc.id = r.remote_ssh_config_id
             WHERE ar.id = ?
         ", [$archiveId]);
 
@@ -368,11 +424,29 @@ class QueueManager
 
         $repo = ['path' => $archive['repo_path'], 'passphrase_encrypted' => $archive['passphrase_encrypted']];
         $cmd = BorgCommandBuilder::buildExtractCommand($repo, $archive['archive_name'], $paths);
-        $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPort());
+
+        // Handle remote SSH repos
+        $remoteSshConfig = null;
+        if (($archive['storage_type'] ?? 'local') === 'remote_ssh' && !empty($archive['remote_ssh_key_encrypted'])) {
+            $remoteSshConfig = [
+                'remote_port' => $archive['remote_port'] ?? 22,
+                'borg_remote_path' => $archive['borg_remote_path'] ?? null,
+            ];
+            $cmd = BorgCommandBuilder::appendRemotePath($cmd, $archive['borg_remote_path'] ?? null);
+        }
+
+        $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPort(), $remoteSshConfig);
 
         $extra = ['job_id' => $job['id']];
         if ($destination) {
             $extra['cwd'] = $destination;
+        }
+        if ($remoteSshConfig && !empty($archive['remote_ssh_key_encrypted'])) {
+            try {
+                $extra['remote_ssh_key'] = Encryption::decrypt($archive['remote_ssh_key_encrypted']);
+            } catch (\Exception $e) {
+                $extra['remote_ssh_key'] = $archive['remote_ssh_key_encrypted'];
+            }
         }
 
         return BorgCommandBuilder::toTaskPayload('restore', $cmd, $env, $extra);
@@ -388,9 +462,13 @@ class QueueManager
 
         $archive = $this->db->fetchOne("
             SELECT ar.archive_name, ar.databases_backed_up,
-                   r.path as repo_path, r.passphrase_encrypted
+                   r.path as repo_path, r.passphrase_encrypted,
+                   r.storage_type, r.remote_ssh_config_id,
+                   rsc.remote_port, rsc.ssh_private_key_encrypted as remote_ssh_key_encrypted,
+                   rsc.borg_remote_path
             FROM archives ar
             JOIN repositories r ON r.id = ar.repository_id
+            LEFT JOIN remote_ssh_configs rsc ON rsc.id = r.remote_ssh_config_id
             WHERE ar.id = ?
         ", [$archiveId]);
 
@@ -434,9 +512,20 @@ class QueueManager
         $repo = ['path' => $archive['repo_path'], 'passphrase_encrypted' => $archive['passphrase_encrypted']];
         $extractPath = ltrim($dumpDir, '/');
         $cmd = BorgCommandBuilder::buildExtractCommand($repo, $archive['archive_name'], [$extractPath]);
-        $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPort());
 
-        return [
+        // Handle remote SSH repos
+        $remoteSshConfig = null;
+        if (($archive['storage_type'] ?? 'local') === 'remote_ssh' && !empty($archive['remote_ssh_key_encrypted'])) {
+            $remoteSshConfig = [
+                'remote_port' => $archive['remote_port'] ?? 22,
+                'borg_remote_path' => $archive['borg_remote_path'] ?? null,
+            ];
+            $cmd = BorgCommandBuilder::appendRemotePath($cmd, $archive['borg_remote_path'] ?? null);
+        }
+
+        $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPort(), $remoteSshConfig);
+
+        $payload = [
             'task' => 'restore_mysql',
             'job_id' => $job['id'],
             'command' => $cmd,
@@ -453,6 +542,17 @@ class QueueManager
                 'per_database' => $perDatabase,
             ],
         ];
+
+        // Include remote SSH key for agent
+        if ($remoteSshConfig && !empty($archive['remote_ssh_key_encrypted'])) {
+            try {
+                $payload['remote_ssh_key'] = Encryption::decrypt($archive['remote_ssh_key_encrypted']);
+            } catch (\Exception $e) {
+                $payload['remote_ssh_key'] = $archive['remote_ssh_key_encrypted'];
+            }
+        }
+
+        return $payload;
     }
 
     /**
@@ -465,9 +565,13 @@ class QueueManager
 
         $archive = $this->db->fetchOne("
             SELECT ar.archive_name, ar.databases_backed_up,
-                   r.path as repo_path, r.passphrase_encrypted
+                   r.path as repo_path, r.passphrase_encrypted,
+                   r.storage_type, r.remote_ssh_config_id,
+                   rsc.remote_port, rsc.ssh_private_key_encrypted as remote_ssh_key_encrypted,
+                   rsc.borg_remote_path
             FROM archives ar
             JOIN repositories r ON r.id = ar.repository_id
+            LEFT JOIN remote_ssh_configs rsc ON rsc.id = r.remote_ssh_config_id
             WHERE ar.id = ?
         ", [$archiveId]);
 
@@ -509,9 +613,20 @@ class QueueManager
         $repo = ['path' => $archive['repo_path'], 'passphrase_encrypted' => $archive['passphrase_encrypted']];
         $extractPath = ltrim($dumpDir, '/');
         $cmd = BorgCommandBuilder::buildExtractCommand($repo, $archive['archive_name'], [$extractPath]);
-        $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPort());
 
-        return [
+        // Handle remote SSH repos
+        $remoteSshConfig = null;
+        if (($archive['storage_type'] ?? 'local') === 'remote_ssh' && !empty($archive['remote_ssh_key_encrypted'])) {
+            $remoteSshConfig = [
+                'remote_port' => $archive['remote_port'] ?? 22,
+                'borg_remote_path' => $archive['borg_remote_path'] ?? null,
+            ];
+            $cmd = BorgCommandBuilder::appendRemotePath($cmd, $archive['borg_remote_path'] ?? null);
+        }
+
+        $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPort(), $remoteSshConfig);
+
+        $payload = [
             'task' => 'restore_pg',
             'job_id' => $job['id'],
             'command' => $cmd,
@@ -527,6 +642,17 @@ class QueueManager
                 'compress' => $compress,
             ],
         ];
+
+        // Include remote SSH key for agent
+        if ($remoteSshConfig && !empty($archive['remote_ssh_key_encrypted'])) {
+            try {
+                $payload['remote_ssh_key'] = Encryption::decrypt($archive['remote_ssh_key_encrypted']);
+            } catch (\Exception $e) {
+                $payload['remote_ssh_key'] = $archive['remote_ssh_key_encrypted'];
+            }
+        }
+
+        return $payload;
     }
 
     /**

@@ -455,6 +455,7 @@ class ClientController extends Controller
             's3Orphans' => $s3Orphans,
             's3PluginConfigId' => $s3PluginConfigId,
             'globalS3Configured' => $globalS3Configured,
+            'remoteSshConfigs' => (new \BBS\Services\RemoteSshService())->getAll(),
         ]);
     }
 
@@ -1190,9 +1191,14 @@ class ClientController extends Controller
 
         $archive = $this->db->fetchOne("
             SELECT ar.*, r.path as repo_path, r.passphrase_encrypted, r.encryption,
-                   r.agent_id as repo_agent_id, r.name as repo_name
+                   r.agent_id as repo_agent_id, r.name as repo_name,
+                   r.storage_type, r.remote_ssh_config_id,
+                   rsc.remote_host, rsc.remote_port, rsc.remote_user,
+                   rsc.ssh_private_key_encrypted as remote_ssh_key_encrypted,
+                   rsc.borg_remote_path
             FROM archives ar
             JOIN repositories r ON r.id = ar.repository_id
+            LEFT JOIN remote_ssh_configs rsc ON rsc.id = r.remote_ssh_config_id
             WHERE ar.id = ? AND r.agent_id = ?
         ", [$archive_id, $id]);
 
@@ -1208,13 +1214,17 @@ class ClientController extends Controller
             'encryption' => $archive['encryption'],
             'agent_id' => $archive['repo_agent_id'] ?? $id,
             'name' => $archive['repo_name'] ?? '',
+            'storage_type' => $archive['storage_type'] ?? 'local',
         ];
-        $localPath = \BBS\Services\BorgCommandBuilder::getLocalRepoPath($repo);
+        $isRemoteSsh = ($repo['storage_type'] === 'remote_ssh');
+        $localPath = $isRemoteSsh ? $archive['repo_path'] : \BBS\Services\BorgCommandBuilder::getLocalRepoPath($repo);
         $env = \BBS\Services\BorgCommandBuilder::buildEnv($repo, false);
 
         // Create temp directory for extraction
         $tmpDir = sys_get_temp_dir() . '/bbs-download-' . bin2hex(random_bytes(8));
         mkdir($tmpDir, 0700, true);
+
+        $remoteSshKeyFile = null; // Track temp SSH key for cleanup
 
         try {
             // Build borg extract args: repo::archive + selected paths
@@ -1226,25 +1236,54 @@ class ClientController extends Controller
                 }
             }
 
-            // Use SSH helper to run borg extract as the repo-owning user
-            // (www-data can't read repo files owned by the bbs-* user)
-            $sshUser = $agent['ssh_unix_user'] ?? '';
-            if (!empty($sshUser)) {
-                // Pass passphrase as argument (sudo strips env vars)
-                $passphrase = $env['BORG_PASSPHRASE'] ?? '';
-                $cmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-extract', $sshUser, $tmpDir, $passphrase];
+            if ($isRemoteSsh && !empty($archive['remote_ssh_key_encrypted'])) {
+                // Remote SSH repos: run borg extract over SSH from BBS server
+                try {
+                    $sshKey = \BBS\Services\Encryption::decrypt($archive['remote_ssh_key_encrypted']);
+                } catch (\Exception $e) {
+                    $sshKey = $archive['remote_ssh_key_encrypted'];
+                }
+                $remoteSshKeyFile = tempnam(sys_get_temp_dir(), 'bbs-ssh-');
+                file_put_contents($remoteSshKeyFile, $sshKey);
+                chmod($remoteSshKeyFile, 0600);
+
+                $port = (int) ($archive['remote_port'] ?? 22);
+                $env['BORG_RSH'] = "ssh -i {$remoteSshKeyFile} -p {$port} -o StrictHostKeyChecking=no -o BatchMode=yes";
+
+                $cmd = ['borg', 'extract'];
+                if (!empty($archive['borg_remote_path'])) {
+                    $cmd[] = '--remote-path=' . $archive['borg_remote_path'];
+                }
                 $cmd = array_merge($cmd, $borgArgs);
 
-                $envStrings = null; // helper handles env; null inherits current env (for PATH)
-            } else {
-                // Fallback: run directly as www-data (non-SSH repos)
-                $cmd = array_merge(['borg', 'extract'], $borgArgs);
                 $envStrings = [];
                 foreach ($_SERVER as $k => $v) {
                     if (is_string($v)) $envStrings[$k] = $v;
                 }
                 foreach ($env as $k => $v) {
                     $envStrings[$k] = $v;
+                }
+            } else {
+                // Local repos: Use SSH helper to run borg extract as the repo-owning user
+                // (www-data can't read repo files owned by the bbs-* user)
+                $sshUser = $agent['ssh_unix_user'] ?? '';
+                if (!empty($sshUser)) {
+                    // Pass passphrase as argument (sudo strips env vars)
+                    $passphrase = $env['BORG_PASSPHRASE'] ?? '';
+                    $cmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-extract', $sshUser, $tmpDir, $passphrase];
+                    $cmd = array_merge($cmd, $borgArgs);
+
+                    $envStrings = null; // helper handles env; null inherits current env (for PATH)
+                } else {
+                    // Fallback: run directly as www-data (non-SSH repos)
+                    $cmd = array_merge(['borg', 'extract'], $borgArgs);
+                    $envStrings = [];
+                    foreach ($_SERVER as $k => $v) {
+                        if (is_string($v)) $envStrings[$k] = $v;
+                    }
+                    foreach ($env as $k => $v) {
+                        $envStrings[$k] = $v;
+                    }
                 }
             }
 
@@ -1307,8 +1346,11 @@ class ClientController extends Controller
             $this->flash('danger', 'Download failed: ' . $e->getMessage());
             $this->redirect("/clients/{$id}?tab=restore");
         } finally {
-            // Cleanup temp directory
+            // Cleanup temp directory and remote SSH key
             $this->removeDir($tmpDir);
+            if ($remoteSshKeyFile && file_exists($remoteSshKeyFile)) {
+                @unlink($remoteSshKeyFile);
+            }
         }
 
         exit;

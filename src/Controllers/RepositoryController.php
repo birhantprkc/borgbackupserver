@@ -6,6 +6,7 @@ use BBS\Core\Controller;
 use BBS\Services\BorgCommandBuilder;
 use BBS\Services\Encryption;
 use BBS\Services\PermissionService;
+use BBS\Services\RemoteSshService;
 use BBS\Services\S3SyncService;
 use BBS\Services\SshKeyManager;
 
@@ -20,6 +21,8 @@ class RepositoryController extends Controller
         $name = trim($_POST['name'] ?? '');
         $encryption = $_POST['encryption'] ?? 'repokey-blake2';
         $passphrase = $_POST['passphrase'] ?? '';
+        $storageType = $_POST['storage_type'] ?? 'local';
+        $remoteSshConfigId = !empty($_POST['remote_ssh_config_id']) ? (int) $_POST['remote_ssh_config_id'] : null;
 
         if (empty($name) || empty($agentId)) {
             $this->flash('danger', 'Repository name and agent are required.');
@@ -34,6 +37,24 @@ class RepositoryController extends Controller
         }
         $this->requirePermission(PermissionService::MANAGE_REPOS, $agentId);
 
+        // Auto-generate passphrase if not provided and encryption is enabled
+        if (empty($passphrase) && $encryption !== 'none') {
+            $passphrase = $this->generatePassphrase();
+        }
+
+        // Branch based on storage type
+        if ($storageType === 'remote_ssh') {
+            $this->storeRemoteSsh($agentId, $name, $encryption, $passphrase, $remoteSshConfigId);
+        } else {
+            $this->storeLocal($agentId, $agent, $name, $encryption, $passphrase);
+        }
+    }
+
+    /**
+     * Create a local repository on the BBS server.
+     */
+    private function storeLocal(int $agentId, array $agent, string $name, string $encryption, string $passphrase): void
+    {
         // Build repo path using single storage_path setting
         $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
         $storagePath = $storageSetting['value'] ?? '';
@@ -46,13 +67,9 @@ class RepositoryController extends Controller
             $path = rtrim($storagePath, '/') . '/' . $agentId . '/' . $name;
         }
 
-        // Auto-generate passphrase if not provided and encryption is enabled
-        if (empty($passphrase) && $encryption !== 'none') {
-            $passphrase = $this->generatePassphrase();
-        }
-
         $repoId = $this->db->insert('repositories', [
             'agent_id' => $agentId,
+            'storage_type' => 'local',
             'name' => $name,
             'path' => $path,
             'encryption' => $encryption,
@@ -141,6 +158,60 @@ class RepositoryController extends Controller
         ]);
 
         $this->flash('success', "Repository \"{$name}\" created and initialized.");
+        $this->redirect("/clients/{$agentId}?tab=repos");
+    }
+
+    /**
+     * Create a repository on a remote SSH host (rsync.net, BorgBase, etc.)
+     */
+    private function storeRemoteSsh(int $agentId, string $name, string $encryption, string $passphrase, ?int $remoteSshConfigId): void
+    {
+        if (!$remoteSshConfigId) {
+            $this->flash('danger', 'Please select a remote SSH host.');
+            $this->redirect("/clients/{$agentId}?tab=repos");
+        }
+
+        $remoteSshService = new RemoteSshService();
+        $config = $remoteSshService->getById($remoteSshConfigId);
+        if (!$config) {
+            $this->flash('danger', 'Remote SSH host not found.');
+            $this->redirect("/clients/{$agentId}?tab=repos");
+        }
+
+        // Build the SSH repo path
+        $repoPath = $remoteSshService->buildRepoPath($config, $name);
+
+        $repoId = $this->db->insert('repositories', [
+            'agent_id' => $agentId,
+            'storage_type' => 'remote_ssh',
+            'remote_ssh_config_id' => $remoteSshConfigId,
+            'name' => $name,
+            'path' => $repoPath,
+            'encryption' => $encryption,
+            'passphrase_encrypted' => $encryption !== 'none' ? Encryption::encrypt($passphrase) : null,
+        ]);
+
+        // Run borg init over SSH from the BBS server
+        $result = $remoteSshService->initRepo($config, $repoPath, $encryption, $passphrase);
+
+        if (!$result['success']) {
+            $errorMsg = $result['stderr'] ?? $result['output'] ?? 'Unknown error';
+            $this->db->insert('server_log', [
+                'agent_id' => $agentId,
+                'level' => 'error',
+                'message' => "borg init failed for remote repo \"{$name}\" on {$config['remote_host']}: {$errorMsg}",
+            ]);
+            $this->flash('warning', "Repository \"{$name}\" created in database but borg init on remote host failed: {$errorMsg}");
+            $this->redirect("/clients/{$agentId}?tab=repos");
+        }
+
+        $this->db->insert('server_log', [
+            'agent_id' => $agentId,
+            'level' => 'info',
+            'message' => "Remote repository \"{$name}\" initialized ({$encryption}) on {$config['remote_user']}@{$config['remote_host']}",
+        ]);
+
+        $this->flash('success', "Repository \"{$name}\" created on {$config['remote_host']} and initialized.");
         $this->redirect("/clients/{$agentId}?tab=repos");
     }
 
@@ -360,9 +431,11 @@ class RepositoryController extends Controller
         $this->requireAuth();
 
         $repo = $this->db->fetchOne("
-            SELECT r.*, a.name as agent_name, a.ssh_unix_user
+            SELECT r.*, a.name as agent_name, a.ssh_unix_user,
+                   rsc.name as remote_config_name, rsc.remote_host, rsc.remote_user, rsc.remote_port
             FROM repositories r
             JOIN agents a ON a.id = r.agent_id
+            LEFT JOIN remote_ssh_configs rsc ON rsc.id = r.remote_ssh_config_id
             WHERE r.id = ? AND r.agent_id = ?
         ", [$id, $agentId]);
 
@@ -391,14 +464,27 @@ class RepositoryController extends Controller
             ORDER BY queued_at DESC LIMIT 20
         ", [$id]);
 
-        // Check if repo has S3 sync enabled (via repository_s3_configs)
-        $s3SyncInfo = $this->db->fetchOne("
-            SELECT rsc.plugin_config_id, pc.name as config_name,
-                   rsc.last_sync_at as last_s3_sync, rsc.enabled
-            FROM repository_s3_configs rsc
-            JOIN plugin_configs pc ON pc.id = rsc.plugin_config_id
-            WHERE rsc.repository_id = ?
-        ", [$id]);
+        // Check if repo has S3 sync enabled (via repository_s3_configs) — only for local repos
+        $s3SyncInfo = null;
+        $s3PluginConfigs = [];
+        if (($repo['storage_type'] ?? 'local') === 'local') {
+            $s3SyncInfo = $this->db->fetchOne("
+                SELECT rsc.plugin_config_id, pc.name as config_name,
+                       rsc.last_sync_at as last_s3_sync, rsc.enabled
+                FROM repository_s3_configs rsc
+                JOIN plugin_configs pc ON pc.id = rsc.plugin_config_id
+                WHERE rsc.repository_id = ?
+            ", [$id]);
+
+            // Get available S3 plugin configs for this agent (for "Enable S3 Sync" option)
+            $s3PluginConfigs = $this->db->fetchAll("
+                SELECT pc.id, pc.name
+                FROM plugin_configs pc
+                JOIN plugins p ON p.id = pc.plugin_id
+                WHERE p.slug = 's3_sync' AND pc.agent_id = ?
+                ORDER BY pc.name
+            ", [$agentId]);
+        }
 
         // Check for active jobs on this repo
         $activeJob = $this->db->fetchOne(
@@ -406,16 +492,7 @@ class RepositoryController extends Controller
             [$id]
         );
 
-        // Get available S3 plugin configs for this agent (for "Enable S3 Sync" option)
-        $s3PluginConfigs = $this->db->fetchAll("
-            SELECT pc.id, pc.name
-            FROM plugin_configs pc
-            JOIN plugins p ON p.id = pc.plugin_id
-            WHERE p.slug = 's3_sync' AND pc.agent_id = ?
-            ORDER BY pc.name
-        ", [$agentId]);
-
-        // Get local path for display
+        // Get local path for display (null for remote repos)
         $localPath = BorgCommandBuilder::getLocalRepoPath($repo);
 
         // Calculate stats

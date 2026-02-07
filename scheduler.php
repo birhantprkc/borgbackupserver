@@ -12,6 +12,7 @@ use BBS\Services\SchedulerService;
 use BBS\Services\QueueManager;
 use BBS\Services\NotificationService;
 use BBS\Services\UpdateService;
+use BBS\Services\RemoteSshService;
 
 Config::load();
 
@@ -111,11 +112,14 @@ foreach ($serverJobs as $sj) {
         'passphrase_encrypted' => $sj['passphrase_encrypted'],
         'agent_id' => $sj['repo_agent_id'] ?? $sj['agent_id'],
         'name' => $sj['repo_name'],
+        'storage_type' => $sj['storage_type'] ?? 'local',
     ];
 
-    // Use local path for server-side execution
+    $isRemoteSsh = ($repo['storage_type'] === 'remote_ssh');
+
+    // Use local path for server-side execution (null for remote SSH repos)
     $localPath = \BBS\Services\BorgCommandBuilder::getLocalRepoPath($repo);
-    $localRepo = array_merge($repo, ['path' => $localPath]);
+    $localRepo = $localPath ? array_merge($repo, ['path' => $localPath]) : $repo;
 
     $plan = [
         'prune_minutes' => $sj['prune_minutes'] ?? 0,
@@ -135,8 +139,23 @@ foreach ($serverJobs as $sj) {
 
     echo date('Y-m-d H:i:s') . " Executing server-side: job #{$sj['id']} ({$sj['task_type']})\n";
 
-    // S3 sync — uses rclone, not borg
+    // S3 sync — uses rclone, not borg (skip for remote SSH repos — already offsite)
     if ($sj['task_type'] === 's3_sync') {
+        if ($isRemoteSsh) {
+            $db->update('backup_jobs', [
+                'status' => 'completed',
+                'completed_at' => date('Y-m-d H:i:s'),
+                'duration_seconds' => 0,
+            ], 'id = ?', [$sj['id']]);
+            $db->insert('server_log', [
+                'agent_id' => $sj['agent_id'],
+                'backup_job_id' => $sj['id'],
+                'level' => 'info',
+                'message' => 'S3 sync skipped — remote SSH repos are already offsite',
+            ]);
+            echo date('Y-m-d H:i:s') . " S3 sync job #{$sj['id']} skipped (remote SSH repo)\n";
+            continue;
+        }
         $pluginManager = $pluginManager ?? new \BBS\Services\PluginManager();
 
         // Resolve plugin config — from job's plugin_config_id or plan plugins
@@ -393,7 +412,6 @@ foreach ($serverJobs as $sj) {
             continue;
         }
 
-        $csLocalPath = \BBS\Services\BorgCommandBuilder::getLocalRepoPath($csRepo);
         $passphrase = '';
         if (!empty($csRepo['passphrase_encrypted'])) {
             try {
@@ -403,51 +421,76 @@ foreach ($serverJobs as $sj) {
             }
         }
 
-        // Run borg list via bbs-ssh-helper (handles sudo to the repo-owning user)
-        $runAsUser = $sj['ssh_unix_user'] ?? null;
-        if ($runAsUser) {
-            // Use ssh-helper which handles sudo properly
-            $csCmd = [
-                'sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-list',
-                $runAsUser, $passphrase, $csLocalPath
-            ];
-            $csEnv = [];
-        } else {
-            // No unix user — run directly as www-data (legacy mode)
-            $csCmd = ['borg', 'list', '--json', $csLocalPath];
-            $csEnv = [];
-            if ($passphrase) {
-                $csEnv['BORG_PASSPHRASE'] = $passphrase;
+        // Remote SSH repos: use RemoteSshService, Local repos: use bbs-ssh-helper or direct borg
+        if ($isRemoteSsh && !empty($sj['remote_ssh_config_id'])) {
+            $remoteSshService = $remoteSshService ?? new RemoteSshService();
+            $remoteConfig = $remoteSshService->getById((int) $sj['remote_ssh_config_id']);
+            if (!$remoteConfig) {
+                $db->update('backup_jobs', [
+                    'status' => 'failed',
+                    'completed_at' => date('Y-m-d H:i:s'),
+                    'error_log' => 'Remote SSH config not found',
+                ], 'id = ?', [$sj['id']]);
+                echo date('Y-m-d H:i:s') . " Catalog sync job #{$sj['id']} failed: remote SSH config not found\n";
+                continue;
             }
-            $csEnv['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes';
-            $csEnv['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes';
-            $csEnv['BORG_BASE_DIR'] = '/tmp/bbs-borg-www-data';
-            $csEnv['HOME'] = '/tmp/bbs-borg-www-data';
+
+            $csResult = $remoteSshService->runBorgCommand($remoteConfig, $csRepo['path'], ['list', '--json', $csRepo['path']], $passphrase);
+            $csOutput = $csResult['output'] ?? '';
+            $csError = $csResult['stderr'] ?? '';
+            $csExitCode = $csResult['exit_code'] ?? -1;
+        } else {
+            $csLocalPath = \BBS\Services\BorgCommandBuilder::getLocalRepoPath($csRepo);
+
+            // Run borg list via bbs-ssh-helper (handles sudo to the repo-owning user)
+            $runAsUser = $sj['ssh_unix_user'] ?? null;
+            if ($runAsUser) {
+                // Use ssh-helper which handles sudo properly
+                $csCmd = [
+                    'sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-list',
+                    $runAsUser, $passphrase, $csLocalPath
+                ];
+                $csEnv = [];
+            } else {
+                // No unix user — run directly as www-data (legacy mode)
+                $csCmd = ['borg', 'list', '--json', $csLocalPath];
+                $csEnv = [];
+                if ($passphrase) {
+                    $csEnv['BORG_PASSPHRASE'] = $passphrase;
+                }
+                $csEnv['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes';
+                $csEnv['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes';
+                $csEnv['BORG_BASE_DIR'] = '/tmp/bbs-borg-www-data';
+                $csEnv['HOME'] = '/tmp/bbs-borg-www-data';
+            }
+
+            // When running via helper (runAsUser is set), env is handled by the helper
+            $csEnvStrings = $runAsUser ? null : array_filter($_SERVER, 'is_string') + $csEnv;
+
+            $csProc = proc_open($csCmd, [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ], $csPipes, null, $csEnvStrings);
+
+            $csOutput = '';
+            $csError = '';
+            $csExitCode = -1;
+            if (is_resource($csProc)) {
+                fclose($csPipes[0]);
+                $csOutput = stream_get_contents($csPipes[1]);
+                $csError = stream_get_contents($csPipes[2]);
+                fclose($csPipes[1]);
+                fclose($csPipes[2]);
+                $csExitCode = proc_close($csProc);
+            }
         }
 
-        // When running via helper (runAsUser is set), env is handled by the helper
-        $csEnvStrings = $runAsUser ? null : array_filter($_SERVER, 'is_string') + $csEnv;
-
-        $csProc = proc_open($csCmd, [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ], $csPipes, null, $csEnvStrings);
-
-        $csOutput = '';
-        $csError = '';
-        $csExitCode = -1;
-        if (is_resource($csProc)) {
-            fclose($csPipes[0]);
-            $csOutput = stream_get_contents($csPipes[1]);
-            $csError = stream_get_contents($csPipes[2]);
-            fclose($csPipes[1]);
-            fclose($csPipes[2]);
-            $csExitCode = proc_close($csProc);
-        }
+        // Use remote repo path for archive info commands
+        $csArchivePath = $isRemoteSsh ? $csRepo['path'] : ($csLocalPath ?? $csRepo['path']);
 
         $csNow = date('Y-m-d H:i:s');
-        if ($csExitCode === 0) {
+        if ($csExitCode <= 1) {
             $csData = json_decode($csOutput, true);
             $archives = $csData['archives'] ?? [];
 
@@ -470,45 +513,57 @@ foreach ($serverJobs as $sj) {
                 $deduplicatedSize = 0;
 
                 // Run borg info to get archive sizes
-                $archivePath = "{$csLocalPath}::{$archiveName}";
-                if ($runAsUser) {
-                    $infoCmd = [
-                        'sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-cmd',
-                        $runAsUser, $passphrase, 'info', '--json', $archivePath
-                    ];
-                    $infoEnvStrings = null;
-                } else {
-                    $infoCmd = ['borg', 'info', '--json', $archivePath];
-                    $infoEnv = [];
-                    if ($passphrase) {
-                        $infoEnv['BORG_PASSPHRASE'] = $passphrase;
-                    }
-                    $infoEnv['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes';
-                    $infoEnv['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes';
-                    $infoEnv['BORG_BASE_DIR'] = '/tmp/bbs-borg-www-data';
-                    $infoEnv['HOME'] = '/tmp/bbs-borg-www-data';
-                    $infoEnvStrings = array_filter($_SERVER, 'is_string') + $infoEnv;
-                }
-
-                $infoProc = proc_open($infoCmd, [
-                    0 => ['pipe', 'r'],
-                    1 => ['pipe', 'w'],
-                    2 => ['pipe', 'w'],
-                ], $infoPipes, null, $infoEnvStrings);
-
-                if (is_resource($infoProc)) {
-                    fclose($infoPipes[0]);
-                    $infoOutput = stream_get_contents($infoPipes[1]);
-                    fclose($infoPipes[1]);
-                    fclose($infoPipes[2]);
-                    $infoExitCode = proc_close($infoProc);
-
-                    if ($infoExitCode === 0) {
-                        $infoData = json_decode($infoOutput, true);
+                if ($isRemoteSsh && isset($remoteConfig)) {
+                    $infoResult = $remoteSshService->runBorgCommand($remoteConfig, $csRepo['path'], ['info', '--json', $csRepo['path'] . '::' . $archiveName], $passphrase);
+                    if ($infoResult['success']) {
+                        $infoData = json_decode($infoResult['output'], true);
                         $archiveInfo = $infoData['archives'][0] ?? [];
                         $stats = $archiveInfo['stats'] ?? [];
                         $originalSize = (int) ($stats['original_size'] ?? 0);
                         $deduplicatedSize = (int) ($stats['deduplicated_size'] ?? 0);
+                    }
+                } else {
+                    $archivePath = "{$csArchivePath}::{$archiveName}";
+                    $runAsUser = $sj['ssh_unix_user'] ?? null;
+                    if ($runAsUser) {
+                        $infoCmd = [
+                            'sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-cmd',
+                            $runAsUser, $passphrase, 'info', '--json', $archivePath
+                        ];
+                        $infoEnvStrings = null;
+                    } else {
+                        $infoCmd = ['borg', 'info', '--json', $archivePath];
+                        $infoEnv = [];
+                        if ($passphrase) {
+                            $infoEnv['BORG_PASSPHRASE'] = $passphrase;
+                        }
+                        $infoEnv['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes';
+                        $infoEnv['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes';
+                        $infoEnv['BORG_BASE_DIR'] = '/tmp/bbs-borg-www-data';
+                        $infoEnv['HOME'] = '/tmp/bbs-borg-www-data';
+                        $infoEnvStrings = array_filter($_SERVER, 'is_string') + $infoEnv;
+                    }
+
+                    $infoProc = proc_open($infoCmd, [
+                        0 => ['pipe', 'r'],
+                        1 => ['pipe', 'w'],
+                        2 => ['pipe', 'w'],
+                    ], $infoPipes, null, $infoEnvStrings);
+
+                    if (is_resource($infoProc)) {
+                        fclose($infoPipes[0]);
+                        $infoOutput = stream_get_contents($infoPipes[1]);
+                        fclose($infoPipes[1]);
+                        fclose($infoPipes[2]);
+                        $infoExitCode = proc_close($infoProc);
+
+                        if ($infoExitCode === 0) {
+                            $infoData = json_decode($infoOutput, true);
+                            $archiveInfo = $infoData['archives'][0] ?? [];
+                            $stats = $archiveInfo['stats'] ?? [];
+                            $originalSize = (int) ($stats['original_size'] ?? 0);
+                            $deduplicatedSize = (int) ($stats['deduplicated_size'] ?? 0);
+                        }
                     }
                 }
 
@@ -629,6 +684,13 @@ foreach ($serverJobs as $sj) {
             'files_processed' => 0,
         ], 'id = ?', [$sj['id']]);
 
+        // For remote SSH repos, load config
+        $crRemoteConfig = null;
+        if ($isRemoteSsh && !empty($sj['remote_ssh_config_id'])) {
+            $remoteSshService = $remoteSshService ?? new RemoteSshService();
+            $crRemoteConfig = $remoteSshService->getById((int) $sj['remote_ssh_config_id']);
+        }
+
         $runAsUser = $sj['ssh_unix_user'] ?? null;
         $agentId = $sj['agent_id'];
         $processedArchives = 0;
@@ -638,45 +700,57 @@ foreach ($serverJobs as $sj) {
         echo date('Y-m-d H:i:s') . " Catalog rebuild job #{$sj['id']}: processing {$totalArchives} archives...\n";
 
         foreach ($crArchives as $crArchive) {
-            $archivePath = "{$crLocalPath}::{$crArchive['archive_name']}";
-
-            // Build command to list archive files
-            if ($runAsUser) {
-                $crCmd = [
-                    'sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-list-archive',
-                    $runAsUser, $passphrase, $archivePath
-                ];
-                $crEnv = null;
+            // Remote SSH repos: use RemoteSshService
+            if ($isRemoteSsh && $crRemoteConfig) {
+                $crResult = $remoteSshService->runBorgCommand(
+                    $crRemoteConfig,
+                    $crRepo['path'],
+                    ['list', '--json-lines', $crRepo['path'] . '::' . $crArchive['archive_name']],
+                    $passphrase
+                );
+                $crOutput = $crResult['output'] ?? '';
+                $crExitCode = $crResult['exit_code'] ?? -1;
             } else {
-                $crCmd = ['borg', 'list', '--json-lines', $archivePath];
-                $crEnv = [];
-                if ($passphrase) {
-                    $crEnv['BORG_PASSPHRASE'] = $passphrase;
+                $archivePath = "{$crLocalPath}::{$crArchive['archive_name']}";
+
+                // Build command to list archive files
+                if ($runAsUser) {
+                    $crCmd = [
+                        'sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-list-archive',
+                        $runAsUser, $passphrase, $archivePath
+                    ];
+                    $crEnv = null;
+                } else {
+                    $crCmd = ['borg', 'list', '--json-lines', $archivePath];
+                    $crEnv = [];
+                    if ($passphrase) {
+                        $crEnv['BORG_PASSPHRASE'] = $passphrase;
+                    }
+                    $crEnv['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes';
+                    $crEnv['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes';
+                    $crEnv['BORG_BASE_DIR'] = '/tmp/bbs-borg-www-data';
+                    $crEnv['HOME'] = '/tmp/bbs-borg-www-data';
+                    $crEnv = array_filter($_SERVER, 'is_string') + $crEnv;
                 }
-                $crEnv['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes';
-                $crEnv['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes';
-                $crEnv['BORG_BASE_DIR'] = '/tmp/bbs-borg-www-data';
-                $crEnv['HOME'] = '/tmp/bbs-borg-www-data';
-                $crEnv = array_filter($_SERVER, 'is_string') + $crEnv;
+
+                $crProc = proc_open($crCmd, [
+                    0 => ['pipe', 'r'],
+                    1 => ['pipe', 'w'],
+                    2 => ['pipe', 'w'],
+                ], $crPipes, null, $crEnv);
+
+                if (!is_resource($crProc)) {
+                    $errors[] = "Failed to start borg for archive {$crArchive['archive_name']}";
+                    continue;
+                }
+
+                fclose($crPipes[0]);
+                $crOutput = stream_get_contents($crPipes[1]);
+                $crError = stream_get_contents($crPipes[2]);
+                fclose($crPipes[1]);
+                fclose($crPipes[2]);
+                $crExitCode = proc_close($crProc);
             }
-
-            $crProc = proc_open($crCmd, [
-                0 => ['pipe', 'r'],
-                1 => ['pipe', 'w'],
-                2 => ['pipe', 'w'],
-            ], $crPipes, null, $crEnv);
-
-            if (!is_resource($crProc)) {
-                $errors[] = "Failed to start borg for archive {$crArchive['archive_name']}";
-                continue;
-            }
-
-            fclose($crPipes[0]);
-            $crOutput = stream_get_contents($crPipes[1]);
-            $crError = stream_get_contents($crPipes[2]);
-            fclose($crPipes[1]);
-            fclose($crPipes[2]);
-            $crExitCode = proc_close($crProc);
 
             if ($crExitCode !== 0) {
                 $errors[] = "Archive {$crArchive['archive_name']}: exit code {$crExitCode}";
@@ -819,7 +893,8 @@ foreach ($serverJobs as $sj) {
         continue;
     }
 
-    // Build borg command arguments (without 'borg' prefix - that's added by helper or directly)
+    // Build borg command arguments — use repo path (remote SSH or local)
+    $repoPath = $isRemoteSsh ? $repo['path'] : $localPath;
     if ($sj['task_type'] === 'prune') {
         $archivePrefix = $sj['backup_plan_id'] ? 'plan' . $sj['backup_plan_id'] : null;
         $borgArgs = \BBS\Services\BorgCommandBuilder::buildPruneCommand($plan, $localRepo, $archivePrefix);
@@ -827,14 +902,19 @@ foreach ($serverJobs as $sj) {
         if ($borgArgs[0] === 'borg') {
             array_shift($borgArgs);
         }
+        // For remote repos, replace the local path with the remote path in prune args
+        if ($isRemoteSsh) {
+            $lastIdx = count($borgArgs) - 1;
+            $borgArgs[$lastIdx] = $repo['path'];
+        }
     } elseif ($sj['task_type'] === 'compact') {
-        $borgArgs = ['compact', $localPath];
+        $borgArgs = ['compact', $repoPath];
     } elseif ($sj['task_type'] === 'repo_check') {
-        $borgArgs = ['check', '--verbose', $localPath];
+        $borgArgs = ['check', '--verbose', $repoPath];
     } elseif ($sj['task_type'] === 'repo_repair') {
-        $borgArgs = ['check', '--repair', $localPath];
+        $borgArgs = ['check', '--repair', $repoPath];
     } elseif ($sj['task_type'] === 'break_lock') {
-        $borgArgs = ['break-lock', $localPath];
+        $borgArgs = ['break-lock', $repoPath];
     } else {
         // Unknown task type
         $db->update('backup_jobs', [
@@ -850,61 +930,91 @@ foreach ($serverJobs as $sj) {
     $env = \BBS\Services\BorgCommandBuilder::buildEnv($localRepo, false);
     $passphrase = $env['BORG_PASSPHRASE'] ?? '';
 
-    // Run as the repo's unix user via bbs-ssh-helper
-    $runAsUser = $sj['ssh_unix_user'] ?? null;
-    if ($runAsUser) {
-        // Use ssh-helper which handles sudo properly
-        $cmd = array_merge(
-            ['sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-cmd', $runAsUser, $passphrase],
-            $borgArgs
-        );
-        $envStrings = [];
-    } else {
-        // No unix user — run directly as www-data (legacy mode)
-        $cmd = array_merge(['borg'], $borgArgs);
-        $envStrings = [];
-        foreach ($env as $k => $v) {
-            $envStrings[$k] = $v;
+    // Remote SSH repos: execute via RemoteSshService
+    if ($isRemoteSsh && !empty($sj['remote_ssh_config_id'])) {
+        $remoteSshService = $remoteSshService ?? new RemoteSshService();
+        $remoteConfig = $remoteSshService->getById((int) $sj['remote_ssh_config_id']);
+
+        if (!$remoteConfig) {
+            $db->update('backup_jobs', [
+                'status' => 'failed',
+                'completed_at' => date('Y-m-d H:i:s'),
+                'error_log' => 'Remote SSH config not found',
+            ], 'id = ?', [$sj['id']]);
+            echo date('Y-m-d H:i:s') . " Job #{$sj['id']} failed: remote SSH config not found\n";
+            continue;
         }
-        $envStrings['BORG_BASE_DIR'] = '/tmp/bbs-borg-www-data';
-        $envStrings['HOME'] = '/tmp/bbs-borg-www-data';
-    }
 
-    // Log the borg command (without passphrase)
-    $logCmd = $runAsUser
-        ? array_merge(['sudo', 'bbs-ssh-helper', 'borg-cmd', $runAsUser, '***'], $borgArgs)
-        : $cmd;
-    $cmdStr = implode(' ', array_map('escapeshellarg', array_values($logCmd)));
-    $db->insert('server_log', [
-        'agent_id' => $sj['agent_id'],
-        'backup_job_id' => $sj['id'],
-        'level' => 'info',
-        'message' => ucfirst($sj['task_type']) . " command: {$cmdStr}",
-    ]);
+        $cmdStr = implode(' ', array_map('escapeshellarg', $borgArgs));
+        $db->insert('server_log', [
+            'agent_id' => $sj['agent_id'],
+            'backup_job_id' => $sj['id'],
+            'level' => 'info',
+            'message' => ucfirst($sj['task_type']) . " command (remote SSH): borg {$cmdStr}",
+        ]);
 
-    // Execute
-    $desc = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
-    $proc = proc_open($cmd, $desc, $pipes, null, $envStrings);
-
-    $result = 'failed';
-    $errorOutput = '';
-
-    if (is_resource($proc)) {
-        fclose($pipes[0]);
-        $stdout = stream_get_contents($pipes[1]);
-        $stderr = stream_get_contents($pipes[2]);
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-        $exitCode = proc_close($proc);
-
-        if ($exitCode <= 1) {
-            $result = 'completed';
+        $remoteResult = $remoteSshService->runBorgCommand($remoteConfig, $repo['path'], $borgArgs, $passphrase);
+        $result = $remoteResult['success'] ? 'completed' : 'failed';
+        $stdout = $remoteResult['output'] ?? '';
+        $errorOutput = $result === 'failed' ? trim($remoteResult['stderr'] ?? $stdout) ?: "Exit code {$remoteResult['exit_code']}" : '';
+    } else {
+        // Local repos: run as the repo's unix user via bbs-ssh-helper
+        $runAsUser = $sj['ssh_unix_user'] ?? null;
+        if ($runAsUser) {
+            // Use ssh-helper which handles sudo properly
+            $cmd = array_merge(
+                ['sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-cmd', $runAsUser, $passphrase],
+                $borgArgs
+            );
+            $envStrings = [];
         } else {
-            // Error may be in $stdout (due to 2>&1 in helper) or $stderr
-            $errorOutput = trim($stderr ?: $stdout) ?: "Exit code $exitCode";
+            // No unix user — run directly as www-data (legacy mode)
+            $cmd = array_merge(['borg'], $borgArgs);
+            $envStrings = [];
+            foreach ($env as $k => $v) {
+                $envStrings[$k] = $v;
+            }
+            $envStrings['BORG_BASE_DIR'] = '/tmp/bbs-borg-www-data';
+            $envStrings['HOME'] = '/tmp/bbs-borg-www-data';
         }
-    } else {
-        $errorOutput = 'Failed to execute borg command';
+
+        // Log the borg command (without passphrase)
+        $logCmd = $runAsUser
+            ? array_merge(['sudo', 'bbs-ssh-helper', 'borg-cmd', $runAsUser, '***'], $borgArgs)
+            : $cmd;
+        $cmdStr = implode(' ', array_map('escapeshellarg', array_values($logCmd)));
+        $db->insert('server_log', [
+            'agent_id' => $sj['agent_id'],
+            'backup_job_id' => $sj['id'],
+            'level' => 'info',
+            'message' => ucfirst($sj['task_type']) . " command: {$cmdStr}",
+        ]);
+
+        // Execute
+        $desc = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+        $proc = proc_open($cmd, $desc, $pipes, null, $envStrings);
+
+        $result = 'failed';
+        $errorOutput = '';
+        $stdout = '';
+
+        if (is_resource($proc)) {
+            fclose($pipes[0]);
+            $stdout = stream_get_contents($pipes[1]);
+            $stderr = stream_get_contents($pipes[2]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            $exitCode = proc_close($proc);
+
+            if ($exitCode <= 1) {
+                $result = 'completed';
+            } else {
+                // Error may be in $stdout (due to 2>&1 in helper) or $stderr
+                $errorOutput = trim($stderr ?: $stdout) ?: "Exit code $exitCode";
+            }
+        } else {
+            $errorOutput = 'Failed to execute borg command';
+        }
     }
 
     $now = date('Y-m-d H:i:s');
@@ -941,77 +1051,89 @@ foreach ($serverJobs as $sj) {
 
     // After successful prune, sync archives table with actual repo contents
     if ($result === 'completed' && $sj['task_type'] === 'prune') {
-        if ($runAsUser) {
-            // Use ssh-helper for borg list
-            $listCmd = [
-                'sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-list',
-                $runAsUser, $passphrase, $localPath
-            ];
-            $listEnv = [];
+        $listOut = null;
+        $listExit = -1;
+
+        if ($isRemoteSsh && isset($remoteConfig)) {
+            // Remote SSH: list via RemoteSshService
+            $listResult = $remoteSshService->runBorgCommand($remoteConfig, $repo['path'], ['list', '--json', $repo['path']], $passphrase);
+            $listOut = $listResult['output'] ?? '';
+            $listExit = $listResult['exit_code'] ?? -1;
         } else {
-            $listCmd = \BBS\Services\BorgCommandBuilder::buildListCommand($localRepo);
-            $listEnv = $envStrings;
+            $runAsUser = $sj['ssh_unix_user'] ?? null;
+            if ($runAsUser) {
+                // Use ssh-helper for borg list
+                $listCmd = [
+                    'sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-list',
+                    $runAsUser, $passphrase, $localPath
+                ];
+                $listEnv = [];
+            } else {
+                $listCmd = \BBS\Services\BorgCommandBuilder::buildListCommand($localRepo);
+                $listEnv = $envStrings ?? [];
+            }
+            $desc = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+            $listProc = proc_open($listCmd, $desc, $listPipes, null, $listEnv);
+
+            if (is_resource($listProc)) {
+                fclose($listPipes[0]);
+                $listOut = stream_get_contents($listPipes[1]);
+                fclose($listPipes[1]);
+                fclose($listPipes[2]);
+                $listExit = proc_close($listProc);
+            }
         }
-        $listProc = proc_open($listCmd, $desc, $listPipes, null, $listEnv);
 
-        if (is_resource($listProc)) {
-            fclose($listPipes[0]);
-            $listOut = stream_get_contents($listPipes[1]);
-            fclose($listPipes[1]);
-            fclose($listPipes[2]);
-            $listExit = proc_close($listProc);
-
-            if ($listExit === 0 && $listOut) {
-                $listData = json_decode($listOut, true);
-                $borgArchives = [];
-                if (!empty($listData['archives'])) {
-                    foreach ($listData['archives'] as $a) {
-                        $borgArchives[] = $a['name'];
-                    }
+        if ($listExit <= 1 && $listOut) {
+            $listData = json_decode($listOut, true);
+            $borgArchives = [];
+            if (!empty($listData['archives'])) {
+                foreach ($listData['archives'] as $a) {
+                    $borgArchives[] = $a['name'];
                 }
+            }
 
-                // Get DB archives for this repo
-                $repoId = $sj['repository_id'];
-                $dbArchives = $db->fetchAll(
-                    "SELECT id, archive_name FROM archives WHERE repository_id = ?", [$repoId]
-                );
+            // Get DB archives for this repo
+            $repoId = $sj['repository_id'];
+            $dbArchives = $db->fetchAll(
+                "SELECT id, archive_name FROM archives WHERE repository_id = ?", [$repoId]
+            );
 
-                $removed = 0;
-                $removedNames = [];
-                foreach ($dbArchives as $dbA) {
-                    if (!in_array($dbA['archive_name'], $borgArchives, true)) {
-                        $db->delete('archives', 'id = ?', [$dbA['id']]);
-                        $removedNames[] = $dbA['archive_name'];
-                        $removed++;
-                    }
+            $removed = 0;
+            $removedNames = [];
+            foreach ($dbArchives as $dbA) {
+                if (!in_array($dbA['archive_name'], $borgArchives, true)) {
+                    $db->delete('archives', 'id = ?', [$dbA['id']]);
+                    $removedNames[] = $dbA['archive_name'];
+                    $removed++;
                 }
+            }
 
-                if ($removed > 0) {
-                    $nameList = implode(', ', array_slice($removedNames, 0, 20));
-                    if (count($removedNames) > 20) {
-                        $nameList .= ' (and ' . (count($removedNames) - 20) . ' more)';
-                    }
-                    $db->insert('server_log', [
-                        'agent_id' => $sj['agent_id'],
-                        'backup_job_id' => $sj['id'],
-                        'level' => 'info',
-                        'message' => "Removed {$removed} pruned recovery point(s) from database — " . count($borgArchives) . " remaining: {$nameList}",
-                    ]);
-                    echo date('Y-m-d H:i:s') . " Removed {$removed} pruned archive(s) from DB for repo #{$repoId}\n";
-                } else {
-                    $db->insert('server_log', [
-                        'agent_id' => $sj['agent_id'],
-                        'backup_job_id' => $sj['id'],
-                        'level' => 'info',
-                        'message' => "Prune completed — all " . count($borgArchives) . " recovery point(s) retained, none removed",
-                    ]);
+            if ($removed > 0) {
+                $nameList = implode(', ', array_slice($removedNames, 0, 20));
+                if (count($removedNames) > 20) {
+                    $nameList .= ' (and ' . (count($removedNames) - 20) . ' more)';
                 }
+                $db->insert('server_log', [
+                    'agent_id' => $sj['agent_id'],
+                    'backup_job_id' => $sj['id'],
+                    'level' => 'info',
+                    'message' => "Removed {$removed} pruned recovery point(s) from database — " . count($borgArchives) . " remaining: {$nameList}",
+                ]);
+                echo date('Y-m-d H:i:s') . " Removed {$removed} pruned archive(s) from DB for repo #{$repoId}\n";
+            } else {
+                $db->insert('server_log', [
+                    'agent_id' => $sj['agent_id'],
+                    'backup_job_id' => $sj['id'],
+                    'level' => 'info',
+                    'message' => "Prune completed — all " . count($borgArchives) . " recovery point(s) retained, none removed",
+                ]);
             }
         }
     }
 
-    // Auto-queue S3 sync after successful prune (if repo has S3 sync configured)
-    if ($result === 'completed' && $sj['task_type'] === 'prune' && !empty($sj['repository_id'])) {
+    // Auto-queue S3 sync after successful prune (skip for remote SSH — already offsite)
+    if ($result === 'completed' && $sj['task_type'] === 'prune' && !empty($sj['repository_id']) && !$isRemoteSsh) {
         // Check repository_s3_configs for S3 sync configuration
         $repoS3Config = $db->fetchOne(
             "SELECT rsc.plugin_config_id
@@ -1054,9 +1176,11 @@ foreach ($serverJobs as $sj) {
 }
 
 // Step 5: Update repository sizes from actual disk usage (every 5 minutes)
+// Skips remote SSH repos — no local disk to measure; size comes from agent backup reports
 if ((int) date('i') % 5 === 0) {
-    $repos = $db->fetchAll("SELECT id, path, agent_id, name FROM repositories");
+    $repos = $db->fetchAll("SELECT id, path, agent_id, name, storage_type FROM repositories");
     foreach ($repos as $repo) {
+        if (($repo['storage_type'] ?? 'local') === 'remote_ssh') continue;
         $localPath = \BBS\Services\BorgCommandBuilder::getLocalRepoPath($repo);
         if (!empty($localPath)) {
             // Use SSH helper to get size (runs as root, can read all repos)

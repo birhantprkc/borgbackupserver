@@ -113,9 +113,24 @@ CREATE TABLE agents (
 -- Repositories & Backup Plans
 -- --------------------------------------------------------
 
+CREATE TABLE remote_ssh_configs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    remote_host VARCHAR(255) NOT NULL,
+    remote_port INT NOT NULL DEFAULT 22,
+    remote_user VARCHAR(100) NOT NULL,
+    remote_base_path VARCHAR(500) NOT NULL DEFAULT './',
+    ssh_private_key_encrypted TEXT NOT NULL,
+    borg_remote_path VARCHAR(255) DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
 CREATE TABLE repositories (
     id INT AUTO_INCREMENT PRIMARY KEY,
     agent_id INT NOT NULL,
+    storage_type VARCHAR(20) NOT NULL DEFAULT 'local',
+    remote_ssh_config_id INT DEFAULT NULL,
     name VARCHAR(100) NOT NULL,
     path VARCHAR(500) NOT NULL,
     encryption VARCHAR(50) NOT NULL DEFAULT 'repokey-blake2',

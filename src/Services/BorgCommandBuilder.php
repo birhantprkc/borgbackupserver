@@ -157,8 +157,9 @@ class BorgCommandBuilder
      * @param array $repo Repository data
      * @param bool $forAgent Whether this is for agent-side execution
      * @param int|null $sshPort SSH port to use (default 22, used for Docker multi-tenant)
+     * @param array|null $remoteSshConfig Remote SSH config for remote_ssh repos (agent-side)
      */
-    public static function buildEnv(array $repo, bool $forAgent = true, ?int $sshPort = null): array
+    public static function buildEnv(array $repo, bool $forAgent = true, ?int $sshPort = null, ?array $remoteSshConfig = null): array
     {
         $env = [
             // Agent runs on a different machine than where the repo was created
@@ -176,8 +177,12 @@ class BorgCommandBuilder
         }
 
         if ($forAgent) {
-            // For agent-side execution, set BORG_RSH to use the agent's SSH key
-            if (self::isSshRepo($repo['path'] ?? '')) {
+            if ($remoteSshConfig) {
+                // Remote SSH repo: agent uses a temp key file written from the task payload
+                $port = (int) ($remoteSshConfig['remote_port'] ?? 22);
+                $env['BORG_RSH'] = "ssh -i /tmp/bbs-remote-ssh-key -p {$port} -o StrictHostKeyChecking=no -o BatchMode=yes";
+            } elseif (self::isSshRepo($repo['path'] ?? '')) {
+                // Local repo on BBS server: agent uses its installed SSH key
                 $port = $sshPort ?? 22;
                 $env['BORG_RSH'] = "ssh -i /etc/bbs-agent/ssh_key -p {$port} -o StrictHostKeyChecking=no -o BatchMode=yes";
             }
@@ -205,9 +210,15 @@ class BorgCommandBuilder
     /**
      * Get the local path for a repo (for server-side operations like prune).
      * Converts ssh://user@host/./reponame to the actual local path using storage location.
+     * Returns null for remote SSH repos (storage_type = 'remote_ssh') — they have no local path.
      */
-    public static function getLocalRepoPath(array $repo): string
+    public static function getLocalRepoPath(array $repo): ?string
     {
+        // Remote SSH repos have no local path
+        if (($repo['storage_type'] ?? 'local') === 'remote_ssh') {
+            return null;
+        }
+
         if (!self::isSshRepo($repo['path'])) {
             return $repo['path'];
         }
@@ -226,6 +237,19 @@ class BorgCommandBuilder
         }
 
         return $repo['path'];
+    }
+
+    /**
+     * Append --remote-path to a command array if borg_remote_path is set.
+     * Inserts after the subcommand (index 1) for proper borg argument order.
+     */
+    public static function appendRemotePath(array $cmd, ?string $borgRemotePath): array
+    {
+        if ($borgRemotePath) {
+            // Insert --remote-path after 'borg <subcommand>'
+            array_splice($cmd, 2, 0, ['--remote-path=' . $borgRemotePath]);
+        }
+        return $cmd;
     }
 
     /**

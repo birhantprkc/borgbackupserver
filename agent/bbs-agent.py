@@ -20,7 +20,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.8.9"
+AGENT_VERSION = "1.9.0"
 CONFIG_PATH = "/etc/bbs-agent/config.ini"
 LOG_PATH = "/var/log/bbs-agent.log"
 SSH_KEY_PATH = "/etc/bbs-agent/ssh_key"
@@ -1575,6 +1575,23 @@ def execute_task(config, task):
     if cwd:
         os.makedirs(cwd, exist_ok=True)
 
+    # Write temporary SSH key for remote SSH repos (key provided by server in task payload)
+    remote_ssh_key = task.get("remote_ssh_key")
+    remote_key_path = "/tmp/bbs-remote-ssh-key"
+    if remote_ssh_key:
+        try:
+            with open(remote_key_path, "w") as kf:
+                kf.write(remote_ssh_key)
+            os.chmod(remote_key_path, 0o600)
+            logger.info("Wrote temporary SSH key for remote repo")
+        except Exception as e:
+            logger.error(f"Failed to write remote SSH key: {e}")
+            api_request(config, "/api/agent/status", method="POST", data={
+                "job_id": job_id, "result": "failed",
+                "error_log": f"Failed to write remote SSH key: {e}",
+            })
+            return
+
     try:
         proc = subprocess.Popen(
             command,
@@ -1742,6 +1759,14 @@ def execute_task(config, task):
         archive_id = status_response.get("archive_id")
         if archive_id:
             upload_catalog(config, archive_id, catalog_entries)
+
+    # Clean up temporary SSH key for remote repos
+    if remote_ssh_key and os.path.exists(remote_key_path):
+        try:
+            os.unlink(remote_key_path)
+            logger.info("Cleaned up temporary SSH key")
+        except Exception as e:
+            logger.warning(f"Failed to clean up temporary SSH key: {e}")
 
 
 def upload_catalog(config, archive_id, entries):

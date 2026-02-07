@@ -22,9 +22,19 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
             <div>
                 <h4 class="mb-1">
                     <i class="bi bi-archive text-primary me-2"></i><?= htmlspecialchars($repo['name']) ?>
+                    <?php if (($repo['storage_type'] ?? 'local') === 'remote_ssh'): ?>
+                    <span class="badge bg-info ms-2" style="font-size: 0.6em; vertical-align: middle;"><i class="bi bi-hdd-network me-1"></i>Remote SSH</span>
+                    <?php endif; ?>
                 </h4>
                 <div class="text-muted small">
-                    <i class="bi bi-folder me-1"></i><?= htmlspecialchars($localPath) ?>
+                    <?php if (($repo['storage_type'] ?? 'local') === 'remote_ssh'): ?>
+                    <i class="bi bi-hdd-network me-1"></i><?= htmlspecialchars(($repo['remote_user'] ?? '') . '@' . ($repo['remote_host'] ?? '')) ?><?= ((int)($repo['remote_port'] ?? 22)) !== 22 ? ':' . (int)$repo['remote_port'] : '' ?>
+                    <?php if (!empty($repo['remote_config_name'])): ?>
+                    <span class="ms-2 text-muted">(<?= htmlspecialchars($repo['remote_config_name']) ?>)</span>
+                    <?php endif; ?>
+                    <?php else: ?>
+                    <i class="bi bi-folder me-1"></i><?= htmlspecialchars($localPath ?? $repo['path']) ?>
+                    <?php endif; ?>
                 </div>
             </div>
             <?php if ($activeJob): ?>
@@ -169,7 +179,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
 
     <!-- S3 Offsite & Info -->
     <div class="col-lg-6">
-        <?php if ($s3SyncInfo): ?>
+        <?php if (($repo['storage_type'] ?? 'local') !== 'remote_ssh' && $s3SyncInfo): ?>
         <div class="card border-0 shadow-sm mb-4">
             <div class="card-header bg-body fw-semibold d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-cloud text-info me-1"></i> S3 Offsite Mirror</span>
@@ -226,7 +236,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                 </div>
             </div>
         </div>
-        <?php elseif (!empty($s3PluginConfigs)): ?>
+        <?php elseif (($repo['storage_type'] ?? 'local') !== 'remote_ssh' && !empty($s3PluginConfigs)): ?>
         <div class="card border-0 shadow-sm mb-4">
             <div class="card-header bg-body fw-semibold">
                 <i class="bi bi-cloud text-muted me-1"></i> S3 Offsite Mirror
@@ -365,7 +375,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
             <?php else: ?>
             <form method="POST" action="/repositories/<?= $repo['id'] ?>/delete" id="deleteRepoForm">
                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                <?php if ($s3SyncInfo): ?>
+                <?php if (($repo['storage_type'] ?? 'local') !== 'remote_ssh' && $s3SyncInfo): ?>
                 <div class="form-check mb-2">
                     <input class="form-check-input" type="checkbox" name="delete_from_s3" id="deleteFromS3" value="1">
                     <label class="form-check-label small" for="deleteFromS3">

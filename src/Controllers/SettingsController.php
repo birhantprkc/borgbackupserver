@@ -29,11 +29,16 @@ class SettingsController extends Controller
             }
         }
 
+        // Load remote SSH configs for the Remote Storage tab
+        $remoteSshService = new \BBS\Services\RemoteSshService();
+        $remoteSshConfigs = $remoteSshService->getAll();
+
         $this->view('settings/index', [
             'pageTitle' => 'Settings',
             'settings' => $settings,
             'templates' => $templates,
             'storageUsagePercent' => $storageUsagePercent,
+            'remoteSshConfigs' => $remoteSshConfigs,
         ]);
     }
 

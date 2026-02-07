@@ -128,6 +128,12 @@ class App
         $this->router->map('POST', '/settings/test-smtp', 'SettingsController@testSmtp');
         $this->router->map('POST', '/settings/check-update', 'SettingsController@checkUpdate');
 
+        // Remote SSH Configs
+        $this->router->map('POST', '/remote-ssh-configs/create', 'RemoteSshConfigController@store');
+        $this->router->map('POST', '/remote-ssh-configs/[i:id]/update', 'RemoteSshConfigController@update');
+        $this->router->map('POST', '/remote-ssh-configs/[i:id]/delete', 'RemoteSshConfigController@delete');
+        $this->router->map('POST', '/remote-ssh-configs/[i:id]/test', 'RemoteSshConfigController@test');
+
         // Notification Services
         $this->router->map('GET', '/notification-services', 'NotificationServiceController@index');
         $this->router->map('POST', '/notification-services', 'NotificationServiceController@store');

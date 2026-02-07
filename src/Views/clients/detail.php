@@ -564,6 +564,11 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     <h5 class="mb-3">Repositories</h5>
 
     <script>
+    function toggleRemoteSshConfig() {
+        var sel = document.getElementById('storageTypeSelect');
+        var row = document.getElementById('remoteSshConfigRow');
+        if (row) row.style.display = sel && sel.value === 'remote_ssh' ? '' : 'none';
+    }
     function showCreateRepo() {
         var grid = document.getElementById('repo-cards-grid');
         var solo = document.getElementById('add-repo-card-solo');
@@ -747,6 +752,38 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                         <input type="text" class="form-control" name="name" required maxlength="20" placeholder="RepoName">
                     </div>
                     <div class="col-md-3 form-text pt-2">Descriptive name for the repo. (Max 20 characters)</div>
+                </div>
+
+                <div class="row mb-3">
+                    <label class="col-md-3 col-form-label fw-semibold">Storage</label>
+                    <div class="col-md-6">
+                        <select class="form-select" name="storage_type" id="storageTypeSelect" onchange="toggleRemoteSshConfig()">
+                            <option value="local">Local (this server)</option>
+                            <?php if (!empty($remoteSshConfigs)): ?>
+                            <option value="remote_ssh">Remote SSH</option>
+                            <?php endif; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-3 form-text pt-2">Where to store backup data.</div>
+                </div>
+
+                <div class="row mb-3" id="remoteSshConfigRow" style="display:none;">
+                    <label class="col-md-3 col-form-label fw-semibold">Remote Host</label>
+                    <div class="col-md-6">
+                        <select class="form-select" name="remote_ssh_config_id">
+                            <option value="">Select a remote host...</option>
+                            <?php foreach ($remoteSshConfigs ?? [] as $rsc): ?>
+                            <option value="<?= $rsc['id'] ?>"><?= htmlspecialchars($rsc['name']) ?> (<?= htmlspecialchars($rsc['remote_user']) ?>@<?= htmlspecialchars($rsc['remote_host']) ?>)</option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-3 form-text pt-2">
+                        <?php if (empty($remoteSshConfigs)): ?>
+                        <a href="/settings?tab=remote">Configure remote hosts</a>
+                        <?php else: ?>
+                        <a href="/settings?tab=remote">Manage hosts</a>
+                        <?php endif; ?>
+                    </div>
                 </div>
 
                 <div class="row mb-3">
