@@ -1,9 +1,11 @@
 <?php
 $activeTab = $_GET['tab'] ?? 'general';
-// Backwards compat: map old tab names to new consolidated storage tab
+// Backwards compat: map old tab names to new consolidated tabs
 if ($activeTab === 'remote') { $activeTab = 'storage'; $storageSection = 'remote'; }
 elseif ($activeTab === 'offsite') { $activeTab = 'storage'; $storageSection = 's3'; }
 if ($activeTab === 'storage') { $storageSection = $storageSection ?? ($_GET['section'] ?? 'overview'); }
+if ($activeTab === 'borg') { $activeTab = 'updates'; $updatesSection = 'borg'; }
+if ($activeTab === 'updates') { $updatesSection = $updatesSection ?? ($_GET['section'] ?? 'software'); }
 ?>
 
 <!-- Tab Navigation -->
@@ -39,15 +41,10 @@ $updateAvailable = $updateService->isUpdateAvailable();
     </li>
     <li class="nav-item">
         <a class="nav-link <?= $activeTab === 'updates' ? 'active' : '' ?>" href="/settings?tab=updates">
-            <i class="bi bi-cloud-arrow-down me-1"></i><span class="tab-label">Update</span>
+            <i class="bi bi-cloud-arrow-down me-1"></i><span class="tab-label">Updates</span>
             <?php if ($updateAvailable): ?>
                 <span class="badge bg-warning text-dark ms-1">New</span>
             <?php endif; ?>
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link <?= $activeTab === 'borg' ? 'active' : '' ?>" href="/settings?tab=borg">
-            <i class="bi bi-box-seam me-1"></i><span class="tab-label"><span class="d-none d-sm-inline">Borg Version</span><span class="d-sm-none">Borg</span></span>
         </a>
     </li>
 </ul>
@@ -1157,8 +1154,24 @@ function updateBuiltUrl(containerId, schema, prefix) {
 </div>
 <?php endif; ?>
 
-<!-- Borg Versions Tab -->
-<?php if ($activeTab === 'borg'):
+<!-- Updates Tab -->
+<?php if ($activeTab === 'updates'): ?>
+
+<!-- Updates Sub-Navigation -->
+<ul class="nav storage-subnav mb-4">
+    <li class="nav-item">
+        <a class="nav-link <?= $updatesSection === 'software' ? 'active' : '' ?>" href="/settings?tab=updates">
+            <i class="bi bi-cloud-arrow-down me-1"></i> Software Updates
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link <?= $updatesSection === 'borg' ? 'active' : '' ?>" href="/settings?tab=updates&section=borg">
+            <i class="bi bi-box-seam me-1"></i> Borg Clients
+        </a>
+    </li>
+</ul>
+
+<?php if ($updatesSection === 'borg'):
     $borgService = new \BBS\Services\BorgVersionService();
     $updateMode = $borgService->getUpdateMode();
     $serverVersion = $borgService->getServerVersion();
@@ -2005,8 +2018,7 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
 
 <?php endif; ?>
 
-<!-- Updates Tab -->
-<?php if ($activeTab === 'updates'):
+<?php if ($updatesSection === 'software'):
     $updateSvc = new \BBS\Services\UpdateService();
     $currentVersion = $updateSvc->getCurrentVersion();
     $latest = $updateSvc->getLatestRelease();
@@ -2186,6 +2198,8 @@ $outdatedCount = count($outdatedAgents);
     </div>
 </div>
 <?php endif; ?>
+<?php endif; ?>
+
 <?php endif; ?>
 </div><!-- /client-tab-content -->
 
