@@ -103,6 +103,7 @@ $updateAvailable = $updateService->isUpdateAvailable();
                                 <div class="form-text">Send alert when storage exceeds this threshold.</div>
                             </div>
                         </div>
+                        <div class="form-text mt-2">Want to backup to a remote store? <a href="/settings?tab=remote">Configure Remote Storage</a></div>
                     </div>
                     <?php $sshPort = (int) ($settings['ssh_port'] ?? 22); if ($sshPort !== 22): ?>
                     <div class="mb-3">
