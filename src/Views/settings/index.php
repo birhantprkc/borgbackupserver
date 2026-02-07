@@ -1572,25 +1572,37 @@ function _formatBytes($bytes) {
                 <div class="row">
                     <div class="col-md-7">
                         <p class="small text-muted mb-2">Remote Storage via SSH offers an affordable and low-impact way of having backups that are offsite and secure. Requires less infrastructure and gives peace of mind knowing your backups are off-site. The borg client must be executable on the remote server. Setup wizards for BorgBase, Hetzner Storage Box, and rsync.net are available.</p>
+                        <div class="d-flex align-items-center gap-3">
+                            <a href="/settings?tab=storage&section=remote" class="btn btn-sm <?= empty($remoteSshConfigs) ? 'btn-primary' : 'btn-outline-primary' ?>">
+                                <?php if (empty($remoteSshConfigs)): ?>
+                                <i class="bi bi-plus-lg me-1"></i> Add SSH Host
+                                <?php else: ?>
+                                <i class="bi bi-gear me-1"></i> Manage Hosts
+                                <?php endif; ?>
+                            </a>
+                            <?php if (!empty($remoteSshConfigs)): ?>
+                            <span class="small text-muted">
+                                <span class="fw-semibold text-body"><?= count($remoteSshConfigs) ?></span> host<?= count($remoteSshConfigs) !== 1 ? 's' : '' ?> configured,
+                                <span class="fw-semibold text-body"><?= $_remoteRepoCount ?></span> remote repo<?= $_remoteRepoCount !== 1 ? 's' : '' ?>
+                            </span>
+                            <?php endif; ?>
+                        </div>
                     </div>
                     <div class="col-md-5">
                         <?php if (empty($remoteSshConfigs)): ?>
-                        <div class="text-center py-2">
-                            <p class="text-muted small mb-2">No remote SSH hosts configured yet.</p>
-                            <a href="/settings?tab=storage&section=remote" class="btn btn-sm btn-primary">
-                                <i class="bi bi-plus-lg me-1"></i> Add SSH Host
-                            </a>
+                        <div class="text-center text-muted py-3">
+                            <i class="bi bi-hdd-network d-block opacity-50" style="font-size: 2rem;"></i>
+                            <p class="small mb-0 mt-2">No remote hosts configured yet.</p>
                         </div>
                         <?php else: ?>
-                        <div class="small mb-2 text-muted">
-                            <span class="fw-semibold text-body"><?= count($remoteSshConfigs) ?></span> host<?= count($remoteSshConfigs) !== 1 ? 's' : '' ?> configured,
-                            <span class="fw-semibold text-body"><?= $_remoteRepoCount ?></span> remote repo<?= $_remoteRepoCount !== 1 ? 's' : '' ?>
-                        </div>
                         <?php foreach ($remoteSshConfigs as $rsc): ?>
                         <div class="card border mb-2">
                             <div class="card-body py-2 px-3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="text-primary opacity-75" style="font-size: 1.4rem;">
+                                        <i class="bi bi-server"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
                                         <span class="fw-semibold small"><?= htmlspecialchars($rsc['name']) ?></span>
                                         <br><span class="text-muted small"><?= htmlspecialchars($rsc['remote_user']) ?>@<?= htmlspecialchars($rsc['remote_host']) ?><?= (int)$rsc['remote_port'] !== 22 ? ':' . (int)$rsc['remote_port'] : '' ?></span>
                                     </div>
@@ -1599,9 +1611,6 @@ function _formatBytes($bytes) {
                             </div>
                         </div>
                         <?php endforeach; ?>
-                        <a href="/settings?tab=storage&section=remote" class="btn btn-sm btn-outline-primary mt-1">
-                            <i class="bi bi-gear me-1"></i> Manage Hosts
-                        </a>
                         <?php endif; ?>
                     </div>
                 </div>
