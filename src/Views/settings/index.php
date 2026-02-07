@@ -1572,8 +1572,8 @@ function _formatBytes($bytes) {
                 <div class="row">
                     <div class="col-md-7">
                         <p class="small text-muted mb-2">Remote Storage via SSH offers an affordable and low-impact way of having backups that are offsite and secure. Requires less infrastructure and gives peace of mind knowing your backups are off-site. The borg client must be executable on the remote server. Setup wizards for BorgBase, Hetzner Storage Box, and rsync.net are available.</p>
-                        <div class="d-flex align-items-center gap-3">
-                            <a href="/settings?tab=storage&section=remote" class="btn btn-sm <?= empty($remoteSshConfigs) ? 'btn-primary' : 'btn-outline-primary' ?>">
+                        <div class="d-flex flex-wrap align-items-center gap-2">
+                            <a href="/settings?tab=storage&section=remote" class="btn btn-sm <?= empty($remoteSshConfigs) ? 'btn-primary' : 'btn-outline-primary' ?> text-nowrap">
                                 <?php if (empty($remoteSshConfigs)): ?>
                                 <i class="bi bi-plus-lg me-1"></i> Add SSH Host
                                 <?php else: ?>
@@ -1582,7 +1582,7 @@ function _formatBytes($bytes) {
                             </a>
                             <?php if (!empty($remoteSshConfigs)): ?>
                             <span class="small text-muted">
-                                <span class="fw-semibold text-body"><?= count($remoteSshConfigs) ?></span> host<?= count($remoteSshConfigs) !== 1 ? 's' : '' ?> configured,
+                                <span class="fw-semibold text-body"><?= count($remoteSshConfigs) ?></span> host<?= count($remoteSshConfigs) !== 1 ? 's' : '' ?>,
                                 <span class="fw-semibold text-body"><?= $_remoteRepoCount ?></span> remote repo<?= $_remoteRepoCount !== 1 ? 's' : '' ?>
                             </span>
                             <?php endif; ?>
@@ -1598,15 +1598,15 @@ function _formatBytes($bytes) {
                         <?php foreach ($remoteSshConfigs as $rsc): ?>
                         <div class="card border mb-2">
                             <div class="card-body py-2 px-3">
-                                <div class="d-flex align-items-center gap-3">
-                                    <div class="text-primary opacity-75" style="font-size: 1.4rem;">
+                                <div class="d-flex align-items-center gap-2" style="min-width: 0;">
+                                    <div class="text-primary opacity-75 flex-shrink-0" style="font-size: 1.4rem;">
                                         <i class="bi bi-server"></i>
                                     </div>
-                                    <div class="flex-grow-1">
+                                    <div class="flex-grow-1" style="min-width: 0;">
                                         <span class="fw-semibold small"><?= htmlspecialchars($rsc['name']) ?></span>
-                                        <br><span class="text-muted small"><?= htmlspecialchars($rsc['remote_user']) ?>@<?= htmlspecialchars($rsc['remote_host']) ?><?= (int)$rsc['remote_port'] !== 22 ? ':' . (int)$rsc['remote_port'] : '' ?></span>
+                                        <br><span class="text-muted small d-none d-md-inline text-truncate d-md-block" style="max-width: 100%;"><?= htmlspecialchars($rsc['remote_user']) ?>@<?= htmlspecialchars($rsc['remote_host']) ?><?= (int)$rsc['remote_port'] !== 22 ? ':' . (int)$rsc['remote_port'] : '' ?></span>
                                     </div>
-                                    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Active</span>
+                                    <span class="badge bg-success flex-shrink-0"><i class="bi bi-check-circle me-1"></i>Active</span>
                                 </div>
                             </div>
                         </div>
