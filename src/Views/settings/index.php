@@ -1543,127 +1543,156 @@ function _formatBytes($bytes) {
 <!-- Storage Overview -->
 <div class="row g-4">
     <!-- Local Storage Card -->
-    <div class="col-lg-6">
-        <div class="card shadow-sm h-100">
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
             <div class="card-header bg-primary bg-opacity-10 fw-semibold">
                 <i class="bi bi-hdd me-1"></i> Local Storage
             </div>
             <div class="card-body">
-                <div class="mb-3">
-                    <div class="d-flex justify-content-between small mb-1">
-                        <span class="text-muted">Disk Usage</span>
-                        <span class="fw-semibold"><?= $storageUsagePercent ?>%</span>
+                <div class="row">
+                    <div class="col-md-7">
+                        <p class="small text-muted mb-2">Generally using local storage repos as your first line of defense in your backup strategy is going to give you the maximum benefit when you need to restore a lot of data quickly. Pair local storage with S3 Sync for bullet-proof backups.</p>
                     </div>
-                    <div class="progress" style="height: 8px;">
-                        <div class="progress-bar <?= $storageUsagePercent >= 90 ? 'bg-danger' : ($storageUsagePercent >= 75 ? 'bg-warning' : 'bg-success') ?>" style="width: <?= $storageUsagePercent ?>%"></div>
+                    <div class="col-md-5">
+                        <div class="card">
+                            <div class="card-body py-2 px-3">
+                                <div class="mb-2">
+                                    <div class="d-flex justify-content-between small mb-1">
+                                        <span class="text-muted">Disk Usage</span>
+                                        <span class="fw-semibold"><?= $storageUsagePercent ?>%</span>
+                                    </div>
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar <?= $storageUsagePercent >= 90 ? 'bg-danger' : ($storageUsagePercent >= 75 ? 'bg-warning' : 'bg-success') ?>" style="width: <?= $storageUsagePercent ?>%"></div>
+                                    </div>
+                                </div>
+                                <div class="row g-1 small">
+                                    <div class="col-5 text-muted">Path</div>
+                                    <div class="col-7"><code class="small"><?= htmlspecialchars($_storagePath) ?></code></div>
+                                    <div class="col-5 text-muted">Disk</div>
+                                    <div class="col-7"><?= $_storageTotalBytes ? _formatBytes($_storageUsedBytes) . ' used / ' . _formatBytes($_storageFreeBytes) . ' free' : 'N/A' ?></div>
+                                    <div class="col-5 text-muted">Local Repos</div>
+                                    <div class="col-7"><span class="badge bg-primary"><?= $_localRepoCount ?></span></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                <div class="row g-2 small">
-                    <div class="col-4 text-muted">Path</div>
-                    <div class="col-8"><code class="small"><?= htmlspecialchars($_storagePath) ?></code></div>
-                    <div class="col-4 text-muted">Disk</div>
-                    <div class="col-8"><?= $_storageTotalBytes ? _formatBytes($_storageUsedBytes) . ' used / ' . _formatBytes($_storageFreeBytes) . ' free' : 'N/A' ?></div>
-                    <div class="col-4 text-muted">Local Repos</div>
-                    <div class="col-8"><span class="badge bg-primary"><?= $_localRepoCount ?></span></div>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Remote Storage (SSH) Card -->
-    <div class="col-lg-6">
-        <div class="card shadow-sm h-100">
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
             <div class="card-header bg-primary bg-opacity-10 fw-semibold">
                 <i class="bi bi-hdd-network me-1"></i> Remote Storage (SSH)
             </div>
             <div class="card-body">
-                <?php if (empty($remoteSshConfigs)): ?>
-                <div class="text-center text-muted py-3">
-                    <i class="bi bi-hdd-network d-block opacity-50" style="font-size: 2rem;"></i>
-                    <p class="small mb-0 mt-2">No remote hosts configured yet.</p>
-                    <a href="/settings?tab=storage&section=wizard" class="btn btn-sm btn-primary mt-2">
-                        <i class="bi bi-plus-lg me-1"></i> Add SSH Host
-                    </a>
-                </div>
-                <?php else: ?>
-                <?php foreach ($remoteSshConfigs as $rsc): ?>
-                <div class="card border mb-2">
-                    <div class="card-body py-2 px-3">
-                        <div class="d-flex align-items-center gap-2" style="min-width: 0;">
-                            <div class="flex-shrink-0" style="font-size: 1.4rem;">
-                                <?php if (($rsc['provider'] ?? '') === 'borgbase'): ?>
-                                <img src="/images/borgbase.svg" alt="" style="width:24px;height:24px;border-radius:50%">
-                                <?php elseif (($rsc['provider'] ?? '') === 'hetzner'): ?>
-                                <img src="/images/hetzner-h.png" alt="" style="width:24px;height:24px;border-radius:50%">
+                <div class="row">
+                    <div class="col-md-7">
+                        <p class="small text-muted mb-2">Remote Storage via SSH offers an affordable and low-impact way of having backups that are offsite and secure. Requires less infrastructure and gives peace of mind knowing your backups are off-site. The borg client must be executable on the remote server. Setup wizards for BorgBase, Hetzner Storage Box, and rsync.net are available.</p>
+                        <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
+                            <a href="/settings?tab=storage&section=remote" class="btn btn-sm <?= empty($remoteSshConfigs) ? 'btn-primary' : 'btn-outline-primary' ?> text-nowrap">
+                                <?php if (empty($remoteSshConfigs)): ?>
+                                <i class="bi bi-plus-lg me-1"></i> Add SSH Host
                                 <?php else: ?>
-                                <i class="bi bi-server text-primary opacity-75"></i>
+                                <i class="bi bi-gear me-1"></i> Manage Hosts
                                 <?php endif; ?>
-                            </div>
-                            <div class="flex-grow-1" style="min-width: 0;">
-                                <span class="fw-semibold small"><?= htmlspecialchars($rsc['name']) ?></span>
-                                <br><span class="text-muted small text-truncate d-block" style="max-width: 100%;"><?= htmlspecialchars($rsc['remote_user']) ?>@<?= htmlspecialchars($rsc['remote_host']) ?><?= (int)$rsc['remote_port'] !== 22 ? ':' . (int)$rsc['remote_port'] : '' ?></span>
-                            </div>
-                            <span class="badge bg-success flex-shrink-0"><i class="bi bi-check-circle me-1"></i>Active</span>
+                            </a>
+                            <?php if (!empty($remoteSshConfigs)): ?>
+                            <span class="small text-muted">
+                                <span class="fw-semibold text-body"><?= count($remoteSshConfigs) ?></span> host<?= count($remoteSshConfigs) !== 1 ? 's' : '' ?>,
+                                <span class="fw-semibold text-body"><?= $_remoteRepoCount ?></span> remote repo<?= $_remoteRepoCount !== 1 ? 's' : '' ?>
+                            </span>
+                            <?php endif; ?>
                         </div>
                     </div>
+                    <div class="col-md-5">
+                        <?php if (empty($remoteSshConfigs)): ?>
+                        <div class="text-center text-muted py-3">
+                            <i class="bi bi-hdd-network d-block opacity-50" style="font-size: 2rem;"></i>
+                            <p class="small mb-0 mt-2">No remote hosts configured yet.</p>
+                        </div>
+                        <?php else: ?>
+                        <?php foreach ($remoteSshConfigs as $rsc): ?>
+                        <div class="card border mb-2">
+                            <div class="card-body py-2 px-3">
+                                <div class="d-flex align-items-center gap-2" style="min-width: 0;">
+                                    <div class="flex-shrink-0" style="font-size: 1.4rem;">
+                                        <?php if (($rsc['provider'] ?? '') === 'borgbase'): ?>
+                                        <img src="/images/borgbase.svg" alt="" style="width:24px;height:24px;border-radius:50%">
+                                        <?php elseif (($rsc['provider'] ?? '') === 'hetzner'): ?>
+                                        <img src="/images/hetzner-h.png" alt="" style="width:24px;height:24px;border-radius:50%">
+                                        <?php else: ?>
+                                        <i class="bi bi-server text-primary opacity-75"></i>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="flex-grow-1" style="min-width: 0;">
+                                        <span class="fw-semibold small"><?= htmlspecialchars($rsc['name']) ?></span>
+                                        <br><span class="text-muted small d-none d-md-inline text-truncate d-md-block" style="max-width: 100%;"><?= htmlspecialchars($rsc['remote_user']) ?>@<?= htmlspecialchars($rsc['remote_host']) ?><?= (int)$rsc['remote_port'] !== 22 ? ':' . (int)$rsc['remote_port'] : '' ?></span>
+                                    </div>
+                                    <span class="badge bg-success flex-shrink-0"><i class="bi bi-check-circle me-1"></i>Active</span>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
                 </div>
-                <?php endforeach; ?>
-                <div class="d-flex align-items-center gap-2 mt-2">
-                    <a href="/settings?tab=storage&section=remote" class="btn btn-sm btn-outline-primary text-nowrap">
-                        <i class="bi bi-gear me-1"></i> Manage Hosts
-                    </a>
-                    <span class="small text-muted">
-                        <span class="fw-semibold text-body"><?= count($remoteSshConfigs) ?></span> host<?= count($remoteSshConfigs) !== 1 ? 's' : '' ?>,
-                        <span class="fw-semibold text-body"><?= $_remoteRepoCount ?></span> remote repo<?= $_remoteRepoCount !== 1 ? 's' : '' ?>
-                    </span>
-                </div>
-                <?php endif; ?>
             </div>
         </div>
     </div>
 
-    <!-- S3 Offsite Sync Card -->
-    <div class="col-lg-6">
-        <div class="card shadow-sm h-100">
+    <!-- S3 Offsite Sync (Global) Card -->
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
             <div class="card-header bg-primary bg-opacity-10 fw-semibold">
-                <i class="bi bi-bucket me-1"></i> S3 Offsite Sync
+                <i class="bi bi-bucket me-1"></i> S3 Offsite Sync (Global)
             </div>
             <div class="card-body">
-                <?php if ($_s3Configured): ?>
-                <div class="row g-2 small">
-                    <div class="col-4 text-muted">Status</div>
-                    <div class="col-8"><span class="badge bg-success">Configured</span></div>
-                    <div class="col-4 text-muted">Endpoint</div>
-                    <div class="col-8"><?= htmlspecialchars($settings['s3_endpoint'] ?? '') ?></div>
-                    <div class="col-4 text-muted">Bucket</div>
-                    <div class="col-8"><?= htmlspecialchars($settings['s3_bucket'] ?? '') ?></div>
-                    <?php if (!empty($settings['s3_region'])): ?>
-                    <div class="col-4 text-muted">Region</div>
-                    <div class="col-8"><?= htmlspecialchars($settings['s3_region']) ?></div>
-                    <?php endif; ?>
-                    <div class="col-4 text-muted">Server Sync</div>
-                    <div class="col-8">
-                        <?php if ($_s3SyncServerBackups): ?>
-                        <span class="badge bg-success">Enabled</span>
+                <div class="row">
+                    <div class="col-md-7">
+                        <p class="small text-muted mb-2">By combining the power and speed of local repositories, the S3 Sync feature keeps your repos and software database in a second, off-site location for maximum security and disaster recovery. Supports AWS S3, Backblaze B2, Wasabi, and any S3-compatible endpoint.</p>
+                    </div>
+                    <div class="col-md-5">
+                        <?php if ($_s3Configured): ?>
+                        <div class="card">
+                            <div class="card-body py-2 px-3">
+                                <div class="row g-2 small">
+                                    <div class="col-5 text-muted">Status</div>
+                                    <div class="col-7"><span class="badge bg-success">Configured</span></div>
+                                    <div class="col-5 text-muted">Endpoint</div>
+                                    <div class="col-7"><?= htmlspecialchars($settings['s3_endpoint'] ?? '') ?></div>
+                                    <div class="col-5 text-muted">Bucket</div>
+                                    <div class="col-7"><?= htmlspecialchars($settings['s3_bucket'] ?? '') ?></div>
+                                    <?php if (!empty($settings['s3_region'])): ?>
+                                    <div class="col-5 text-muted">Region</div>
+                                    <div class="col-7"><?= htmlspecialchars($settings['s3_region']) ?></div>
+                                    <?php endif; ?>
+                                    <div class="col-5 text-muted">Server Sync</div>
+                                    <div class="col-7">
+                                        <?php if ($_s3SyncServerBackups): ?>
+                                        <span class="badge bg-success">Enabled</span>
+                                        <?php else: ?>
+                                        <span class="badge bg-secondary">Disabled</span>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <a href="/settings?tab=storage&section=s3" class="btn btn-sm btn-outline-primary mt-3">
+                            <i class="bi bi-gear me-1"></i> Configure S3
+                        </a>
                         <?php else: ?>
-                        <span class="badge bg-secondary">Disabled</span>
+                        <div class="text-center py-2">
+                            <p class="text-muted small mb-2">S3 offsite sync is not configured yet.</p>
+                            <a href="/settings?tab=storage&section=s3" class="btn btn-sm btn-primary">
+                                <i class="bi bi-gear me-1"></i> Configure S3
+                            </a>
+                        </div>
                         <?php endif; ?>
                     </div>
                 </div>
-                <div class="d-flex align-items-center gap-2 mt-3">
-                    <a href="/settings?tab=storage&section=s3" class="btn btn-sm btn-outline-primary text-nowrap">
-                        <i class="bi bi-gear me-1"></i> Configure S3
-                    </a>
-                </div>
-                <?php else: ?>
-                <div class="text-center py-3">
-                    <i class="bi bi-bucket d-block opacity-50" style="font-size: 2rem;"></i>
-                    <p class="text-muted small mb-2 mt-2">S3 offsite sync is not configured yet.</p>
-                    <a href="/settings?tab=storage&section=s3" class="btn btn-sm btn-primary">
-                        <i class="bi bi-gear me-1"></i> Configure S3
-                    </a>
-                </div>
-                <?php endif; ?>
             </div>
         </div>
     </div>
