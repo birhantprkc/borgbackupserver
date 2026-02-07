@@ -437,8 +437,7 @@ body.bg-body-secondary {
     border-bottom: 2px solid var(--bs-border-color);
     padding-bottom: 0;
     flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    overflow-x: hidden;
 }
 .storage-subnav .nav-link {
     color: var(--bs-secondary-color);
