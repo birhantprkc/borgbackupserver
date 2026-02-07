@@ -1999,7 +1999,7 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
         <div class="card border-0 shadow-sm h-100 text-center" style="cursor:pointer;background:rgba(220,50,50,0.08)" onclick="showWizardForm('hetzner')">
             <div class="card-body py-4">
                 <img src="/images/hetzner-h.png" alt="Hetzner" class="mb-3" style="width:48px;height:48px;border-radius:50%">
-                <h6 class="mb-1">Hetzner Storage Box</h6>
+                <h6 class="mb-1">Hetzner</h6>
                 <p class="text-muted small mb-2">Affordable Storage Boxes</p>
                 <span class="btn btn-sm btn-danger">Setup</span>
             </div>
