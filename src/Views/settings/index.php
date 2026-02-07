@@ -1989,7 +1989,7 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
             <div class="card-body py-4">
                 <img src="/images/borgbase.svg" alt="BorgBase" class="mb-3" style="width:48px;height:48px;border-radius:50%">
                 <h6 class="mb-1">BorgBase</h6>
-                <p class="text-muted small mb-2">Simple and Secure Offsite Backups</p>
+                <p class="text-muted small mb-2">Simple and Secure</p>
                 <span class="btn btn-sm btn-dark">Setup</span>
             </div>
         </div>
