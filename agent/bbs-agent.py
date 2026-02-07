@@ -20,7 +20,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.9.1"
+AGENT_VERSION = "1.9.2"
 CONFIG_PATH = "/etc/bbs-agent/config.ini"
 LOG_PATH = "/var/log/bbs-agent.log"
 SSH_KEY_PATH = "/etc/bbs-agent/ssh_key"
@@ -1198,8 +1198,9 @@ def execute_restore_pg(config, task):
     remote_key_path = "/tmp/bbs-remote-ssh-key"
     if remote_ssh_key:
         try:
+            normalized_key = remote_ssh_key.replace("\r\n", "\n").replace("\r", "\n").rstrip() + "\n"
             with open(remote_key_path, "w") as kf:
-                kf.write(remote_ssh_key)
+                kf.write(normalized_key)
             os.chmod(remote_key_path, 0o600)
             logger.info("Wrote temporary SSH key for remote repo")
         except Exception as e:
@@ -1365,8 +1366,9 @@ def execute_restore_mysql(config, task):
     remote_key_path = "/tmp/bbs-remote-ssh-key"
     if remote_ssh_key:
         try:
+            normalized_key = remote_ssh_key.replace("\r\n", "\n").replace("\r", "\n").rstrip() + "\n"
             with open(remote_key_path, "w") as kf:
-                kf.write(remote_ssh_key)
+                kf.write(normalized_key)
             os.chmod(remote_key_path, 0o600)
             logger.info("Wrote temporary SSH key for remote repo")
         except Exception as e:
@@ -1628,8 +1630,10 @@ def execute_task(config, task):
     remote_key_path = "/tmp/bbs-remote-ssh-key"
     if remote_ssh_key:
         try:
+            # Normalize line endings (Windows \r\n -> Unix \n) and ensure trailing newline
+            normalized_key = remote_ssh_key.replace("\r\n", "\n").replace("\r", "\n").rstrip() + "\n"
             with open(remote_key_path, "w") as kf:
-                kf.write(remote_ssh_key)
+                kf.write(normalized_key)
             os.chmod(remote_key_path, 0o600)
             logger.info("Wrote temporary SSH key for remote repo")
         except Exception as e:
