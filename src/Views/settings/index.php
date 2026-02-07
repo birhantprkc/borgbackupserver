@@ -2002,7 +2002,7 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
     .then(function(data) {
         btn.disabled = false;
         if (data.success) {
-            result.textContent = 'Connection successful!';
+            result.textContent = 'Success';
             result.className = 'd-flex align-items-center ms-2 small text-success fw-semibold';
         } else {
             result.textContent = 'Failed: ' + data.error;
