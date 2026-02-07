@@ -1752,16 +1752,21 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         }
     }
 
-    // Init all schedule pickers (create form + any visible edit forms)
+    // Init all schedule pickers (create form + edit forms)
+    // Use a Set to avoid initializing the same form twice (edit forms are
+    // inside both a <form> and an .edit-plan-panel, which would double-bind
+    // event listeners and cause toggle clicks to cancel themselves out).
+    const initedForms = new Set();
     document.querySelectorAll('form').forEach(form => {
-        if (form.querySelector('.schedule-frequency')) {
+        if (form.querySelector('.schedule-frequency') && !initedForms.has(form)) {
+            initedForms.add(form);
             initSchedulePicker(form);
         }
     });
-    // Also init edit panels (they are inside collapse divs, not directly in a form with .schedule-frequency)
     document.querySelectorAll('.edit-plan-panel').forEach(panel => {
         const form = panel.querySelector('form');
-        if (form && form.querySelector('.schedule-frequency')) {
+        if (form && form.querySelector('.schedule-frequency') && !initedForms.has(form)) {
+            initedForms.add(form);
             initSchedulePicker(form);
         }
     });

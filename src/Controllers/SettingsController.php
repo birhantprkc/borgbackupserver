@@ -320,7 +320,8 @@ class SettingsController extends Controller
         if ($result['success']) {
             $this->flash('success', 'Upgrade completed successfully.');
         } else {
-            $this->flash('danger', 'Upgrade failed. See log below.');
+            $reason = !empty($result['log']) ? end($result['log']) : 'Unknown error';
+            $this->flash('danger', 'Upgrade failed — ' . $reason);
         }
 
         $this->redirect('/settings?tab=updates');
@@ -346,7 +347,8 @@ class SettingsController extends Controller
         if ($code === 0) {
             $this->flash('success', 'Sync completed — code updated and permissions fixed.');
         } else {
-            $this->flash('danger', 'Sync failed. See log below.');
+            $reason = !empty($lines) ? end($lines) : 'Unknown error';
+            $this->flash('danger', 'Sync failed — ' . $reason);
         }
 
         $this->redirect('/settings?tab=updates');

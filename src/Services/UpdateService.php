@@ -119,11 +119,15 @@ class UpdateService
         $latest = $this->getSetting('latest_version', '');
 
         if (empty($latest)) {
-            return ['success' => false, 'log' => ['No update information available. Check for updates first.']];
+            $log[] = 'No update information available. Check for updates first.';
+            $this->setSetting('last_upgrade_log', implode("\n", $log));
+            return ['success' => false, 'log' => $log];
         }
 
         if (!version_compare($latest, $this->getCurrentVersion(), '>')) {
-            return ['success' => false, 'log' => ['Already up to date (v' . $this->getCurrentVersion() . ').']];
+            $log[] = 'Already up to date (v' . $this->getCurrentVersion() . ').';
+            $this->setSetting('last_upgrade_log', implode("\n", $log));
+            return ['success' => false, 'log' => $log];
         }
 
         // Check for active jobs
@@ -131,10 +135,9 @@ class UpdateService
             "SELECT COUNT(*) as cnt FROM backup_jobs WHERE status IN ('sent', 'running')"
         );
         if ((int)$activeJobs['cnt'] > 0) {
-            return [
-                'success' => false,
-                'log' => ["{$activeJobs['cnt']} job(s) still running. Wait for them to complete or cancel them before upgrading."],
-            ];
+            $log[] = "{$activeJobs['cnt']} job(s) still running. Wait for them to complete or cancel them before upgrading.";
+            $this->setSetting('last_upgrade_log', implode("\n", $log));
+            return ['success' => false, 'log' => $log];
         }
 
         // Enable maintenance mode
@@ -157,6 +160,7 @@ class UpdateService
                 $log[] = '';
                 $log[] = "Update script exited with code {$code}.";
                 $this->setSetting('maintenance_mode', '0');
+                $this->setSetting('last_upgrade_log', implode("\n", $log));
                 return ['success' => false, 'log' => $log];
             }
 
