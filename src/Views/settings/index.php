@@ -2036,7 +2036,7 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
 <!-- BorgBase Wizard Form -->
 <div id="wizardBorgbase" style="display:none">
     <div class="card border-0 shadow-sm">
-        <div class="card-header fw-semibold" style="background:rgba(38,50,56,0.08)">
+        <div class="card-header fw-semibold" style="background:rgba(200,170,50,0.12)">
             <img src="/images/borgbase.svg" alt="" style="width:18px;height:18px;border-radius:50%;vertical-align:text-bottom" class="me-1"> BorgBase Setup
         </div>
         <div class="card-body">
