@@ -53,8 +53,7 @@ See the **[full documentation on the Wiki](https://github.com/marcpope/borgbacku
 Run BBS in a Docker container — no OS dependencies to install:
 
 ```bash
-git clone https://github.com/marcpope/borgbackupserver.git
-cd borgbackupserver
+curl -sO https://raw.githubusercontent.com/marcpope/borgbackupserver/main/docker-compose.yml
 docker compose up -d
 ```
 
@@ -66,52 +65,7 @@ docker compose logs bbs
 
 Open `http://localhost:8080` and log in.
 
-### Configuration
-
-Edit `docker-compose.yml` to customize:
-
-| Variable | Default | Description |
-|---|---|---|
-| `APP_URL` | `http://localhost:8080` | Public URL (used by browsers and agents) |
-| `SSH_PORT` | `2222` | SSH port — must match the host-side port mapping |
-| `BBS_VERSION` | `latest` | Release tag, e.g. `v1.0.0-RC5`, or `main` for dev |
-| `ADMIN_PASS` | *(random)* | Admin password (first run only) |
-
-### Ports
-
-BBS needs two ports: **HTTP** for the web UI and API, and **SSH** for borg backup data transfer.
-
-The `SSH_PORT` environment variable tells agents which port to connect to for backups — it **must match** the host-side port in your SSH port mapping (the left side of `2222:22`). For a production server, you would typically use the server's public IP or hostname as `APP_URL` and map the ports accordingly.
-
-### Data & Storage
-
-All persistent data lives in a single Docker volume (`bbs-data`) mounted at `/var/bbs` inside the container:
-
-| Path | Contents |
-|---|---|
-| `/var/bbs/home/` | Borg repositories — one directory per client (e.g. `/var/bbs/home/bbs-webserver1/`) |
-| `/var/bbs/mysql/` | MariaDB database files |
-| `/var/bbs/backups/` | Server self-backup archives |
-| `/var/bbs/cache/` | Borg cache (speeds up backup operations) |
-
-Each registered client gets its own SSH user and home directory under `/var/bbs/home/`. Borg repositories are created inside each client's home directory. This is all handled automatically when you add a client through the web UI.
-
-To use a **bind mount** instead of a Docker volume (e.g. to store repos on a specific disk):
-
-```yaml
-    volumes:
-      - /path/to/your/storage:/var/bbs
-```
-
-### Updates
-
-Updates can be applied from **Settings > Updates** in the web UI, or by restarting the container:
-
-```bash
-docker compose restart
-```
-
-On each start, the container pulls the latest release from GitHub and runs any pending database migrations automatically.
+Edit `docker-compose.yml` to set your `APP_URL`, `SSH_PORT`, and other options. See the **[Docker Installation guide](https://github.com/marcpope/borgbackupserver/wiki/Docker-Installation)** on the wiki for full configuration, storage, reverse proxy, and update documentation.
 
 ---
 
