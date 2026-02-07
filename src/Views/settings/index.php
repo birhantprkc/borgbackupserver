@@ -1653,6 +1653,11 @@ function _formatBytes($bytes) {
                 <div class="row">
                     <div class="col-md-7">
                         <p class="small text-muted mb-2">By combining the power and speed of local repositories, the S3 Sync feature keeps your repos and software database in a second, off-site location for maximum security and disaster recovery. Supports AWS S3, Backblaze B2, Wasabi, and any S3-compatible endpoint.</p>
+                        <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
+                            <a href="/settings?tab=storage&section=s3" class="btn btn-sm <?= $_s3Configured ? 'btn-outline-primary' : 'btn-primary' ?> text-nowrap">
+                                <i class="bi bi-gear me-1"></i> Configure S3
+                            </a>
+                        </div>
                     </div>
                     <div class="col-md-5">
                         <?php if ($_s3Configured): ?>
@@ -1680,15 +1685,9 @@ function _formatBytes($bytes) {
                                 </div>
                             </div>
                         </div>
-                        <a href="/settings?tab=storage&section=s3" class="btn btn-sm btn-outline-primary mt-3">
-                            <i class="bi bi-gear me-1"></i> Configure S3
-                        </a>
                         <?php else: ?>
                         <div class="text-center py-2">
                             <p class="text-muted small mb-2">S3 offsite sync is not configured yet.</p>
-                            <a href="/settings?tab=storage&section=s3" class="btn btn-sm btn-primary">
-                                <i class="bi bi-gear me-1"></i> Configure S3
-                            </a>
                         </div>
                         <?php endif; ?>
                     </div>
