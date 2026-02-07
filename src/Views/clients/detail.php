@@ -654,9 +654,10 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 </div>
                 <div class="card-body p-3">
                     <div class="d-flex align-items-center">
-                        <div class="schedule-icon-wrap me-3 repo-icon-wrap">
-                            <i class="bi bi-archive"></i>
-                            <span class="schedule-id"><?= $repo['archive_count'] ?></span>
+                        <?php $isRemoteRepo = ($repo['storage_type'] ?? 'local') === 'remote_ssh'; ?>
+                        <div class="schedule-icon-wrap me-3 repo-icon-wrap<?= $isRemoteRepo ? ' repo-icon-remote' : '' ?>">
+                            <i class="bi <?= $isRemoteRepo ? 'bi-cloud' : 'bi-archive' ?>"></i>
+                            <span class="schedule-id"><?= $isRemoteRepo ? 'Remote' : 'Local' ?></span>
                         </div>
                         <div class="flex-grow-1 min-width-0">
                             <h6 class="mb-1 fw-bold"><?= htmlspecialchars($repo['name']) ?></h6>

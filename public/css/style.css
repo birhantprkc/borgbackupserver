@@ -469,6 +469,11 @@ body.bg-body-secondary {
     color: #fff;
 }
 
+.repo-icon-remote {
+    background: linear-gradient(135deg, #6f42c1 0%, #5a32a3 100%);
+    color: #fff;
+}
+
 .repo-status-bar {
     text-align: center;
     font-size: 0.8rem;
