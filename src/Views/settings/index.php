@@ -1844,12 +1844,12 @@ $outdatedCount = count($outdatedAgents);
             <div class="card-body">
                 <div class="row g-2 small">
                     <div class="col-4 text-muted">Host</div>
-                    <div class="col-8"><code><?= htmlspecialchars($rsc['remote_user']) ?>@<?= htmlspecialchars($rsc['remote_host']) ?><?= (int)$rsc['remote_port'] !== 22 ? ':' . (int)$rsc['remote_port'] : '' ?></code></div>
+                    <div class="col-8"><span class="text-info"><?= htmlspecialchars($rsc['remote_user']) ?>@<?= htmlspecialchars($rsc['remote_host']) ?><?= (int)$rsc['remote_port'] !== 22 ? ':' . (int)$rsc['remote_port'] : '' ?></span></div>
                     <div class="col-4 text-muted">Base Path</div>
-                    <div class="col-8"><code><?= htmlspecialchars($rsc['remote_base_path']) ?></code></div>
+                    <div class="col-8"><?= htmlspecialchars($rsc['remote_base_path']) ?></div>
                     <?php if (!empty($rsc['borg_remote_path'])): ?>
                     <div class="col-4 text-muted">Borg Binary</div>
-                    <div class="col-8"><code><?= htmlspecialchars($rsc['borg_remote_path']) ?></code></div>
+                    <div class="col-8"><?= htmlspecialchars($rsc['borg_remote_path']) ?></div>
                     <?php endif; ?>
                     <div class="col-4 text-muted">SSH Key</div>
                     <div class="col-8"><span class="badge bg-success"><i class="bi bi-key me-1"></i>Configured</span></div>
