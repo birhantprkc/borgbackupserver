@@ -703,6 +703,24 @@ case "$ACTION" in
         echo "OK"
         ;;
 
+    enable-local-infile)
+        # Enable MySQL local_infile for LOAD DATA LOCAL INFILE support.
+        # Required for fast catalog imports.
+        # Usage: bbs-ssh-helper enable-local-infile
+        MYCNF="/etc/mysql/mysql.conf.d/bbs.cnf"
+        if [ -f "$MYCNF" ] && grep -q "local_infile" "$MYCNF" 2>/dev/null; then
+            echo "Already enabled"
+        else
+            echo "[mysqld]" > "$MYCNF"
+            echo "local_infile=1" >> "$MYCNF"
+            chmod 644 "$MYCNF"
+            # Restart MySQL to pick up the change
+            systemctl restart mysql 2>/dev/null || systemctl restart mysqld 2>/dev/null || true
+            echo "Enabled local_infile and restarted MySQL"
+        fi
+        echo "OK"
+        ;;
+
     update-all-keys)
         # Regenerate authorized_keys for all bbs-* users to use the gate dispatcher.
         # Reads the existing public key from each user's authorized_keys file.

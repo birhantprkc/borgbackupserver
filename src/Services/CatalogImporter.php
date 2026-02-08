@@ -9,11 +9,11 @@ class CatalogImporter
     /**
      * Process a JSONL catalog file from disk into file_paths + file_catalog tables.
      *
-     * Reads the file line by line in batches to keep memory constant.
-     * Uses the same 3-step INSERT pattern as AgentApiController::catalog():
-     *   1. INSERT IGNORE into file_paths (path dedup via path_hash)
-     *   2. SELECT ids via path_hash IN (...)
-     *   3. INSERT into file_catalog
+     * Uses LOAD DATA LOCAL INFILE for bulk import:
+     *   1. Convert JSONL → two TSV temp files (paths + catalog staging)
+     *   2. LOAD DATA LOCAL INFILE into file_paths (IGNORE for dedup)
+     *   3. LOAD DATA LOCAL INFILE into temp staging table
+     *   4. INSERT IGNORE INTO file_catalog ... SELECT from staging JOIN file_paths
      *
      * @return int Number of catalog entries imported
      */
@@ -25,11 +25,21 @@ class CatalogImporter
         }
 
         $pdo = $db->getPdo();
-        $batchSize = 5000;
-        $batch = [];
-        $totalImported = 0;
+        $suffix = $agentId . '_' . $archiveId . '_' . getmypid();
+        $pathsTsv = sys_get_temp_dir() . "/catalog_paths_{$suffix}.tsv";
+        $stagingTsv = sys_get_temp_dir() . "/catalog_staging_{$suffix}.tsv";
 
         try {
+            // Pass 1: Convert JSONL → two TSV files
+            $pathsFh = fopen($pathsTsv, 'w');
+            $stagingFh = fopen($stagingTsv, 'w');
+            if (!$pathsFh || !$stagingFh) {
+                throw new \RuntimeException("Cannot write temp files");
+            }
+
+            $seenPaths = [];
+            $totalLines = 0;
+
             while (($line = fgets($handle)) !== false) {
                 $line = trim($line);
                 if (empty($line)) continue;
@@ -37,111 +47,73 @@ class CatalogImporter
                 $entry = json_decode($line, true);
                 if (!$entry || empty($entry['path'])) continue;
 
-                $batch[] = $entry;
+                $path = $entry['path'];
+                $pathHash = hash('sha256', $agentId . ':' . $path);
+                $status = substr($entry['status'] ?? 'U', 0, 1);
+                $size = (int) ($entry['size'] ?? 0);
+                $mtime = $entry['mtime'] ?? '\\N';
 
-                if (count($batch) >= $batchSize) {
-                    $totalImported += $this->insertBatch($db, $pdo, $agentId, $archiveId, $batch);
-                    $batch = [];
+                // Paths TSV (deduped): agent_id \t path \t file_name \t path_hash
+                if (!isset($seenPaths[$pathHash])) {
+                    $seenPaths[$pathHash] = true;
+                    $escapedPath = str_replace(["\t", "\n", "\\"], ["\\t", "\\n", "\\\\"], $path);
+                    $escapedName = str_replace(["\t", "\n", "\\"], ["\\t", "\\n", "\\\\"], basename($path));
+                    fwrite($pathsFh, "{$agentId}\t{$escapedPath}\t{$escapedName}\t{$pathHash}\n");
                 }
+
+                // Staging TSV: path_hash \t archive_id \t size \t status \t mtime
+                fwrite($stagingFh, "{$pathHash}\t{$archiveId}\t{$size}\t{$status}\t{$mtime}\n");
+                $totalLines++;
             }
 
-            // Final partial batch
-            if (!empty($batch)) {
-                $totalImported += $this->insertBatch($db, $pdo, $agentId, $archiveId, $batch);
-            }
-        } finally {
+            fclose($pathsFh);
+            fclose($stagingFh);
             fclose($handle);
-        }
+            $handle = null;
 
-        return $totalImported;
-    }
-
-    /**
-     * Insert a batch of catalog entries into file_paths + file_catalog.
-     */
-    private function insertBatch(Database $db, \PDO $pdo, int $agentId, int $archiveId, array $files): int
-    {
-        // Build path data with hashes for fast unique lookups
-        $paths = [];
-        foreach ($files as $file) {
-            $path = $file['path'] ?? '';
-            if (empty($path) || isset($paths[$path])) continue;
-            $paths[$path] = hash('sha256', $agentId . ':' . $path);
-        }
-
-        if (empty($paths)) {
-            return 0;
-        }
-
-        // Retry up to 3 times on deadlock (MySQL error 1213)
-        $maxRetries = 3;
-        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
-            $pdo->beginTransaction();
-
-            try {
-                // Step 1: Upsert unique paths into file_paths using path_hash
-                $pathPlaceholders = [];
-                $pathValues = [];
-                foreach ($paths as $path => $pathHash) {
-                    $pathPlaceholders[] = '(?, ?, ?, ?)';
-                    $pathValues[] = $agentId;
-                    $pathValues[] = $path;
-                    $pathValues[] = basename($path);
-                    $pathValues[] = $pathHash;
-                }
-
-                $sql = "INSERT IGNORE INTO file_paths (agent_id, path, file_name, path_hash) VALUES "
-                     . implode(', ', $pathPlaceholders);
-                $db->query($sql, $pathValues);
-
-                // Step 2: Fetch IDs using path_hash (fast fixed-length index lookup)
-                $hashValues = array_values($paths);
-                $inPlaceholders = implode(',', array_fill(0, count($hashValues), '?'));
-                $rows = $db->fetchAll(
-                    "SELECT id, path FROM file_paths WHERE path_hash IN ({$inPlaceholders})",
-                    $hashValues
-                );
-                $pathIdMap = [];
-                foreach ($rows as $row) {
-                    $pathIdMap[$row['path']] = $row['id'];
-                }
-
-                // Step 3: Insert into file_catalog junction table (IGNORE for duplicate paths)
-                $catalogPlaceholders = [];
-                $catalogValues = [];
-                foreach ($files as $file) {
-                    $path = $file['path'] ?? '';
-                    if (empty($path) || !isset($pathIdMap[$path])) continue;
-
-                    $catalogPlaceholders[] = '(?, ?, ?, ?, ?)';
-                    $catalogValues[] = $archiveId;
-                    $catalogValues[] = $pathIdMap[$path];
-                    $catalogValues[] = (int) ($file['size'] ?? 0);
-                    $catalogValues[] = $file['status'] ?? 'U';
-                    $catalogValues[] = $file['mtime'] ?? null;
-                }
-
-                $inserted = 0;
-                if (!empty($catalogPlaceholders)) {
-                    $sql = "INSERT IGNORE INTO file_catalog (archive_id, file_path_id, file_size, status, mtime) VALUES "
-                         . implode(', ', $catalogPlaceholders);
-                    $db->query($sql, $catalogValues);
-                    $inserted = count($catalogPlaceholders);
-                }
-
-                $pdo->commit();
-                return $inserted;
-            } catch (\PDOException $e) {
-                $pdo->rollBack();
-                // Retry on deadlock (SQLSTATE 40001 / MySQL error 1213)
-                if ($e->getCode() == '40001' && $attempt < $maxRetries) {
-                    usleep($attempt * 100000); // 100ms, 200ms backoff
-                    continue;
-                }
-                throw $e;
+            if ($totalLines === 0) {
+                return 0;
             }
-        }
 
-        return 0; // unreachable but satisfies static analysis
+            $seenPaths = []; // free memory
+
+            // Step 2: Bulk load into file_paths
+            $pdo->exec("LOAD DATA LOCAL INFILE " . $pdo->quote($pathsTsv) . "
+                IGNORE INTO TABLE file_paths
+                FIELDS TERMINATED BY '\\t' ESCAPED BY '\\\\'
+                LINES TERMINATED BY '\\n'
+                (agent_id, path, file_name, path_hash)");
+
+            // Step 3: Create temp staging table and bulk load
+            $pdo->exec("CREATE TEMPORARY TABLE _catalog_staging (
+                path_hash CHAR(64) NOT NULL,
+                archive_id INT NOT NULL,
+                file_size BIGINT DEFAULT 0,
+                status CHAR(1) DEFAULT 'U',
+                mtime VARCHAR(19) NULL,
+                KEY (path_hash)
+            ) ENGINE=InnoDB");
+
+            $pdo->exec("LOAD DATA LOCAL INFILE " . $pdo->quote($stagingTsv) . "
+                INTO TABLE _catalog_staging
+                FIELDS TERMINATED BY '\\t'
+                LINES TERMINATED BY '\\n'
+                (path_hash, archive_id, file_size, status, @vmtime)
+                SET mtime = NULLIF(@vmtime, '\\\\N')");
+
+            // Step 4: Join staging with file_paths and insert into file_catalog
+            $pdo->exec("INSERT IGNORE INTO file_catalog (archive_id, file_path_id, file_size, status, mtime)
+                SELECT s.archive_id, fp.id, s.file_size, s.status, s.mtime
+                FROM _catalog_staging s
+                INNER JOIN file_paths fp ON fp.path_hash = s.path_hash");
+
+            $pdo->exec("DROP TEMPORARY TABLE IF EXISTS _catalog_staging");
+
+            return $totalLines;
+        } finally {
+            if ($handle) fclose($handle);
+            @unlink($pathsTsv);
+            @unlink($stagingTsv);
+        }
     }
 }
