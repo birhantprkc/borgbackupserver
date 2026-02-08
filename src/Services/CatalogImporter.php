@@ -19,6 +19,8 @@ class CatalogImporter
      */
     public function processFile(Database $db, int $agentId, int $archiveId, string $filePath): int
     {
+        set_time_limit(0);
+
         $handle = fopen($filePath, 'r');
         if (!$handle) {
             throw new \RuntimeException("Cannot open catalog file: {$filePath}");

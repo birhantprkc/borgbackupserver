@@ -503,15 +503,9 @@ class AgentApiController extends Controller
                     if ($archive) {
                         try {
                             $importer = new CatalogImporter();
-                            $count = $importer->processFile(
+                            $importer->processFile(
                                 $this->db, (int) $agent['id'], (int) $archive['id'], $catalogPath
                             );
-                            $this->db->insert('server_log', [
-                                'agent_id' => $agent['id'],
-                                'backup_job_id' => $jobId,
-                                'level' => 'info',
-                                'message' => "File catalog imported: " . number_format($count) . " entries",
-                            ]);
                         } catch (\Exception $e) {
                             $this->db->insert('server_log', [
                                 'agent_id' => $agent['id'],
