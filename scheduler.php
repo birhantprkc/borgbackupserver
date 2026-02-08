@@ -1555,3 +1555,22 @@ if ($hourOfDay === 3) {
         }
     }
 }
+
+// Step 15: One-time migration — install SSH gate if missing
+// The gate was introduced in a version where bbs-update split into two scripts.
+// Old bbs-update (loaded in memory before git pull) never ran the new post-pull
+// steps, so the gate may be missing after the first update. This detects that
+// and runs the install via bbs-ssh-helper (which www-data has sudo access to).
+if (!file_exists('/usr/local/bin/bbs-ssh-gate')) {
+    $helper = '/usr/local/bin/bbs-ssh-helper';
+    if (file_exists($helper)) {
+        echo date('Y-m-d H:i:s') . " New updater detected — installing SSH gate and updating authorized_keys\n";
+        $out1 = shell_exec("sudo {$helper} install-gate 2>&1");
+        $out2 = shell_exec("sudo {$helper} update-all-keys 2>&1");
+        echo $out1 . $out2;
+        $db->insert('server_log', [
+            'level' => 'info',
+            'message' => 'SSH gate auto-installed by scheduler (post-update migration)',
+        ]);
+    }
+}
