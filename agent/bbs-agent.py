@@ -20,7 +20,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.9.4"
+AGENT_VERSION = "1.9.5"
 
 # Ensure UTF-8 locale for handling filenames with non-ASCII characters
 # CentOS 7 and older systems may default to ASCII, causing encoding errors
@@ -653,7 +653,7 @@ def execute_update_agent(config, task):
 
             # Write new script to temp file first, then move
             tmp_path = script_path + ".tmp"
-            with open(tmp_path, "w") as f:
+            with open(tmp_path, "w", encoding="utf-8") as f:
                 f.write(new_script)
             os.chmod(tmp_path, os.stat(script_path).st_mode)
             os.replace(tmp_path, script_path)
