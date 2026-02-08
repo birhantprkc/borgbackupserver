@@ -20,7 +20,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.9.5"
+AGENT_VERSION = "1.9.6"
 
 # Ensure UTF-8 locale for handling filenames with non-ASCII characters
 # CentOS 7 and older systems may default to ASCII, causing encoding errors
@@ -1783,10 +1783,9 @@ def execute_task(config, task):
         error_output = str(e)
         logger.error(f"Job #{job_id} error: {e}")
 
-    # Report final status
+    # Build status data
     status_data = {
         "job_id": job_id,
-        "result": result,
         "files_total": files_total if files_total else files_processed,
         "files_processed": files_processed,
         "original_size": original_size,
@@ -1818,17 +1817,27 @@ def execute_task(config, task):
             "compress": pg_result.get("compress", True),
         }
 
+    # If backup succeeded and has catalog entries, use two-phase status reporting:
+    # 1) Report "cataloging" — creates archive, keeps job as "running"
+    # 2) Upload catalog
+    # 3) Report "completed" — triggers notifications, prune, etc.
+    has_catalog = result == "completed" and task_type == "backup" and catalog_entries
+    if has_catalog:
+        status_data["result"] = "cataloging"
+        catalog_response = api_request(config, "/api/agent/status", method="POST", data=status_data)
+        archive_id = catalog_response.get("archive_id") if catalog_response else None
+        if archive_id:
+            upload_catalog(config, archive_id, catalog_entries)
+        # Now report final completion
+        status_data["result"] = "completed"
+    else:
+        status_data["result"] = result
+
     status_response = api_request(config, "/api/agent/status", method="POST", data=status_data)
 
     # Run post-backup plugin cleanup
     if result == "completed" and task_type == "backup" and plugins and plugin_results:
         cleanup_plugins(plugins, plugin_results, config, job_id)
-
-    # Send file catalog after successful backup
-    if result == "completed" and task_type == "backup" and catalog_entries and status_response:
-        archive_id = status_response.get("archive_id")
-        if archive_id:
-            upload_catalog(config, archive_id, catalog_entries)
 
     # Clean up temporary SSH key for remote repos
     if remote_ssh_key and os.path.exists(remote_key_path):

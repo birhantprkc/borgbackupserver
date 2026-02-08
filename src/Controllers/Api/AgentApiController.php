@@ -215,10 +215,10 @@ class AgentApiController extends Controller
         $input = $this->getJsonInput();
 
         $jobId = (int) ($input['job_id'] ?? 0);
-        $result = $input['result'] ?? '';  // 'completed' or 'failed'
+        $result = $input['result'] ?? '';  // 'completed', 'failed', or 'cataloging'
 
-        if (!$jobId || !in_array($result, ['completed', 'failed'])) {
-            $this->json(['error' => 'job_id and result (completed/failed) required'], 400);
+        if (!$jobId || !in_array($result, ['completed', 'failed', 'cataloging'])) {
+            $this->json(['error' => 'job_id and result (completed/failed/cataloging) required'], 400);
         }
 
         $job = $this->db->fetchOne(
@@ -234,11 +234,18 @@ class AgentApiController extends Controller
         $startedAt = $job['started_at'] ?? $job['queued_at'] ?? $now;
         $duration = strtotime($now) - strtotime($startedAt);
 
+        // "cataloging" means borg finished but agent is about to upload catalog —
+        // keep job as "running" so it doesn't appear completed prematurely
+        $isCataloging = ($result === 'cataloging');
+
         $data = [
-            'status' => $result,
-            'completed_at' => $now,
-            'duration_seconds' => max(0, $duration),
+            'status' => $isCataloging ? 'running' : $result,
         ];
+
+        if (!$isCataloging) {
+            $data['completed_at'] = $now;
+            $data['duration_seconds'] = max(0, $duration);
+        }
 
         // If the agent never reported "running", backfill started_at
         if (empty($job['started_at'])) {
@@ -253,8 +260,68 @@ class AgentApiController extends Controller
 
         $this->db->update('backup_jobs', $data, 'id = ?', [$jobId]);
 
-        // Log the result
         $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
+
+        // For "cataloging", create the archive and return archive_id but skip
+        // notifications, prune, and completion logging
+        if ($isCataloging && $job['task_type'] === 'backup' && !empty($input['archive_name'])) {
+            $archiveData = [
+                'repository_id' => $job['repository_id'],
+                'backup_job_id' => $jobId,
+                'archive_name' => $input['archive_name'],
+                'file_count' => (int) ($input['files_total'] ?? 0),
+                'original_size' => (int) ($input['original_size'] ?? 0),
+                'deduplicated_size' => (int) ($input['deduplicated_size'] ?? 0),
+            ];
+
+            if (!empty($input['databases_backed_up'])) {
+                $archiveData['databases_backed_up'] = json_encode($input['databases_backed_up']);
+            }
+
+            $this->db->insert('archives', $archiveData);
+
+            $origSize = $this->formatBytesLog((int)($input['original_size'] ?? 0));
+            $dedupSize = $this->formatBytesLog((int)($input['deduplicated_size'] ?? 0));
+            $this->db->insert('server_log', [
+                'agent_id' => $agent['id'],
+                'backup_job_id' => $jobId,
+                'level' => 'info',
+                'message' => "Archive created: \"{$input['archive_name']}\" — {$origSize} original, {$dedupSize} deduplicated",
+            ]);
+
+            // Update repo stats
+            $this->db->query("
+                UPDATE repositories SET
+                    archive_count = (SELECT COUNT(*) FROM archives WHERE repository_id = ?),
+                    size_bytes = COALESCE((SELECT SUM(deduplicated_size) FROM archives WHERE repository_id = ?), 0)
+                WHERE id = ?
+            ", [$job['repository_id'], $job['repository_id'], $job['repository_id']]);
+
+            $this->db->insert('server_log', [
+                'agent_id' => $agent['id'],
+                'backup_job_id' => $jobId,
+                'level' => 'info',
+                'message' => "{$taskLabel} finished, uploading file catalog...",
+            ]);
+
+            $archive = $this->db->fetchOne(
+                "SELECT id FROM archives WHERE backup_job_id = ?",
+                [$jobId]
+            );
+
+            $this->json(['status' => 'ok', 'archive_id' => $archive ? (int) $archive['id'] : null]);
+            return;
+        }
+
+        // For cataloging without archive data, just acknowledge
+        if ($isCataloging) {
+            $this->json(['status' => 'ok', 'archive_id' => null]);
+            return;
+        }
+
+        // --- Normal completed/failed flow below ---
+
+        // Log the result
         $level = $result === 'completed' ? 'info' : 'error';
         $message = $result === 'completed'
             ? "{$taskLabel} completed: job #{$jobId}" . (($data['files_total'] ?? 0) > 0 ? ", {$data['files_total']} files" : '') . ", {$duration}s"
@@ -367,46 +434,53 @@ class AgentApiController extends Controller
         }
 
         // If completed and it was a backup, create an archive record
+        // (skip if archive was already created during "cataloging" phase)
         if ($result === 'completed' && $job['task_type'] === 'backup' && !empty($input['archive_name'])) {
-            $archiveData = [
-                'repository_id' => $job['repository_id'],
-                'backup_job_id' => $jobId,
-                'archive_name' => $input['archive_name'],
-                'file_count' => (int) ($input['files_total'] ?? 0),
-                'original_size' => (int) ($input['original_size'] ?? 0),
-                'deduplicated_size' => (int) ($input['deduplicated_size'] ?? 0),
-            ];
+            $existingArchive = $this->db->fetchOne(
+                "SELECT id FROM archives WHERE backup_job_id = ?",
+                [$jobId]
+            );
+            if (!$existingArchive) {
+                $archiveData = [
+                    'repository_id' => $job['repository_id'],
+                    'backup_job_id' => $jobId,
+                    'archive_name' => $input['archive_name'],
+                    'file_count' => (int) ($input['files_total'] ?? 0),
+                    'original_size' => (int) ($input['original_size'] ?? 0),
+                    'deduplicated_size' => (int) ($input['deduplicated_size'] ?? 0),
+                ];
 
-            if (!empty($input['databases_backed_up'])) {
-                $archiveData['databases_backed_up'] = json_encode($input['databases_backed_up']);
+                if (!empty($input['databases_backed_up'])) {
+                    $archiveData['databases_backed_up'] = json_encode($input['databases_backed_up']);
+                }
+
+                $this->db->insert('archives', $archiveData);
+
+                // Log archive creation
+                $origSize = $this->formatBytesLog((int)($input['original_size'] ?? 0));
+                $dedupSize = $this->formatBytesLog((int)($input['deduplicated_size'] ?? 0));
+                $this->db->insert('server_log', [
+                    'agent_id' => $agent['id'],
+                    'backup_job_id' => $jobId,
+                    'level' => 'info',
+                    'message' => "Archive created: \"{$input['archive_name']}\" — {$origSize} original, {$dedupSize} deduplicated",
+                ]);
+
+                // Update repo stats
+                $this->db->query("
+                    UPDATE repositories SET
+                        archive_count = (SELECT COUNT(*) FROM archives WHERE repository_id = ?),
+                        size_bytes = COALESCE((SELECT SUM(deduplicated_size) FROM archives WHERE repository_id = ?), 0)
+                    WHERE id = ?
+                ", [$job['repository_id'], $job['repository_id'], $job['repository_id']]);
+
+                $this->db->insert('server_log', [
+                    'agent_id' => $agent['id'],
+                    'backup_job_id' => $jobId,
+                    'level' => 'info',
+                    'message' => "Repository stats updated for job #{$jobId}",
+                ]);
             }
-
-            $this->db->insert('archives', $archiveData);
-
-            // Log archive creation
-            $origSize = $this->formatBytesLog((int)($input['original_size'] ?? 0));
-            $dedupSize = $this->formatBytesLog((int)($input['deduplicated_size'] ?? 0));
-            $this->db->insert('server_log', [
-                'agent_id' => $agent['id'],
-                'backup_job_id' => $jobId,
-                'level' => 'info',
-                'message' => "Archive created: \"{$input['archive_name']}\" — {$origSize} original, {$dedupSize} deduplicated",
-            ]);
-
-            // Update repo stats
-            $this->db->query("
-                UPDATE repositories SET
-                    archive_count = (SELECT COUNT(*) FROM archives WHERE repository_id = ?),
-                    size_bytes = COALESCE((SELECT SUM(deduplicated_size) FROM archives WHERE repository_id = ?), 0)
-                WHERE id = ?
-            ", [$job['repository_id'], $job['repository_id'], $job['repository_id']]);
-
-            $this->db->insert('server_log', [
-                'agent_id' => $agent['id'],
-                'backup_job_id' => $jobId,
-                'level' => 'info',
-                'message' => "Repository stats updated for job #{$jobId}",
-            ]);
         }
 
         // Auto-queue prune after successful backup
@@ -436,9 +510,9 @@ class AgentApiController extends Controller
             }
         }
 
-        // Return archive_id so agent can send catalog
+        // Return archive_id so older agents can still send catalog after completion
         $archiveId = null;
-        if ($result === 'completed' && $job['task_type'] === 'backup' && !empty($input['archive_name'])) {
+        if ($result === 'completed' && $job['task_type'] === 'backup') {
             $archive = $this->db->fetchOne(
                 "SELECT id FROM archives WHERE backup_job_id = ?",
                 [$jobId]
