@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 #
-# BBS Update Script — pulls latest code and updates all components.
+# BBS Update — thin wrapper that pulls code, then hands off to bbs-update-run.
+#
+# This script is loaded into memory by bash before execution. After git pull,
+# the on-disk copy may have changed, but bash keeps running the old version.
+# By exec-ing bbs-update-run after the pull, we guarantee all post-pull steps
+# always use the freshly-pulled code.
 #
 # Usage:
-#   sudo /var/www/bbs/bin/bbs-update
+#   sudo /var/www/bbs/bin/bbs-update [bbs_dir] [git_tag|main]
 #
 set -euo pipefail
 
@@ -25,7 +30,7 @@ echo ""
 
 git config --global --add safe.directory "$BBS_DIR" 2>/dev/null || true
 
-# 1. Pull / checkout code
+# Pull / checkout code
 if [ -n "$GIT_TAG" ]; then
     echo "[1/10] Upgrading to $GIT_TAG..."
     git -C "$BBS_DIR" fetch --all --tags --force
@@ -50,167 +55,5 @@ else
     fi
 fi
 
-# 2. Install/update PHP dependencies
-echo "[2/10] Installing PHP dependencies..."
-if command -v composer &>/dev/null; then
-    composer install --no-dev --working-dir="$BBS_DIR" --quiet
-else
-    echo "  Warning: composer not found, skipping"
-fi
-
-# 3. Fix web file ownership
-echo "[3/10] Setting web file permissions..."
-chown -R www-data:www-data "$BBS_DIR"
-chmod 755 "$BBS_DIR/config"
-[ -f "$BBS_DIR/config/.env" ] && chmod 600 "$BBS_DIR/config/.env"
-
-# 4. Update SSH helper and gate
-echo "[4/10] Updating SSH helper..."
-cp "$BBS_DIR/bin/bbs-ssh-helper" /usr/local/bin/bbs-ssh-helper
-chmod 755 /usr/local/bin/bbs-ssh-helper
-/usr/local/bin/bbs-ssh-helper install-gate
-/usr/local/bin/bbs-ssh-helper update-all-keys
-
-# 5. Fix runtime directories
-echo "[5/10] Fixing runtime permissions..."
-
-# Borg cache dirs under /var/bbs/cache (avoid /tmp size limits)
-mkdir -p /var/bbs/cache/www-data
-chown www-data:www-data /var/bbs/cache/www-data
-
-# Fix permissions for each bbs-* user's borg dir and home
-for user in $(getent passwd | grep '^bbs-' | cut -d: -f1); do
-    home=$(getent passwd "$user" | cut -d: -f6)
-
-    # Per-user borg cache dir
-    borgdir="/var/bbs/cache/$user"
-    mkdir -p "$borgdir"
-    chown "$user":"$user" "$borgdir"
-
-    # Home dir: 750 for sshd compatibility, owned by user with www-data group
-    if [ -d "$home" ]; then
-        chown "$user":www-data "$home"
-        chmod 750 "$home"
-
-        # .ssh dir strict ownership
-        if [ -d "$home/.ssh" ]; then
-            chown -R "$user":"$user" "$home/.ssh"
-            chmod 700 "$home/.ssh"
-            [ -f "$home/.ssh/authorized_keys" ] && chmod 600 "$home/.ssh/authorized_keys"
-        fi
-
-        # Repo directories: owned by user, group www-data, 770
-        for repo in "$home"/*/; do
-            [ -d "$repo" ] || continue
-            # Skip .ssh
-            [ "$(basename "$repo")" = ".ssh" ] && continue
-            chown -R "$user":www-data "$repo"
-            chmod 770 "$repo"
-        done
-    fi
-done
-
-# 6. Fix sudoers (ensure bbs-update is allowed)
-echo "[6/10] Verifying sudoers..."
-SUDOERS_FILE="/etc/sudoers.d/bbs-ssh-helper"
-EXPECTED="www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper, $BBS_DIR/bin/bbs-update"
-if [ -f "$SUDOERS_FILE" ]; then
-    if ! grep -q "bbs-update" "$SUDOERS_FILE"; then
-        echo "$EXPECTED" > "$SUDOERS_FILE"
-        chmod 440 "$SUDOERS_FILE"
-        echo "  Updated sudoers to include bbs-update"
-    else
-        echo "  OK"
-    fi
-else
-    echo "$EXPECTED" > "$SUDOERS_FILE"
-    chmod 440 "$SUDOERS_FILE"
-    echo "  Created sudoers file"
-fi
-
-# Ensure borg sudoers rule exists (allows prune/compact as client users)
-BORG_SUDOERS="/etc/sudoers.d/bbs-borg"
-BORG_EXPECTED="www-data ALL=(bbs-*) NOPASSWD: /usr/bin/borg, /usr/local/bin/borg, /usr/bin/rclone, /usr/bin/env"
-if [ ! -f "$BORG_SUDOERS" ] || ! grep -q "/usr/bin/rclone" "$BORG_SUDOERS"; then
-    echo "$BORG_EXPECTED" > "$BORG_SUDOERS"
-    chmod 440 "$BORG_SUDOERS"
-    echo "  Updated borg sudoers rule"
-fi
-
-# 7. Ensure rclone is installed (needed for S3 offsite sync)
-echo "[7/10] Checking rclone..."
-if command -v rclone &>/dev/null; then
-    echo "  OK ($(rclone --version 2>/dev/null | head -1))"
-else
-    echo "  Installing rclone..."
-    apt-get install -y rclone 2>/dev/null || echo "  Warning: rclone install failed (S3 sync will not work)"
-fi
-
-# 8. Ensure Apprise is installed (needed for push notifications)
-echo "[8/10] Checking Apprise..."
-if command -v apprise &>/dev/null; then
-    echo "  OK ($(apprise --version 2>/dev/null || echo 'installed'))"
-else
-    echo "  Installing Apprise..."
-    if ! command -v pip3 &>/dev/null; then
-        apt-get update -qq 2>/dev/null
-        apt-get install -y python3-pip 2>/dev/null || true
-    fi
-    if command -v pip3 &>/dev/null; then
-        pip3 install --break-system-packages --no-cache-dir apprise 2>/dev/null \
-            || pip3 install --no-cache-dir apprise 2>/dev/null \
-            || echo "  Warning: Apprise install failed (push notifications will not work)"
-    else
-        echo "  Warning: pip3 not available, cannot install Apprise"
-    fi
-fi
-
-# 9. Run database migrations
-echo "[9/10] Running database migrations..."
-sudo -u www-data php "$BBS_DIR/migrate.php" 2>&1 || echo "  Warning: migration runner returned an error (migrations may run on next page load)"
-
-# 10. Fix storage path permissions
-echo "[10/10] Fixing storage path permissions..."
-ENV_FILE="$BBS_DIR/config/.env"
-if [ -f "$ENV_FILE" ]; then
-    DB_HOST=$(grep '^DB_HOST=' "$ENV_FILE" | cut -d= -f2-)
-    DB_NAME=$(grep '^DB_NAME=' "$ENV_FILE" | cut -d= -f2-)
-    DB_USER=$(grep '^DB_USER=' "$ENV_FILE" | cut -d= -f2-)
-    DB_PASS=$(grep '^DB_PASS=' "$ENV_FILE" | cut -d= -f2-)
-
-    if [ -n "$DB_NAME" ] && [ -n "$DB_USER" ]; then
-        STORAGE_PATH=$(mysql -h "${DB_HOST:-localhost}" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" \
-            -N -e "SELECT \`value\` FROM settings WHERE \`key\` = 'storage_path'" 2>/dev/null || true)
-
-        if [ -n "$STORAGE_PATH" ]; then
-            if [ ! -d "$STORAGE_PATH" ]; then
-                mkdir -p "$STORAGE_PATH"
-                echo "  Created $STORAGE_PATH"
-            fi
-            # root-owned with www-data group so sshd StrictModes
-            # doesn't reject user homes underneath this path
-            chown root:www-data "$STORAGE_PATH"
-            chmod 775 "$STORAGE_PATH"
-            echo "  Fixed $STORAGE_PATH"
-        else
-            echo "  No storage path configured"
-        fi
-    else
-        echo "  Warning: could not read DB credentials from .env"
-    fi
-else
-    echo "  Warning: .env not found, skipping"
-fi
-
-# Restart PHP-FPM to clear OPcache (CLI opcache_reset won't affect FPM)
-PHP_FPM=$(systemctl list-units --type=service --no-legend 2>/dev/null | grep -oP 'php[0-9.]+-fpm\.service' | head -1 || true)
-if [ -n "$PHP_FPM" ]; then
-    echo "  Restarting $PHP_FPM..."
-    systemctl restart "$PHP_FPM"
-else
-    # Try generic service name
-    systemctl restart php-fpm 2>/dev/null || true
-fi
-
-echo ""
-echo "=== Update complete ==="
+# Hand off to the freshly-pulled run script
+exec bash "$BBS_DIR/bin/bbs-update-run" "$BBS_DIR"

@@ -267,8 +267,19 @@ def register(config):
 
 def download_ssh_key(config):
     """Download SSH private key from the server if not already present."""
-    if os.path.exists(SSH_KEY_PATH):
-        logger.info(f"SSH key already present at {SSH_KEY_PATH}")
+    have_key = os.path.exists(SSH_KEY_PATH)
+    have_info = os.path.exists(SSH_INFO_PATH)
+
+    if have_key and have_info:
+        return True
+
+    if have_key and not have_info:
+        # Key exists but ssh_info.json missing (upgraded from older agent).
+        # Fetch connection info from server without re-downloading the key.
+        logger.info("SSH key present but ssh_info.json missing -- fetching connection info")
+        result = api_request(config, "/api/agent/ssh-key")
+        if result and result.get("status") == "ok":
+            _save_ssh_info(result)
         return True
 
     logger.info("Downloading SSH key from server...")
@@ -290,25 +301,27 @@ def download_ssh_key(config):
             f.write(private_key)
         os.chmod(SSH_KEY_PATH, 0o600)
         logger.info(f"SSH key saved to {SSH_KEY_PATH}")
-
-        # Save SSH connection info for catalog streaming
-        ssh_user = result.get("ssh_unix_user", "")
-        server_host = result.get("server_host", "")
-        ssh_port = result.get("ssh_port", 22)
-        if ssh_user and server_host:
-            ssh_info = {
-                "ssh_unix_user": ssh_user,
-                "server_host": server_host,
-                "ssh_port": ssh_port,
-            }
-            with open(SSH_INFO_PATH, "w") as f:
-                json.dump(ssh_info, f)
-            logger.info(f"SSH configured: {ssh_user}@{server_host}:{ssh_port}")
-
+        _save_ssh_info(result)
         return True
     except Exception as e:
         logger.error(f"Failed to save SSH key: {e}")
         return False
+
+
+def _save_ssh_info(result):
+    """Save SSH connection info for catalog streaming."""
+    ssh_user = result.get("ssh_unix_user", "")
+    server_host = result.get("server_host", "")
+    ssh_port = result.get("ssh_port", 22)
+    if ssh_user and server_host:
+        ssh_info = {
+            "ssh_unix_user": ssh_user,
+            "server_host": server_host,
+            "ssh_port": ssh_port,
+        }
+        with open(SSH_INFO_PATH, "w") as f:
+            json.dump(ssh_info, f)
+        logger.info(f"SSH configured: {ssh_user}@{server_host}:{ssh_port}")
 
 
 def count_files(directories):
