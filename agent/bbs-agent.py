@@ -20,7 +20,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.9.9"
+AGENT_VERSION = "1.9.10"
 
 # Ensure UTF-8 locale for handling filenames with non-ASCII characters
 # CentOS 7 and older systems may default to ASCII, causing encoding errors
