@@ -488,7 +488,7 @@ class S3SyncService
         }
 
         // Stream file catalog in batches to handle millions of files
-        // Join with file_paths to get actual path strings (normalized schema)
+        $catalogTable = "file_catalog_{$agent['id']}";
         fwrite($fp, '  "file_catalog": [' . "\n");
 
         $batchSize = 10000;
@@ -498,11 +498,10 @@ class S3SyncService
 
         do {
             $files = $this->db->fetchAll(
-                "SELECT fc.archive_id, fp.path, fc.file_size, fc.mtime
-                 FROM file_catalog fc
-                 JOIN file_paths fp ON fp.id = fc.file_path_id
-                 WHERE fc.archive_id IN (SELECT id FROM archives WHERE repository_id = ?)
-                 ORDER BY fc.archive_id, fp.path
+                "SELECT archive_id, path, file_size, mtime
+                 FROM `{$catalogTable}`
+                 WHERE archive_id IN (SELECT id FROM archives WHERE repository_id = ?)
+                 ORDER BY archive_id, path
                  LIMIT ? OFFSET ?",
                 [$repo['id'], $batchSize, $offset]
             );
@@ -767,62 +766,43 @@ class S3SyncService
             $totalSize += $ar['deduplicated_size'] ?? 0;
         }
 
-        // Get agent_id for file_paths table
+        // Get agent_id for per-agent catalog table
         $repo = $this->db->fetchOne("SELECT agent_id FROM repositories WHERE id = ?", [$repoId]);
-        $agentId = $repo['agent_id'] ?? 0;
+        $agentId = (int) ($repo['agent_id'] ?? 0);
 
-        // Import file catalog in batches to reduce memory pressure
-        // Uses normalized schema: file_paths stores path strings, file_catalog references by ID
+        // Ensure per-agent catalog table exists
+        CatalogImporter::ensureTable($this->db, $agentId);
+        $catalogTable = "file_catalog_{$agentId}";
+
+        // Import file catalog in batches
         $fileCount = 0;
         $fileCatalog = $manifest['file_catalog'] ?? [];
         $batchSize = 1000;
-        $pathCache = [];  // Cache path -> id lookups within batch
 
         for ($i = 0; $i < count($fileCatalog); $i += $batchSize) {
             $batch = array_slice($fileCatalog, $i, $batchSize);
+            $placeholders = [];
+            $values = [];
+
             foreach ($batch as $file) {
                 $archiveId = $archiveNameToId[$file['archive']] ?? null;
                 $path = $file['path'] ?? '';
                 if ($archiveId && $path) {
-                    // Get or create file_path_id
-                    if (isset($pathCache[$path])) {
-                        $filePathId = $pathCache[$path];
-                    } else {
-                        $existingPath = $this->db->fetchOne(
-                            "SELECT id FROM file_paths WHERE agent_id = ? AND path = ?",
-                            [$agentId, $path]
-                        );
-                        if ($existingPath) {
-                            $filePathId = $existingPath['id'];
-                        } else {
-                            $fileName = basename($path);
-                            $filePathId = $this->db->insert('file_paths', [
-                                'agent_id' => $agentId,
-                                'path' => $path,
-                                'file_name' => $fileName,
-                            ]);
-                        }
-                        $pathCache[$path] = $filePathId;
-                    }
-
-                    // Check if entry already exists (composite primary key)
-                    $existing = $this->db->fetchOne(
-                        "SELECT 1 FROM file_catalog WHERE archive_id = ? AND file_path_id = ?",
-                        [$archiveId, $filePathId]
-                    );
-                    if (!$existing) {
-                        $this->db->insert('file_catalog', [
-                            'archive_id' => $archiveId,
-                            'file_path_id' => $filePathId,
-                            'file_size' => $file['size'] ?? 0,
-                            'mtime' => $file['mtime'] ?? null,
-                        ]);
-                    }
+                    $placeholders[] = '(?, ?, ?, ?, ?)';
+                    $values[] = $archiveId;
+                    $values[] = $path;
+                    $values[] = basename($path);
+                    $values[] = (int) ($file['size'] ?? 0);
+                    $values[] = $file['mtime'] ?? null;
                     $fileCount++;
                 }
             }
-            // Clear path cache between batches to manage memory
-            $pathCache = [];
+
+            if (!empty($placeholders)) {
+                $sql = "INSERT INTO `{$catalogTable}` (archive_id, path, file_name, file_size, mtime) VALUES "
+                     . implode(', ', $placeholders);
+                $this->db->query($sql, $values);
+            }
         }
 
         // Update repository stats

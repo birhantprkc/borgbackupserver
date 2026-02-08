@@ -613,42 +613,40 @@ class ClientController extends Controller
             $this->json(['error' => 'Client not found'], 404);
         }
 
+        $table = "file_catalog_{$id}";
         $search = trim($_GET['search'] ?? '');
         $page = max(1, (int) ($_GET['page'] ?? 1));
         $perPage = 100;
         $offset = ($page - 1) * $perPage;
 
-        $where = 'fc.archive_id = ? AND fp.agent_id = ?';
-        $params = [$archive_id, $id];
+        $where = 'archive_id = ?';
+        $params = [$archive_id];
 
         if ($search !== '') {
-            $where .= ' AND (fp.file_name LIKE ? OR fp.path LIKE ?)';
+            $where .= ' AND (file_name LIKE ? OR path LIKE ?)';
             $params[] = "%{$search}%";
             $params[] = "%{$search}%";
         }
 
         $total = $this->db->fetchOne(
-            "SELECT COUNT(*) as cnt FROM file_catalog fc
-             JOIN file_paths fp ON fp.id = fc.file_path_id
-             WHERE {$where}",
+            "SELECT COUNT(*) as cnt FROM `{$table}` WHERE {$where}",
             $params
         );
 
         $files = $this->db->fetchAll(
-            "SELECT fp.id, fp.path as file_path, fp.file_name, fc.file_size, fc.status, fc.mtime
-             FROM file_catalog fc
-             JOIN file_paths fp ON fp.id = fc.file_path_id
+            "SELECT path as file_path, file_name, file_size, status, mtime
+             FROM `{$table}`
              WHERE {$where}
-             ORDER BY fp.path
+             ORDER BY path
              LIMIT {$perPage} OFFSET {$offset}",
             $params
         );
 
         $this->json([
             'files' => $files,
-            'total' => (int) $total['cnt'],
+            'total' => (int) ($total['cnt'] ?? 0),
             'page' => $page,
-            'pages' => max(1, ceil($total['cnt'] / $perPage)),
+            'pages' => max(1, ceil(($total['cnt'] ?? 0) / $perPage)),
         ]);
     }
 
@@ -665,6 +663,7 @@ class ClientController extends Controller
             $this->json(['error' => 'Client not found'], 404);
         }
 
+        $table = "file_catalog_{$id}";
         $prefix = $_GET['path'] ?? '/';
         // Ensure prefix ends with /
         if ($prefix !== '/' && !str_ends_with($prefix, '/')) {
@@ -677,17 +676,16 @@ class ClientController extends Controller
         // Get subdirectories: distinct next path segment for paths that have more segments
         $dirs = $this->db->fetchAll("
             SELECT
-                SUBSTRING_INDEX(SUBSTRING(fp.path, ?), '/', 1) as name,
+                SUBSTRING_INDEX(SUBSTRING(path, ?), '/', 1) as name,
                 COUNT(*) as file_count,
-                SUM(fc.file_size) as total_size
-            FROM file_catalog fc
-            JOIN file_paths fp ON fp.id = fc.file_path_id
-            WHERE fc.archive_id = ? AND fp.agent_id = ?
-              AND fp.path LIKE ?
-              AND LOCATE('/', SUBSTRING(fp.path, ?)) > 0
+                SUM(file_size) as total_size
+            FROM `{$table}`
+            WHERE archive_id = ?
+              AND path LIKE ?
+              AND LOCATE('/', SUBSTRING(path, ?)) > 0
             GROUP BY name
             ORDER BY name
-        ", [$prefixLen + 1, $archive_id, $id, $likePath, $prefixLen + 1]);
+        ", [$prefixLen + 1, $archive_id, $likePath, $prefixLen + 1]);
 
         // Build full paths for dirs
         $directories = [];
@@ -702,15 +700,14 @@ class ClientController extends Controller
 
         // Get files directly at this level (no more / after prefix)
         $files = $this->db->fetchAll("
-            SELECT fp.id, fp.path as file_path, fp.file_name, fc.file_size, fc.status, fc.mtime
-            FROM file_catalog fc
-            JOIN file_paths fp ON fp.id = fc.file_path_id
-            WHERE fc.archive_id = ? AND fp.agent_id = ?
-              AND fp.path LIKE ?
-              AND LOCATE('/', SUBSTRING(fp.path, ?)) = 0
-              AND fc.status != 'D'
-            ORDER BY fp.file_name
-        ", [$archive_id, $id, $likePath, $prefixLen + 1]);
+            SELECT path as file_path, file_name, file_size, status, mtime
+            FROM `{$table}`
+            WHERE archive_id = ?
+              AND path LIKE ?
+              AND LOCATE('/', SUBSTRING(path, ?)) = 0
+              AND status != 'D'
+            ORDER BY file_name
+        ", [$archive_id, $likePath, $prefixLen + 1]);
 
         $this->json([
             'dirs' => $directories,
@@ -738,30 +735,29 @@ class ClientController extends Controller
             return;
         }
 
+        $table = "file_catalog_{$id}";
         $page = max(1, (int) ($_GET['page'] ?? 1));
         $perPage = 20;
 
         // Find distinct file paths matching the search
         $countRow = $this->db->fetchOne(
-            "SELECT COUNT(DISTINCT fp.id) as cnt
-             FROM file_paths fp
-             JOIN file_catalog fc ON fc.file_path_id = fp.id
-             WHERE fp.agent_id = ? AND (fp.file_name LIKE ? OR fp.path LIKE ?)",
-            [$id, "%{$search}%", "%{$search}%"]
+            "SELECT COUNT(DISTINCT path) as cnt
+             FROM `{$table}`
+             WHERE file_name LIKE ? OR path LIKE ?",
+            ["%{$search}%", "%{$search}%"]
         );
         $total = (int) ($countRow['cnt'] ?? 0);
         $pages = max(1, ceil($total / $perPage));
         $offset = ($page - 1) * $perPage;
 
-        // Get the matching file_path IDs (paginated by unique file)
+        // Get the matching paths (paginated by unique path)
         $pathRows = $this->db->fetchAll(
-            "SELECT DISTINCT fp.id, fp.path, fp.file_name
-             FROM file_paths fp
-             JOIN file_catalog fc ON fc.file_path_id = fp.id
-             WHERE fp.agent_id = ? AND (fp.file_name LIKE ? OR fp.path LIKE ?)
-             ORDER BY fp.path
+            "SELECT DISTINCT path, file_name
+             FROM `{$table}`
+             WHERE file_name LIKE ? OR path LIKE ?
+             ORDER BY path
              LIMIT {$perPage} OFFSET {$offset}",
-            [$id, "%{$search}%", "%{$search}%"]
+            ["%{$search}%", "%{$search}%"]
         );
 
         if (empty($pathRows)) {
@@ -769,26 +765,26 @@ class ClientController extends Controller
             return;
         }
 
-        $pathIds = array_column($pathRows, 'id');
-        $placeholders = implode(',', array_fill(0, count($pathIds), '?'));
+        $paths = array_column($pathRows, 'path');
+        $placeholders = implode(',', array_fill(0, count($paths), '?'));
 
         // Get all versions for these paths across all archives
         $versions = $this->db->fetchAll(
-            "SELECT fc.file_path_id, fc.archive_id, fc.file_size, fc.status, fc.mtime,
+            "SELECT c.path, c.archive_id, c.file_size, c.status, c.mtime,
                     ar.archive_name, ar.created_at as archive_date,
                     r.name as repo_name
-             FROM file_catalog fc
-             JOIN archives ar ON ar.id = fc.archive_id
+             FROM `{$table}` c
+             JOIN archives ar ON ar.id = c.archive_id
              JOIN repositories r ON r.id = ar.repository_id
-             WHERE fc.file_path_id IN ({$placeholders})
-             ORDER BY fc.file_path_id, ar.created_at DESC",
-            $pathIds
+             WHERE c.path IN ({$placeholders})
+             ORDER BY c.path, ar.created_at DESC",
+            $paths
         );
 
-        // Group versions by file_path_id
+        // Group versions by path
         $versionMap = [];
         foreach ($versions as $v) {
-            $versionMap[$v['file_path_id']][] = $v;
+            $versionMap[$v['path']][] = $v;
         }
 
         // Build response
@@ -797,7 +793,7 @@ class ClientController extends Controller
             $files[] = [
                 'path' => $pr['path'],
                 'file_name' => $pr['file_name'],
-                'versions' => $versionMap[$pr['id']] ?? [],
+                'versions' => $versionMap[$pr['path']] ?? [],
             ];
         }
 
@@ -926,13 +922,13 @@ class ClientController extends Controller
                     $ext = $compress ? '.sql.gz' : '.sql';
                     $patterns[] = $dumpDir . '/' . $db . $ext;
                 }
+                $table = "file_catalog_{$id}";
                 $placeholders = implode(',', array_fill(0, count($patterns), '?'));
                 $rows = $this->db->fetchAll("
-                    SELECT fp.path, fc.mtime
-                    FROM file_catalog fc
-                    JOIN file_paths fp ON fp.id = fc.file_path_id
-                    WHERE fc.archive_id = ? AND fp.agent_id = ? AND fp.path IN ({$placeholders})
-                ", array_merge([$archive_id, $id], $patterns));
+                    SELECT path, mtime
+                    FROM `{$table}`
+                    WHERE archive_id = ? AND path IN ({$placeholders})
+                ", array_merge([$archive_id], $patterns));
                 foreach ($rows as $row) {
                     $basename = basename($row['path']);
                     $dbName = preg_replace('/\\.sql(\\.gz)?$/', '', $basename);
@@ -1424,6 +1420,11 @@ class ClientController extends Controller
                 SshKeyManager::deleteStorage($clientDir);
             }
         }
+
+        // Drop per-agent catalog table
+        try {
+            $this->db->getPdo()->exec("DROP TABLE IF EXISTS `file_catalog_{$id}`");
+        } catch (\Exception $e) { /* ignore */ }
 
         $this->db->delete('agents', 'id = ?', [$id]);
         $this->flash('success', "Client \"{$agent['name']}\" deleted.");

@@ -14,7 +14,7 @@ set -euo pipefail
 BBS_DIR="${1:-/var/www/bbs}"
 
 # 2. Install/update PHP dependencies
-echo "[2/11] Installing PHP dependencies..."
+echo "[2/12] Installing PHP dependencies..."
 if command -v composer &>/dev/null; then
     composer install --no-dev --working-dir="$BBS_DIR" --quiet
 else
@@ -22,24 +22,24 @@ else
 fi
 
 # 3. Fix web file ownership
-echo "[3/11] Setting web file permissions..."
+echo "[3/12] Setting web file permissions..."
 chown -R www-data:www-data "$BBS_DIR"
 chmod 755 "$BBS_DIR/config"
 [ -f "$BBS_DIR/config/.env" ] && chmod 600 "$BBS_DIR/config/.env"
 
 # 4. Update SSH helper and gate
-echo "[4/11] Updating SSH helper..."
+echo "[4/12] Updating SSH helper..."
 cp "$BBS_DIR/bin/bbs-ssh-helper" /usr/local/bin/bbs-ssh-helper
 chmod 755 /usr/local/bin/bbs-ssh-helper
 /usr/local/bin/bbs-ssh-helper install-gate
 /usr/local/bin/bbs-ssh-helper update-all-keys
 
 # 5. Enable MySQL local_infile for fast catalog imports
-echo "[5/11] Enabling MySQL local_infile..."
+echo "[5/12] Enabling MySQL local_infile..."
 /usr/local/bin/bbs-ssh-helper enable-local-infile
 
 # 6. Fix runtime directories
-echo "[6/11] Fixing runtime permissions..."
+echo "[6/12] Fixing runtime permissions..."
 
 # Borg cache dirs under /var/bbs/cache (avoid /tmp size limits)
 mkdir -p /var/bbs/cache/www-data
@@ -79,7 +79,7 @@ for user in $(getent passwd | grep '^bbs-' | cut -d: -f1); do
 done
 
 # 7. Fix sudoers (ensure bbs-update is allowed)
-echo "[7/11] Verifying sudoers..."
+echo "[7/12] Verifying sudoers..."
 SUDOERS_FILE="/etc/sudoers.d/bbs-ssh-helper"
 EXPECTED="www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper, $BBS_DIR/bin/bbs-update"
 if [ -f "$SUDOERS_FILE" ]; then
@@ -106,7 +106,7 @@ if [ ! -f "$BORG_SUDOERS" ] || ! grep -q "/usr/bin/rclone" "$BORG_SUDOERS"; then
 fi
 
 # 8. Ensure rclone is installed (needed for S3 offsite sync)
-echo "[8/11] Checking rclone..."
+echo "[8/12] Checking rclone..."
 if command -v rclone &>/dev/null; then
     echo "  OK ($(rclone --version 2>/dev/null | head -1))"
 else
@@ -115,7 +115,7 @@ else
 fi
 
 # 9. Ensure Apprise is installed (needed for push notifications)
-echo "[9/11] Checking Apprise..."
+echo "[9/12] Checking Apprise..."
 if command -v apprise &>/dev/null; then
     echo "  OK ($(apprise --version 2>/dev/null || echo 'installed'))"
 else
@@ -134,11 +134,15 @@ else
 fi
 
 # 10. Run database migrations
-echo "[10/11] Running database migrations..."
+echo "[10/12] Running database migrations..."
 sudo -u www-data php "$BBS_DIR/migrate.php" 2>&1 || echo "  Warning: migration runner returned an error (migrations may run on next page load)"
 
-# 11. Fix storage path permissions
-echo "[11/11] Fixing storage path permissions..."
+# 11. Migrate catalog data to per-agent tables
+echo "[11/12] Migrating catalog data..."
+sudo -u www-data php "$BBS_DIR/bin/migrate-catalog.php" 2>&1 || echo "  Warning: catalog migration incomplete (will retry on next update)"
+
+# 12. Fix storage path permissions
+echo "[12/12] Fixing storage path permissions..."
 ENV_FILE="$BBS_DIR/config/.env"
 if [ -f "$ENV_FILE" ]; then
     DB_HOST=$(grep '^DB_HOST=' "$ENV_FILE" | cut -d= -f2-)

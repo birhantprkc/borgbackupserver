@@ -622,92 +622,49 @@ class AgentApiController extends Controller
             $this->json(['error' => 'Archive not found'], 404);
         }
 
-        $agentId = $agent['id'];
-        $pdo = $this->db->getPdo();
+        $agentId = (int) $agent['id'];
+        $table = "file_catalog_{$agentId}";
 
-        // Build path data with hashes for fast unique lookups
-        $paths = [];
+        // Ensure per-agent table exists
+        CatalogImporter::ensureTable($this->db, $agentId);
+
+        // Batch insert directly into flat per-agent table
+        $placeholders = [];
+        $values = [];
         foreach ($files as $file) {
             $path = $file['path'] ?? '';
-            if (empty($path) || isset($paths[$path])) continue;
-            $paths[$path] = hash('sha256', $agentId . ':' . $path);
+            if (empty($path)) continue;
+
+            $placeholders[] = '(?, ?, ?, ?, ?, ?)';
+            $values[] = $archiveId;
+            $values[] = $path;
+            $values[] = basename($path);
+            $values[] = (int) ($file['size'] ?? 0);
+            $values[] = $file['status'] ?? 'U';
+            $values[] = $file['mtime'] ?? null;
         }
 
-        // Wrap all inserts in a single transaction (one fsync instead of per-query)
-        $pdo->beginTransaction();
-
-        try {
-            // Step 1: Upsert unique paths into file_paths using path_hash
-            if (!empty($paths)) {
-                $pathPlaceholders = [];
-                $pathValues = [];
-                foreach ($paths as $path => $pathHash) {
-                    $pathPlaceholders[] = '(?, ?, ?, ?)';
-                    $pathValues[] = $agentId;
-                    $pathValues[] = $path;
-                    $pathValues[] = basename($path);
-                    $pathValues[] = $pathHash;
-                }
-
-                $sql = "INSERT IGNORE INTO file_paths (agent_id, path, file_name, path_hash) VALUES "
-                     . implode(', ', $pathPlaceholders);
-                $this->db->query($sql, $pathValues);
-            }
-
-            // Step 2: Fetch IDs using path_hash (fast fixed-length index lookup)
-            $hashValues = array_values($paths);
-            $inPlaceholders = implode(',', array_fill(0, count($hashValues), '?'));
-            $rows = $this->db->fetchAll(
-                "SELECT id, path FROM file_paths WHERE path_hash IN ({$inPlaceholders})",
-                $hashValues
-            );
-            $pathIdMap = [];
-            foreach ($rows as $row) {
-                $pathIdMap[$row['path']] = $row['id'];
-            }
-
-            // Step 3: Insert into file_catalog junction table
-            $catalogPlaceholders = [];
-            $catalogValues = [];
-            foreach ($files as $file) {
-                $path = $file['path'] ?? '';
-                if (empty($path) || !isset($pathIdMap[$path])) continue;
-
-                $catalogPlaceholders[] = '(?, ?, ?, ?, ?)';
-                $catalogValues[] = $archiveId;
-                $catalogValues[] = $pathIdMap[$path];
-                $catalogValues[] = (int) ($file['size'] ?? 0);
-                $catalogValues[] = $file['status'] ?? 'U';
-                $catalogValues[] = $file['mtime'] ?? null;
-            }
-
-            if (!empty($catalogPlaceholders)) {
-                $sql = "INSERT INTO file_catalog (archive_id, file_path_id, file_size, status, mtime) VALUES "
-                     . implode(', ', $catalogPlaceholders);
-                $this->db->query($sql, $catalogValues);
-            }
-
-            $pdo->commit();
-        } catch (\Exception $e) {
-            $pdo->rollBack();
-            throw $e;
+        $batchSize = 0;
+        if (!empty($placeholders)) {
+            $sql = "INSERT INTO `{$table}` (archive_id, path, file_name, file_size, status, mtime) VALUES "
+                 . implode(', ', $placeholders);
+            $this->db->query($sql, $values);
+            $batchSize = count($placeholders);
         }
 
-        $batchSize = count($catalogPlaceholders);
         $isDone = !empty($input['done']);
 
-        $archiveRow = $this->db->fetchOne("SELECT backup_job_id FROM archives WHERE id = ?", [$archiveId]);
-        $logJobId = $archiveRow['backup_job_id'] ?? null;
-
         if ($isDone) {
-            // Final batch — log a single summary
-            $totalIndexed = (int)$this->db->fetchOne(
-                "SELECT COUNT(*) as cnt FROM file_catalog WHERE archive_id = ?",
+            $archiveRow = $this->db->fetchOne("SELECT backup_job_id FROM archives WHERE id = ?", [$archiveId]);
+            $logJobId = $archiveRow['backup_job_id'] ?? null;
+
+            $totalIndexed = (int) $this->db->fetchOne(
+                "SELECT COUNT(*) as cnt FROM `{$table}` WHERE archive_id = ?",
                 [$archiveId]
             )['cnt'];
 
             $this->db->insert('server_log', [
-                'agent_id' => $agent['id'],
+                'agent_id' => $agentId,
                 'backup_job_id' => $logJobId,
                 'level' => 'info',
                 'message' => "File catalog indexed: {$totalIndexed} entries for archive #{$archiveId}",

@@ -226,31 +226,23 @@ CREATE TABLE archives (
 );
 
 -- --------------------------------------------------------
--- File Catalog (normalized — paths stored once per agent)
+-- File Catalog (flat per-agent tables, created dynamically)
 -- --------------------------------------------------------
-
-CREATE TABLE file_paths (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    agent_id INT NOT NULL,
-    path TEXT NOT NULL,
-    file_name VARCHAR(255) NOT NULL,
-    path_hash CHAR(64) NOT NULL DEFAULT '',
-    INDEX idx_agent_name (agent_id, file_name),
-    UNIQUE KEY idx_path_hash (path_hash),
-    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
-) ENGINE=InnoDB ROW_FORMAT=COMPRESSED;
-
-CREATE TABLE file_catalog (
-    archive_id INT NOT NULL,
-    file_path_id BIGINT UNSIGNED NOT NULL,
-    file_size BIGINT DEFAULT 0,
-    status CHAR(1) DEFAULT 'U',
-    mtime DATETIME NULL,
-    PRIMARY KEY (archive_id, file_path_id),
-    KEY idx_file_path (file_path_id),
-    FOREIGN KEY (archive_id) REFERENCES archives(id) ON DELETE CASCADE,
-    FOREIGN KEY (file_path_id) REFERENCES file_paths(id) ON DELETE CASCADE
-) ENGINE=InnoDB ROW_FORMAT=COMPRESSED;
+-- Each agent gets a table named file_catalog_{agent_id}, created by
+-- CatalogImporter::ensureTable(). Schema per table:
+--
+--   CREATE TABLE file_catalog_{agent_id} (
+--       id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+--       archive_id INT NOT NULL,
+--       path TEXT NOT NULL,
+--       file_name VARCHAR(255) NOT NULL,
+--       file_size BIGINT DEFAULT 0,
+--       status CHAR(1) DEFAULT 'U',
+--       mtime DATETIME NULL,
+--       KEY idx_archive (archive_id),
+--       KEY idx_file_name (file_name),
+--       FOREIGN KEY (archive_id) REFERENCES archives(id) ON DELETE CASCADE
+--   ) ENGINE=InnoDB;
 
 -- --------------------------------------------------------
 -- Logging & Settings

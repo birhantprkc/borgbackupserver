@@ -7,13 +7,11 @@ use BBS\Core\Database;
 class CatalogImporter
 {
     /**
-     * Process a JSONL catalog file from disk into file_paths + file_catalog tables.
+     * Process a JSONL catalog file into the per-agent file_catalog_{agent_id} table.
      *
-     * Uses LOAD DATA LOCAL INFILE with a staging table approach:
-     *   1. Convert JSONL → TSV (paths deduped via PHP hash set)
-     *   2. LOAD DATA LOCAL INFILE into temp staging table (fast, no indexes to maintain)
-     *   3. INSERT only NEW paths into file_paths (LEFT JOIN to skip existing)
-     *   4. INSERT IGNORE INTO file_catalog via staging JOIN file_paths
+     * Converts JSONL → TSV in a single pass, then uses LOAD DATA LOCAL INFILE
+     * to bulk-load directly into the flat per-agent table. No staging tables,
+     * no JOINs, no dedup needed.
      *
      * @return int Number of catalog entries imported
      */
@@ -28,20 +26,19 @@ class CatalogImporter
         }
 
         $pdo = $db->getPdo();
-        $suffix = $agentId . '_' . $archiveId . '_' . getmypid();
-        $stagingTsv = sys_get_temp_dir() . "/catalog_staging_{$suffix}.tsv";
-        $pathsTsv = sys_get_temp_dir() . "/catalog_paths_{$suffix}.tsv";
+        $table = "file_catalog_{$agentId}";
+
+        self::ensureTable($db, $agentId);
+
+        $tsvFile = sys_get_temp_dir() . "/catalog_{$agentId}_{$archiveId}_" . getmypid() . '.tsv';
+        $tsvFh = fopen($tsvFile, 'w');
+        if (!$tsvFh) {
+            fclose($handle);
+            throw new \RuntimeException("Cannot write temp file: {$tsvFile}");
+        }
 
         try {
-            // Pass 1: Convert JSONL → two TSV files
-            $stagingFh = fopen($stagingTsv, 'w');
-            $pathsFh = fopen($pathsTsv, 'w');
-            if (!$stagingFh || !$pathsFh) {
-                throw new \RuntimeException("Cannot write temp files");
-            }
-
-            $seenPaths = [];
-            $totalLines = 0;
+            $count = 0;
 
             while (($line = fgets($handle)) !== false) {
                 $line = trim($line);
@@ -50,90 +47,57 @@ class CatalogImporter
                 $entry = json_decode($line, true);
                 if (!$entry || empty($entry['path'])) continue;
 
-                $path = $entry['path'];
-                $pathHash = hash('sha256', $agentId . ':' . $path);
+                $path = str_replace(["\t", "\n", "\\"], ["\\t", "\\n", "\\\\"], $entry['path']);
+                $name = str_replace(["\t", "\n", "\\"], ["\\t", "\\n", "\\\\"], basename($entry['path']));
                 $status = substr($entry['status'] ?? 'U', 0, 1);
                 $size = (int) ($entry['size'] ?? 0);
                 $mtime = $entry['mtime'] ?? '\\N';
 
-                // Paths TSV (deduped): agent_id \t path \t file_name \t path_hash
-                if (!isset($seenPaths[$pathHash])) {
-                    $seenPaths[$pathHash] = true;
-                    $escapedPath = str_replace(["\t", "\n", "\\"], ["\\t", "\\n", "\\\\"], $path);
-                    $escapedName = str_replace(["\t", "\n", "\\"], ["\\t", "\\n", "\\\\"], basename($path));
-                    fwrite($pathsFh, "{$agentId}\t{$escapedPath}\t{$escapedName}\t{$pathHash}\n");
-                }
-
-                // Staging TSV: path_hash \t archive_id \t size \t status \t mtime
-                fwrite($stagingFh, "{$pathHash}\t{$archiveId}\t{$size}\t{$status}\t{$mtime}\n");
-                $totalLines++;
+                fwrite($tsvFh, "{$archiveId}\t{$path}\t{$name}\t{$size}\t{$status}\t{$mtime}\n");
+                $count++;
             }
 
-            fclose($stagingFh);
-            fclose($pathsFh);
             fclose($handle);
             $handle = null;
+            fclose($tsvFh);
+            $tsvFh = null;
 
-            if ($totalLines === 0) {
+            if ($count === 0) {
                 return 0;
             }
 
-            $seenPaths = []; // free memory
-
-            // Step 2: Create staging table and bulk load catalog entries
-            $pdo->exec("CREATE TEMPORARY TABLE _catalog_staging (
-                path_hash CHAR(64) NOT NULL,
-                archive_id INT NOT NULL,
-                file_size BIGINT DEFAULT 0,
-                status CHAR(1) DEFAULT 'U',
-                mtime VARCHAR(19) NULL,
-                KEY (path_hash)
-            ) ENGINE=InnoDB");
-
-            $pdo->exec("LOAD DATA LOCAL INFILE " . $pdo->quote($stagingTsv) . "
-                INTO TABLE _catalog_staging
-                FIELDS TERMINATED BY '\\t'
-                LINES TERMINATED BY '\\n'
-                (path_hash, archive_id, file_size, status, @vmtime)
-                SET mtime = NULLIF(@vmtime, '\\\\N')");
-
-            // Step 3: Load unique paths into a temp table, then insert only NEW ones
-            $pdo->exec("CREATE TEMPORARY TABLE _new_paths (
-                agent_id INT NOT NULL,
-                path TEXT NOT NULL,
-                file_name VARCHAR(255) NOT NULL,
-                path_hash CHAR(64) NOT NULL,
-                UNIQUE KEY (path_hash)
-            ) ENGINE=InnoDB");
-
-            $pdo->exec("LOAD DATA LOCAL INFILE " . $pdo->quote($pathsTsv) . "
-                INTO TABLE _new_paths
+            $pdo->exec("LOAD DATA LOCAL INFILE " . $pdo->quote($tsvFile) . "
+                INTO TABLE `{$table}`
                 FIELDS TERMINATED BY '\\t' ESCAPED BY '\\\\'
                 LINES TERMINATED BY '\\n'
-                (agent_id, path, file_name, path_hash)");
+                (archive_id, path, file_name, file_size, status, @vmtime)
+                SET mtime = NULLIF(@vmtime, '\\\\N')");
 
-            // Only insert paths that don't already exist in file_paths
-            $pdo->exec("INSERT INTO file_paths (agent_id, path, file_name, path_hash)
-                SELECT np.agent_id, np.path, np.file_name, np.path_hash
-                FROM _new_paths np
-                LEFT JOIN file_paths fp ON fp.path_hash = np.path_hash
-                WHERE fp.id IS NULL");
-
-            $pdo->exec("DROP TEMPORARY TABLE _new_paths");
-
-            // Step 4: Join staging with file_paths and insert into file_catalog
-            $pdo->exec("INSERT IGNORE INTO file_catalog (archive_id, file_path_id, file_size, status, mtime)
-                SELECT s.archive_id, fp.id, s.file_size, s.status, s.mtime
-                FROM _catalog_staging s
-                INNER JOIN file_paths fp ON fp.path_hash = s.path_hash");
-
-            $pdo->exec("DROP TEMPORARY TABLE IF EXISTS _catalog_staging");
-
-            return $totalLines;
+            return $count;
         } finally {
             if ($handle) fclose($handle);
-            @unlink($stagingTsv);
-            @unlink($pathsTsv);
+            if ($tsvFh) fclose($tsvFh);
+            @unlink($tsvFile);
         }
+    }
+
+    /**
+     * Ensure the per-agent catalog table exists. Safe to call multiple times.
+     */
+    public static function ensureTable(Database $db, int $agentId): void
+    {
+        $table = "file_catalog_{$agentId}";
+        $db->getPdo()->exec("CREATE TABLE IF NOT EXISTS `{$table}` (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            archive_id INT NOT NULL,
+            path TEXT NOT NULL,
+            file_name VARCHAR(255) NOT NULL,
+            file_size BIGINT DEFAULT 0,
+            status CHAR(1) DEFAULT 'U',
+            mtime DATETIME NULL,
+            KEY idx_archive (archive_id),
+            KEY idx_file_name (file_name),
+            FOREIGN KEY (archive_id) REFERENCES archives(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB");
     }
 }

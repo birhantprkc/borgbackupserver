@@ -212,7 +212,16 @@ class ServerStats
     {
         $db = \BBS\Core\Database::getInstance();
 
-        $catalogFiles = $db->fetchOne("SELECT COUNT(*) AS cnt FROM file_paths");
+        // Sum catalog entries across per-agent tables
+        $catalogTotal = 0;
+        $agents = $db->fetchAll("SELECT id FROM agents");
+        foreach ($agents as $a) {
+            try {
+                $row = $db->fetchOne("SELECT COUNT(*) AS cnt FROM `file_catalog_{$a['id']}`");
+                $catalogTotal += (int) ($row['cnt'] ?? 0);
+            } catch (\Exception $e) { /* table may not exist yet */ }
+        }
+        $catalogFiles = ['cnt' => $catalogTotal];
         $archives = $db->fetchOne("SELECT COUNT(*) AS cnt FROM archives");
         $jobs = $db->fetchOne("SELECT COALESCE(MAX(id), 0) AS cnt FROM backup_jobs");
 
