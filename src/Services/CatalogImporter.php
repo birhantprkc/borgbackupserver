@@ -20,6 +20,7 @@ class CatalogImporter
     public function processFile(Database $db, int $agentId, int $archiveId, string $filePath): int
     {
         set_time_limit(0);
+        ini_set('memory_limit', '-1');
 
         $handle = fopen($filePath, 'r');
         if (!$handle) {
