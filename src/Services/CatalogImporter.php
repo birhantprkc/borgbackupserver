@@ -95,9 +95,7 @@ class CatalogImporter
             file_size BIGINT DEFAULT 0,
             status CHAR(1) DEFAULT 'U',
             mtime DATETIME NULL,
-            KEY idx_archive (archive_id),
-            KEY idx_file_name (file_name),
-            FOREIGN KEY (archive_id) REFERENCES archives(id) ON DELETE CASCADE
+            KEY idx_archive (archive_id)
         ) ENGINE=InnoDB");
     }
 }
