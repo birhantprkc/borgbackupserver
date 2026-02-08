@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+#
+# bbs-ssh-gate -- SSH command dispatcher for BBS agent connections.
+#
+# Installed as the forced command in authorized_keys for all bbs-* users.
+# Inspects SSH_ORIGINAL_COMMAND to dispatch to either borg serve or
+# a sandboxed catalog log writer.
+#
+# authorized_keys format:
+#   command="/usr/local/bin/bbs-ssh-gate /var/bbs/home/3",restrict ssh-ed25519 AAAA...
+#
+# The .catalog-logs directory is pre-created by bbs-ssh-helper create-user
+# with setgid www-data, so new files automatically get www-data group.
+#
+set -euo pipefail
+
+HOME_DIR="${1:-}"
+
+if [[ -z "$HOME_DIR" ]]; then
+    echo "ERROR: no home directory specified" >&2
+    exit 1
+fi
+
+case "${SSH_ORIGINAL_COMMAND:-}" in
+    "borg serve"*)
+        # Normal borg operations -- pass through to borg serve with append-only
+        exec borg serve --append-only --restrict-to-path "$HOME_DIR"
+        ;;
+
+    "catalog-write "*)
+        # Catalog log streaming -- write stdin to a sandboxed log file
+        JOB_ID="${SSH_ORIGINAL_COMMAND#catalog-write }"
+
+        # Validate job_id is numeric only (prevent path traversal)
+        if [[ ! "$JOB_ID" =~ ^[0-9]+$ ]]; then
+            echo "ERROR: invalid job_id" >&2
+            exit 1
+        fi
+
+        LOG_DIR="$HOME_DIR/.catalog-logs"
+
+        # Directory should already exist (created by bbs-ssh-helper with setgid).
+        # Create if missing (first backup before server update applied the dir).
+        mkdir -p "$LOG_DIR" 2>/dev/null || true
+
+        TARGET="$LOG_DIR/catalog-${JOB_ID}.jsonl"
+        cat > "$TARGET"
+        chmod 640 "$TARGET" 2>/dev/null || true
+        ;;
+
+    *)
+        echo "ERROR: command not allowed" >&2
+        exit 1
+        ;;
+esac

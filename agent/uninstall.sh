@@ -70,14 +70,6 @@ else
     warn "/etc/bbs-agent not found — skipping"
 fi
 
-# Remove catalog data
-if [[ -d /var/lib/bbs-agent ]]; then
-    rm -rf /var/lib/bbs-agent
-    ok "Removed /var/lib/bbs-agent (catalog data)"
-else
-    warn "/var/lib/bbs-agent not found — skipping"
-fi
-
 # Remove log file
 if [[ -f /var/log/bbs-agent.log ]]; then
     rm -f /var/log/bbs-agent.log

@@ -64,10 +64,12 @@ chown -R www-data:www-data "$BBS_DIR"
 chmod 755 "$BBS_DIR/config"
 [ -f "$BBS_DIR/config/.env" ] && chmod 600 "$BBS_DIR/config/.env"
 
-# 4. Update SSH helper
+# 4. Update SSH helper and gate
 echo "[4/10] Updating SSH helper..."
 cp "$BBS_DIR/bin/bbs-ssh-helper" /usr/local/bin/bbs-ssh-helper
 chmod 755 /usr/local/bin/bbs-ssh-helper
+/usr/local/bin/bbs-ssh-helper install-gate
+/usr/local/bin/bbs-ssh-helper update-all-keys
 
 # 5. Fix runtime directories
 echo "[5/10] Fixing runtime permissions..."

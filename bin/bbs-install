@@ -307,6 +307,9 @@ cp "$BBS_DIR/bin/bbs-ssh-helper" /usr/local/bin/bbs-ssh-helper
 chmod 755 /usr/local/bin/bbs-ssh-helper
 ok "SSH helper installed"
 
+sudo /usr/local/bin/bbs-ssh-helper install-gate
+ok "SSH gate installed"
+
 echo "www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper, $BBS_DIR/bin/bbs-update" \
     > /etc/sudoers.d/bbs-ssh-helper
 chmod 440 /etc/sudoers.d/bbs-ssh-helper

@@ -7,6 +7,7 @@ use BBS\Services\QueueManager;
 use BBS\Services\BorgCommandBuilder;
 use BBS\Services\Mailer;
 use BBS\Services\NotificationService;
+use BBS\Services\CatalogImporter;
 
 class AgentApiController extends Controller
 {
@@ -480,6 +481,46 @@ class AgentApiController extends Controller
                     'level' => 'info',
                     'message' => "Repository stats updated for job #{$jobId}",
                 ]);
+            }
+        }
+
+        // Import server-side catalog file if present (written by agent via SSH pipe)
+        if ($result === 'completed' && $job['task_type'] === 'backup') {
+            $storagePath = $this->db->fetchOne(
+                "SELECT `value` FROM settings WHERE `key` = 'storage_path'"
+            );
+            if ($storagePath && !empty($storagePath['value'])) {
+                $catalogPath = rtrim($storagePath['value'], '/') . '/' . $agent['id']
+                             . '/.catalog-logs/catalog-' . $jobId . '.jsonl';
+
+                if (file_exists($catalogPath)) {
+                    $archive = $this->db->fetchOne(
+                        "SELECT id FROM archives WHERE backup_job_id = ?",
+                        [$jobId]
+                    );
+                    if ($archive) {
+                        try {
+                            $importer = new CatalogImporter();
+                            $count = $importer->processFile(
+                                $this->db, (int) $agent['id'], (int) $archive['id'], $catalogPath
+                            );
+                            $this->db->insert('server_log', [
+                                'agent_id' => $agent['id'],
+                                'backup_job_id' => $jobId,
+                                'level' => 'info',
+                                'message' => "File catalog imported: " . number_format($count) . " entries",
+                            ]);
+                        } catch (\Exception $e) {
+                            $this->db->insert('server_log', [
+                                'agent_id' => $agent['id'],
+                                'backup_job_id' => $jobId,
+                                'level' => 'error',
+                                'message' => "Catalog import failed: " . $e->getMessage(),
+                            ]);
+                        }
+                        @unlink($catalogPath);
+                    }
+                }
             }
         }
 

@@ -6,6 +6,8 @@
 #   bbs-ssh-helper create-user <username> <home_dir> <public_key>
 #   bbs-ssh-helper create-repo-dir <repo_dir>
 #   bbs-ssh-helper delete-user <username>
+#   bbs-ssh-helper install-gate
+#   bbs-ssh-helper update-all-keys
 #
 # Install:
 #   cp bin/bbs-ssh-helper /usr/local/bin/bbs-ssh-helper
@@ -48,17 +50,23 @@ case "$ACTION" in
         chown "$USERNAME":www-data "$HOME_DIR"
         chmod 750 "$HOME_DIR"
 
-        # Configure SSH authorized_keys with borg serve restriction
+        # Configure SSH authorized_keys with gate dispatcher
         SSH_DIR="$HOME_DIR/.ssh"
         mkdir -p "$SSH_DIR"
         chmod 700 "$SSH_DIR"
 
         AUTHORIZED_KEYS="$SSH_DIR/authorized_keys"
-        RESTRICT_CMD="command=\"borg serve --append-only --restrict-to-path $HOME_DIR\",restrict"
+        RESTRICT_CMD="command=\"/usr/local/bin/bbs-ssh-gate $HOME_DIR\",restrict"
 
         echo "$RESTRICT_CMD $PUBLIC_KEY" > "$AUTHORIZED_KEYS"
         chmod 600 "$AUTHORIZED_KEYS"
         chown -R "$USERNAME":"$USERNAME" "$SSH_DIR"
+
+        # Create catalog log directory with setgid so files inherit www-data group
+        CATALOG_DIR="$HOME_DIR/.catalog-logs"
+        mkdir -p "$CATALOG_DIR"
+        chown "$USERNAME":www-data "$CATALOG_DIR"
+        chmod 2750 "$CATALOG_DIR"
 
         echo "OK"
         ;;
@@ -676,8 +684,73 @@ case "$ACTION" in
         exit $EXIT_CODE
         ;;
 
+    install-gate)
+        # Install the bbs-ssh-gate script to /usr/local/bin
+        # Usage: bbs-ssh-helper install-gate
+        BBS_DIR="/var/www/bbs"
+        GATE_SRC="$BBS_DIR/bin/bbs-ssh-gate"
+        GATE_DST="/usr/local/bin/bbs-ssh-gate"
+
+        if [ ! -f "$GATE_SRC" ]; then
+            echo "Error: gate script not found at $GATE_SRC"
+            exit 1
+        fi
+
+        cp "$GATE_SRC" "$GATE_DST"
+        chmod 755 "$GATE_DST"
+        chown root:root "$GATE_DST"
+        echo "Installed bbs-ssh-gate to $GATE_DST"
+        echo "OK"
+        ;;
+
+    update-all-keys)
+        # Regenerate authorized_keys for all bbs-* users to use the gate dispatcher.
+        # Reads the existing public key from each user's authorized_keys file.
+        # Usage: bbs-ssh-helper update-all-keys
+        UPDATED=0
+        SKIPPED=0
+
+        for USERNAME in $(awk -F: '$1 ~ /^bbs-/ {print $1}' /etc/passwd); do
+            HOME_DIR=$(getent passwd "$USERNAME" | cut -d: -f6)
+            AK_FILE="$HOME_DIR/.ssh/authorized_keys"
+
+            if [ ! -f "$AK_FILE" ]; then
+                echo "  $USERNAME: no authorized_keys -- skipping"
+                SKIPPED=$((SKIPPED + 1))
+                continue
+            fi
+
+            # Extract the public key (everything after the last ",restrict " prefix)
+            PUBLIC_KEY=$(sed 's/^.*,restrict //' "$AK_FILE" | head -1)
+
+            if [ -z "$PUBLIC_KEY" ]; then
+                echo "  $USERNAME: could not extract public key -- skipping"
+                SKIPPED=$((SKIPPED + 1))
+                continue
+            fi
+
+            # Write new authorized_keys with gate dispatcher
+            RESTRICT_CMD="command=\"/usr/local/bin/bbs-ssh-gate $HOME_DIR\",restrict"
+            echo "$RESTRICT_CMD $PUBLIC_KEY" > "$AK_FILE"
+            chmod 600 "$AK_FILE"
+            chown "$USERNAME":"$USERNAME" "$AK_FILE"
+
+            # Create catalog log directory with setgid
+            CATALOG_DIR="$HOME_DIR/.catalog-logs"
+            mkdir -p "$CATALOG_DIR"
+            chown "$USERNAME":www-data "$CATALOG_DIR"
+            chmod 2750 "$CATALOG_DIR"
+
+            echo "  $USERNAME: updated"
+            UPDATED=$((UPDATED + 1))
+        done
+
+        echo "Updated: $UPDATED, Skipped: $SKIPPED"
+        echo "OK"
+        ;;
+
     *)
-        echo "Usage: bbs-ssh-helper {create-user|create-repo-dir|borg-extract|fix-repo-perms|delete-user|rclone-sync|rclone-restore|get-size|delete-storage|clear-borg-cache} [args...]"
+        echo "Usage: bbs-ssh-helper {create-user|create-repo-dir|borg-extract|fix-repo-perms|delete-user|install-gate|update-all-keys|rclone-sync|rclone-restore|get-size|delete-storage|clear-borg-cache} [args...]"
         exit 1
         ;;
 esac
