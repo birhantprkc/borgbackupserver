@@ -9,11 +9,11 @@ class CatalogImporter
     /**
      * Process a JSONL catalog file from disk into file_paths + file_catalog tables.
      *
-     * Uses LOAD DATA LOCAL INFILE for bulk import:
-     *   1. Convert JSONL → two TSV temp files (paths + catalog staging)
-     *   2. LOAD DATA LOCAL INFILE into file_paths (IGNORE for dedup)
-     *   3. LOAD DATA LOCAL INFILE into temp staging table
-     *   4. INSERT IGNORE INTO file_catalog ... SELECT from staging JOIN file_paths
+     * Uses LOAD DATA LOCAL INFILE with a staging table approach:
+     *   1. Convert JSONL → TSV (paths deduped via PHP hash set)
+     *   2. LOAD DATA LOCAL INFILE into temp staging table (fast, no indexes to maintain)
+     *   3. INSERT only NEW paths into file_paths (LEFT JOIN to skip existing)
+     *   4. INSERT IGNORE INTO file_catalog via staging JOIN file_paths
      *
      * @return int Number of catalog entries imported
      */
@@ -28,14 +28,14 @@ class CatalogImporter
 
         $pdo = $db->getPdo();
         $suffix = $agentId . '_' . $archiveId . '_' . getmypid();
-        $pathsTsv = sys_get_temp_dir() . "/catalog_paths_{$suffix}.tsv";
         $stagingTsv = sys_get_temp_dir() . "/catalog_staging_{$suffix}.tsv";
+        $pathsTsv = sys_get_temp_dir() . "/catalog_paths_{$suffix}.tsv";
 
         try {
             // Pass 1: Convert JSONL → two TSV files
-            $pathsFh = fopen($pathsTsv, 'w');
             $stagingFh = fopen($stagingTsv, 'w');
-            if (!$pathsFh || !$stagingFh) {
+            $pathsFh = fopen($pathsTsv, 'w');
+            if (!$stagingFh || !$pathsFh) {
                 throw new \RuntimeException("Cannot write temp files");
             }
 
@@ -68,8 +68,8 @@ class CatalogImporter
                 $totalLines++;
             }
 
-            fclose($pathsFh);
             fclose($stagingFh);
+            fclose($pathsFh);
             fclose($handle);
             $handle = null;
 
@@ -79,14 +79,7 @@ class CatalogImporter
 
             $seenPaths = []; // free memory
 
-            // Step 2: Bulk load into file_paths
-            $pdo->exec("LOAD DATA LOCAL INFILE " . $pdo->quote($pathsTsv) . "
-                IGNORE INTO TABLE file_paths
-                FIELDS TERMINATED BY '\\t' ESCAPED BY '\\\\'
-                LINES TERMINATED BY '\\n'
-                (agent_id, path, file_name, path_hash)");
-
-            // Step 3: Create temp staging table and bulk load
+            // Step 2: Create staging table and bulk load catalog entries
             $pdo->exec("CREATE TEMPORARY TABLE _catalog_staging (
                 path_hash CHAR(64) NOT NULL,
                 archive_id INT NOT NULL,
@@ -103,6 +96,30 @@ class CatalogImporter
                 (path_hash, archive_id, file_size, status, @vmtime)
                 SET mtime = NULLIF(@vmtime, '\\\\N')");
 
+            // Step 3: Load unique paths into a temp table, then insert only NEW ones
+            $pdo->exec("CREATE TEMPORARY TABLE _new_paths (
+                agent_id INT NOT NULL,
+                path TEXT NOT NULL,
+                file_name VARCHAR(255) NOT NULL,
+                path_hash CHAR(64) NOT NULL,
+                UNIQUE KEY (path_hash)
+            ) ENGINE=InnoDB");
+
+            $pdo->exec("LOAD DATA LOCAL INFILE " . $pdo->quote($pathsTsv) . "
+                INTO TABLE _new_paths
+                FIELDS TERMINATED BY '\\t' ESCAPED BY '\\\\'
+                LINES TERMINATED BY '\\n'
+                (agent_id, path, file_name, path_hash)");
+
+            // Only insert paths that don't already exist in file_paths
+            $pdo->exec("INSERT INTO file_paths (agent_id, path, file_name, path_hash)
+                SELECT np.agent_id, np.path, np.file_name, np.path_hash
+                FROM _new_paths np
+                LEFT JOIN file_paths fp ON fp.path_hash = np.path_hash
+                WHERE fp.id IS NULL");
+
+            $pdo->exec("DROP TEMPORARY TABLE _new_paths");
+
             // Step 4: Join staging with file_paths and insert into file_catalog
             $pdo->exec("INSERT IGNORE INTO file_catalog (archive_id, file_path_id, file_size, status, mtime)
                 SELECT s.archive_id, fp.id, s.file_size, s.status, s.mtime
@@ -114,8 +131,8 @@ class CatalogImporter
             return $totalLines;
         } finally {
             if ($handle) fclose($handle);
-            @unlink($pathsTsv);
             @unlink($stagingTsv);
+            @unlink($pathsTsv);
         }
     }
 }
