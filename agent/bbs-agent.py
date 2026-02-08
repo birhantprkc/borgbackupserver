@@ -2133,7 +2133,7 @@ def check_pending_catalogs(config):
             cleanup_catalog_files(job_id)
             continue
 
-        # Resume catalog upload
+        # Resume catalog upload — try one batch cycle (retries are within upload_catalog)
         logger.info(f"Found pending catalog for job #{job_id}, archive #{archive_id}")
         has_pending = True
 
@@ -2147,6 +2147,7 @@ def check_pending_catalogs(config):
                     "result": "completed",
                 })
                 logger.info(f"Job #{job_id} catalog resume complete, reported completed")
+                has_pending = False
             else:
                 logger.warning(f"Job #{job_id} catalog resume incomplete, will retry")
         finally:
@@ -2155,6 +2156,8 @@ def check_pending_catalogs(config):
         # Only process one pending catalog per cycle
         break
 
+    # Even with pending catalogs, still poll for update_agent tasks so the agent
+    # can be remotely updated to fix issues. Regular backup tasks are blocked.
     return not has_pending
 
 
@@ -2221,31 +2224,36 @@ def main():
             # Check for pending catalog uploads before accepting new work
             catalogs_clear = check_pending_catalogs(config)
 
-            if catalogs_clear:
-                # Poll for tasks
-                result = api_request(config, "/api/agent/tasks")
+            # Poll for tasks
+            result = api_request(config, "/api/agent/tasks")
 
-                # Update poll interval if server sends one
-                if result and "poll_interval" in result:
-                    config["poll_interval"] = int(result["poll_interval"])
+            # Update poll interval if server sends one
+            if result and "poll_interval" in result:
+                config["poll_interval"] = int(result["poll_interval"])
 
-                if result and result.get("tasks"):
-                    for task in result["tasks"]:
-                        if not running:
-                            break
-                        task_running = True
-                        try:
-                            if task.get("task") == "update_borg":
-                                execute_update_borg(config, task)
-                            elif task.get("task") == "update_agent":
-                                execute_update_agent(config, task)
-                            else:
-                                execute_task(config, task)
-                        finally:
-                            task_running = False
-                elif result is None:
-                    # Connection error — server might be down
-                    logger.warning("Failed to poll server, will retry")
+            if result and result.get("tasks"):
+                for task in result["tasks"]:
+                    if not running:
+                        break
+
+                    # If catalogs are pending, only allow agent updates
+                    # (so we can be remotely fixed). Block all other tasks.
+                    if not catalogs_clear and task.get("task") != "update_agent":
+                        continue
+
+                    task_running = True
+                    try:
+                        if task.get("task") == "update_borg":
+                            execute_update_borg(config, task)
+                        elif task.get("task") == "update_agent":
+                            execute_update_agent(config, task)
+                        else:
+                            execute_task(config, task)
+                    finally:
+                        task_running = False
+            elif result is None:
+                # Connection error — server might be down
+                logger.warning("Failed to poll server, will retry")
 
         except Exception as e:
             logger.error(f"Poll loop error: {e}")
