@@ -73,64 +73,75 @@ class CatalogImporter
             return 0;
         }
 
-        $pdo->beginTransaction();
+        // Retry up to 3 times on deadlock (MySQL error 1213)
+        $maxRetries = 3;
+        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            $pdo->beginTransaction();
 
-        try {
-            // Step 1: Upsert unique paths into file_paths using path_hash
-            $pathPlaceholders = [];
-            $pathValues = [];
-            foreach ($paths as $path => $pathHash) {
-                $pathPlaceholders[] = '(?, ?, ?, ?)';
-                $pathValues[] = $agentId;
-                $pathValues[] = $path;
-                $pathValues[] = basename($path);
-                $pathValues[] = $pathHash;
+            try {
+                // Step 1: Upsert unique paths into file_paths using path_hash
+                $pathPlaceholders = [];
+                $pathValues = [];
+                foreach ($paths as $path => $pathHash) {
+                    $pathPlaceholders[] = '(?, ?, ?, ?)';
+                    $pathValues[] = $agentId;
+                    $pathValues[] = $path;
+                    $pathValues[] = basename($path);
+                    $pathValues[] = $pathHash;
+                }
+
+                $sql = "INSERT IGNORE INTO file_paths (agent_id, path, file_name, path_hash) VALUES "
+                     . implode(', ', $pathPlaceholders);
+                $db->query($sql, $pathValues);
+
+                // Step 2: Fetch IDs using path_hash (fast fixed-length index lookup)
+                $hashValues = array_values($paths);
+                $inPlaceholders = implode(',', array_fill(0, count($hashValues), '?'));
+                $rows = $db->fetchAll(
+                    "SELECT id, path FROM file_paths WHERE path_hash IN ({$inPlaceholders})",
+                    $hashValues
+                );
+                $pathIdMap = [];
+                foreach ($rows as $row) {
+                    $pathIdMap[$row['path']] = $row['id'];
+                }
+
+                // Step 3: Insert into file_catalog junction table (IGNORE for duplicate paths)
+                $catalogPlaceholders = [];
+                $catalogValues = [];
+                foreach ($files as $file) {
+                    $path = $file['path'] ?? '';
+                    if (empty($path) || !isset($pathIdMap[$path])) continue;
+
+                    $catalogPlaceholders[] = '(?, ?, ?, ?, ?)';
+                    $catalogValues[] = $archiveId;
+                    $catalogValues[] = $pathIdMap[$path];
+                    $catalogValues[] = (int) ($file['size'] ?? 0);
+                    $catalogValues[] = $file['status'] ?? 'U';
+                    $catalogValues[] = $file['mtime'] ?? null;
+                }
+
+                $inserted = 0;
+                if (!empty($catalogPlaceholders)) {
+                    $sql = "INSERT IGNORE INTO file_catalog (archive_id, file_path_id, file_size, status, mtime) VALUES "
+                         . implode(', ', $catalogPlaceholders);
+                    $db->query($sql, $catalogValues);
+                    $inserted = count($catalogPlaceholders);
+                }
+
+                $pdo->commit();
+                return $inserted;
+            } catch (\PDOException $e) {
+                $pdo->rollBack();
+                // Retry on deadlock (SQLSTATE 40001 / MySQL error 1213)
+                if ($e->getCode() == '40001' && $attempt < $maxRetries) {
+                    usleep($attempt * 100000); // 100ms, 200ms backoff
+                    continue;
+                }
+                throw $e;
             }
-
-            $sql = "INSERT IGNORE INTO file_paths (agent_id, path, file_name, path_hash) VALUES "
-                 . implode(', ', $pathPlaceholders);
-            $db->query($sql, $pathValues);
-
-            // Step 2: Fetch IDs using path_hash (fast fixed-length index lookup)
-            $hashValues = array_values($paths);
-            $inPlaceholders = implode(',', array_fill(0, count($hashValues), '?'));
-            $rows = $db->fetchAll(
-                "SELECT id, path FROM file_paths WHERE path_hash IN ({$inPlaceholders})",
-                $hashValues
-            );
-            $pathIdMap = [];
-            foreach ($rows as $row) {
-                $pathIdMap[$row['path']] = $row['id'];
-            }
-
-            // Step 3: Insert into file_catalog junction table
-            $catalogPlaceholders = [];
-            $catalogValues = [];
-            foreach ($files as $file) {
-                $path = $file['path'] ?? '';
-                if (empty($path) || !isset($pathIdMap[$path])) continue;
-
-                $catalogPlaceholders[] = '(?, ?, ?, ?, ?)';
-                $catalogValues[] = $archiveId;
-                $catalogValues[] = $pathIdMap[$path];
-                $catalogValues[] = (int) ($file['size'] ?? 0);
-                $catalogValues[] = $file['status'] ?? 'U';
-                $catalogValues[] = $file['mtime'] ?? null;
-            }
-
-            $inserted = 0;
-            if (!empty($catalogPlaceholders)) {
-                $sql = "INSERT INTO file_catalog (archive_id, file_path_id, file_size, status, mtime) VALUES "
-                     . implode(', ', $catalogPlaceholders);
-                $db->query($sql, $catalogValues);
-                $inserted = count($catalogPlaceholders);
-            }
-
-            $pdo->commit();
-            return $inserted;
-        } catch (\Exception $e) {
-            $pdo->rollBack();
-            throw $e;
         }
+
+        return 0; // unreachable but satisfies static analysis
     }
 }
