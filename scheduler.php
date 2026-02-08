@@ -641,7 +641,7 @@ foreach ($serverJobs as $sj) {
         continue;
     }
 
-    // Catalog rebuild — extract file listings from all archives to populate file_catalog
+    // Catalog rebuild — extract file listings from all archives to populate per-agent catalog table
     if ($sj['task_type'] === 'catalog_rebuild') {
         $crRepo = $db->fetchOne("SELECT * FROM repositories WHERE id = ?", [$sj['repository_id']]);
         if (!$crRepo) {
@@ -757,7 +757,7 @@ foreach ($serverJobs as $sj) {
                 continue;
             }
 
-            // Parse JSON lines output and insert into file_catalog
+            // Parse JSON lines output and insert into per-agent catalog table
             $files = [];
             $lines = array_filter(explode("\n", trim($crOutput)));
             foreach ($lines as $line) {
@@ -780,72 +780,32 @@ foreach ($serverJobs as $sj) {
             }
 
             if (!empty($files)) {
-                // Build path data with hashes for fast unique lookups
-                $paths = [];
+                $table = "file_catalog_{$agentId}";
+                \BBS\Services\CatalogImporter::ensureTable($db, (int) $agentId);
+
+                // Batch insert directly into flat per-agent table
+                $placeholders = [];
+                $values = [];
                 foreach ($files as $file) {
-                    $path = $file['path'];
-                    if (isset($paths[$path])) continue;
-                    $paths[$path] = hash('sha256', $agentId . ':' . $path);
+                    $placeholders[] = '(?, ?, ?, ?, ?, ?)';
+                    $values[] = $crArchive['id'];
+                    $values[] = $file['path'];
+                    $values[] = basename($file['path']);
+                    $values[] = (int) $file['size'];
+                    $values[] = 'U';
+                    $values[] = $file['mtime'];
                 }
 
-                $pdo = $db->getPdo();
-                $pdo->beginTransaction();
-
-                try {
-                    // Step 1: Upsert paths into file_paths using path_hash
-                    $pathPlaceholders = [];
-                    $pathValues = [];
-                    foreach ($paths as $path => $pathHash) {
-                        $pathPlaceholders[] = '(?, ?, ?, ?)';
-                        $pathValues[] = $agentId;
-                        $pathValues[] = $path;
-                        $pathValues[] = basename($path);
-                        $pathValues[] = $pathHash;
+                if (!empty($placeholders)) {
+                    // Insert in batches of 500 to avoid max_allowed_packet limits
+                    $batchSize = 500;
+                    $chunks = array_chunk($placeholders, $batchSize);
+                    $valueChunks = array_chunk($values, $batchSize * 6);
+                    foreach ($chunks as $i => $chunk) {
+                        $sql = "INSERT INTO `{$table}` (archive_id, path, file_name, file_size, status, mtime) VALUES "
+                             . implode(', ', $chunk);
+                        $db->query($sql, $valueChunks[$i]);
                     }
-
-                    if (!empty($pathPlaceholders)) {
-                        $sql = "INSERT IGNORE INTO file_paths (agent_id, path, file_name, path_hash) VALUES "
-                             . implode(', ', $pathPlaceholders);
-                        $db->query($sql, $pathValues);
-                    }
-
-                    // Step 2: Fetch IDs using path_hash (fast fixed-length index lookup)
-                    $hashValues = array_values($paths);
-                    $inPlaceholders = implode(',', array_fill(0, count($hashValues), '?'));
-                    $rows = $db->fetchAll(
-                        "SELECT id, path FROM file_paths WHERE path_hash IN ({$inPlaceholders})",
-                        $hashValues
-                    );
-                    $pathIdMap = [];
-                    foreach ($rows as $row) {
-                        $pathIdMap[$row['path']] = $row['id'];
-                    }
-
-                    // Step 3: Insert into file_catalog (batch for performance)
-                    $catalogPlaceholders = [];
-                    $catalogValues = [];
-                    foreach ($files as $file) {
-                        $path = $file['path'];
-                        if (!isset($pathIdMap[$path])) continue;
-
-                        $catalogPlaceholders[] = '(?, ?, ?, ?, ?)';
-                        $catalogValues[] = $crArchive['id'];
-                        $catalogValues[] = $pathIdMap[$path];
-                        $catalogValues[] = (int) $file['size'];
-                        $catalogValues[] = 'U';  // Unknown status for restored files
-                        $catalogValues[] = $file['mtime'];
-                    }
-
-                    if (!empty($catalogPlaceholders)) {
-                        $sql = "INSERT IGNORE INTO file_catalog (archive_id, file_path_id, file_size, status, mtime) VALUES "
-                             . implode(', ', $catalogPlaceholders);
-                        $db->query($sql, $catalogValues);
-                    }
-
-                    $pdo->commit();
-                } catch (\Exception $e) {
-                    $pdo->rollBack();
-                    throw $e;
                 }
 
                 $totalFiles += count($files);
