@@ -151,9 +151,18 @@ PACKAGES=(
     python3-pip  # for apprise
 )
 
-info "Installing ${#PACKAGES[@]} packages..."
-apt-get install -y -qq "${PACKAGES[@]}" > /dev/null 2>&1
-ok "System packages installed"
+info "Installing ${#PACKAGES[@]} packages (this can take a few minutes, please be patient)..."
+INSTALLED=0
+for pkg in "${PACKAGES[@]}"; do
+    INSTALLED=$((INSTALLED + 1))
+    printf "  ${CYAN}⋯${NC} [%d/%d] %s...\\r" "$INSTALLED" "${#PACKAGES[@]}" "$pkg"
+    if ! apt-get install -y -qq "$pkg" > /dev/null 2>&1; then
+        echo ""
+        warn "Failed to install $pkg (continuing)"
+    fi
+done
+echo ""
+ok "System packages installed (${#PACKAGES[@]} packages)"
 
 info "Installing Apprise notification tool..."
 pip3 install --break-system-packages --no-cache-dir apprise > /dev/null 2>&1 \
