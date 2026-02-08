@@ -448,10 +448,14 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
                 if (sub) sub.textContent = fmtBytes(job.bytes_processed) + ' of ' + fmtBytes(job.bytes_total) + ' processed';
             })();
         } else if (isJobActive && job.status === 'running') {
-            const label = container.querySelector('.fw-semibold');
-            if (label && job.status_message) {
-                label.textContent = job.status_message;
-            }
+            // Full replace when transitioning from queued/sent to running (pre-progress phase)
+            var taskLabel2 = (job.task_type || 'backup').replace('_',' ').replace(/^\w/, c => c.toUpperCase());
+            var msg = job.status_message ? esc(job.status_message) : taskLabel2 + ' in progress...';
+            var sub = job.status_message ? '' : '<div class="text-white-50 small">Waiting for progress data from agent...</div>';
+            container.innerHTML = '<div class="card border-0 shadow-sm mb-4" style="background-color:#2c3e50"><div class="card-body py-3">' +
+                '<div class="text-white fw-semibold mb-1">' + msg + '</div>' +
+                '<div class="progress mb-1" style="height:22px;background-color:rgba(255,255,255,0.15)"><div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width:100%;background-color:#5b9bd5">Running</div></div>' +
+                sub + '</div></div>';
         }
 
         // Update status badge in header
