@@ -222,6 +222,62 @@ install_borg() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Verify python3 is available (required for the agent)
+# ═══════════════════════════════════════════════════════════════════════════════
+check_python3() {
+    if command -v python3 &>/dev/null; then
+        return
+    fi
+
+    # python3 not found — try to install it
+    print_warning "python3 not found, attempting to install..."
+
+    case "$OS" in
+        ubuntu|debian|pop|linuxmint)
+            apt-get install -y -qq python3 >/dev/null 2>&1 || true
+            ;;
+        centos|rhel|rocky|almalinux)
+            if command -v dnf &>/dev/null; then
+                dnf install -y python3 >/dev/null 2>&1 || true
+            else
+                yum install -y epel-release >/dev/null 2>&1 || true
+                yum install -y python3 >/dev/null 2>&1 || true
+            fi
+            ;;
+        fedora)
+            dnf install -y python3 >/dev/null 2>&1 || true
+            ;;
+        macos)
+            brew install python3 >/dev/null 2>&1 || true
+            ;;
+    esac
+
+    if command -v python3 &>/dev/null; then
+        print_success "python3 installed"
+    else
+        print_error "python3 is required but could not be installed."
+        print_info "Install python3 manually, then re-run this installer."
+        exit 1
+    fi
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Parse a JSON field (works with or without python3)
+# ═══════════════════════════════════════════════════════════════════════════════
+parse_json_field() {
+    local json="$1"
+    local field="$2"
+
+    # Try python3 first (handles all valid JSON correctly)
+    if command -v python3 &>/dev/null; then
+        echo "$json" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('$field',''))" 2>/dev/null && return
+    fi
+
+    # Fallback: simple grep/sed extraction for flat JSON
+    echo "$json" | grep -o "\"${field}\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | sed 's/.*:.*"\(.*\)"/\1/' 2>/dev/null || echo ""
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Install agent files
 # ═══════════════════════════════════════════════════════════════════════════════
 install_agent() {
@@ -296,9 +352,9 @@ install_ssh_key() {
 
     # Extract SSH key from JSON response
     local ssh_key
-    ssh_key=$(echo "$response" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('ssh_private_key',''))" 2>/dev/null)
+    ssh_key=$(parse_json_field "$response" "ssh_private_key")
     local ssh_host
-    ssh_host=$(echo "$response" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('server_host',''))" 2>/dev/null)
+    ssh_host=$(parse_json_field "$response" "server_host")
 
     if [ -n "$ssh_key" ] && [ "$ssh_key" != "" ]; then
         echo "$ssh_key" > "$CONFIG_DIR/ssh_key"
@@ -433,6 +489,7 @@ echo ""
 
 detect_os
 install_borg
+check_python3
 install_agent
 install_ssh_key
 install_service
