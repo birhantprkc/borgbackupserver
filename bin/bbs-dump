@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+#
+# BBS Database Dump — exports critical tables and config for server migration.
+#
+# Usage:
+#   sudo -u bbs bash /var/www/bbs/bin/bbs-dump [output_dir]
+#
+# Creates a timestamped archive containing:
+#   - SQL dump of all critical tables (data only)
+#   - Copy of .env config (preserves APP_KEY for SSH key decryption)
+#
+# The dump can be restored on a fresh install with bin/bbs-restore.
+#
+set -euo pipefail
+
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BOLD='\033[1m'; NC='\033[0m'
+ok()   { echo -e "  ${GREEN}✔${NC} $*"; }
+warn() { echo -e "  ${YELLOW}⚠${NC} $*"; }
+die()  { echo -e "  ${RED}✘${NC} $*"; exit 1; }
+
+BBS_DIR="/var/www/bbs"
+ENV_FILE="$BBS_DIR/config/.env"
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+OUTPUT_DIR="${1:-/tmp}"
+DUMP_DIR="$OUTPUT_DIR/bbs-dump-$TIMESTAMP"
+
+echo -e "${BOLD}BBS Database Dump${NC}"
+echo ""
+
+# Check .env exists
+[[ -f "$ENV_FILE" ]] || die ".env not found at $ENV_FILE"
+
+# Read DB credentials from .env
+DB_HOST=$(grep -oP '^DB_HOST=\K.*' "$ENV_FILE" || echo "localhost")
+DB_NAME=$(grep -oP '^DB_NAME=\K.*' "$ENV_FILE" || echo "bbs")
+DB_USER=$(grep -oP '^DB_USER=\K.*' "$ENV_FILE" || die "DB_USER not found in .env")
+DB_PASS=$(grep -oP '^DB_PASS=\K.*' "$ENV_FILE" || die "DB_PASS not found in .env")
+
+# Tables to dump (ordered by foreign key dependencies)
+TABLES=(
+    # Base tables (no dependencies)
+    users
+    settings
+    plugins
+    notification_services
+    backup_templates
+    remote_ssh_configs
+    borg_versions
+
+    # Tables with FK to base tables
+    recovery_codes
+    agents
+    borg_version_assets
+
+    # Tables with FK to agents/plugins
+    user_agents
+    user_permissions
+    agent_plugins
+    plugin_configs
+
+    # Tables with FK to deeper dependencies
+    backup_plan_plugins
+)
+
+mkdir -p "$DUMP_DIR"
+
+# Dump each table
+echo -e "  Dumping ${#TABLES[@]} tables..."
+for table in "${TABLES[@]}"; do
+    COUNT=$(mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -sN \
+        -e "SELECT COUNT(*) FROM \`$table\`" 2>/dev/null || echo "0")
+
+    if mysqldump -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASS" \
+        --no-create-info --complete-insert --skip-triggers \
+        --single-transaction --quick \
+        "$DB_NAME" "$table" > "$DUMP_DIR/$table.sql" 2>/dev/null; then
+        ok "$table ($COUNT rows)"
+    else
+        warn "$table — failed to dump (table may not exist)"
+        rm -f "$DUMP_DIR/$table.sql"
+    fi
+done
+
+# Copy .env (critical — contains APP_KEY for SSH key decryption)
+cp "$ENV_FILE" "$DUMP_DIR/dot-env"
+ok "Saved .env config (APP_KEY preserved)"
+
+# Save agent list for reference
+mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -sN \
+    -e "SELECT id, name, ssh_unix_user, hostname FROM agents ORDER BY id" \
+    > "$DUMP_DIR/agent-list.txt" 2>/dev/null || true
+ok "Saved agent list for reference"
+
+# Create archive
+ARCHIVE="$OUTPUT_DIR/bbs-dump-$TIMESTAMP.tar.gz"
+tar -czf "$ARCHIVE" -C "$OUTPUT_DIR" "bbs-dump-$TIMESTAMP"
+rm -rf "$DUMP_DIR"
+
+echo ""
+echo -e "${GREEN}${BOLD}Dump complete:${NC} $ARCHIVE"
+echo ""
+echo -e "  To restore on a fresh server:"
+echo -e "    1. Run the BBS installer (bin/bbs-install)"
+echo -e "    2. Copy the archive to the new server"
+echo -e "    3. Run: ${BOLD}sudo bash /var/www/bbs/bin/bbs-migrate-restore $ARCHIVE${NC}"
+echo ""
+echo -e "  ${YELLOW}Important:${NC} The .env APP_KEY is included in the dump."
+echo -e "  This is required to decrypt stored SSH keys. Keep the archive secure."
