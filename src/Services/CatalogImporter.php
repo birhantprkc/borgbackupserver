@@ -6,12 +6,14 @@ use BBS\Core\Database;
 
 class CatalogImporter
 {
+    private const SECURE_FILE_DIR = '/var/lib/mysql-files';
+
     /**
      * Process a JSONL catalog file into the per-agent file_catalog_{agent_id} table.
      *
-     * Converts JSONL → TSV in a single pass, then uses LOAD DATA LOCAL INFILE
-     * to bulk-load directly into the flat per-agent table. No staging tables,
-     * no JOINs, no dedup needed.
+     * Converts JSONL → TSV in a single pass, then uses LOAD DATA INFILE
+     * (server-side read) for maximum speed into a MyISAM table.
+     * Falls back to LOAD DATA LOCAL INFILE if the secure dir isn't writable.
      *
      * @return int Number of catalog entries imported
      */
@@ -30,7 +32,12 @@ class CatalogImporter
 
         self::ensureTable($db, $agentId);
 
-        $tsvFile = sys_get_temp_dir() . "/catalog_{$agentId}_{$archiveId}_" . getmypid() . '.tsv';
+        // Write TSV to MySQL's secure_file_priv dir for server-side LOAD DATA.
+        // Fall back to /tmp if not writable (uses LOAD DATA LOCAL instead).
+        $useServerSide = is_dir(self::SECURE_FILE_DIR) && is_writable(self::SECURE_FILE_DIR);
+        $tsvDir = $useServerSide ? self::SECURE_FILE_DIR : sys_get_temp_dir();
+        $tsvFile = $tsvDir . "/catalog_{$agentId}_{$archiveId}_" . getmypid() . '.tsv';
+
         $tsvFh = fopen($tsvFile, 'w');
         if (!$tsvFh) {
             fclose($handle);
@@ -66,30 +73,26 @@ class CatalogImporter
                 return 0;
             }
 
-            // Disable constraint checks for bulk load performance
-            $pdo->exec("SET unique_checks=0, foreign_key_checks=0");
+            $loadCmd = $useServerSide ? 'LOAD DATA INFILE' : 'LOAD DATA LOCAL INFILE';
 
-            $pdo->exec("LOAD DATA LOCAL INFILE " . $pdo->quote($tsvFile) . "
+            $pdo->exec("{$loadCmd} " . $pdo->quote($tsvFile) . "
                 INTO TABLE `{$table}`
                 FIELDS TERMINATED BY '\\t' ESCAPED BY '\\\\'
                 LINES TERMINATED BY '\\n'
                 (archive_id, path, file_name, file_size, status, @vmtime)
                 SET mtime = NULLIF(@vmtime, '\\\\N')");
 
-            $pdo->exec("SET unique_checks=1, foreign_key_checks=1");
-
             return $count;
         } finally {
             if ($handle) fclose($handle);
             if ($tsvFh) fclose($tsvFh);
             @unlink($tsvFile);
-            $pdo->exec("SET unique_checks=1, foreign_key_checks=1");
         }
     }
 
     /**
-     * Ensure the per-agent catalog table exists. Safe to call multiple times.
-     * Also drops legacy FK/indexes from older table versions for performance.
+     * Ensure the per-agent catalog table exists as MyISAM.
+     * Converts existing InnoDB tables and drops legacy FK/indexes.
      */
     public static function ensureTable(Database $db, int $agentId): void
     {
@@ -105,25 +108,35 @@ class CatalogImporter
             status CHAR(1) DEFAULT 'U',
             mtime DATETIME NULL,
             KEY idx_archive (archive_id)
-        ) ENGINE=InnoDB");
+        ) ENGINE=MyISAM");
 
-        // Drop legacy FK constraint and file_name index if present (slow during bulk load)
+        // Convert existing InnoDB tables to MyISAM (must drop FKs first)
         try {
-            $constraints = $db->fetchAll(
-                "SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS
-                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND CONSTRAINT_TYPE = 'FOREIGN KEY'",
+            $row = $db->fetchOne(
+                "SELECT ENGINE FROM information_schema.TABLES
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?",
                 [$table]
             );
-            foreach ($constraints as $c) {
-                $pdo->exec("ALTER TABLE `{$table}` DROP FOREIGN KEY `{$c['CONSTRAINT_NAME']}`");
-            }
-        } catch (\Exception $e) { /* ignore */ }
+            if ($row && strtolower($row['ENGINE']) !== 'myisam') {
+                // Drop any FK constraints first (MyISAM doesn't support them)
+                $constraints = $db->fetchAll(
+                    "SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS
+                     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND CONSTRAINT_TYPE = 'FOREIGN KEY'",
+                    [$table]
+                );
+                foreach ($constraints as $c) {
+                    $pdo->exec("ALTER TABLE `{$table}` DROP FOREIGN KEY `{$c['CONSTRAINT_NAME']}`");
+                }
 
-        try {
-            $indexes = $db->fetchAll("SHOW INDEX FROM `{$table}` WHERE Key_name = 'idx_file_name'");
-            if (!empty($indexes)) {
-                $pdo->exec("ALTER TABLE `{$table}` DROP INDEX `idx_file_name`");
+                // Drop file_name index if present (not needed, slows bulk loads)
+                $indexes = $db->fetchAll("SHOW INDEX FROM `{$table}` WHERE Key_name = 'idx_file_name'");
+                if (!empty($indexes)) {
+                    $pdo->exec("ALTER TABLE `{$table}` DROP INDEX `idx_file_name`");
+                }
+
+                // Convert to MyISAM
+                $pdo->exec("ALTER TABLE `{$table}` ENGINE=MyISAM");
             }
-        } catch (\Exception $e) { /* ignore */ }
+        } catch (\Exception $e) { /* ignore — table will work either way */ }
     }
 }

@@ -704,8 +704,8 @@ case "$ACTION" in
         ;;
 
     enable-local-infile)
-        # Enable MySQL local_infile for LOAD DATA LOCAL INFILE support.
-        # Required for fast catalog imports.
+        # Enable MySQL local_infile and make secure_file_priv dir writable by www-data.
+        # Required for fast catalog imports via LOAD DATA INFILE.
         # Usage: bbs-ssh-helper enable-local-infile
         MYCNF="/etc/mysql/mysql.conf.d/bbs.cnf"
         if [ -f "$MYCNF" ] && grep -q "local_infile" "$MYCNF" 2>/dev/null; then
@@ -717,6 +717,13 @@ case "$ACTION" in
             # Restart MySQL to pick up the change
             systemctl restart mysql 2>/dev/null || systemctl restart mysqld 2>/dev/null || true
             echo "Enabled local_infile and restarted MySQL"
+        fi
+        # Make secure_file_priv dir writable by www-data for server-side LOAD DATA INFILE
+        SECURE_DIR="/var/lib/mysql-files"
+        if [ -d "$SECURE_DIR" ]; then
+            chgrp www-data "$SECURE_DIR"
+            chmod 770 "$SECURE_DIR"
+            echo "Set $SECURE_DIR writable by www-data"
         fi
         echo "OK"
         ;;

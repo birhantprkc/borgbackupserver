@@ -240,7 +240,7 @@ CREATE TABLE archives (
 --       status CHAR(1) DEFAULT 'U',
 --       mtime DATETIME NULL,
 --       KEY idx_archive (archive_id)
---   ) ENGINE=InnoDB;
+--   ) ENGINE=MyISAM;
 
 -- --------------------------------------------------------
 -- Logging & Settings
