@@ -20,7 +20,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.9.7"
+AGENT_VERSION = "1.9.8"
 
 # Ensure UTF-8 locale for handling filenames with non-ASCII characters
 # CentOS 7 and older systems may default to ASCII, causing encoding errors
@@ -175,7 +175,7 @@ def get_system_info():
             gnu_get_libc_version = libc.gnu_get_libc_version
             gnu_get_libc_version.restype = ctypes.c_char_p
             glibc_ver = gnu_get_libc_version().decode("utf-8")
-            # Convert "2.31" → "glibc231"
+            # Convert "2.31" to "glibc231"
             info["glibc_version"] = "glibc" + glibc_ver.replace(".", "")
         except Exception:
             info["glibc_version"] = None
@@ -1181,8 +1181,8 @@ def test_plugin_shell_hook(config):
         if not os.path.isfile(path):
             raise Exception(f"{label} not found: {path}")
         if not os.access(path, os.X_OK):
-            raise Exception(f"{label} not executable: {path} — run: chmod +x {path}")
-        results.append(f"{label}: {path} ✓")
+            raise Exception(f"{label} not executable: {path} - run: chmod +x {path}")
+        results.append(f"{label}: {path} ok")
 
     return " | ".join(results)
 
@@ -1327,7 +1327,7 @@ def execute_restore_pg(config, task):
                         errors.append(f"{db_name}: import failed: {r.stderr.decode('utf-8', errors='replace')[:500]}")
                         continue
 
-            imported.append(f"{db_name} → {target_db}")
+            imported.append(f"{db_name} -> {target_db}")
 
         except Exception as e:
             errors.append(f"{db_name}: {e}")
@@ -1495,7 +1495,7 @@ def execute_restore_mysql(config, task):
                             errors.append(f"{db_name}: import failed: {r.stderr.decode('utf-8', errors='replace')[:500]}")
                             continue
             else:
-                # all_databases dump — import without specifying target db (uses embedded USE statements)
+                # all_databases dump -- import without specifying target db (uses embedded USE statements)
                 import_cmd = mysql_base  # no db name
                 if compress:
                     gunzip = subprocess.Popen(["gunzip", "-c", dump_file], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -1515,7 +1515,7 @@ def execute_restore_mysql(config, task):
                 imported.append(f"all databases (from {dump_file})")
                 break
 
-            imported.append(f"{db_name} → {target_db}")
+            imported.append(f"{db_name} -> {target_db}")
 
         except Exception as e:
             errors.append(f"{db_name}: {e}")
@@ -1852,10 +1852,10 @@ def execute_task(config, task):
         }
 
     # If backup succeeded and has catalog entries, use two-phase status reporting:
-    # 1) Report "cataloging" — creates archive, keeps job as "running"
+    # 1) Report "cataloging" -- creates archive, keeps job as "running"
     # 2) Upload catalog from JSONL file
-    # 3) Report "completed" — triggers notifications, prune, etc.
-    # If catalog upload fails, don't report "completed" — retry next cycle.
+    # 3) Report "completed" -- triggers notifications, prune, etc.
+    # If catalog upload fails, don't report "completed" -- retry next cycle.
     has_catalog = result == "completed" and task_type == "backup" and catalog_count > 0
     catalog_deferred = False
     if has_catalog:
@@ -1867,10 +1867,10 @@ def execute_task(config, task):
             save_catalog_state(job_id, archive_id, 0)
             catalog_ok = upload_catalog(config, archive_id, job_id)
             if catalog_ok:
-                # Catalog uploaded successfully — report final completion
+                # Catalog uploaded successfully -- report final completion
                 status_data["result"] = "completed"
             else:
-                # Catalog upload incomplete — don't report completed yet
+                # Catalog upload incomplete -- don't report completed yet
                 log_to_server(config, job_id,
                               "Catalog upload incomplete, will retry on next cycle", level="warning")
                 logger.warning(f"Job #{job_id}: catalog upload incomplete, deferring completion")
@@ -2039,7 +2039,7 @@ def upload_catalog(config, archive_id, job_id):
                     save_catalog_state(job_id, archive_id, uploaded_so_far)
                     logger.error(f"Catalog upload paused at {uploaded_so_far:,}/{total:,} entries")
                     log_to_server(config, job_id,
-                                  f"Catalog upload paused at {uploaded_so_far:,}/{total:,} entries — will retry next cycle",
+                                  f"Catalog upload paused at {uploaded_so_far:,}/{total:,} entries -- will retry next cycle",
                                   level="warning")
                     return False
 
@@ -2065,11 +2065,11 @@ def upload_catalog(config, archive_id, job_id):
             save_catalog_state(job_id, archive_id, lines_uploaded)
             logger.error(f"Catalog upload failed on final batch at {lines_uploaded:,}/{total:,}")
             log_to_server(config, job_id,
-                          f"Catalog upload paused at {lines_uploaded:,}/{total:,} entries — will retry next cycle",
+                          f"Catalog upload paused at {lines_uploaded:,}/{total:,} entries -- will retry next cycle",
                           level="warning")
             return False
 
-    # Success — clean up files
+    # Success -- clean up files
     cleanup_catalog_files(job_id)
     logger.info(f"Catalog upload complete: {total:,} entries")
     log_to_server(config, job_id, f"Catalog upload complete: {total:,} entries")
@@ -2113,7 +2113,7 @@ def check_pending_catalogs(config):
         # Check for state file (means upload was in progress)
         state_path = os.path.join(CATALOG_DIR, f"catalog-{job_id}.state")
         if not os.path.exists(state_path):
-            # JSONL exists without state file — backup finished but cataloging status
+            # JSONL exists without state file -- backup finished but cataloging status
             # was never reported (crash before status report). Clean it up.
             logger.info(f"Removing orphaned catalog file for job #{job_id} (no state file)")
             cleanup_catalog_files(job_id)
@@ -2133,7 +2133,7 @@ def check_pending_catalogs(config):
             cleanup_catalog_files(job_id)
             continue
 
-        # Resume catalog upload — try one batch cycle (retries are within upload_catalog)
+        # Resume catalog upload -- try one batch cycle (retries are within upload_catalog)
         logger.info(f"Found pending catalog for job #{job_id}, archive #{archive_id}")
         has_pending = True
 
@@ -2252,7 +2252,7 @@ def main():
                     finally:
                         task_running = False
             elif result is None:
-                # Connection error — server might be down
+                # Connection error -- server might be down
                 logger.warning("Failed to poll server, will retry")
 
         except Exception as e:
