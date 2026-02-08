@@ -5,4 +5,4 @@
 --
 -- Old tables (file_paths, file_catalog) are preserved for backward compatibility
 -- and will be removed in a future release.
-SELECT 1;
+SET @noop = 1;
