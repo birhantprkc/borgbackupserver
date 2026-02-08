@@ -1628,6 +1628,9 @@ def execute_task(config, task):
         env["LC_ALL"] = "C.UTF-8"
         env["LANG"] = "C.UTF-8"
 
+    # Clear stale cache locks left by crashed borg processes
+    clear_stale_cache_locks()
+
     # Execute borg command
     files_processed = 0
     original_size = 0
@@ -1834,6 +1837,25 @@ def execute_task(config, task):
             logger.info("Cleaned up temporary SSH key")
         except Exception as e:
             logger.warning(f"Failed to clean up temporary SSH key: {e}")
+
+
+def clear_stale_cache_locks():
+    """Remove stale borg cache locks that can block operations after a crash."""
+    cache_dir = os.path.expanduser("~/.cache/borg")
+    if not os.path.isdir(cache_dir):
+        return
+    import shutil
+    for entry in os.listdir(cache_dir):
+        lock_path = os.path.join(cache_dir, entry, "lock.exclusive")
+        if os.path.exists(lock_path):
+            try:
+                if os.path.isdir(lock_path):
+                    shutil.rmtree(lock_path)
+                else:
+                    os.remove(lock_path)
+                logger.info(f"Cleared stale cache lock: {lock_path}")
+            except Exception as e:
+                logger.warning(f"Could not clear cache lock {lock_path}: {e}")
 
 
 def upload_catalog(config, archive_id, entries):
