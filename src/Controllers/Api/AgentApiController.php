@@ -576,7 +576,7 @@ class AgentApiController extends Controller
                 $startTime = microtime(true);
                 $importer = new CatalogImporter();
                 $count = $importer->processFile(
-                    $this->db, $catalogImport['agent_id'], $catalogImport['archive_id'], $catalogImport['path']
+                    $this->db, $catalogImport['agent_id'], $catalogImport['archive_id'], $catalogImport['path'], $catalogImport['job_id']
                 );
                 $elapsed = round(microtime(true) - $startTime, 1);
                 $this->db->insert('server_log', [

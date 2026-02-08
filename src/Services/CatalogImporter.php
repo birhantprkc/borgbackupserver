@@ -15,12 +15,21 @@ class CatalogImporter
      * (server-side read) for maximum speed into a MyISAM table.
      * Falls back to LOAD DATA LOCAL INFILE if the secure dir isn't writable.
      *
+     * @param int|null $jobId Optional backup job ID for detailed log entries
      * @return int Number of catalog entries imported
      */
-    public function processFile(Database $db, int $agentId, int $archiveId, string $filePath): int
+    public function processFile(Database $db, int $agentId, int $archiveId, string $filePath, ?int $jobId = null): int
     {
         set_time_limit(0);
         ini_set('memory_limit', '-1');
+
+        $log = function (string $message) use ($db, $agentId, $jobId) {
+            $data = ['agent_id' => $agentId, 'level' => 'info', 'message' => $message];
+            if ($jobId) {
+                $data['backup_job_id'] = $jobId;
+            }
+            try { $db->insert('server_log', $data); } catch (\Exception $e) { /* ignore */ }
+        };
 
         $handle = fopen($filePath, 'r');
         if (!$handle) {
@@ -45,6 +54,7 @@ class CatalogImporter
         }
 
         try {
+            $tsvStart = microtime(true);
             $count = 0;
 
             while (($line = fgets($handle)) !== false) {
@@ -69,11 +79,19 @@ class CatalogImporter
             fclose($tsvFh);
             $tsvFh = null;
 
+            $tsvElapsed = round(microtime(true) - $tsvStart, 1);
+            $tsvSize = round(filesize($tsvFile) / 1048576, 1);
+
             if ($count === 0) {
                 return 0;
             }
 
             $loadCmd = $useServerSide ? 'LOAD DATA INFILE' : 'LOAD DATA LOCAL INFILE';
+            $loadMethod = $useServerSide ? 'server-side' : 'client-side (LOCAL)';
+
+            $log("Catalog TSV generated: " . number_format($count) . " rows, {$tsvSize} MB in {$tsvElapsed}s — loading via {$loadMethod}");
+
+            $loadStart = microtime(true);
 
             $pdo->exec("{$loadCmd} " . $pdo->quote($tsvFile) . "
                 INTO TABLE `{$table}`
@@ -81,6 +99,9 @@ class CatalogImporter
                 LINES TERMINATED BY '\\n'
                 (archive_id, path, file_name, file_size, status, @vmtime)
                 SET mtime = NULLIF(@vmtime, '\\\\N')");
+
+            $loadElapsed = round(microtime(true) - $loadStart, 1);
+            $log("Catalog MySQL load complete: {$loadElapsed}s ({$loadMethod} into {$table})");
 
             return $count;
         } finally {
