@@ -233,8 +233,9 @@ CREATE TABLE file_paths (
     agent_id INT NOT NULL,
     path TEXT NOT NULL,
     file_name VARCHAR(255) NOT NULL,
+    path_hash CHAR(64) NOT NULL DEFAULT '',
     INDEX idx_agent_name (agent_id, file_name),
-    UNIQUE KEY idx_agent_path (agent_id, path(512)),
+    UNIQUE KEY idx_path_hash (path_hash),
     FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
 ) ENGINE=InnoDB ROW_FORMAT=COMPRESSED;
 

@@ -473,58 +473,74 @@ class AgentApiController extends Controller
         }
 
         $agentId = $agent['id'];
+        $pdo = $this->db->getPdo();
 
-        // Step 1: Upsert unique paths into file_paths
-        $pathPlaceholders = [];
-        $pathValues = [];
+        // Build path data with hashes for fast unique lookups
         $paths = [];
         foreach ($files as $file) {
             $path = $file['path'] ?? '';
             if (empty($path) || isset($paths[$path])) continue;
-            $paths[$path] = true;
-            $pathPlaceholders[] = '(?, ?, ?)';
-            $pathValues[] = $agentId;
-            $pathValues[] = $path;
-            $pathValues[] = basename($path);
+            $paths[$path] = hash('sha256', $agentId . ':' . $path);
         }
 
-        if (!empty($pathPlaceholders)) {
-            $sql = "INSERT IGNORE INTO file_paths (agent_id, path, file_name) VALUES "
-                 . implode(', ', $pathPlaceholders);
-            $this->db->query($sql, $pathValues);
-        }
+        // Wrap all inserts in a single transaction (one fsync instead of per-query)
+        $pdo->beginTransaction();
 
-        // Step 2: Fetch IDs for all paths in this batch
-        $pathKeys = array_keys($paths);
-        $inPlaceholders = implode(',', array_fill(0, count($pathKeys), '?'));
-        $rows = $this->db->fetchAll(
-            "SELECT id, path FROM file_paths WHERE agent_id = ? AND path IN ({$inPlaceholders})",
-            array_merge([$agentId], $pathKeys)
-        );
-        $pathIdMap = [];
-        foreach ($rows as $row) {
-            $pathIdMap[$row['path']] = $row['id'];
-        }
+        try {
+            // Step 1: Upsert unique paths into file_paths using path_hash
+            if (!empty($paths)) {
+                $pathPlaceholders = [];
+                $pathValues = [];
+                foreach ($paths as $path => $pathHash) {
+                    $pathPlaceholders[] = '(?, ?, ?, ?)';
+                    $pathValues[] = $agentId;
+                    $pathValues[] = $path;
+                    $pathValues[] = basename($path);
+                    $pathValues[] = $pathHash;
+                }
 
-        // Step 3: Insert into file_catalog junction table
-        $catalogPlaceholders = [];
-        $catalogValues = [];
-        foreach ($files as $file) {
-            $path = $file['path'] ?? '';
-            if (empty($path) || !isset($pathIdMap[$path])) continue;
+                $sql = "INSERT IGNORE INTO file_paths (agent_id, path, file_name, path_hash) VALUES "
+                     . implode(', ', $pathPlaceholders);
+                $this->db->query($sql, $pathValues);
+            }
 
-            $catalogPlaceholders[] = '(?, ?, ?, ?, ?)';
-            $catalogValues[] = $archiveId;
-            $catalogValues[] = $pathIdMap[$path];
-            $catalogValues[] = (int) ($file['size'] ?? 0);
-            $catalogValues[] = $file['status'] ?? 'U';
-            $catalogValues[] = $file['mtime'] ?? null;
-        }
+            // Step 2: Fetch IDs using path_hash (fast fixed-length index lookup)
+            $hashValues = array_values($paths);
+            $inPlaceholders = implode(',', array_fill(0, count($hashValues), '?'));
+            $rows = $this->db->fetchAll(
+                "SELECT id, path FROM file_paths WHERE path_hash IN ({$inPlaceholders})",
+                $hashValues
+            );
+            $pathIdMap = [];
+            foreach ($rows as $row) {
+                $pathIdMap[$row['path']] = $row['id'];
+            }
 
-        if (!empty($catalogPlaceholders)) {
-            $sql = "INSERT INTO file_catalog (archive_id, file_path_id, file_size, status, mtime) VALUES "
-                 . implode(', ', $catalogPlaceholders);
-            $this->db->query($sql, $catalogValues);
+            // Step 3: Insert into file_catalog junction table
+            $catalogPlaceholders = [];
+            $catalogValues = [];
+            foreach ($files as $file) {
+                $path = $file['path'] ?? '';
+                if (empty($path) || !isset($pathIdMap[$path])) continue;
+
+                $catalogPlaceholders[] = '(?, ?, ?, ?, ?)';
+                $catalogValues[] = $archiveId;
+                $catalogValues[] = $pathIdMap[$path];
+                $catalogValues[] = (int) ($file['size'] ?? 0);
+                $catalogValues[] = $file['status'] ?? 'U';
+                $catalogValues[] = $file['mtime'] ?? null;
+            }
+
+            if (!empty($catalogPlaceholders)) {
+                $sql = "INSERT INTO file_catalog (archive_id, file_path_id, file_size, status, mtime) VALUES "
+                     . implode(', ', $catalogPlaceholders);
+                $this->db->query($sql, $catalogValues);
+            }
+
+            $pdo->commit();
+        } catch (\Exception $e) {
+            $pdo->rollBack();
+            throw $e;
         }
 
         $batchSize = count($catalogPlaceholders);
