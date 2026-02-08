@@ -123,6 +123,8 @@
                                         <?= $pct ?>%
                                     </div>
                                 </div>
+                            <?php elseif (!empty($job['status_message'])): ?>
+                                <span class="text-info small"><?= htmlspecialchars($job['status_message']) ?></span>
                             <?php else: ?>
                                 <div class="progress" style="height: 18px; min-width: 80px;">
                                     <div class="progress-bar progress-bar-striped progress-bar-animated bg-info" style="width: 100%">
@@ -282,6 +284,8 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
             const pct = Math.round((job.files_processed / job.files_total) * 100);
             progress = '<div class="progress" style="height:18px;min-width:80px;">' +
                 '<div class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width:' + pct + '%">' + pct + '%</div></div>';
+        } else if (job.status_message) {
+            progress = '<span class="text-info small">' + esc(job.status_message) + '</span>';
         } else {
             progress = '<div class="progress" style="height:18px;min-width:80px;">' +
                 '<div class="progress-bar progress-bar-striped progress-bar-animated bg-info" style="width:100%">Preparing...</div></div>';

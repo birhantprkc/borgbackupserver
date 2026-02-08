@@ -20,7 +20,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "2.0.0"
+AGENT_VERSION = "2.0.1"
 
 # Ensure UTF-8 locale for handling filenames with non-ASCII characters
 # CentOS 7 and older systems may default to ASCII, causing encoding errors
@@ -738,13 +738,25 @@ def log_to_server(config, job_id, message, level="info"):
         pass  # Don't fail the job over a log message
 
 
+PLUGIN_DISPLAY_NAMES = {
+    "mysql_dump": "MySQL Dump",
+    "pg_dump": "PostgreSQL Dump",
+}
+
+
 def execute_plugins(plugins, config=None, job_id=None):
     """Execute pre-backup plugins. Returns dict of results keyed by slug."""
     results = {}
     for plugin in plugins:
         slug = plugin.get("slug", "")
         cfg = plugin.get("config", {})
+        display = PLUGIN_DISPLAY_NAMES.get(slug, slug)
         logger.info(f"Running pre-backup plugin: {slug}")
+        if config and job_id:
+            api_request(config, "/api/agent/progress", method="POST", data={
+                "job_id": job_id,
+                "status_message": f"Running plugin: {display}",
+            })
         func_name = f"execute_plugin_{slug}"
         func = globals().get(func_name)
         if not func:
@@ -1614,6 +1626,12 @@ def execute_task(config, task):
         execute_restore_pg(config, task)
         return
 
+    # Report running immediately so the UI shows activity
+    api_request(config, "/api/agent/progress", method="POST", data={
+        "job_id": job_id,
+        "status_message": "Starting task...",
+    })
+
     # Execute pre-backup plugins
     plugin_results = {}
     if task_type == "backup" and plugins:
@@ -1632,20 +1650,20 @@ def execute_task(config, task):
     # Pre-count files for progress
     files_total = 0
     if task_type == "backup" and directories:
+        api_request(config, "/api/agent/progress", method="POST", data={
+            "job_id": job_id,
+            "status_message": "Counting files...",
+        })
         files_total = count_files(directories)
         logger.info(f"Pre-counted {files_total} files to backup")
 
-    # Report initial progress
-    api_request(
-        config,
-        "/api/agent/progress",
-        method="POST",
-        data={
-            "job_id": job_id,
-            "files_total": files_total,
-            "files_processed": 0,
-        },
-    )
+    # Report initial progress with file count
+    api_request(config, "/api/agent/progress", method="POST", data={
+        "job_id": job_id,
+        "files_total": files_total,
+        "files_processed": 0,
+        "status_message": f"Backing up {files_total:,} files..." if task_type == "backup" else None,
+    })
 
     # Build environment
     env = os.environ.copy()
@@ -1750,16 +1768,17 @@ def execute_task(config, task):
                     # Report progress every 5 seconds
                     now = time.time()
                     if now - last_progress_time >= 5:
+                        progress_data = {
+                            "job_id": job_id,
+                            "files_total": files_total,
+                            "files_processed": files_processed,
+                            "bytes_processed": original_size,
+                        }
                         api_request(
                             config,
                             "/api/agent/progress",
                             method="POST",
-                            data={
-                                "job_id": job_id,
-                                "files_total": files_total,
-                                "files_processed": files_processed,
-                                "bytes_processed": original_size,
-                            },
+                            data=progress_data,
                         )
                         last_progress_time = now
 

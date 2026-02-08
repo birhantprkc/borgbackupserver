@@ -169,10 +169,11 @@ class AgentApiController extends Controller
         }
 
         $data = ['status' => 'running'];
-        if (isset($input['files_total']))     $data['files_total'] = (int) $input['files_total'];
-        if (isset($input['files_processed'])) $data['files_processed'] = (int) $input['files_processed'];
-        if (isset($input['bytes_total']))     $data['bytes_total'] = (int) $input['bytes_total'];
-        if (isset($input['bytes_processed'])) $data['bytes_processed'] = (int) $input['bytes_processed'];
+        if (isset($input['files_total']))      $data['files_total'] = (int) $input['files_total'];
+        if (isset($input['files_processed']))  $data['files_processed'] = (int) $input['files_processed'];
+        if (isset($input['bytes_total']))      $data['bytes_total'] = (int) $input['bytes_total'];
+        if (isset($input['bytes_processed']))  $data['bytes_processed'] = (int) $input['bytes_processed'];
+        if (isset($input['status_message']))   $data['status_message'] = substr($input['status_message'], 0, 255);
 
         if (empty($job['started_at'])) {
             $data['started_at'] = date('Y-m-d H:i:s');
@@ -246,6 +247,7 @@ class AgentApiController extends Controller
         if (!$isCataloging) {
             $data['completed_at'] = $now;
             $data['duration_seconds'] = max(0, $duration);
+            $data['status_message'] = null;
         }
 
         // If the agent never reported "running", backfill started_at

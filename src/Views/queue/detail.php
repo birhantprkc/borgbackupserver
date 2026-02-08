@@ -76,7 +76,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
                 <?= formatBytes($job['bytes_processed']) ?> of <?= formatBytes($job['bytes_total']) ?> processed
             </div>
         <?php elseif ($job['status'] === 'running'): ?>
-            <div class="text-white fw-semibold mb-1"><?= $taskLabel ?> in progress...</div>
+            <div class="text-white fw-semibold mb-1"><?= !empty($job['status_message']) ? htmlspecialchars($job['status_message']) : $taskLabel . ' in progress...' ?></div>
             <div class="progress mb-1" style="height: 22px; background-color: rgba(255,255,255,0.15);">
                 <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"
                      style="width: 100%; background-color: #5b9bd5;">
@@ -447,6 +447,11 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
                 if (label) label.textContent = taskLabel + '... ' + pct + '%';
                 if (sub) sub.textContent = fmtBytes(job.bytes_processed) + ' of ' + fmtBytes(job.bytes_total) + ' processed';
             })();
+        } else if (isJobActive && job.status === 'running') {
+            const label = container.querySelector('.fw-semibold');
+            if (label && job.status_message) {
+                label.textContent = job.status_message;
+            }
         }
 
         // Update status badge in header
