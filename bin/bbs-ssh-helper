@@ -725,6 +725,18 @@ case "$ACTION" in
             chmod 770 "$SECURE_DIR"
             echo "Set $SECURE_DIR writable by www-data"
         fi
+        # Grant FILE privilege to BBS MySQL user for server-side LOAD DATA INFILE
+        BBS_DIR="${2:-/var/www/bbs}"
+        ENV_FILE="$BBS_DIR/config/.env"
+        if [ -f "$ENV_FILE" ]; then
+            DB_USER=$(grep '^DB_USER=' "$ENV_FILE" | cut -d= -f2-)
+            DB_HOST=$(grep '^DB_HOST=' "$ENV_FILE" | cut -d= -f2-)
+            if [ -n "$DB_USER" ]; then
+                mysql -e "GRANT FILE ON *.* TO '${DB_USER}'@'${DB_HOST:-localhost}'; FLUSH PRIVILEGES;" 2>/dev/null \
+                    && echo "Granted FILE privilege to ${DB_USER}" \
+                    || echo "Warning: could not grant FILE privilege (server-side LOAD DATA may not work)"
+            fi
+        fi
         echo "OK"
         ;;
 

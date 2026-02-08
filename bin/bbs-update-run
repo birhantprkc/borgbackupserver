@@ -36,7 +36,7 @@ chmod 755 /usr/local/bin/bbs-ssh-helper
 
 # 5. Enable MySQL local_infile for fast catalog imports
 echo "[5/12] Enabling MySQL local_infile..."
-/usr/local/bin/bbs-ssh-helper enable-local-infile
+/usr/local/bin/bbs-ssh-helper enable-local-infile "$BBS_DIR"
 
 # 6. Fix runtime directories
 echo "[6/12] Fixing runtime permissions..."

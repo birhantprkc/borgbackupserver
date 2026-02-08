@@ -86,19 +86,31 @@ class CatalogImporter
                 return 0;
             }
 
-            $loadCmd = $useServerSide ? 'LOAD DATA INFILE' : 'LOAD DATA LOCAL INFILE';
-            $loadMethod = $useServerSide ? 'server-side' : 'client-side (LOCAL)';
-
-            $log("Catalog TSV generated: " . number_format($count) . " rows, {$tsvSize} MB in {$tsvElapsed}s — loading via {$loadMethod}");
-
-            $loadStart = microtime(true);
-
-            $pdo->exec("{$loadCmd} " . $pdo->quote($tsvFile) . "
+            $loadSql = fn(string $cmd) => "{$cmd} " . $pdo->quote($tsvFile) . "
                 INTO TABLE `{$table}`
                 FIELDS TERMINATED BY '\\t' ESCAPED BY '\\\\'
                 LINES TERMINATED BY '\\n'
                 (archive_id, path, file_name, file_size, status, @vmtime)
-                SET mtime = NULLIF(@vmtime, '\\\\N')");
+                SET mtime = NULLIF(@vmtime, '\\\\N')";
+
+            // Try server-side LOAD DATA first (fastest), fall back to LOCAL
+            $loadMethod = $useServerSide ? 'server-side' : 'client-side (LOCAL)';
+            $log("Catalog TSV generated: " . number_format($count) . " rows, {$tsvSize} MB in {$tsvElapsed}s — loading via {$loadMethod}");
+
+            $loadStart = microtime(true);
+
+            if ($useServerSide) {
+                try {
+                    $pdo->exec($loadSql('LOAD DATA INFILE'));
+                } catch (\Exception $e) {
+                    // FILE privilege missing or secure_file_priv issue — fall back to LOCAL
+                    $loadMethod = 'client-side (LOCAL fallback)';
+                    $log("Server-side LOAD DATA failed: " . $e->getMessage() . " — falling back to LOCAL");
+                    $pdo->exec($loadSql('LOAD DATA LOCAL INFILE'));
+                }
+            } else {
+                $pdo->exec($loadSql('LOAD DATA LOCAL INFILE'));
+            }
 
             $loadElapsed = round(microtime(true) - $loadStart, 1);
             $log("Catalog MySQL load complete: {$loadElapsed}s ({$loadMethod} into {$table})");
