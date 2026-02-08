@@ -486,7 +486,8 @@ class AgentApiController extends Controller
             }
         }
 
-        // Import server-side catalog file if present (written by agent via SSH pipe)
+        // Build catalog import info for after response is sent
+        $catalogImport = null;
         if ($result === 'completed' && $job['task_type'] === 'backup') {
             $storagePath = $this->db->fetchOne(
                 "SELECT `value` FROM settings WHERE `key` = 'storage_path'"
@@ -494,45 +495,18 @@ class AgentApiController extends Controller
             if ($storagePath && !empty($storagePath['value'])) {
                 $catalogPath = rtrim($storagePath['value'], '/') . '/' . $agent['id']
                              . '/.catalog-logs/catalog-' . $jobId . '.jsonl';
-
                 if (file_exists($catalogPath)) {
                     $archive = $this->db->fetchOne(
                         "SELECT id FROM archives WHERE backup_job_id = ?",
                         [$jobId]
                     );
                     if ($archive) {
-                        $fileSize = filesize($catalogPath);
-                        $fileSizeLabel = $fileSize > 1048576
-                            ? round($fileSize / 1048576, 1) . ' MB'
-                            : round($fileSize / 1024, 1) . ' KB';
-                        $this->db->insert('server_log', [
-                            'agent_id' => $agent['id'],
-                            'backup_job_id' => $jobId,
-                            'level' => 'info',
-                            'message' => "Importing file catalog ({$fileSizeLabel})...",
-                        ]);
-                        try {
-                            $startTime = microtime(true);
-                            $importer = new CatalogImporter();
-                            $count = $importer->processFile(
-                                $this->db, (int) $agent['id'], (int) $archive['id'], $catalogPath
-                            );
-                            $elapsed = round(microtime(true) - $startTime, 1);
-                            $this->db->insert('server_log', [
-                                'agent_id' => $agent['id'],
-                                'backup_job_id' => $jobId,
-                                'level' => 'info',
-                                'message' => "File catalog imported: " . number_format($count) . " entries in {$elapsed}s",
-                            ]);
-                        } catch (\Exception $e) {
-                            $this->db->insert('server_log', [
-                                'agent_id' => $agent['id'],
-                                'backup_job_id' => $jobId,
-                                'level' => 'error',
-                                'message' => "Catalog import failed: " . $e->getMessage(),
-                            ]);
-                        }
-                        @unlink($catalogPath);
+                        $catalogImport = [
+                            'agent_id' => (int) $agent['id'],
+                            'archive_id' => (int) $archive['id'],
+                            'job_id' => $jobId,
+                            'path' => $catalogPath,
+                        ];
                     }
                 }
             }
@@ -575,7 +549,54 @@ class AgentApiController extends Controller
             $archiveId = $archive ? (int) $archive['id'] : null;
         }
 
-        $this->json(['status' => 'ok', 'archive_id' => $archiveId]);
+        // Send response immediately so the agent isn't blocked
+        http_response_code(200);
+        header('Content-Type: application/json');
+        echo json_encode(['status' => 'ok', 'archive_id' => $archiveId]);
+
+        // Flush response to agent, then continue processing in background
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+        }
+
+        // Import catalog file after response is sent (can take minutes for large catalogs)
+        if ($catalogImport) {
+            set_time_limit(0);
+            $fileSize = filesize($catalogImport['path']);
+            $fileSizeLabel = $fileSize > 1048576
+                ? round($fileSize / 1048576, 1) . ' MB'
+                : round($fileSize / 1024, 1) . ' KB';
+            $this->db->insert('server_log', [
+                'agent_id' => $catalogImport['agent_id'],
+                'backup_job_id' => $catalogImport['job_id'],
+                'level' => 'info',
+                'message' => "Importing file catalog ({$fileSizeLabel})...",
+            ]);
+            try {
+                $startTime = microtime(true);
+                $importer = new CatalogImporter();
+                $count = $importer->processFile(
+                    $this->db, $catalogImport['agent_id'], $catalogImport['archive_id'], $catalogImport['path']
+                );
+                $elapsed = round(microtime(true) - $startTime, 1);
+                $this->db->insert('server_log', [
+                    'agent_id' => $catalogImport['agent_id'],
+                    'backup_job_id' => $catalogImport['job_id'],
+                    'level' => 'info',
+                    'message' => "File catalog imported: " . number_format($count) . " entries in {$elapsed}s",
+                ]);
+            } catch (\Exception $e) {
+                $this->db->insert('server_log', [
+                    'agent_id' => $catalogImport['agent_id'],
+                    'backup_job_id' => $catalogImport['job_id'],
+                    'level' => 'error',
+                    'message' => "Catalog import failed: " . $e->getMessage(),
+                ]);
+            }
+            @unlink($catalogImport['path']);
+        }
+
+        exit;
     }
 
     /**
