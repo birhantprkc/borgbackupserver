@@ -20,7 +20,17 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.9.2"
+AGENT_VERSION = "1.9.3"
+
+# Ensure UTF-8 locale for handling filenames with non-ASCII characters
+# CentOS 7 and older systems may default to ASCII, causing encoding errors
+if os.environ.get("LC_ALL", "") not in ("C.UTF-8", "en_US.UTF-8") and \
+   not os.environ.get("LANG", "").endswith("UTF-8"):
+    for loc in ("C.UTF-8", "en_US.UTF-8", "en_US.utf8"):
+        os.environ["LC_ALL"] = loc
+        os.environ["LANG"] = loc
+        break
+
 CONFIG_PATH = "/etc/bbs-agent/config.ini"
 LOG_PATH = "/var/log/bbs-agent.log"
 SSH_KEY_PATH = "/etc/bbs-agent/ssh_key"
@@ -46,7 +56,7 @@ def setup_logging():
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
         handlers=[
-            logging.FileHandler(LOG_PATH),
+            logging.FileHandler(LOG_PATH, encoding="utf-8"),
             logging.StreamHandler(sys.stdout),
         ],
     )
@@ -1612,6 +1622,11 @@ def execute_task(config, task):
     # This prevents "repository was previously located at X" interactive prompts
     env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
     env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+
+    # Ensure UTF-8 locale for borg (handles filenames with non-ASCII characters)
+    if "LC_ALL" not in env or not env["LC_ALL"].endswith("UTF-8"):
+        env["LC_ALL"] = "C.UTF-8"
+        env["LANG"] = "C.UTF-8"
 
     # Execute borg command
     files_processed = 0
