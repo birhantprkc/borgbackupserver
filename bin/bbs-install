@@ -84,9 +84,44 @@ fi
 # ─── Step 1: Gather info ────────────────────────────────────────────────────
 step "1/10" "Gather information"
 
-# Hostname
+# Hostname — auto-detect, then confirm with user
 if [[ -z "$HOSTNAME_ARG" ]]; then
-    read -rp "  Server hostname (e.g. backups.example.com or IP): " HOSTNAME_ARG
+    # Try to detect a usable hostname
+    DETECTED_HOST=""
+
+    # 1) FQDN from hostname -f (most reliable if DNS is configured)
+    if [[ -z "$DETECTED_HOST" ]]; then
+        FQDN=$(hostname -f 2>/dev/null || true)
+        if [[ -n "$FQDN" && "$FQDN" == *.* && "$FQDN" != "localhost"* ]]; then
+            DETECTED_HOST="$FQDN"
+        fi
+    fi
+
+    # 2) Reverse DNS of the primary public IP
+    if [[ -z "$DETECTED_HOST" ]]; then
+        PUB_IP=$(curl -s --max-time 5 ifconfig.me 2>/dev/null || true)
+        if [[ -n "$PUB_IP" ]]; then
+            RDNS=$(dig +short -x "$PUB_IP" 2>/dev/null | sed 's/\.$//' || true)
+            if [[ -n "$RDNS" && "$RDNS" == *.* && "$RDNS" != "localhost"* ]]; then
+                DETECTED_HOST="$RDNS"
+            fi
+        fi
+    fi
+
+    # 3) First non-localhost hostname from /etc/hosts
+    if [[ -z "$DETECTED_HOST" ]]; then
+        ETC_HOST=$(grep -v '^\s*#' /etc/hosts 2>/dev/null | grep -v 'localhost' | awk '{for(i=2;i<=NF;i++) if($i ~ /\./) {print $i; exit}}' || true)
+        if [[ -n "$ETC_HOST" ]]; then
+            DETECTED_HOST="$ETC_HOST"
+        fi
+    fi
+
+    if [[ -n "$DETECTED_HOST" ]]; then
+        read -rp "  Server hostname [$DETECTED_HOST]: " HOSTNAME_ARG
+        HOSTNAME_ARG="${HOSTNAME_ARG:-$DETECTED_HOST}"
+    else
+        read -rp "  Server hostname (e.g. backups.example.com): " HOSTNAME_ARG
+    fi
 fi
 if [[ -z "$HOSTNAME_ARG" ]]; then
     die "Hostname is required"
