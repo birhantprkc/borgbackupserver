@@ -285,6 +285,8 @@ install_agent() {
 
     mkdir -p "$INSTALL_DIR"
     mkdir -p "$CONFIG_DIR"
+    mkdir -p /var/lib/bbs-agent
+    chmod 700 /var/lib/bbs-agent
 
     start_spinner "Downloading agent from server..."
 

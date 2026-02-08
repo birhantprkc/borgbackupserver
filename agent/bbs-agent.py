@@ -20,7 +20,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "1.9.6"
+AGENT_VERSION = "1.9.7"
 
 # Ensure UTF-8 locale for handling filenames with non-ASCII characters
 # CentOS 7 and older systems may default to ASCII, causing encoding errors
@@ -35,6 +35,8 @@ CONFIG_PATH = "/etc/bbs-agent/config.ini"
 LOG_PATH = "/var/log/bbs-agent.log"
 SSH_KEY_PATH = "/etc/bbs-agent/ssh_key"
 BORG_SOURCE_PATH = "/etc/bbs-agent/borg_source"
+CATALOG_DIR = "/var/lib/bbs-agent"
+CATALOG_STALE_HOURS = 48
 
 # Allow overrides for development
 if os.environ.get("BBS_AGENT_CONFIG"):
@@ -62,6 +64,11 @@ def setup_logging():
     )
 
 
+def ensure_catalog_dir():
+    """Create the catalog data directory if it doesn't exist."""
+    os.makedirs(CATALOG_DIR, mode=0o700, exist_ok=True)
+
+
 def load_config():
     if not os.path.exists(CONFIG_PATH):
         logger.error(f"Config file not found: {CONFIG_PATH}")
@@ -77,7 +84,7 @@ def load_config():
     }
 
 
-def api_request(config, endpoint, method="GET", data=None):
+def api_request(config, endpoint, method="GET", data=None, timeout=30):
     """Make an authenticated request to the BBS server."""
     url = f"{config['server_url']}{endpoint}"
     headers = {
@@ -92,7 +99,7 @@ def api_request(config, endpoint, method="GET", data=None):
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
 
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         error_body = e.read().decode("utf-8", errors="replace")
@@ -1637,7 +1644,18 @@ def execute_task(config, task):
     deduplicated_size = 0
     error_output = ""
     last_progress_time = time.time()
-    catalog_entries = []  # Collect file entries for catalog
+    catalog_count = 0  # Count of file entries written to catalog JSONL
+    catalog_file = None  # File handle for streaming catalog to disk
+    catalog_jsonl_path = None
+
+    if task_type == "backup":
+        ensure_catalog_dir()
+        catalog_jsonl_path = os.path.join(CATALOG_DIR, f"catalog-{job_id}.jsonl")
+        try:
+            catalog_file = open(catalog_jsonl_path, "w", encoding="utf-8")
+        except Exception as e:
+            logger.warning(f"Could not open catalog file {catalog_jsonl_path}: {e}")
+            catalog_jsonl_path = None
 
     # For restore tasks, create and use the target directory
     if cwd:
@@ -1703,8 +1721,8 @@ def execute_task(config, task):
                         )
                         last_progress_time = now
 
-                elif msg_type == "file_status" and task_type == "backup":
-                    # Collect file entries for catalog
+                elif msg_type == "file_status" and task_type == "backup" and catalog_file:
+                    # Stream file entry to JSONL catalog on disk
                     fpath = entry.get("path", "")
                     fsize = 0
                     fmtime = None
@@ -1715,12 +1733,13 @@ def execute_task(config, task):
                             fmtime = datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
                         except OSError:
                             pass
-                    catalog_entries.append({
+                    catalog_file.write(json.dumps({
                         "path": fpath,
                         "status": entry.get("status", "U")[0].upper(),
                         "size": fsize,
                         "mtime": fmtime,
-                    })
+                    }) + "\n")
+                    catalog_count += 1
 
                 elif msg_type == "log_message":
                     log_level = entry.get("levelname", "INFO")
@@ -1782,6 +1801,21 @@ def execute_task(config, task):
         result = "failed"
         error_output = str(e)
         logger.error(f"Job #{job_id} error: {e}")
+    finally:
+        # Always close the catalog file handle
+        if catalog_file:
+            try:
+                catalog_file.close()
+            except Exception:
+                pass
+
+    # If backup failed, remove the incomplete catalog file
+    if result != "completed" and catalog_jsonl_path and os.path.exists(catalog_jsonl_path):
+        try:
+            os.remove(catalog_jsonl_path)
+        except Exception:
+            pass
+        catalog_count = 0
 
     # Build status data
     status_data = {
@@ -1819,21 +1853,36 @@ def execute_task(config, task):
 
     # If backup succeeded and has catalog entries, use two-phase status reporting:
     # 1) Report "cataloging" — creates archive, keeps job as "running"
-    # 2) Upload catalog
+    # 2) Upload catalog from JSONL file
     # 3) Report "completed" — triggers notifications, prune, etc.
-    has_catalog = result == "completed" and task_type == "backup" and catalog_entries
+    # If catalog upload fails, don't report "completed" — retry next cycle.
+    has_catalog = result == "completed" and task_type == "backup" and catalog_count > 0
+    catalog_deferred = False
     if has_catalog:
         status_data["result"] = "cataloging"
         catalog_response = api_request(config, "/api/agent/status", method="POST", data=status_data)
         archive_id = catalog_response.get("archive_id") if catalog_response else None
         if archive_id:
-            upload_catalog(config, archive_id, catalog_entries)
-        # Now report final completion
-        status_data["result"] = "completed"
+            # Save state so check_pending_catalogs() can resume
+            save_catalog_state(job_id, archive_id, 0)
+            catalog_ok = upload_catalog(config, archive_id, job_id)
+            if catalog_ok:
+                # Catalog uploaded successfully — report final completion
+                status_data["result"] = "completed"
+            else:
+                # Catalog upload incomplete — don't report completed yet
+                log_to_server(config, job_id,
+                              "Catalog upload incomplete, will retry on next cycle", level="warning")
+                logger.warning(f"Job #{job_id}: catalog upload incomplete, deferring completion")
+                catalog_deferred = True
+        else:
+            logger.error(f"Job #{job_id}: no archive_id in cataloging response")
+            status_data["result"] = "completed"
     else:
         status_data["result"] = result
 
-    status_response = api_request(config, "/api/agent/status", method="POST", data=status_data)
+    if not catalog_deferred:
+        status_response = api_request(config, "/api/agent/status", method="POST", data=status_data)
 
     # Run post-backup plugin cleanup
     if result == "completed" and task_type == "backup" and plugins and plugin_results:
@@ -1867,30 +1916,246 @@ def clear_stale_cache_locks():
                 logger.warning(f"Could not clear cache lock {lock_path}: {e}")
 
 
-def upload_catalog(config, archive_id, entries):
-    """Upload file catalog entries to the server in batches."""
-    batch_size = 1000
-    total = len(entries)
-    uploaded = 0
+def save_catalog_state(job_id, archive_id, lines_uploaded):
+    """Atomically write catalog upload progress to a state file."""
+    state_path = os.path.join(CATALOG_DIR, f"catalog-{job_id}.state")
+    tmp_path = state_path + ".tmp"
+    try:
+        with open(tmp_path, "w") as f:
+            json.dump({
+                "archive_id": archive_id,
+                "job_id": job_id,
+                "lines_uploaded": lines_uploaded,
+                "timestamp": time.time(),
+            }, f)
+        os.replace(tmp_path, state_path)
+    except Exception as e:
+        logger.warning(f"Failed to save catalog state: {e}")
 
-    logger.info(f"Uploading catalog: {total} file entries for archive #{archive_id}")
 
-    for i in range(0, total, batch_size):
-        batch = entries[i : i + batch_size]
-        is_last = (i + batch_size) >= total
+def cleanup_catalog_files(job_id):
+    """Remove JSONL and state files for a completed or abandoned catalog."""
+    for suffix in (".jsonl", ".state"):
+        path = os.path.join(CATALOG_DIR, f"catalog-{job_id}{suffix}")
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+        except Exception as e:
+            logger.warning(f"Failed to remove {path}: {e}")
+
+
+def upload_catalog_batch(config, archive_id, batch, is_last):
+    """Upload one batch with exponential backoff. Returns True on success."""
+    max_retries = 10
+    delay = 5
+    for attempt in range(1, max_retries + 1):
+        if not running:
+            return False
         result = api_request(
             config,
             "/api/agent/catalog",
             method="POST",
             data={"archive_id": archive_id, "files": batch, "done": is_last},
+            timeout=120,
         )
         if result and result.get("status") == "ok":
-            uploaded += result.get("inserted", 0)
+            return True
+        if attempt < max_retries:
+            logger.warning(f"Catalog batch failed, retrying in {delay}s (attempt {attempt}/{max_retries})")
+            time.sleep(delay)
+            delay = min(delay * 2, 300)  # Cap at 5 minutes
         else:
-            logger.error(f"Catalog upload failed at batch {i // batch_size + 1}")
-            break
+            return False
+    return False
 
-    logger.info(f"Catalog upload complete: {uploaded}/{total} entries")
+
+def upload_catalog(config, archive_id, job_id):
+    """Upload file catalog from JSONL file with retry/resume support.
+
+    Returns True on success, False on failure (file preserved for retry).
+    """
+    jsonl_path = os.path.join(CATALOG_DIR, f"catalog-{job_id}.jsonl")
+    if not os.path.exists(jsonl_path):
+        logger.warning(f"Catalog file not found: {jsonl_path}")
+        return True  # Nothing to upload
+
+    # Count total lines for progress reporting
+    total = 0
+    with open(jsonl_path, "r", encoding="utf-8") as f:
+        for _ in f:
+            total += 1
+
+    if total == 0:
+        cleanup_catalog_files(job_id)
+        return True
+
+    # Check for resume state
+    state_path = os.path.join(CATALOG_DIR, f"catalog-{job_id}.state")
+    lines_uploaded = 0
+    if os.path.exists(state_path):
+        try:
+            with open(state_path, "r") as f:
+                state = json.load(f)
+            lines_uploaded = state.get("lines_uploaded", 0)
+            if lines_uploaded > 0:
+                logger.info(f"Resuming catalog upload from {lines_uploaded:,}/{total:,} entries")
+                log_to_server(config, job_id,
+                              f"Resuming catalog upload from {lines_uploaded:,}/{total:,} entries")
+        except Exception:
+            lines_uploaded = 0
+
+    batch_size = 1000
+    total_batches = (total + batch_size - 1) // batch_size
+
+    if lines_uploaded == 0:
+        log_to_server(config, job_id,
+                      f"Uploading file catalog: {total:,} entries in {total_batches:,} batches")
+    logger.info(f"Uploading catalog: {total:,} entries for archive #{archive_id}")
+
+    batch = []
+    line_num = 0
+    batches_sent = lines_uploaded // batch_size
+
+    with open(jsonl_path, "r", encoding="utf-8") as f:
+        for raw_line in f:
+            line_num += 1
+
+            # Skip already-uploaded lines on resume
+            if line_num <= lines_uploaded:
+                continue
+
+            try:
+                entry = json.loads(raw_line)
+                batch.append(entry)
+            except json.JSONDecodeError:
+                continue
+
+            if len(batch) >= batch_size:
+                is_last = line_num >= total
+                batch_num = line_num // batch_size
+                if not upload_catalog_batch(config, archive_id, batch, is_last):
+                    # Save state for resume
+                    uploaded_so_far = line_num - len(batch)
+                    save_catalog_state(job_id, archive_id, uploaded_so_far)
+                    logger.error(f"Catalog upload paused at {uploaded_so_far:,}/{total:,} entries")
+                    log_to_server(config, job_id,
+                                  f"Catalog upload paused at {uploaded_so_far:,}/{total:,} entries — will retry next cycle",
+                                  level="warning")
+                    return False
+
+                lines_uploaded = line_num
+                batches_sent += 1
+                save_catalog_state(job_id, archive_id, lines_uploaded)
+
+                # Log progress every 10 batches
+                if batches_sent % 10 == 0:
+                    pct = (lines_uploaded / total) * 100
+                    log_to_server(config, job_id,
+                                  f"Catalog progress: {lines_uploaded:,}/{total:,} entries ({pct:.1f}%)")
+
+                batch = []
+
+                if not running:
+                    save_catalog_state(job_id, archive_id, lines_uploaded)
+                    return False
+
+    # Upload remaining entries
+    if batch:
+        if not upload_catalog_batch(config, archive_id, batch, True):
+            save_catalog_state(job_id, archive_id, lines_uploaded)
+            logger.error(f"Catalog upload failed on final batch at {lines_uploaded:,}/{total:,}")
+            log_to_server(config, job_id,
+                          f"Catalog upload paused at {lines_uploaded:,}/{total:,} entries — will retry next cycle",
+                          level="warning")
+            return False
+
+    # Success — clean up files
+    cleanup_catalog_files(job_id)
+    logger.info(f"Catalog upload complete: {total:,} entries")
+    log_to_server(config, job_id, f"Catalog upload complete: {total:,} entries")
+    return True
+
+
+def check_pending_catalogs(config):
+    """Check for pending catalog uploads from previous runs. Resume if possible.
+
+    Returns True if no pending catalogs (safe to take new tasks), False otherwise.
+    """
+    global task_running
+
+    if not os.path.isdir(CATALOG_DIR):
+        return True
+
+    now = time.time()
+    has_pending = False
+
+    for filename in os.listdir(CATALOG_DIR):
+        if not filename.startswith("catalog-") or not filename.endswith(".jsonl"):
+            continue
+
+        jsonl_path = os.path.join(CATALOG_DIR, filename)
+        # Extract job_id from filename: catalog-{job_id}.jsonl
+        job_id_str = filename[len("catalog-"):-len(".jsonl")]
+        try:
+            job_id = int(job_id_str)
+        except ValueError:
+            continue
+
+        file_age_hours = (now - os.path.getmtime(jsonl_path)) / 3600
+
+        # Stale cleanup: remove files older than 48 hours
+        if file_age_hours > CATALOG_STALE_HOURS:
+            logger.info(f"Cleaning up stale catalog for job #{job_id} ({file_age_hours:.0f}h old)")
+            log_to_server(config, job_id, "Cleaned up stale catalog data (48h timeout)", level="warning")
+            cleanup_catalog_files(job_id)
+            continue
+
+        # Check for state file (means upload was in progress)
+        state_path = os.path.join(CATALOG_DIR, f"catalog-{job_id}.state")
+        if not os.path.exists(state_path):
+            # JSONL exists without state file — backup finished but cataloging status
+            # was never reported (crash before status report). Clean it up.
+            logger.info(f"Removing orphaned catalog file for job #{job_id} (no state file)")
+            cleanup_catalog_files(job_id)
+            continue
+
+        # Load state to get archive_id
+        try:
+            with open(state_path, "r") as f:
+                state = json.load(f)
+            archive_id = state.get("archive_id")
+            if not archive_id:
+                logger.warning(f"Catalog state for job #{job_id} missing archive_id, removing")
+                cleanup_catalog_files(job_id)
+                continue
+        except Exception as e:
+            logger.warning(f"Failed to read catalog state for job #{job_id}: {e}")
+            cleanup_catalog_files(job_id)
+            continue
+
+        # Resume catalog upload
+        logger.info(f"Found pending catalog for job #{job_id}, archive #{archive_id}")
+        has_pending = True
+
+        task_running = True  # Keep heartbeat alive during resume
+        try:
+            success = upload_catalog(config, archive_id, job_id)
+            if success:
+                # Report completed status for the job
+                api_request(config, "/api/agent/status", method="POST", data={
+                    "job_id": job_id,
+                    "result": "completed",
+                })
+                logger.info(f"Job #{job_id} catalog resume complete, reported completed")
+            else:
+                logger.warning(f"Job #{job_id} catalog resume incomplete, will retry")
+        finally:
+            task_running = False
+
+        # Only process one pending catalog per cycle
+        break
+
+    return not has_pending
 
 
 def signal_handler(signum, frame):
@@ -1953,30 +2218,34 @@ def main():
 
     while running:
         try:
-            # Poll for tasks
-            result = api_request(config, "/api/agent/tasks")
+            # Check for pending catalog uploads before accepting new work
+            catalogs_clear = check_pending_catalogs(config)
 
-            # Update poll interval if server sends one
-            if result and "poll_interval" in result:
-                config["poll_interval"] = int(result["poll_interval"])
+            if catalogs_clear:
+                # Poll for tasks
+                result = api_request(config, "/api/agent/tasks")
 
-            if result and result.get("tasks"):
-                for task in result["tasks"]:
-                    if not running:
-                        break
-                    task_running = True
-                    try:
-                        if task.get("task") == "update_borg":
-                            execute_update_borg(config, task)
-                        elif task.get("task") == "update_agent":
-                            execute_update_agent(config, task)
-                        else:
-                            execute_task(config, task)
-                    finally:
-                        task_running = False
-            elif result is None:
-                # Connection error — server might be down
-                logger.warning("Failed to poll server, will retry")
+                # Update poll interval if server sends one
+                if result and "poll_interval" in result:
+                    config["poll_interval"] = int(result["poll_interval"])
+
+                if result and result.get("tasks"):
+                    for task in result["tasks"]:
+                        if not running:
+                            break
+                        task_running = True
+                        try:
+                            if task.get("task") == "update_borg":
+                                execute_update_borg(config, task)
+                            elif task.get("task") == "update_agent":
+                                execute_update_agent(config, task)
+                            else:
+                                execute_task(config, task)
+                        finally:
+                            task_running = False
+                elif result is None:
+                    # Connection error — server might be down
+                    logger.warning("Failed to poll server, will retry")
 
         except Exception as e:
             logger.error(f"Poll loop error: {e}")
