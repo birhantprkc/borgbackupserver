@@ -289,7 +289,7 @@ class ClientController extends Controller
         ", [$id]);
 
         $plans = $this->db->fetchAll("
-            SELECT bp.*, r.name as repo_name, s.frequency, s.times, s.day_of_week, s.day_of_month, s.enabled as schedule_enabled, s.id as schedule_id
+            SELECT bp.*, r.name as repo_name, r.storage_type as repo_storage_type, s.frequency, s.times, s.day_of_week, s.day_of_month, s.enabled as schedule_enabled, s.id as schedule_id
             FROM backup_plans bp
             LEFT JOIN repositories r ON r.id = bp.repository_id
             LEFT JOIN schedules s ON s.backup_plan_id = bp.id

@@ -982,7 +982,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                 <i class="bi bi-clock me-1"></i><?= $schedSummary ?>
                             </div>
                             <div class="small text-muted">
-                                <i class="bi bi-archive me-1"></i><?= htmlspecialchars($plan['repo_name'] ?? '--') ?>
+                                <i class="bi bi-archive me-1"></i><?= htmlspecialchars($plan['repo_name'] ?? '--') ?><?php if (($plan['repo_storage_type'] ?? 'local') === 'remote_ssh'): ?> <span class="text-muted">(Remote)</span><?php endif; ?>
                             </div>
                         </div>
                     </div>
