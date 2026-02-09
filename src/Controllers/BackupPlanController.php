@@ -276,13 +276,23 @@ class BackupPlanController extends Controller
         $timeList = array_filter(array_map('trim', explode(',', $times)));
         $firstTime = !empty($timeList) ? $timeList[0] : '01:00';
 
-        if ($frequency === 'daily') {
-            $next = new \DateTime("today {$firstTime}", $userTz);
-            if ($next <= $nowLocal) {
-                $next->modify('+1 day');
+        if ($frequency === 'daily' && !empty($timeList)) {
+            $today = new \DateTime('today', $userTz);
+            foreach ($timeList as $time) {
+                $candidate = clone $today;
+                $parts = explode(':', $time);
+                $candidate->setTime((int)($parts[0] ?? 0), (int)($parts[1] ?? 0));
+                if ($candidate > $nowLocal) {
+                    $candidate->setTimezone($utcTz);
+                    return $candidate->format('Y-m-d H:i:s');
+                }
             }
-            $next->setTimezone($utcTz);
-            return $next->format('Y-m-d H:i:s');
+            // All times today have passed — use first time tomorrow
+            $tomorrow = new \DateTime('tomorrow', $userTz);
+            $parts = explode(':', $timeList[0]);
+            $tomorrow->setTime((int)($parts[0] ?? 0), (int)($parts[1] ?? 0));
+            $tomorrow->setTimezone($utcTz);
+            return $tomorrow->format('Y-m-d H:i:s');
         }
 
         if ($frequency === 'weekly' && $dayOfWeek !== null) {
