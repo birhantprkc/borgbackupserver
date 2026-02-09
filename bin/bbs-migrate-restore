@@ -60,19 +60,20 @@ if [[ -f "$ENV_FILE" ]]; then
     fi
     ok "Kept existing .env DB credentials"
 elif [[ -f "$DUMP_DIR/dot-env" ]]; then
-    # No .env yet — copy from dump, then update DB_PASS from the new server
+    # No .env yet — copy from dump, then fix DB_PASS to match this server
     mkdir -p "$(dirname "$ENV_FILE")"
     cp "$DUMP_DIR/dot-env" "$ENV_FILE"
     chmod 600 "$ENV_FILE"
     chown www-data:www-data "$ENV_FILE"
     ok "Restored .env from dump"
-    echo ""
-    warn "No existing .env — DB password needs to match this server."
-    echo -n "  Enter the DB password from the installer output: "
-    read -r NEW_DB_PASS
-    if [[ -n "$NEW_DB_PASS" ]]; then
-        sed -i "s|^DB_PASS=.*|DB_PASS=$NEW_DB_PASS|" "$ENV_FILE"
-        ok "Updated DB_PASS in .env"
+
+    # Reset the bbs DB user password to match what's in the dump
+    DUMP_DB_USER=$(grep -oP '^DB_USER=\K.*' "$ENV_FILE" || echo "bbs")
+    DUMP_DB_PASS=$(grep -oP '^DB_PASS=\K.*' "$ENV_FILE" || echo "")
+    if [[ -n "$DUMP_DB_PASS" ]]; then
+        mysql -e "ALTER USER '${DUMP_DB_USER}'@'localhost' IDENTIFIED BY '$DUMP_DB_PASS';" 2>/dev/null \
+            && ok "Updated MySQL password for '$DUMP_DB_USER' to match dump" \
+            || warn "Could not update MySQL password — you may need to update DB_PASS in .env"
     fi
 else
     die "No .env in dump and no existing .env — cannot continue"
