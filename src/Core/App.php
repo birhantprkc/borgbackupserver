@@ -28,6 +28,20 @@ class App
     {
         $this->registerRoutes();
 
+        // Redirect all UI routes to /upgrade while an upgrade is in progress
+        $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+        if (!str_starts_with($path, '/upgrade') && !str_starts_with($path, '/api/')
+            && !str_starts_with($path, '/login') && !str_starts_with($path, '/logout')) {
+            try {
+                $db = Database::getInstance();
+                $row = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'upgrade_in_progress'");
+                if ($row && $row['value'] === '1') {
+                    header('Location: /upgrade');
+                    exit;
+                }
+            } catch (\Exception $e) { /* DB not available — skip guard */ }
+        }
+
         $match = $this->router->match();
 
         if ($match) {
@@ -143,6 +157,10 @@ class App
         $this->router->map('POST', '/notification-services/[i:id]/toggle', 'NotificationServiceController@toggle');
         $this->router->map('POST', '/notification-services/[i:id]/test', 'NotificationServiceController@test');
         $this->router->map('POST', '/notification-services/[i:id]/duplicate', 'NotificationServiceController@duplicate');
+        // Upgrade
+        $this->router->map('GET', '/upgrade', 'UpgradeController@index');
+        $this->router->map('GET', '/upgrade/status', 'UpgradeController@statusJson');
+        $this->router->map('POST', '/upgrade/dismiss', 'UpgradeController@dismiss');
         $this->router->map('POST', '/settings/upgrade', 'SettingsController@upgrade');
         $this->router->map('POST', '/settings/sync', 'SettingsController@sync');
         $this->router->map('POST', '/settings/upgrade-agents', 'SettingsController@upgradeAgents');

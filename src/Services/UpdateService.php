@@ -113,70 +113,197 @@ class UpdateService
         ];
     }
 
-    public function performUpgrade(): array
+    /**
+     * Start a background upgrade process.
+     *
+     * @param string|null $branchOrTag  Pass 'main' for dev sync, null for latest release tag
+     */
+    public function startBackgroundUpgrade(?string $branchOrTag = null): array
     {
-        $log = [];
-        $latest = $this->getSetting('latest_version', '');
-
-        if (empty($latest)) {
-            $log[] = 'No update information available. Check for updates first.';
-            $this->setSetting('last_upgrade_log', implode("\n", $log));
-            return ['success' => false, 'log' => $log];
+        // Already upgrading?
+        if ($this->getSetting('upgrade_in_progress') === '1') {
+            return ['success' => false, 'error' => 'An upgrade is already in progress.'];
         }
 
-        if (!version_compare($latest, $this->getCurrentVersion(), '>')) {
-            $log[] = 'Already up to date (v' . $this->getCurrentVersion() . ').';
-            $this->setSetting('last_upgrade_log', implode("\n", $log));
-            return ['success' => false, 'log' => $log];
+        $tag = $branchOrTag;
+        if ($tag === null) {
+            $latest = $this->getSetting('latest_version', '');
+            if (empty($latest)) {
+                return ['success' => false, 'error' => 'No update information available. Check for updates first.'];
+            }
+            if (!version_compare($latest, $this->getCurrentVersion(), '>')) {
+                return ['success' => false, 'error' => 'Already up to date (v' . $this->getCurrentVersion() . ').'];
+            }
+            $tag = $this->getSetting('latest_release_tag', 'v' . $latest);
         }
 
-        // Check for active jobs
+        // Check for active backup jobs
         $activeJobs = $this->db->fetchOne(
             "SELECT COUNT(*) as cnt FROM backup_jobs WHERE status IN ('sent', 'running')"
         );
-        if ((int)$activeJobs['cnt'] > 0) {
-            $log[] = "{$activeJobs['cnt']} job(s) still running. Wait for them to complete or cancel them before upgrading.";
-            $this->setSetting('last_upgrade_log', implode("\n", $log));
-            return ['success' => false, 'log' => $log];
+        if ((int) $activeJobs['cnt'] > 0) {
+            return ['success' => false, 'error' => "{$activeJobs['cnt']} backup job(s) still running. Wait for them to complete or cancel them before upgrading."];
         }
 
-        // Enable maintenance mode
-        $this->setSetting('maintenance_mode', '1');
-        $log[] = 'Maintenance mode enabled — new backups paused';
-
+        // Check for active server jobs (prune, compact, etc.)
         try {
-            // Run bbs-update via sudo with tag for release checkout
-            $updateScript = $this->projectRoot . '/bin/bbs-update';
-            $tag = $this->getSetting('latest_release_tag', 'v' . $latest);
-            $lines = [];
-            $code = 0;
-
-            exec("sudo " . escapeshellarg($updateScript) . " " . escapeshellarg($this->projectRoot) . " " . escapeshellarg($tag) . " 2>&1", $lines, $code);
-            foreach ($lines as $line) {
-                $log[] = $line;
+            $activeServerJobs = $this->db->fetchOne(
+                "SELECT COUNT(*) as cnt FROM server_jobs WHERE status IN ('queued', 'running')"
+            );
+            if ((int) ($activeServerJobs['cnt'] ?? 0) > 0) {
+                return ['success' => false, 'error' => "{$activeServerJobs['cnt']} server job(s) still running. Wait for them to complete before upgrading."];
             }
+        } catch (\Exception $e) { /* server_jobs table may not exist */ }
 
-            if ($code !== 0) {
-                $log[] = '';
-                $log[] = "Update script exited with code {$code}.";
-                $this->setSetting('maintenance_mode', '0');
-                $this->setSetting('last_upgrade_log', implode("\n", $log));
-                return ['success' => false, 'log' => $log];
-            }
+        // Enable maintenance mode to suspend the queue
+        $this->setSetting('maintenance_mode', '1');
 
-            $log[] = '';
-            $log[] = 'Upgrade complete.';
+        // Set up log file
+        $logFile = '/tmp/bbs-upgrade-' . getmypid() . '.log';
+        $this->setSetting('upgrade_in_progress', '1');
+        $this->setSetting('upgrade_started_at', date('Y-m-d H:i:s'));
+        $this->setSetting('upgrade_log_file', $logFile);
+        $this->setSetting('upgrade_target', $tag);
+        // Clear any previous result
+        $this->setSetting('upgrade_result', '');
+        $this->setSetting('upgrade_completed_at', '');
 
-        } finally {
-            // Always disable maintenance mode
-            $this->setSetting('maintenance_mode', '0');
-            $log[] = 'Maintenance mode disabled — backups resumed.';
+        // Spawn background process
+        $updateScript = $this->projectRoot . '/bin/bbs-update';
+        $cmd = sprintf(
+            'nohup sudo %s %s %s > %s 2>&1 & echo $!',
+            escapeshellarg($updateScript),
+            escapeshellarg($this->projectRoot),
+            escapeshellarg($tag),
+            escapeshellarg($logFile)
+        );
+        $pid = trim(shell_exec($cmd));
+        $this->setSetting('upgrade_pid', $pid);
+
+        return ['success' => true, 'pid' => $pid];
+    }
+
+    /**
+     * Get the current status of a background upgrade.
+     */
+    public function getUpgradeStatus(): array
+    {
+        $inProgress = $this->getSetting('upgrade_in_progress') === '1';
+        $result = $this->getSetting('upgrade_result', '');
+        $startedAt = $this->getSetting('upgrade_started_at', '');
+        $completedAt = $this->getSetting('upgrade_completed_at', '');
+        $target = $this->getSetting('upgrade_target', '');
+
+        if (!$inProgress && empty($result)) {
+            return ['in_progress' => false, 'result' => null];
         }
 
-        // Save upgrade log
-        $this->setSetting('last_upgrade_log', implode("\n", $log));
+        // If already completed (detected on a previous poll), return stored result
+        if (!$inProgress && !empty($result)) {
+            $log = $this->getSetting('last_upgrade_log', '');
+            return [
+                'in_progress' => false,
+                'progress' => 100,
+                'log' => $log,
+                'last_line' => $this->extractLastMeaningfulLine($log),
+                'result' => $result,
+                'target' => $target,
+                'started_at' => $startedAt,
+                'completed_at' => $completedAt,
+                'elapsed' => $this->calcElapsed($startedAt, $completedAt),
+            ];
+        }
 
-        return ['success' => true, 'log' => $log];
+        // In progress — read live log
+        $logFile = $this->getSetting('upgrade_log_file', '');
+        $pid = $this->getSetting('upgrade_pid', '');
+        $log = '';
+        if (!empty($logFile) && file_exists($logFile)) {
+            $log = file_get_contents($logFile);
+        }
+
+        // Parse progress from [N/12] pattern
+        $progress = 0;
+        $totalSteps = 12;
+        if (preg_match_all('/\[(\d+)\/(\d+)\]/', $log, $matches)) {
+            $lastStep = (int) end($matches[1]);
+            $totalSteps = (int) end($matches[2]);
+            $progress = $totalSteps > 0 ? (int) round(($lastStep / $totalSteps) * 100) : 0;
+        }
+
+        // Check if process is still running
+        $processRunning = false;
+        if (!empty($pid) && is_numeric($pid)) {
+            $processRunning = file_exists("/proc/{$pid}");
+        }
+
+        // Check for completion marker
+        $completed = str_contains($log, '=== Update complete ===');
+        $failed = !$processRunning && !$completed && !empty($log);
+
+        if ($completed || $failed) {
+            $resultStr = $completed ? 'success' : 'failed';
+            $now = date('Y-m-d H:i:s');
+
+            $this->setSetting('upgrade_in_progress', '0');
+            $this->setSetting('maintenance_mode', '0');
+            $this->setSetting('upgrade_completed_at', $now);
+            $this->setSetting('upgrade_result', $resultStr);
+            $this->setSetting('last_upgrade_log', $log);
+
+            return [
+                'in_progress' => false,
+                'progress' => $completed ? 100 : $progress,
+                'log' => $log,
+                'last_line' => $this->extractLastMeaningfulLine($log),
+                'result' => $resultStr,
+                'target' => $target,
+                'started_at' => $startedAt,
+                'completed_at' => $now,
+                'elapsed' => $this->calcElapsed($startedAt, $now),
+            ];
+        }
+
+        return [
+            'in_progress' => true,
+            'progress' => $progress,
+            'log' => $log,
+            'last_line' => $this->extractLastMeaningfulLine($log),
+            'result' => null,
+            'target' => $target,
+            'started_at' => $startedAt,
+            'elapsed' => $this->calcElapsed($startedAt),
+        ];
+    }
+
+    /**
+     * Clear upgrade state after user acknowledges completion.
+     */
+    public function clearUpgrade(): void
+    {
+        $this->setSetting('upgrade_in_progress', '0');
+        $this->setSetting('upgrade_result', '');
+        $this->setSetting('upgrade_pid', '');
+        $this->setSetting('upgrade_log_file', '');
+        $this->setSetting('upgrade_started_at', '');
+        $this->setSetting('upgrade_completed_at', '');
+        $this->setSetting('upgrade_target', '');
+        // Ensure maintenance mode is off
+        $this->setSetting('maintenance_mode', '0');
+    }
+
+    private function extractLastMeaningfulLine(string $log): string
+    {
+        $lines = array_filter(array_map('trim', explode("\n", $log)), fn($l) => $l !== '');
+        return !empty($lines) ? end($lines) : '';
+    }
+
+    private function calcElapsed(string $startedAt, ?string $endAt = null): int
+    {
+        if (empty($startedAt)) return 0;
+        $start = strtotime($startedAt);
+        $end = $endAt ? strtotime($endAt) : time();
+        return max(0, $end - $start);
     }
 
     private function getSetting(string $key, string $default = ''): string

@@ -2605,7 +2605,7 @@ $outdatedCount = count($outdatedAgents);
                         </button>
                     </form>
                     <?php if ($hasUpdate): ?>
-                    <form method="POST" action="/settings/upgrade" data-confirm="This will enable maintenance mode (pausing new backups), checkout release v<?= htmlspecialchars($latest['version']) ?>, update dependencies, and run migrations.&#10;&#10;Recommendation: Back up your database first.&#10;&#10;Proceed with upgrade?">
+                    <form method="POST" action="/settings/upgrade" data-confirm="This will start a background upgrade to v<?= htmlspecialchars($latest['version']) ?>. You'll be redirected to a progress page.&#10;&#10;Active backups must complete first. New backups will be paused during the upgrade.&#10;&#10;Proceed?">
                         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                         <button type="submit" class="btn btn-sm btn-primary">
                             <i class="bi bi-cloud-arrow-down me-1"></i> Upgrade to v<?= htmlspecialchars($latest['version']) ?>
@@ -2690,7 +2690,7 @@ $outdatedCount = count($outdatedAgents);
                     <i class="bi bi-exclamation-triangle me-1"></i>
                     <strong>Developer Use Only:</strong> Syncs unpublished development code from the main branch. This may include incomplete features and untested changes. Only use if directed by a developer for troubleshooting purposes.
                 </div>
-                <form method="POST" action="/settings/sync" data-confirm="This pulls the latest code from the main branch, which may include unreleased or unstable changes.&#10;&#10;Use Upgrade instead for stable releases.&#10;&#10;Proceed?">
+                <form method="POST" action="/settings/sync" data-confirm="This will sync to the latest code from the main branch (may include unreleased changes). You'll be redirected to a progress page.&#10;&#10;Active backups must complete first. New backups will be paused during the sync.&#10;&#10;Proceed?">
                     <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                     <button type="submit" class="btn btn-outline-secondary btn-sm" title="Pulls latest from main branch (may include unreleased changes)">
                         <i class="bi bi-git me-1"></i> Sync Dev Code

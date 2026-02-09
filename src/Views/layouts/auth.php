@@ -13,7 +13,7 @@
 <body class="bg-body-secondary">
     <div class="container">
         <div class="row justify-content-center mt-5">
-            <div class="col-md-5">
+            <div class="<?= $authColClass ?? 'col-md-5' ?>">
                 <div class="text-center mb-4">
                     <img src="/images/borg_icon_dark.png" alt="Borg Backup Server" class="img-fluid" style="max-width: 120px;">
                 </div>

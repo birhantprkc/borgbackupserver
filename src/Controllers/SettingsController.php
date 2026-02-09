@@ -312,19 +312,15 @@ class SettingsController extends Controller
         $this->verifyCsrf();
 
         $service = new \BBS\Services\UpdateService();
-        $result = $service->performUpgrade();
+        $result = $service->startBackgroundUpgrade();
 
-        // Store result in session so the view can display it
-        $_SESSION['upgrade_result'] = $result;
-
-        if ($result['success']) {
-            $this->flash('success', 'Upgrade completed successfully.');
-        } else {
-            $reason = !empty($result['log']) ? end($result['log']) : 'Unknown error';
-            $this->flash('danger', 'Upgrade failed — ' . $reason);
+        if (!$result['success']) {
+            $this->flash('danger', $result['error']);
+            $this->redirect('/settings?tab=updates');
+            return;
         }
 
-        $this->redirect('/settings?tab=updates');
+        $this->redirect('/upgrade');
     }
 
     public function sync(): void
@@ -332,26 +328,16 @@ class SettingsController extends Controller
         $this->requireAdmin();
         $this->verifyCsrf();
 
-        $projectRoot = dirname(__DIR__, 2);
-        $updateScript = $projectRoot . '/bin/bbs-update';
+        $service = new \BBS\Services\UpdateService();
+        $result = $service->startBackgroundUpgrade('main');
 
-        $lines = [];
-        $code = 0;
-        exec("sudo " . escapeshellarg($updateScript) . " " . escapeshellarg($projectRoot) . " main 2>&1", $lines, $code);
-
-        $_SESSION['upgrade_result'] = [
-            'success' => $code === 0,
-            'log' => $lines,
-        ];
-
-        if ($code === 0) {
-            $this->flash('success', 'Sync completed — code updated and permissions fixed.');
-        } else {
-            $reason = !empty($lines) ? end($lines) : 'Unknown error';
-            $this->flash('danger', 'Sync failed — ' . $reason);
+        if (!$result['success']) {
+            $this->flash('danger', $result['error']);
+            $this->redirect('/settings?tab=updates');
+            return;
         }
 
-        $this->redirect('/settings?tab=updates');
+        $this->redirect('/upgrade');
     }
 
     /**
