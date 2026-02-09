@@ -474,8 +474,14 @@ EOF
 PIDFILE="/var/run/bbs-agent.pid"
 LOGFILE="/var/log/bbs-agent.log"
 
-export LC_ALL=C.UTF-8
-export LANG=C.UTF-8
+# Set UTF-8 locale if available (some old systems lack C.UTF-8)
+if locale -a 2>/dev/null | grep -qi 'c\.utf'; then
+    export LC_ALL=C.UTF-8
+    export LANG=C.UTF-8
+elif locale -a 2>/dev/null | grep -qi 'en_us\.utf'; then
+    export LC_ALL=en_US.UTF-8
+    export LANG=en_US.UTF-8
+fi
 
 start() {
     if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
