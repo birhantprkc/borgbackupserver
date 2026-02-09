@@ -19,6 +19,14 @@ die()  { fail "$*"; exit 1; }
 LOG_FILE="/var/log/bbs-install.log"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
+# Ensure interactive prompts work even when piped (curl | sudo bash)
+if [[ ! -t 0 ]] && [[ -e /dev/tty ]]; then
+    exec 3</dev/tty
+else
+    exec 3<&0
+fi
+ask() { read "$@" <&3; }
+
 echo -e "${BOLD}═══════════════════════════════════════════════════${NC}"
 echo -e "${BOLD}  BBS Installer${NC}"
 echo -e "${BOLD}═══════════════════════════════════════════════════${NC}"
@@ -66,7 +74,7 @@ BBS_DIR="/var/www/bbs"
 if [[ -f "$BBS_DIR/config/.env" ]]; then
     echo ""
     warn "BBS is already installed ($BBS_DIR/config/.env exists)."
-    read -rp "  Run the updater instead? [Y/n] " yn
+    ask -rp "  Run the updater instead? [Y/n] " yn
     if [[ "${yn,,}" != "n" ]]; then
         exec "$BBS_DIR/bin/bbs-update"
     fi
@@ -75,7 +83,7 @@ fi
 
 if [[ -d "$BBS_DIR" ]]; then
     warn "Partial install detected ($BBS_DIR exists but no .env)."
-    read -rp "  Continue installation? [Y/n] " yn
+    ask -rp "  Continue installation? [Y/n] " yn
     if [[ "${yn,,}" == "n" ]]; then
         die "Aborted."
     fi
@@ -117,10 +125,10 @@ if [[ -z "$HOSTNAME_ARG" ]]; then
     fi
 
     if [[ -n "$DETECTED_HOST" ]]; then
-        read -rp "  Server hostname [$DETECTED_HOST]: " HOSTNAME_ARG
+        ask -rp "  Server hostname [$DETECTED_HOST]: " HOSTNAME_ARG
         HOSTNAME_ARG="${HOSTNAME_ARG:-$DETECTED_HOST}"
     else
-        read -rp "  Server hostname (e.g. backups.example.com): " HOSTNAME_ARG
+        ask -rp "  Server hostname (e.g. backups.example.com): " HOSTNAME_ARG
     fi
 fi
 if [[ -z "$HOSTNAME_ARG" ]]; then
@@ -180,7 +188,7 @@ fi
 # MySQL credentials
 echo ""
 echo "  MySQL setup: BBS needs a database."
-read -rp "  Auto-generate a 'bbs' database user with random password? [Y/n] " auto_db
+ask -rp "  Auto-generate a 'bbs' database user with random password? [Y/n] " auto_db
 if [[ "${auto_db,,}" != "n" ]]; then
     DB_USER="bbs"
     DB_PASS=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 24)
@@ -188,7 +196,7 @@ if [[ "${auto_db,,}" != "n" ]]; then
     DB_AUTO=true
     ok "Will create database 'bbs' with user 'bbs'"
 else
-    read -rp "  MySQL root password (or press Enter for none): " -s DB_ROOT_PASS
+    ask -rp "  MySQL root password (or press Enter for none): " -s DB_ROOT_PASS
     echo ""
     DB_USER="bbs"
     DB_PASS=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 24)
