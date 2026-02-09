@@ -5,13 +5,12 @@
 #
 # Prerequisites:
 #   - Fresh BBS install completed (bin/bbs-install)
-#   - Database has schema applied (installer does this automatically)
 #
 # Usage:
 #   sudo bash /var/www/bbs/bin/bbs-migrate-restore /path/to/bbs-dump-YYYYMMDD-HHMMSS.tar.gz
 #
 # What this does:
-#   1. Restores APP_KEY from the old server (required for SSH key decryption)
+#   1. Restores .env from the old server (APP_KEY needed for SSH key decryption)
 #   2. Imports config tables (agents, plugins, settings, users, etc.)
 #   3. Re-provisions Unix users and SSH authorized_keys for all agents
 #
@@ -46,50 +45,57 @@ DUMP_DIR=$(find "$TMPDIR" -maxdepth 1 -type d -name 'bbs-dump-*' | head -1)
 echo -e "  Archive: $(basename "$ARCHIVE")"
 echo ""
 
+# Figure out DB name (from existing .env, or from dump, or default)
+DB_NAME=""
+if [[ -f "$ENV_FILE" ]]; then
+    DB_NAME=$(grep -oP '^DB_NAME=\K.*' "$ENV_FILE" || true)
+elif [[ -f "$DUMP_DIR/dot-env" ]]; then
+    DB_NAME=$(grep -oP '^DB_NAME=\K.*' "$DUMP_DIR/dot-env" || true)
+fi
+DB_NAME="${DB_NAME:-bbs}"
+
+# Use root socket auth for all MySQL operations (script runs as root)
+MYSQL="mysql $DB_NAME"
+
 # ── Step 1: Restore .env ─────────────────────────────────────────
 echo -e "${BOLD}[1/3] Restoring .env${NC}"
 
-if [[ -f "$ENV_FILE" ]]; then
-    # Existing .env — preserve DB credentials, merge APP_KEY from dump
-    if [[ -f "$DUMP_DIR/dot-env" ]]; then
-        OLD_APP_KEY=$(grep -oP '^APP_KEY=\K.*' "$DUMP_DIR/dot-env" || echo "")
+if [[ -f "$DUMP_DIR/dot-env" ]]; then
+    # Get APP_KEY from dump
+    OLD_APP_KEY=$(grep -oP '^APP_KEY=\K.*' "$DUMP_DIR/dot-env" || echo "")
+
+    if [[ -f "$ENV_FILE" ]]; then
+        # Existing .env — just merge APP_KEY from dump
         if [[ -n "$OLD_APP_KEY" ]]; then
             sed -i "s|^APP_KEY=.*|APP_KEY=$OLD_APP_KEY|" "$ENV_FILE"
             ok "Restored APP_KEY from dump (needed for SSH key decryption)"
         fi
-    fi
-    ok "Kept existing .env DB credentials"
-elif [[ -f "$DUMP_DIR/dot-env" ]]; then
-    # No .env yet — copy from dump, then fix DB_PASS to match this server
-    mkdir -p "$(dirname "$ENV_FILE")"
-    cp "$DUMP_DIR/dot-env" "$ENV_FILE"
-    chmod 600 "$ENV_FILE"
-    chown www-data:www-data "$ENV_FILE"
-    ok "Restored .env from dump"
+        ok "Kept existing .env"
+    else
+        # No .env — copy dump's .env, then fix DB_PASS to match this server
+        mkdir -p "$(dirname "$ENV_FILE")"
+        cp "$DUMP_DIR/dot-env" "$ENV_FILE"
 
-    # Reset the bbs DB user password to match what's in the dump
-    DUMP_DB_USER=$(grep -oP '^DB_USER=\K.*' "$ENV_FILE" || echo "bbs")
-    DUMP_DB_PASS=$(grep -oP '^DB_PASS=\K.*' "$ENV_FILE" || echo "")
-    if [[ -n "$DUMP_DB_PASS" ]]; then
-        mysql -e "ALTER USER '${DUMP_DB_USER}'@'localhost' IDENTIFIED BY '$DUMP_DB_PASS';" 2>/dev/null \
-            && ok "Updated MySQL password for '$DUMP_DB_USER' to match dump" \
-            || warn "Could not update MySQL password — you may need to update DB_PASS in .env"
+        # Generate a new DB password and update both MySQL and .env
+        NEW_PASS=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 24)
+        DB_USER=$(grep -oP '^DB_USER=\K.*' "$ENV_FILE" || echo "bbs")
+        mysql -e "ALTER USER '${DB_USER}'@'localhost' IDENTIFIED BY '$NEW_PASS';" 2>/dev/null || true
+        sed -i "s|^DB_PASS=.*|DB_PASS=$NEW_PASS|" "$ENV_FILE"
+        sed -i "s|^DB_HOST=.*|DB_HOST=localhost|" "$ENV_FILE"
+        sed -i "s|^DB_NAME=.*|DB_NAME=$DB_NAME|" "$ENV_FILE"
+
+        chmod 600 "$ENV_FILE"
+        chown www-data:www-data "$ENV_FILE"
+        ok "Restored .env from dump (DB credentials updated for this server)"
     fi
 else
-    die "No .env in dump and no existing .env — cannot continue"
+    [[ -f "$ENV_FILE" ]] || die "No .env in dump and no existing .env — cannot continue"
+    warn "No .env in dump — keeping existing .env"
 fi
 echo ""
 
 # ── Step 2: Import table data ─────────────────────────────────────
 echo -e "${BOLD}[2/3] Importing tables${NC}"
-
-# Read DB credentials
-DB_HOST=$(grep -oP '^DB_HOST=\K.*' "$ENV_FILE" || echo "localhost")
-DB_NAME=$(grep -oP '^DB_NAME=\K.*' "$ENV_FILE" || echo "bbs")
-DB_USER=$(grep -oP '^DB_USER=\K.*' "$ENV_FILE" || die "DB_USER not in .env")
-DB_PASS=$(grep -oP '^DB_PASS=\K.*' "$ENV_FILE" || die "DB_PASS not in .env")
-
-MYSQL="mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME"
 
 # Disable FK checks during import
 $MYSQL -e "SET FOREIGN_KEY_CHECKS=0;" 2>/dev/null
