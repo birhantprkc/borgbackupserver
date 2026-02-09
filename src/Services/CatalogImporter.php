@@ -58,6 +58,9 @@ class CatalogImporter
             $count = 0;
             $escape = fn(string $s) => str_replace(["\t", "\n", "\\"], ["\\t", "\\n", "\\\\"], $s);
 
+            // Track directory stats: dirPath => [file_count, total_size]
+            $dirStats = [];
+
             while (($line = fgets($handle)) !== false) {
                 $line = trim($line);
                 if (empty($line)) continue;
@@ -68,13 +71,23 @@ class CatalogImporter
                 $rawPath = $entry['path'];
                 $path = $escape($rawPath);
                 $name = $escape(basename($rawPath));
-                $parentDir = $escape(dirname($rawPath));
+                $rawParent = dirname($rawPath);
+                $parentDir = $escape($rawParent);
                 $status = substr($entry['status'] ?? 'U', 0, 1);
                 $size = (int) ($entry['size'] ?? 0);
                 $mtime = $entry['mtime'] ?? '\\N';
 
                 fwrite($tsvFh, "{$archiveId}\t{$path}\t{$name}\t{$parentDir}\t{$size}\t{$status}\t{$mtime}\n");
                 $count++;
+
+                // Accumulate per-directory stats (use raw unescaped paths)
+                if ($status !== 'D') {
+                    if (!isset($dirStats[$rawParent])) {
+                        $dirStats[$rawParent] = [0, 0];
+                    }
+                    $dirStats[$rawParent][0]++;
+                    $dirStats[$rawParent][1] += $size;
+                }
             }
 
             fclose($handle);
@@ -117,6 +130,9 @@ class CatalogImporter
 
             $loadElapsed = round(microtime(true) - $loadStart, 1);
             $log("Catalog MySQL load complete: {$loadElapsed}s ({$loadMethod} into {$table})");
+
+            // Build catalog_dirs table for fast directory browsing
+            $this->buildDirIndex($db, $pdo, $agentId, $archiveId, $dirStats, $tsvDir, $useServerSide, $log);
 
             return $count;
         } finally {
@@ -233,5 +249,100 @@ class CatalogImporter
                 $pdo->exec($sql);
             }
         } catch (\Exception $e) { /* ignore — table will work either way */ }
+    }
+
+    /**
+     * Ensure the per-agent catalog_dirs table exists.
+     */
+    public static function ensureDirsTable(Database $db, int $agentId): void
+    {
+        $pdo = $db->getPdo();
+        $table = "catalog_dirs_{$agentId}";
+
+        $pdo->exec("CREATE TABLE IF NOT EXISTS `{$table}` (
+            archive_id INT NOT NULL,
+            dir_path VARCHAR(768) NOT NULL,
+            parent_dir VARCHAR(768) NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            file_count INT NOT NULL DEFAULT 0,
+            total_size BIGINT NOT NULL DEFAULT 0,
+            KEY idx_lookup (archive_id, parent_dir(200)),
+            KEY idx_dir (archive_id, dir_path(200))
+        ) ENGINE=MyISAM");
+    }
+
+    /**
+     * Build the catalog_dirs index table from collected directory stats.
+     * Uses LOAD DATA for speed, just like the main catalog import.
+     */
+    private function buildDirIndex(Database $db, \PDO $pdo, int $agentId, int $archiveId, array $dirStats, string $tsvDir, bool $useServerSide, callable $log): void
+    {
+        self::ensureDirsTable($db, $agentId);
+
+        $dirsTable = "catalog_dirs_{$agentId}";
+
+        // Remove old dir entries for this archive
+        $pdo->exec("DELETE FROM `{$dirsTable}` WHERE archive_id = " . (int) $archiveId);
+
+        if (empty($dirStats)) return;
+
+        // Collect all directory paths (including ancestors) so the tree is complete.
+        // dirStats has the leaf dirs with files; we need intermediate dirs too.
+        $allDirs = []; // dirPath => [file_count, total_size]
+        foreach ($dirStats as $dirPath => [$fc, $sz]) {
+            // Add this dir
+            if (!isset($allDirs[$dirPath])) {
+                $allDirs[$dirPath] = [0, 0];
+            }
+            $allDirs[$dirPath][0] += $fc;
+            $allDirs[$dirPath][1] += $sz;
+
+            // Walk up ancestors to ensure they exist (no file counts for intermediates)
+            $p = dirname($dirPath);
+            while ($p !== '/' && $p !== '.' && !isset($allDirs[$p])) {
+                $allDirs[$p] = [0, 0];
+                $p = dirname($p);
+            }
+        }
+
+        // Don't include root itself as a directory entry
+        unset($allDirs['/']);
+
+        // Write dirs TSV
+        $escape = fn(string $s) => str_replace(["\t", "\n", "\\"], ["\\t", "\\n", "\\\\"], $s);
+        $dirsTsv = $tsvDir . "/catalog_dirs_{$agentId}_{$archiveId}_" . getmypid() . '.tsv';
+        $fh = fopen($dirsTsv, 'w');
+        if (!$fh) return;
+
+        foreach ($allDirs as $dirPath => [$fc, $sz]) {
+            $parent = dirname($dirPath);
+            if ($parent === '.') $parent = '/';
+            $name = basename($dirPath);
+            fwrite($fh, "{$archiveId}\t{$escape($dirPath)}\t{$escape($parent)}\t{$escape($name)}\t{$fc}\t{$sz}\n");
+        }
+        fclose($fh);
+
+        $loadSql = fn(string $cmd) => "{$cmd} " . $pdo->quote($dirsTsv) . "
+            INTO TABLE `{$dirsTable}`
+            FIELDS TERMINATED BY '\\t' ESCAPED BY '\\\\'
+            LINES TERMINATED BY '\\n'
+            (archive_id, dir_path, parent_dir, name, file_count, total_size)";
+
+        try {
+            if ($useServerSide) {
+                try {
+                    $pdo->exec($loadSql('LOAD DATA INFILE'));
+                } catch (\Exception $e) {
+                    $pdo->exec($loadSql('LOAD DATA LOCAL INFILE'));
+                }
+            } else {
+                $pdo->exec($loadSql('LOAD DATA LOCAL INFILE'));
+            }
+            $log("Catalog dirs index: " . number_format(count($allDirs)) . " directories indexed");
+        } catch (\Exception $e) {
+            $log("Catalog dirs index failed: " . $e->getMessage());
+        } finally {
+            @unlink($dirsTsv);
+        }
     }
 }

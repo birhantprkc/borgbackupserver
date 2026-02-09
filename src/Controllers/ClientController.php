@@ -672,37 +672,22 @@ class ClientController extends Controller
 
         // parent_dir for this level: strip trailing slash (root stays as '/')
         $parentDir = $prefix === '/' ? '/' : rtrim($prefix, '/');
-        // Root '/' already ends with separator, so LIKE '/%'.
-        // Non-root '/foo' needs LIKE '/foo/%'.
-        $escaped = str_replace(['%', '_'], ['\\%', '\\_'], $parentDir);
-        $likePath = $parentDir === '/' ? '/%' : $escaped . '/%';
 
-        // SUBSTRING start: skip past parentDir + separator.
-        // Root '/' is the separator itself, so start at position 2.
-        // Non-root '/foo' needs to skip '/foo/' so start at len+2.
-        $substringStart = $parentDir === '/' ? 2 : strlen($parentDir) + 2;
-
-        // Get subdirectories: find distinct immediate child directories
-        // by looking for parent_dir values one level below the current path
+        // Get subdirectories from the catalog_dirs index table (exact match, instant)
+        $dirsTable = "catalog_dirs_{$id}";
         $dirs = $this->db->fetchAll("
-            SELECT
-                SUBSTRING_INDEX(SUBSTRING(parent_dir, ?), '/', 1) as name,
-                COUNT(*) as file_count,
-                SUM(file_size) as total_size
-            FROM `{$table}`
+            SELECT name, dir_path, file_count, total_size
+            FROM `{$dirsTable}`
             WHERE archive_id = ?
-              AND parent_dir LIKE ?
-            GROUP BY name
+              AND parent_dir = ?
             ORDER BY name
-        ", [$substringStart, $archive_id, $likePath]);
+        ", [$archive_id, $parentDir]);
 
-        // Build full paths for dirs
         $directories = [];
         foreach ($dirs as $d) {
-            if ($d['name'] === '') continue;
             $directories[] = [
                 'name' => $d['name'],
-                'path' => $prefix . $d['name'] . '/',
+                'path' => $d['dir_path'] . '/',
                 'file_count' => (int) $d['file_count'],
                 'total_size' => (int) $d['total_size'],
             ];
@@ -1430,9 +1415,10 @@ class ClientController extends Controller
             }
         }
 
-        // Drop per-agent catalog table
+        // Drop per-agent catalog tables
         try {
             $this->db->getPdo()->exec("DROP TABLE IF EXISTS `file_catalog_{$id}`");
+            $this->db->getPdo()->exec("DROP TABLE IF EXISTS `catalog_dirs_{$id}`");
         } catch (\Exception $e) { /* ignore */ }
 
         $this->db->delete('agents', 'id = ?', [$id]);

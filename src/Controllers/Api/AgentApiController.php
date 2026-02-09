@@ -664,6 +664,9 @@ class AgentApiController extends Controller
                 [$archiveId]
             )['cnt'];
 
+            // Build catalog_dirs index from the uploaded data
+            $this->buildDirsFromCatalog($agentId, $archiveId);
+
             $this->db->insert('server_log', [
                 'agent_id' => $agentId,
                 'backup_job_id' => $logJobId,
@@ -679,6 +682,71 @@ class AgentApiController extends Controller
      * POST /api/agent/heartbeat
      * Simple health check — authentication already updates last_heartbeat.
      */
+    /**
+     * Build catalog_dirs index from file_catalog data for a given archive.
+     */
+    private function buildDirsFromCatalog(int $agentId, int $archiveId): void
+    {
+        CatalogImporter::ensureDirsTable($this->db, $agentId);
+
+        $table = "file_catalog_{$agentId}";
+        $dirsTable = "catalog_dirs_{$agentId}";
+        $pdo = $this->db->getPdo();
+
+        // Remove old dir entries for this archive
+        $pdo->exec("DELETE FROM `{$dirsTable}` WHERE archive_id = " . (int) $archiveId);
+
+        // Get dir stats grouped by parent_dir (exact indexed reads)
+        $dirRows = $this->db->fetchAll("
+            SELECT parent_dir, COUNT(*) as file_count, SUM(file_size) as total_size
+            FROM `{$table}`
+            WHERE archive_id = ? AND status != 'D'
+            GROUP BY parent_dir
+        ", [$archiveId]);
+
+        $allDirs = [];
+        foreach ($dirRows as $d) {
+            $dirPath = $d['parent_dir'];
+            if ($dirPath === '' || $dirPath === '/') continue;
+
+            if (!isset($allDirs[$dirPath])) {
+                $allDirs[$dirPath] = [0, 0];
+            }
+            $allDirs[$dirPath][0] += (int) $d['file_count'];
+            $allDirs[$dirPath][1] += (int) $d['total_size'];
+
+            // Walk up ancestors
+            $p = dirname($dirPath);
+            while ($p !== '/' && $p !== '.' && !isset($allDirs[$p])) {
+                $allDirs[$p] = [0, 0];
+                $p = dirname($p);
+            }
+        }
+
+        if (empty($allDirs)) return;
+
+        $values = [];
+        $params = [];
+        foreach ($allDirs as $dirPath => [$fc, $sz]) {
+            $parent = dirname($dirPath);
+            if ($parent === '.') $parent = '/';
+            $name = basename($dirPath);
+            $values[] = "(?, ?, ?, ?, ?, ?)";
+            array_push($params, $archiveId, $dirPath, $parent, $name, $fc, $sz);
+
+            if (count($values) >= 1000) {
+                $pdo->prepare("INSERT INTO `{$dirsTable}` (archive_id, dir_path, parent_dir, name, file_count, total_size) VALUES " . implode(',', $values))
+                    ->execute($params);
+                $values = [];
+                $params = [];
+            }
+        }
+        if (!empty($values)) {
+            $pdo->prepare("INSERT INTO `{$dirsTable}` (archive_id, dir_path, parent_dir, name, file_count, total_size) VALUES " . implode(',', $values))
+                ->execute($params);
+        }
+    }
+
     public function heartbeat(): void
     {
         $agent = $this->authenticateAgent();
