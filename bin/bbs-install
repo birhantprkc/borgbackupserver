@@ -25,7 +25,20 @@ if [[ ! -t 0 ]] && [[ -e /dev/tty ]]; then
 else
     exec 3<&0
 fi
-ask() { read "$@" <&3; }
+ask() {
+    # Extract prompt from -p arg and write it directly to /dev/tty
+    # (read -p gets swallowed by the tee pipe)
+    local args=() prompt=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -p)  prompt="$2"; shift 2 ;;
+            -rp) prompt="$2"; args+=(-r); shift 2 ;;
+            *)   args+=("$1"); shift ;;
+        esac
+    done
+    [[ -n "$prompt" ]] && echo -n "$prompt" > /dev/tty
+    read "${args[@]}" <&3
+}
 
 echo -e "${BOLD}═══════════════════════════════════════════════════${NC}"
 echo -e "${BOLD}  BBS Installer${NC}"
