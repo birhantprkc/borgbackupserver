@@ -20,16 +20,24 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "2.0.2"
+AGENT_VERSION = "2.0.3"
 
-# Ensure UTF-8 locale for handling filenames with non-ASCII characters
-# CentOS 7 and older systems may default to ASCII, causing encoding errors
-if os.environ.get("LC_ALL", "") not in ("C.UTF-8", "en_US.UTF-8") and \
-   not os.environ.get("LANG", "").endswith("UTF-8"):
+# Ensure UTF-8 filesystem encoding for handling filenames with non-ASCII characters.
+# CentOS 7 and older systems may default to ASCII, causing encoding errors.
+# Setting env vars after Python starts does NOT change sys.getfilesystemencoding(),
+# so we must re-exec with the correct locale if needed.
+if sys.getfilesystemencoding().lower() in ("ascii", "ansi_x3.4-1968") and \
+   not os.environ.get("_BBS_LOCALE_RETRY"):
+    os.environ["_BBS_LOCALE_RETRY"] = "1"
+    import locale
     for loc in ("C.UTF-8", "en_US.UTF-8", "en_US.utf8"):
-        os.environ["LC_ALL"] = loc
-        os.environ["LANG"] = loc
-        break
+        try:
+            locale.setlocale(locale.LC_ALL, loc)
+            os.environ["LC_ALL"] = loc
+            os.environ["LANG"] = loc
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+        except locale.Error:
+            continue
 
 CONFIG_PATH = "/etc/bbs-agent/config.ini"
 LOG_PATH = "/var/log/bbs-agent.log"
@@ -1792,7 +1800,7 @@ def execute_task(config, task):
                             st = os.stat("/" + fpath if not fpath.startswith("/") else fpath)
                             fsize = st.st_size
                             fmtime = datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
-                        except OSError:
+                        except (OSError, UnicodeEncodeError):
                             pass
                     line = json.dumps({
                         "path": fpath,

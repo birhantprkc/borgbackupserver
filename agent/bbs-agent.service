@@ -6,6 +6,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=root
+Environment=LC_ALL=C.UTF-8 LANG=C.UTF-8
 ExecStart=/usr/bin/python3 /opt/bbs-agent/bbs-agent.py
 Restart=always
 RestartSec=10
