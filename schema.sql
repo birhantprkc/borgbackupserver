@@ -17,6 +17,7 @@ CREATE TABLE users (
     totp_secret VARCHAR(255) DEFAULT NULL,
     totp_enabled TINYINT(1) NOT NULL DEFAULT 0,
     totp_enabled_at DATETIME DEFAULT NULL,
+    daily_report_email TINYINT(1) NOT NULL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -331,6 +332,13 @@ CREATE TABLE notification_services (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_enabled (enabled)
 ) ENGINE=InnoDB;
+
+CREATE TABLE daily_reports (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    report_date DATE NOT NULL UNIQUE,
+    data JSON NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 
 -- --------------------------------------------------------
 -- Plugins

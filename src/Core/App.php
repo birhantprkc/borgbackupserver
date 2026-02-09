@@ -192,6 +192,9 @@ class App
         $this->router->map('POST', '/profile/2fa/enable', 'ProfileController@twoFactorEnable');
         $this->router->map('POST', '/profile/2fa/disable', 'ProfileController@twoFactorDisable');
         $this->router->map('POST', '/profile/2fa/regenerate-codes', 'ProfileController@twoFactorRegenerateCodes');
+        $this->router->map('POST', '/profile/reports/preferences', 'ProfileController@reportPreferences');
+        $this->router->map('POST', '/profile/reports/generate', 'ProfileController@reportGenerate');
+        $this->router->map('POST', '/profile/reports/email', 'ProfileController@reportEmail');
 
         // Toasts (global live notifications)
         $this->router->map('GET', '/api/toasts', 'DashboardController@toasts');

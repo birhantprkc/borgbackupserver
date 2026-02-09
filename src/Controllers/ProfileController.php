@@ -4,6 +4,8 @@ namespace BBS\Controllers;
 
 use BBS\Core\Controller;
 use BBS\Services\TwoFactorService;
+use BBS\Services\ReportService;
+use BBS\Services\Mailer;
 
 class ProfileController extends Controller
 {
@@ -15,15 +17,37 @@ class ProfileController extends Controller
         $twoFactor = new TwoFactorService();
         $enabled = $twoFactor->isEnabled($_SESSION['user_id']);
 
+        $tab = $_GET['tab'] ?? 'account';
+
+        // Reports tab data
+        $recentReports = [];
+        $selectedReport = null;
+        $smtpEnabled = false;
+        if ($tab === 'reports') {
+            $reportService = new ReportService();
+            $recentReports = $reportService->getRecentReports();
+            $smtpEnabled = (new Mailer())->isEnabled();
+
+            $reportId = (int) ($_GET['report_id'] ?? 0);
+            if ($reportId) {
+                $selectedReport = $reportService->getReport($reportId);
+            } elseif (!empty($recentReports)) {
+                $selectedReport = $reportService->getReport($recentReports[0]['id']);
+            }
+        }
+
         $this->view('profile/index', [
             'pageTitle' => 'Profile',
             'user' => $user,
-            'tab' => $_GET['tab'] ?? 'account',
+            'tab' => $tab,
             'step' => $_GET['step'] ?? 'main',
             'twoFactorEnabled' => $enabled,
             'setupSecret' => $_SESSION['2fa_setup_secret'] ?? null,
             'recoveryCodes' => $_SESSION['2fa_recovery_codes'] ?? null,
             'remainingCodes' => $enabled ? $twoFactor->getRemainingRecoveryCodeCount($_SESSION['user_id']) : 0,
+            'recentReports' => $recentReports,
+            'selectedReport' => $selectedReport,
+            'smtpEnabled' => $smtpEnabled,
         ]);
     }
 
@@ -195,5 +219,61 @@ class ProfileController extends Controller
 
         http_response_code(204);
         exit;
+    }
+
+    /**
+     * POST /profile/reports/preferences — toggle daily report email.
+     */
+    public function reportPreferences(): void
+    {
+        $this->requireAuth();
+        $this->verifyCsrf();
+
+        $enabled = isset($_POST['daily_report_email']) ? 1 : 0;
+        $this->db->update('users', ['daily_report_email' => $enabled], 'id = ?', [$_SESSION['user_id']]);
+        $this->flash('success', $enabled ? 'Daily report email enabled.' : 'Daily report email disabled.');
+        $this->redirect('/profile?tab=reports');
+    }
+
+    /**
+     * POST /profile/reports/generate — generate a report on demand.
+     */
+    public function reportGenerate(): void
+    {
+        $this->requireAuth();
+        $this->verifyCsrf();
+
+        $reportService = new ReportService();
+        $report = $reportService->generate();
+        $this->flash('success', 'Report generated.');
+        $this->redirect('/profile?tab=reports&report_id=' . $report['id']);
+    }
+
+    /**
+     * POST /profile/reports/email — email a report.
+     */
+    public function reportEmail(): void
+    {
+        $this->requireAuth();
+        $this->verifyCsrf();
+
+        $reportId = (int) ($_POST['report_id'] ?? 0);
+        $email = trim($_POST['email'] ?? '');
+
+        if (!$reportId) {
+            $this->flash('danger', 'No report selected.');
+            $this->redirect('/profile?tab=reports');
+        }
+
+        $reportService = new ReportService();
+        $toEmail = $email ?: null;
+        $sent = $reportService->emailReport($reportId, $_SESSION['user_id'], $toEmail);
+
+        if ($sent) {
+            $this->flash('success', 'Report emailed to ' . htmlspecialchars($toEmail ?: 'your email address') . '.');
+        } else {
+            $this->flash('danger', 'Failed to send report. Check SMTP settings.');
+        }
+        $this->redirect('/profile?tab=reports&report_id=' . $reportId);
     }
 }

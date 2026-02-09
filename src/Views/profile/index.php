@@ -20,6 +20,11 @@
             <?php endif; ?>
         </a>
     </li>
+    <li class="nav-item">
+        <a class="nav-link <?= $tab === 'reports' ? 'active' : '' ?>" href="/profile?tab=reports">
+            <i class="bi bi-file-earmark-bar-graph me-1"></i><span class="tab-label">Reports</span>
+        </a>
+    </li>
 </ul>
 <div class="client-tab-content border rounded-bottom p-4 mb-4 shadow-sm">
 
@@ -306,4 +311,135 @@
     </div>
 </div>
 <?php endif; ?>
+
+<?php if ($tab === 'reports'): ?>
+<!-- Reports Tab -->
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+
+        <?php if (!($smtpEnabled ?? false)): ?>
+        <div class="alert alert-warning small">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            Email delivery requires SMTP to be configured.
+            <?php if ($this->isAdmin()): ?>
+                <a href="/settings?tab=smtp">Configure SMTP</a>
+            <?php else: ?>
+                Contact your administrator to set up SMTP.
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+
+        <div class="row g-4 mb-4">
+            <!-- Preferences -->
+            <div class="col-md-6">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-body fw-semibold">
+                        <i class="bi bi-gear me-1"></i> Report Settings
+                    </div>
+                    <div class="card-body">
+                        <form method="POST" action="/profile/reports/preferences">
+                            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" name="daily_report_email" id="dailyReportEmail" value="1"
+                                    <?= ($user['daily_report_email'] ?? 0) ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="dailyReportEmail">
+                                    Email me a daily backup report
+                                </label>
+                                <div class="form-text">Sent each morning at 6 AM server time.</div>
+                            </div>
+                            <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="col-md-6">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-body fw-semibold">
+                        <i class="bi bi-lightning me-1"></i> Actions
+                    </div>
+                    <div class="card-body">
+                        <form method="POST" action="/profile/reports/generate" class="mb-3">
+                            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                            <button type="submit" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-arrow-clockwise me-1"></i>Generate Report Now
+                            </button>
+                        </form>
+
+                        <?php if ($selectedReport ?? null): ?>
+                        <form method="POST" action="/profile/reports/email" class="d-flex gap-2 align-items-end">
+                            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                            <input type="hidden" name="report_id" value="<?= $selectedReport['id'] ?>">
+                            <div class="flex-grow-1">
+                                <label class="form-label small mb-1">Email report to</label>
+                                <input type="email" class="form-control form-control-sm" name="email"
+                                    placeholder="<?= htmlspecialchars($user['email']) ?>"
+                                    value="">
+                            </div>
+                            <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-envelope me-1"></i>Send
+                            </button>
+                        </form>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Past Reports -->
+        <?php if (!empty($recentReports ?? [])): ?>
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-body fw-semibold d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-clock-history me-1"></i> Recent Reports</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    <?php foreach ($recentReports as $r): ?>
+                    <?php
+                        $isSelected = ($selectedReport ?? null) && $selectedReport['id'] == $r['id'];
+                        $dateLabel = date('l, M j, Y', strtotime($r['report_date']));
+                        $timeLabel = date('g:i A', strtotime($r['created_at']));
+                    ?>
+                    <a href="/profile?tab=reports&report_id=<?= $r['id'] ?>"
+                       class="list-group-item list-group-item-action d-flex justify-content-between align-items-center <?= $isSelected ? 'active' : '' ?>">
+                        <span>
+                            <i class="bi bi-file-earmark-text me-1"></i>
+                            <?= $dateLabel ?>
+                        </span>
+                        <small class="<?= $isSelected ? 'text-white-50' : 'text-muted' ?>">Generated <?= $timeLabel ?></small>
+                    </a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <!-- Report Viewer -->
+        <?php if ($selectedReport ?? null): ?>
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-body fw-semibold">
+                <i class="bi bi-file-earmark-bar-graph me-1"></i>
+                Report: <?= date('M j, Y', strtotime($selectedReport['report_date'])) ?>
+            </div>
+            <div class="card-body p-3">
+                <?php
+                    $reportService = new \BBS\Services\ReportService();
+                    echo $reportService->renderHtml($selectedReport['data'], $_SESSION['user_id']);
+                ?>
+            </div>
+        </div>
+        <?php elseif (empty($recentReports ?? [])): ?>
+        <div class="card border-0 shadow-sm">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-file-earmark-bar-graph" style="font-size:3rem;color:var(--bs-secondary);"></i>
+                <p class="text-muted mt-3 mb-0">No reports yet. Click "Generate Report Now" to create your first report.</p>
+            </div>
+        </div>
+        <?php endif; ?>
+
+    </div>
+</div>
+<?php endif; ?>
+
 </div><!-- /client-tab-content -->

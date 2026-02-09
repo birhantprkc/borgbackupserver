@@ -1266,7 +1266,36 @@ if (!$lastJobCleanupTime || strtotime($lastJobCleanupTime) < time() - 86400) {
     );
 }
 
-// Step 10: Daily BBS self-backup
+// Step 10: Generate daily backup report (once daily, after 6 AM)
+$lastDailyReport = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'last_daily_report'");
+$lastDailyReportTime = $lastDailyReport['value'] ?? null;
+if (!$lastDailyReportTime || strtotime($lastDailyReportTime) < time() - 82800) {
+    if ((int) date('G') >= 6) {
+        try {
+            $reportService = new \BBS\Services\ReportService();
+            $report = $reportService->generate();
+            echo date('Y-m-d H:i:s') . " Generated daily report #{$report['id']}\n";
+
+            // Email to opted-in users
+            $subscribers = $db->fetchAll("SELECT id, email FROM users WHERE daily_report_email = 1 AND email != ''");
+            foreach ($subscribers as $sub) {
+                $reportService->emailReport($report['id'], $sub['id']);
+                echo date('Y-m-d H:i:s') . " Emailed daily report to {$sub['email']}\n";
+            }
+
+            $reportService->cleanup();
+        } catch (\Exception $e) {
+            echo date('Y-m-d H:i:s') . " Daily report error: {$e->getMessage()}\n";
+        }
+
+        $db->query(
+            "INSERT INTO settings (`key`, `value`) VALUES ('last_daily_report', ?) ON DUPLICATE KEY UPDATE `value` = ?",
+            [date('Y-m-d H:i:s'), date('Y-m-d H:i:s')]
+        );
+    }
+}
+
+// Step 11: Daily BBS self-backup
 $lastSelfBackup = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'last_self_backup'");
 $lastSelfBackupTime = $lastSelfBackup['value'] ?? null;
 if (!$lastSelfBackupTime || strtotime($lastSelfBackupTime) < time() - 86400) {
