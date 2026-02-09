@@ -674,6 +674,11 @@ class ClientController extends Controller
         $parentDir = $prefix === '/' ? '/' : rtrim($prefix, '/');
         $likePath = str_replace(['%', '_'], ['\\%', '\\_'], $parentDir) . '/%';
 
+        // SUBSTRING start: skip past parentDir + separator.
+        // Root '/' is the separator itself, so start at position 2.
+        // Non-root '/foo' needs to skip '/foo/' so start at len+2.
+        $substringStart = $parentDir === '/' ? 2 : strlen($parentDir) + 2;
+
         // Get subdirectories: find distinct immediate child directories
         // by looking for parent_dir values one level below the current path
         $dirs = $this->db->fetchAll("
@@ -686,7 +691,7 @@ class ClientController extends Controller
               AND parent_dir LIKE ?
             GROUP BY name
             ORDER BY name
-        ", [strlen($parentDir) + 2, $archive_id, $likePath]);
+        ", [$substringStart, $archive_id, $likePath]);
 
         // Build full paths for dirs
         $directories = [];
