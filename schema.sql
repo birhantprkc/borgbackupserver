@@ -236,9 +236,11 @@ CREATE TABLE archives (
 --       archive_id INT NOT NULL,
 --       path VARCHAR(768) NOT NULL,
 --       file_name VARCHAR(255) NOT NULL,
+--       parent_dir VARCHAR(768) NOT NULL DEFAULT '',
 --       file_size BIGINT DEFAULT 0,
 --       status CHAR(1) DEFAULT 'U',
 --       mtime DATETIME NULL,
+--       KEY idx_archive_parent (archive_id, parent_dir(200)),
 --       KEY idx_archive_path (archive_id, path(200))
 --   ) ENGINE=MyISAM;
 

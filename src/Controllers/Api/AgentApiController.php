@@ -635,10 +635,11 @@ class AgentApiController extends Controller
             $path = $file['path'] ?? '';
             if (empty($path)) continue;
 
-            $placeholders[] = '(?, ?, ?, ?, ?, ?)';
+            $placeholders[] = '(?, ?, ?, ?, ?, ?, ?)';
             $values[] = $archiveId;
             $values[] = $path;
             $values[] = basename($path);
+            $values[] = dirname($path);
             $values[] = (int) ($file['size'] ?? 0);
             $values[] = $file['status'] ?? 'U';
             $values[] = $file['mtime'] ?? null;
@@ -646,7 +647,7 @@ class AgentApiController extends Controller
 
         $batchSize = 0;
         if (!empty($placeholders)) {
-            $sql = "INSERT INTO `{$table}` (archive_id, path, file_name, file_size, status, mtime) VALUES "
+            $sql = "INSERT INTO `{$table}` (archive_id, path, file_name, parent_dir, file_size, status, mtime) VALUES "
                  . implode(', ', $placeholders);
             $this->db->query($sql, $values);
             $batchSize = count($placeholders);

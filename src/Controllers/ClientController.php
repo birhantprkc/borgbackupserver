@@ -670,26 +670,28 @@ class ClientController extends Controller
             $prefix .= '/';
         }
 
-        $prefixLen = strlen($prefix);
-        $likePath = str_replace(['%', '_'], ['\\%', '\\_'], $prefix) . '%';
+        // parent_dir for this level: strip trailing slash (root stays as '/')
+        $parentDir = $prefix === '/' ? '/' : rtrim($prefix, '/');
+        $likePath = str_replace(['%', '_'], ['\\%', '\\_'], $parentDir) . '/%';
 
-        // Get subdirectories: distinct next path segment for paths that have more segments
+        // Get subdirectories: find distinct immediate child directories
+        // by looking for parent_dir values one level below the current path
         $dirs = $this->db->fetchAll("
             SELECT
-                SUBSTRING_INDEX(SUBSTRING(path, ?), '/', 1) as name,
+                SUBSTRING_INDEX(SUBSTRING(parent_dir, ?), '/', 1) as name,
                 COUNT(*) as file_count,
                 SUM(file_size) as total_size
             FROM `{$table}`
             WHERE archive_id = ?
-              AND path LIKE ?
-              AND LOCATE('/', SUBSTRING(path, ?)) > 0
+              AND parent_dir LIKE ?
             GROUP BY name
             ORDER BY name
-        ", [$prefixLen + 1, $archive_id, $likePath, $prefixLen + 1]);
+        ", [strlen($parentDir) + 2, $archive_id, $likePath]);
 
         // Build full paths for dirs
         $directories = [];
         foreach ($dirs as $d) {
+            if ($d['name'] === '') continue;
             $directories[] = [
                 'name' => $d['name'],
                 'path' => $prefix . $d['name'] . '/',
@@ -698,16 +700,15 @@ class ClientController extends Controller
             ];
         }
 
-        // Get files directly at this level (no more / after prefix)
+        // Get files directly at this level (exact parent_dir match — indexed lookup)
         $files = $this->db->fetchAll("
             SELECT path as file_path, file_name, file_size, status, mtime
             FROM `{$table}`
             WHERE archive_id = ?
-              AND path LIKE ?
-              AND LOCATE('/', SUBSTRING(path, ?)) = 0
+              AND parent_dir = ?
               AND status != 'D'
             ORDER BY file_name
-        ", [$archive_id, $likePath, $prefixLen + 1]);
+        ", [$archive_id, $parentDir]);
 
         $this->json([
             'dirs' => $directories,

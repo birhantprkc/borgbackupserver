@@ -787,10 +787,11 @@ foreach ($serverJobs as $sj) {
                 $placeholders = [];
                 $values = [];
                 foreach ($files as $file) {
-                    $placeholders[] = '(?, ?, ?, ?, ?, ?)';
+                    $placeholders[] = '(?, ?, ?, ?, ?, ?, ?)';
                     $values[] = $crArchive['id'];
                     $values[] = $file['path'];
                     $values[] = basename($file['path']);
+                    $values[] = dirname($file['path']);
                     $values[] = (int) $file['size'];
                     $values[] = 'U';
                     $values[] = $file['mtime'];
@@ -800,9 +801,9 @@ foreach ($serverJobs as $sj) {
                     // Insert in batches of 500 to avoid max_allowed_packet limits
                     $batchSize = 500;
                     $chunks = array_chunk($placeholders, $batchSize);
-                    $valueChunks = array_chunk($values, $batchSize * 6);
+                    $valueChunks = array_chunk($values, $batchSize * 7);
                     foreach ($chunks as $i => $chunk) {
-                        $sql = "INSERT INTO `{$table}` (archive_id, path, file_name, file_size, status, mtime) VALUES "
+                        $sql = "INSERT INTO `{$table}` (archive_id, path, file_name, parent_dir, file_size, status, mtime) VALUES "
                              . implode(', ', $chunk);
                         $db->query($sql, $valueChunks[$i]);
                     }

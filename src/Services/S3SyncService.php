@@ -788,10 +788,11 @@ class S3SyncService
                 $archiveId = $archiveNameToId[$file['archive']] ?? null;
                 $path = $file['path'] ?? '';
                 if ($archiveId && $path) {
-                    $placeholders[] = '(?, ?, ?, ?, ?)';
+                    $placeholders[] = '(?, ?, ?, ?, ?, ?)';
                     $values[] = $archiveId;
                     $values[] = $path;
                     $values[] = basename($path);
+                    $values[] = dirname($path);
                     $values[] = (int) ($file['size'] ?? 0);
                     $values[] = $file['mtime'] ?? null;
                     $fileCount++;
@@ -799,7 +800,7 @@ class S3SyncService
             }
 
             if (!empty($placeholders)) {
-                $sql = "INSERT INTO `{$catalogTable}` (archive_id, path, file_name, file_size, mtime) VALUES "
+                $sql = "INSERT INTO `{$catalogTable}` (archive_id, path, file_name, parent_dir, file_size, mtime) VALUES "
                      . implode(', ', $placeholders);
                 $this->db->query($sql, $values);
             }

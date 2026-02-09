@@ -74,9 +74,12 @@ foreach ($agents as $a) {
 
     echo "  Agent {$agentId}: migrating {$agentCount} entries...";
 
-    // Migrate in one INSERT...SELECT
-    $pdo->exec("INSERT INTO `{$table}` (archive_id, path, file_name, file_size, status, mtime)
-        SELECT fc.archive_id, fp.path, fp.file_name, fc.file_size, fc.status, fc.mtime
+    // Migrate in one INSERT...SELECT (parent_dir = dirname of path)
+    $pdo->exec("INSERT INTO `{$table}` (archive_id, path, file_name, parent_dir, file_size, status, mtime)
+        SELECT fc.archive_id, fp.path, fp.file_name,
+               IF(fp.path = CONCAT('/', fp.file_name), '/',
+                  LEFT(fp.path, LENGTH(fp.path) - LENGTH(fp.file_name) - 1)),
+               fc.file_size, fc.status, fc.mtime
         FROM file_catalog fc
         JOIN file_paths fp ON fp.id = fc.file_path_id
         WHERE fp.agent_id = {$agentId}");

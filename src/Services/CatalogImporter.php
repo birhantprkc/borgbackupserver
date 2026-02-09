@@ -56,6 +56,7 @@ class CatalogImporter
         try {
             $tsvStart = microtime(true);
             $count = 0;
+            $escape = fn(string $s) => str_replace(["\t", "\n", "\\"], ["\\t", "\\n", "\\\\"], $s);
 
             while (($line = fgets($handle)) !== false) {
                 $line = trim($line);
@@ -64,13 +65,15 @@ class CatalogImporter
                 $entry = json_decode($line, true);
                 if (!$entry || empty($entry['path'])) continue;
 
-                $path = str_replace(["\t", "\n", "\\"], ["\\t", "\\n", "\\\\"], $entry['path']);
-                $name = str_replace(["\t", "\n", "\\"], ["\\t", "\\n", "\\\\"], basename($entry['path']));
+                $rawPath = $entry['path'];
+                $path = $escape($rawPath);
+                $name = $escape(basename($rawPath));
+                $parentDir = $escape(dirname($rawPath));
                 $status = substr($entry['status'] ?? 'U', 0, 1);
                 $size = (int) ($entry['size'] ?? 0);
                 $mtime = $entry['mtime'] ?? '\\N';
 
-                fwrite($tsvFh, "{$archiveId}\t{$path}\t{$name}\t{$size}\t{$status}\t{$mtime}\n");
+                fwrite($tsvFh, "{$archiveId}\t{$path}\t{$name}\t{$parentDir}\t{$size}\t{$status}\t{$mtime}\n");
                 $count++;
             }
 
@@ -90,7 +93,7 @@ class CatalogImporter
                 INTO TABLE `{$table}`
                 FIELDS TERMINATED BY '\\t' ESCAPED BY '\\\\'
                 LINES TERMINATED BY '\\n'
-                (archive_id, path, file_name, file_size, status, @vmtime)
+                (archive_id, path, file_name, parent_dir, file_size, status, @vmtime)
                 SET mtime = NULLIF(@vmtime, '\\\\N')";
 
             // Try server-side LOAD DATA first (fastest), fall back to LOCAL
@@ -137,9 +140,11 @@ class CatalogImporter
             archive_id INT NOT NULL,
             path VARCHAR(768) NOT NULL,
             file_name VARCHAR(255) NOT NULL,
+            parent_dir VARCHAR(768) NOT NULL DEFAULT '',
             file_size BIGINT DEFAULT 0,
             status CHAR(1) DEFAULT 'U',
             mtime DATETIME NULL,
+            KEY idx_archive_parent (archive_id, parent_dir(200)),
             KEY idx_archive_path (archive_id, path(200))
         ) ENGINE=MyISAM");
 
@@ -194,6 +199,25 @@ class CatalogImporter
                 $archivePathIdx = $db->fetchAll("SHOW INDEX FROM `{$table}` WHERE Key_name = 'idx_archive_path'");
                 if (empty($archivePathIdx)) {
                     $alterParts[] = "ADD KEY `idx_archive_path` (archive_id, path(200))";
+                    $needsAlter = true;
+                }
+            }
+
+            // Add parent_dir column if missing
+            $parentCol = $db->fetchOne(
+                "SELECT COLUMN_NAME FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'parent_dir'",
+                [$table]
+            );
+            if (!$parentCol) {
+                $alterParts[] = "ADD COLUMN parent_dir VARCHAR(768) NOT NULL DEFAULT '' AFTER file_name";
+                $alterParts[] = "ADD KEY `idx_archive_parent` (archive_id, parent_dir(200))";
+                $needsAlter = true;
+            } else {
+                // Column exists — ensure index exists
+                $parentIdx = $db->fetchAll("SHOW INDEX FROM `{$table}` WHERE Key_name = 'idx_archive_parent'");
+                if (empty($parentIdx)) {
+                    $alterParts[] = "ADD KEY `idx_archive_parent` (archive_id, parent_dir(200))";
                     $needsAlter = true;
                 }
             }
