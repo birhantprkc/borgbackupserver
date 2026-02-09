@@ -1076,9 +1076,17 @@ foreach ($serverJobs as $sj) {
 
             $removed = 0;
             $removedNames = [];
+            $agentId = (int) $sj['agent_id'];
             foreach ($dbArchives as $dbA) {
                 if (!in_array($dbA['archive_name'], $borgArchives, true)) {
                     $db->delete('archives', 'id = ?', [$dbA['id']]);
+                    // Clean up catalog entries for the pruned archive
+                    $catalogTable = "file_catalog_{$agentId}";
+                    $dirsTable = "catalog_dirs_{$agentId}";
+                    try {
+                        $db->getPdo()->exec("DELETE FROM `{$catalogTable}` WHERE archive_id = " . (int) $dbA['id']);
+                        $db->getPdo()->exec("DELETE FROM `{$dirsTable}` WHERE archive_id = " . (int) $dbA['id']);
+                    } catch (\Exception $e) { /* table may not exist yet */ }
                     $removedNames[] = $dbA['archive_name'];
                     $removed++;
                 }
