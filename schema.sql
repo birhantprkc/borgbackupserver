@@ -234,12 +234,12 @@ CREATE TABLE archives (
 --   CREATE TABLE file_catalog_{agent_id} (
 --       id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 --       archive_id INT NOT NULL,
---       path TEXT NOT NULL,
+--       path VARCHAR(768) NOT NULL,
 --       file_name VARCHAR(255) NOT NULL,
 --       file_size BIGINT DEFAULT 0,
 --       status CHAR(1) DEFAULT 'U',
 --       mtime DATETIME NULL,
---       KEY idx_archive (archive_id)
+--       KEY idx_archive_path (archive_id, path)
 --   ) ENGINE=MyISAM;
 
 -- --------------------------------------------------------

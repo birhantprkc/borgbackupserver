@@ -135,40 +135,78 @@ class CatalogImporter
         $pdo->exec("CREATE TABLE IF NOT EXISTS `{$table}` (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             archive_id INT NOT NULL,
-            path TEXT NOT NULL,
+            path VARCHAR(768) NOT NULL,
             file_name VARCHAR(255) NOT NULL,
             file_size BIGINT DEFAULT 0,
             status CHAR(1) DEFAULT 'U',
             mtime DATETIME NULL,
-            KEY idx_archive (archive_id)
+            KEY idx_archive_path (archive_id, path)
         ) ENGINE=MyISAM");
 
-        // Convert existing InnoDB tables to MyISAM (must drop FKs first)
+        // Upgrade existing tables: convert InnoDB→MyISAM, TEXT→VARCHAR, fix indexes
         try {
             $row = $db->fetchOne(
                 "SELECT ENGINE FROM information_schema.TABLES
                  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?",
                 [$table]
             );
-            if ($row && strtolower($row['ENGINE']) !== 'myisam') {
-                // Drop any FK constraints first (MyISAM doesn't support them)
-                $constraints = $db->fetchAll(
-                    "SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS
-                     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND CONSTRAINT_TYPE = 'FOREIGN KEY'",
-                    [$table]
-                );
-                foreach ($constraints as $c) {
-                    $pdo->exec("ALTER TABLE `{$table}` DROP FOREIGN KEY `{$c['CONSTRAINT_NAME']}`");
-                }
+            if (!$row) return;
 
-                // Drop file_name index if present (not needed, slows bulk loads)
-                $indexes = $db->fetchAll("SHOW INDEX FROM `{$table}` WHERE Key_name = 'idx_file_name'");
-                if (!empty($indexes)) {
-                    $pdo->exec("ALTER TABLE `{$table}` DROP INDEX `idx_file_name`");
-                }
+            $needsAlter = false;
+            $alterParts = [];
 
-                // Convert to MyISAM
-                $pdo->exec("ALTER TABLE `{$table}` ENGINE=MyISAM");
+            // Drop any FK constraints (MyISAM doesn't support them)
+            $constraints = $db->fetchAll(
+                "SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND CONSTRAINT_TYPE = 'FOREIGN KEY'",
+                [$table]
+            );
+            foreach ($constraints as $c) {
+                $alterParts[] = "DROP FOREIGN KEY `{$c['CONSTRAINT_NAME']}`";
+                $needsAlter = true;
+            }
+
+            // Drop legacy idx_file_name if present
+            $indexes = $db->fetchAll("SHOW INDEX FROM `{$table}` WHERE Key_name = 'idx_file_name'");
+            if (!empty($indexes)) {
+                $alterParts[] = "DROP INDEX `idx_file_name`";
+                $needsAlter = true;
+            }
+
+            // Convert path from TEXT to VARCHAR(768) for indexing
+            $col = $db->fetchOne(
+                "SELECT DATA_TYPE FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'path'",
+                [$table]
+            );
+            if ($col && strtolower($col['DATA_TYPE']) === 'text') {
+                $alterParts[] = "MODIFY COLUMN path VARCHAR(768) NOT NULL";
+                $needsAlter = true;
+            }
+
+            // Replace idx_archive with idx_archive_path (composite index for tree queries)
+            $archiveIdx = $db->fetchAll("SHOW INDEX FROM `{$table}` WHERE Key_name = 'idx_archive'");
+            if (!empty($archiveIdx)) {
+                $alterParts[] = "DROP INDEX `idx_archive`";
+                $alterParts[] = "ADD KEY `idx_archive_path` (archive_id, path)";
+                $needsAlter = true;
+            } else {
+                $archivePathIdx = $db->fetchAll("SHOW INDEX FROM `{$table}` WHERE Key_name = 'idx_archive_path'");
+                if (empty($archivePathIdx)) {
+                    $alterParts[] = "ADD KEY `idx_archive_path` (archive_id, path)";
+                    $needsAlter = true;
+                }
+            }
+
+            // Convert engine to MyISAM
+            if (strtolower($row['ENGINE']) !== 'myisam') {
+                $needsAlter = true;
+            }
+
+            if ($needsAlter) {
+                $engine = strtolower($row['ENGINE']) !== 'myisam' ? ' ENGINE=MyISAM' : '';
+                $sql = "ALTER TABLE `{$table}` " . implode(', ', $alterParts) . $engine;
+                $pdo->exec($sql);
             }
         } catch (\Exception $e) { /* ignore — table will work either way */ }
     }
