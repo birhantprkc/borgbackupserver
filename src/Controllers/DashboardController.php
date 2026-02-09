@@ -259,19 +259,20 @@ class DashboardController extends Controller
                     'dedup_savings' => 0,
                     'client_count' => (int) ($clientCount['cnt'] ?? 0),
                     'disk_total' => null,
+                    'disk_used' => null,
                     'disk_free' => null,
                     'disk_percent' => null,
                 ];
                 if ($info['total_original'] > 0) {
                     $info['dedup_savings'] = round((1 - $info['total_dedup'] / $info['total_original']) * 100, 1);
                 }
-                if (!empty($path) && is_dir($path)) {
-                    $total = @disk_total_space($path);
-                    $free = @disk_free_space($path);
-                    if ($total !== false && $free !== false && $total > 0) {
-                        $info['disk_total'] = $total;
-                        $info['disk_free'] = $free;
-                        $info['disk_percent'] = round((($total - $free) / $total) * 100, 1);
+                if (!empty($path)) {
+                    $diskUsage = \BBS\Services\ServerStats::getDiskUsage($path);
+                    if ($diskUsage) {
+                        $info['disk_total'] = $diskUsage['total'];
+                        $info['disk_used'] = $diskUsage['used'];
+                        $info['disk_free'] = $diskUsage['free'];
+                        $info['disk_percent'] = $diskUsage['percent'];
                     }
                 }
                 return $info;

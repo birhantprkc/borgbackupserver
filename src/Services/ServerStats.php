@@ -179,17 +179,14 @@ class ServerStats
             }
         }
         if (!$hasVarBbs && is_dir('/var/bbs')) {
-            $total = @disk_total_space('/var/bbs');
-            $free = @disk_free_space('/var/bbs');
-            if ($total && $total > 0) {
-                $used = $total - $free;
-                $pct = (int) round(($used / $total) * 100);
+            $diskUsage = self::getDiskUsage('/var/bbs');
+            if ($diskUsage) {
                 $partitions[] = [
                     'mount' => '/var/bbs',
-                    'size' => self::formatDfSize($total),
-                    'used' => self::formatDfSize($used),
-                    'free' => self::formatDfSize($free),
-                    'percent' => $pct,
+                    'size' => self::formatDfSize($diskUsage['total']),
+                    'used' => self::formatDfSize($diskUsage['used']),
+                    'free' => self::formatDfSize($diskUsage['free']),
+                    'percent' => $diskUsage['percent'],
                 ];
             }
         }
@@ -301,16 +298,62 @@ class ServerStats
 
         $diskTotal = 0;
         $diskFree = 0;
-        if (is_dir($dataDir)) {
-            $diskTotal = (int) @disk_total_space($dataDir);
-            $diskFree = (int) @disk_free_space($dataDir);
+        $diskUsed = 0;
+        $diskUsage = self::getDiskUsage($dataDir);
+        if ($diskUsage) {
+            $diskTotal = $diskUsage['total'];
+            $diskFree = $diskUsage['free'];
+            $diskUsed = $diskUsage['used'];
         }
 
         return [
             'db_bytes' => $dbBytes,
             'disk_total' => $diskTotal,
             'disk_free' => $diskFree,
-            'disk_used' => $diskTotal - $diskFree,
+            'disk_used' => $diskUsed,
+        ];
+    }
+
+    /**
+     * Get accurate disk usage for a path using df (excludes reserved blocks).
+     * Returns [total, used, free, percent] in bytes, or null on failure.
+     */
+    public static function getDiskUsage(string $path): ?array
+    {
+        if (!is_dir($path)) {
+            return null;
+        }
+
+        $output = @shell_exec('df -P -B1 ' . escapeshellarg($path) . ' 2>/dev/null');
+        if (empty($output)) {
+            return null;
+        }
+
+        $lines = explode("\n", trim($output));
+        if (count($lines) < 2) {
+            return null;
+        }
+
+        // df -P -B1 output: Filesystem 1-blocks Used Available Capacity Mounted
+        $parts = preg_split('/\s+/', trim($lines[1]));
+        if (count($parts) < 6) {
+            return null;
+        }
+
+        $total = (int) $parts[1];
+        $used = (int) $parts[2];
+        $free = (int) $parts[3];
+        $percent = (int) str_replace('%', '', $parts[4]);
+
+        if ($total <= 0) {
+            return null;
+        }
+
+        return [
+            'total' => $total,
+            'used' => $used,
+            'free' => $free,
+            'percent' => $percent,
         ];
     }
 

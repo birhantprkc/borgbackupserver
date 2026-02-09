@@ -18,19 +18,18 @@ class SettingsController extends Controller
 
         $templates = $this->db->fetchAll("SELECT * FROM backup_templates ORDER BY name");
 
-        // Get current storage usage for the storage path
+        // Get current storage usage for the storage path (using df for accurate values)
         $storagePath = $settings['storage_path'] ?? '/var/bbs';
         $storageUsagePercent = 0;
         $storageTotalBytes = 0;
         $storageFreeBytes = 0;
-        if (is_dir($storagePath)) {
-            $total = @disk_total_space($storagePath);
-            $free = @disk_free_space($storagePath);
-            if ($total && $total > 0) {
-                $storageUsagePercent = (int) round((($total - $free) / $total) * 100);
-                $storageTotalBytes = $total;
-                $storageFreeBytes = $free;
-            }
+        $storageUsedBytes = 0;
+        $diskUsage = \BBS\Services\ServerStats::getDiskUsage($storagePath);
+        if ($diskUsage) {
+            $storageUsagePercent = $diskUsage['percent'];
+            $storageTotalBytes = $diskUsage['total'];
+            $storageFreeBytes = $diskUsage['free'];
+            $storageUsedBytes = $diskUsage['used'];
         }
 
         // Load remote SSH configs for the Remote Storage tab
@@ -48,6 +47,7 @@ class SettingsController extends Controller
             'storageUsagePercent' => $storageUsagePercent,
             'storageTotalBytes' => $storageTotalBytes,
             'storageFreeBytes' => $storageFreeBytes,
+            'storageUsedBytes' => $storageUsedBytes,
             'localRepoCount' => $localRepoCount,
             'remoteRepoCount' => $remoteRepoCount,
             'remoteSshConfigs' => $remoteSshConfigs,

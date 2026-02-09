@@ -1505,7 +1505,7 @@ function updateBuiltUrl(containerId, schema, prefix) {
 $_storagePath = $settings['storage_path'] ?? '/var/bbs';
 $_storageTotalBytes = $storageTotalBytes ?? 0;
 $_storageFreeBytes = $storageFreeBytes ?? 0;
-$_storageUsedBytes = $_storageTotalBytes - $_storageFreeBytes;
+$_storageUsedBytes = $storageUsedBytes ?? 0;
 $_localRepoCount = $localRepoCount ?? 0;
 $_remoteRepoCount = $remoteRepoCount ?? 0;
 $_s3Configured = !empty($settings['s3_endpoint']) && !empty($settings['s3_bucket']);

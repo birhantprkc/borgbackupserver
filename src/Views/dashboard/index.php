@@ -169,7 +169,7 @@
 <div class="row g-4 mb-4">
     <?php if (!empty($storage) && $storage['disk_total'] !== null): ?>
     <?php
-        $stUsed = $storage['disk_total'] - $storage['disk_free'];
+        $stUsed = $storage['disk_used'] ?? ($storage['disk_total'] - $storage['disk_free']);
         $stRepoPct = $storage['disk_total'] > 0 ? round($storage['total_repo_bytes'] / $storage['disk_total'] * 100, 1) : 0;
         $stOtherPct = $storage['disk_total'] > 0 ? round(($stUsed - $storage['total_repo_bytes']) / $storage['disk_total'] * 100, 1) : 0;
         if ($stOtherPct < 0) $stOtherPct = 0;
