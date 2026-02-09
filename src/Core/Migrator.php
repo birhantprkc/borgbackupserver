@@ -28,7 +28,9 @@ class Migrator
 
     public function run(): array
     {
-        $files = glob($this->migrationsPath . '/*.sql');
+        $sqlFiles = glob($this->migrationsPath . '/*.sql');
+        $phpFiles = glob($this->migrationsPath . '/*.php');
+        $files = array_merge($sqlFiles ?: [], $phpFiles ?: []);
         sort($files);
 
         $executed = array_column(
@@ -44,12 +46,17 @@ class Migrator
                 continue;
             }
 
-            $sql = file_get_contents($file);
             try {
-                $this->db->getPdo()->exec($sql);
+                if (str_ends_with($file, '.php')) {
+                    $db = $this->db;
+                    require $file;
+                } else {
+                    $sql = file_get_contents($file);
+                    $this->db->getPdo()->exec($sql);
+                }
                 $this->db->insert('migrations', ['filename' => $filename]);
                 $ran[] = $filename;
-            } catch (\PDOException $e) {
+            } catch (\Exception $e) {
                 // Record the migration as executed so it doesn't block future runs
                 // Common case: column/table already exists from manual setup or schema.sql
                 $this->db->insert('migrations', ['filename' => $filename]);
