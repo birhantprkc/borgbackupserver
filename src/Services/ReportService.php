@@ -34,10 +34,13 @@ class ReportService
         foreach ($agents as $agent) {
             // Last backup job for this agent
             $lastJob = $this->db->fetchOne("
-                SELECT bj.status, bj.completed_at, bj.files_processed, bj.original_size,
-                       bj.deduplicated_size, bj.error_log, bj.duration, bp.name as plan_name
+                SELECT bj.status, bj.completed_at, bj.files_processed,
+                       COALESCE(a.original_size, bj.bytes_total, 0) as original_size,
+                       COALESCE(a.deduplicated_size, 0) as deduplicated_size,
+                       bj.error_log, bj.duration_seconds, bp.name as plan_name
                 FROM backup_jobs bj
                 LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
+                LEFT JOIN archives a ON a.backup_job_id = bj.id
                 WHERE bj.agent_id = ? AND bj.task_type = 'backup' AND bj.status IN ('completed', 'failed')
                 ORDER BY bj.completed_at DESC LIMIT 1
             ", [$agent['id']]);
@@ -45,12 +48,13 @@ class ReportService
             // Jobs today for this agent
             $todayStats = $this->db->fetchOne("
                 SELECT
-                    SUM(status = 'completed') as completed,
-                    SUM(status = 'failed') as failed,
-                    SUM(CASE WHEN status = 'completed' THEN original_size ELSE 0 END) as total_bytes
-                FROM backup_jobs
-                WHERE agent_id = ? AND task_type = 'backup'
-                  AND queued_at BETWEEN ? AND ?
+                    SUM(bj.status = 'completed') as completed,
+                    SUM(bj.status = 'failed') as failed,
+                    SUM(CASE WHEN bj.status = 'completed' THEN COALESCE(a.original_size, bj.bytes_total, 0) ELSE 0 END) as total_bytes
+                FROM backup_jobs bj
+                LEFT JOIN archives a ON a.backup_job_id = bj.id
+                WHERE bj.agent_id = ? AND bj.task_type = 'backup'
+                  AND bj.queued_at BETWEEN ? AND ?
             ", [$agent['id'], $dayStart, $dayEnd]);
 
             $completed = (int) ($todayStats['completed'] ?? 0);
@@ -72,7 +76,7 @@ class ReportService
                     'files' => (int) $lastJob['files_processed'],
                     'original_size' => (int) $lastJob['original_size'],
                     'deduplicated_size' => (int) $lastJob['deduplicated_size'],
-                    'duration' => (int) $lastJob['duration'],
+                    'duration' => (int) $lastJob['duration_seconds'],
                     'error' => $lastJob['status'] === 'failed' ? substr($lastJob['error_log'] ?? '', 0, 500) : null,
                 ] : null,
                 'today_completed' => $completed,
