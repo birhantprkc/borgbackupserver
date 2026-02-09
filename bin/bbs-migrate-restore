@@ -139,10 +139,10 @@ for sql_file in "$DUMP_DIR"/*.sql; do
     if $MYSQL < "$sql_file" 2>/dev/null; then
         COUNT=$($MYSQL -sN -e "SELECT COUNT(*) FROM \`$TABLE\`" 2>/dev/null || echo "?")
         ok "$TABLE ($COUNT rows)"
-        ((IMPORTED++))
+        IMPORTED=$((IMPORTED + 1))
     else
         warn "$TABLE — import failed (table may not exist yet)"
-        ((FAILED++))
+        FAILED=$((FAILED + 1))
     fi
 done
 
@@ -152,8 +152,8 @@ echo ""
 echo -e "  Imported: $IMPORTED, Failed: $FAILED"
 echo ""
 
-# ── Step 3: Re-provision Unix users ───────────────────────────────
-echo -e "${BOLD}[3/4] Re-provisioning SSH users${NC}"
+# ── Step 4: Re-provision Unix users ───────────────────────────────
+echo -e "${BOLD}[4/4] Re-provisioning SSH users${NC}"
 
 # Get storage_path from settings
 STORAGE_PATH=$($MYSQL -sN \
@@ -187,7 +187,7 @@ else
 
             if sudo "$SSH_HELPER" create-user "$UNIX_USER" "$HOME_DIR" "$PUBLIC_KEY" 2>/dev/null; then
                 ok "$AGENT_NAME → $UNIX_USER ($HOME_DIR)"
-                ((PROVISIONED++))
+                PROVISIONED=$((PROVISIONED + 1))
             else
                 # User might already exist from a previous attempt
                 if id "$UNIX_USER" &>/dev/null; then
@@ -199,10 +199,10 @@ else
                     chown -R "$UNIX_USER:$UNIX_USER" "$SSH_DIR"
                     chmod 700 "$SSH_DIR"
                     chmod 600 "$SSH_DIR/authorized_keys"
-                    ((PROVISIONED++))
+                    PROVISIONED=$((PROVISIONED + 1))
                 else
                     warn "$AGENT_NAME → $UNIX_USER — failed to provision"
-                    ((PROV_FAILED++))
+                    PROV_FAILED=$((PROV_FAILED + 1))
                 fi
             fi
         done <<< "$AGENTS"
