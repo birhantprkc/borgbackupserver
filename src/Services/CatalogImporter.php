@@ -140,7 +140,7 @@ class CatalogImporter
             file_size BIGINT DEFAULT 0,
             status CHAR(1) DEFAULT 'U',
             mtime DATETIME NULL,
-            KEY idx_archive_path (archive_id, path)
+            KEY idx_archive_path (archive_id, path(200))
         ) ENGINE=MyISAM");
 
         // Upgrade existing tables: convert InnoDB→MyISAM, TEXT→VARCHAR, fix indexes
@@ -188,12 +188,12 @@ class CatalogImporter
             $archiveIdx = $db->fetchAll("SHOW INDEX FROM `{$table}` WHERE Key_name = 'idx_archive'");
             if (!empty($archiveIdx)) {
                 $alterParts[] = "DROP INDEX `idx_archive`";
-                $alterParts[] = "ADD KEY `idx_archive_path` (archive_id, path)";
+                $alterParts[] = "ADD KEY `idx_archive_path` (archive_id, path(200))";
                 $needsAlter = true;
             } else {
                 $archivePathIdx = $db->fetchAll("SHOW INDEX FROM `{$table}` WHERE Key_name = 'idx_archive_path'");
                 if (empty($archivePathIdx)) {
-                    $alterParts[] = "ADD KEY `idx_archive_path` (archive_id, path)";
+                    $alterParts[] = "ADD KEY `idx_archive_path` (archive_id, path(200))";
                     $needsAlter = true;
                 }
             }

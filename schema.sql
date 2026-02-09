@@ -239,7 +239,7 @@ CREATE TABLE archives (
 --       file_size BIGINT DEFAULT 0,
 --       status CHAR(1) DEFAULT 'U',
 --       mtime DATETIME NULL,
---       KEY idx_archive_path (archive_id, path)
+--       KEY idx_archive_path (archive_id, path(200))
 --   ) ENGINE=MyISAM;
 
 -- --------------------------------------------------------
