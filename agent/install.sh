@@ -222,15 +222,39 @@ install_borg() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Verify python3 is available (required for the agent)
+# Verify python3 >= 3.6 is available (required for the agent)
+# Sets PYTHON3 to the best available python3 path.
 # ═══════════════════════════════════════════════════════════════════════════════
+PYTHON3=""
+
 check_python3() {
-    if command -v python3 &>/dev/null; then
+    # Find the best Python 3.6+ available
+    find_best_python3() {
+        local candidates=(
+            /usr/bin/python3
+            /usr/local/bin/python3
+            /opt/rh/rh-python36/root/usr/bin/python3
+            /opt/rh/rh-python38/root/usr/bin/python3
+        )
+        for p in "${candidates[@]}"; do
+            if [ -x "$p" ]; then
+                local ver
+                ver=$("$p" -c 'import sys; print(sys.version_info.minor)' 2>/dev/null) || continue
+                if [ "$ver" -ge 6 ] 2>/dev/null; then
+                    PYTHON3="$p"
+                    return 0
+                fi
+            fi
+        done
+        return 1
+    }
+
+    if find_best_python3; then
         return
     fi
 
-    # python3 not found — try to install it
-    print_warning "python3 not found, attempting to install..."
+    # python3 >= 3.6 not found — try to install it
+    print_warning "python3 >= 3.6 not found, attempting to install..."
 
     case "$OS" in
         ubuntu|debian|pop|linuxmint)
@@ -252,11 +276,11 @@ check_python3() {
             ;;
     esac
 
-    if command -v python3 &>/dev/null; then
-        print_success "python3 installed"
+    if find_best_python3; then
+        print_success "python3 found: $PYTHON3"
     else
-        print_error "python3 is required but could not be installed."
-        print_info "Install python3 manually, then re-run this installer."
+        print_error "python3 >= 3.6 is required but could not be found."
+        print_info "Install python3 >= 3.6 manually, then re-run this installer."
         exit 1
     fi
 }
@@ -392,7 +416,7 @@ install_service() {
         stop_spinner
         print_success "Service installed ${DIM}(launchd)${NC}"
         SERVICE_TYPE="launchd"
-    else
+    elif [ -d /run/systemd/system ] || command -v systemctl &>/dev/null; then
         start_spinner "Configuring systemd service..."
 
         cat > /etc/systemd/system/bbs-agent.service <<EOF
@@ -404,7 +428,8 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=root
-ExecStart=/usr/bin/python3 $INSTALL_DIR/bbs-agent.py
+Environment=LC_ALL=C.UTF-8 LANG=C.UTF-8
+ExecStart=$PYTHON3 $INSTALL_DIR/bbs-agent.py
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -420,6 +445,97 @@ EOF
         stop_spinner
         print_success "Service installed and started ${DIM}(systemd)${NC}"
         SERVICE_TYPE="systemd"
+    else
+        # SysV init (CentOS 6 and similar)
+        start_spinner "Configuring SysV init service..."
+
+        cat > /etc/init.d/bbs-agent <<'INITEOF'
+#!/bin/bash
+# chkconfig: 2345 95 05
+# description: Borg Backup Server Agent
+# processname: bbs-agent
+
+### BEGIN INIT INFO
+# Provides:          bbs-agent
+# Required-Start:    $network $remote_fs
+# Required-Stop:     $network $remote_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Description:       Borg Backup Server Agent
+### END INIT INFO
+
+INITEOF
+        # Append the runtime parts with variable expansion
+        cat >> /etc/init.d/bbs-agent <<EOF
+PYTHON="$PYTHON3"
+AGENT="$INSTALL_DIR/bbs-agent.py"
+EOF
+        cat >> /etc/init.d/bbs-agent <<'INITEOF'
+PIDFILE="/var/run/bbs-agent.pid"
+LOGFILE="/var/log/bbs-agent.log"
+
+export LC_ALL=C.UTF-8
+export LANG=C.UTF-8
+
+start() {
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "bbs-agent is already running (PID $(cat "$PIDFILE"))"
+        return 0
+    fi
+    echo -n "Starting bbs-agent: "
+    nohup "$PYTHON" "$AGENT" >> "$LOGFILE" 2>&1 &
+    echo $! > "$PIDFILE"
+    echo "OK"
+}
+
+stop() {
+    if [ ! -f "$PIDFILE" ] || ! kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "bbs-agent is not running"
+        rm -f "$PIDFILE"
+        return 0
+    fi
+    echo -n "Stopping bbs-agent: "
+    kill "$(cat "$PIDFILE")"
+    rm -f "$PIDFILE"
+    echo "OK"
+}
+
+status() {
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "bbs-agent is running (PID $(cat "$PIDFILE"))"
+    else
+        echo "bbs-agent is not running"
+        return 1
+    fi
+}
+
+restart() {
+    stop
+    sleep 1
+    start
+}
+
+case "$1" in
+    start)   start ;;
+    stop)    stop ;;
+    restart) restart ;;
+    status)  status ;;
+    *)       echo "Usage: $0 {start|stop|restart|status}"; exit 1 ;;
+esac
+INITEOF
+
+        chmod +x /etc/init.d/bbs-agent
+        if command -v chkconfig &>/dev/null; then
+            chkconfig --add bbs-agent >/dev/null 2>&1
+            chkconfig bbs-agent on >/dev/null 2>&1
+        elif command -v update-rc.d &>/dev/null; then
+            update-rc.d bbs-agent defaults >/dev/null 2>&1
+        fi
+        /etc/init.d/bbs-agent restart >/dev/null 2>&1
+
+        stop_spinner
+        print_success "Service installed and started ${DIM}(SysV init)${NC}"
+        SERVICE_TYPE="sysvinit"
     fi
 }
 
@@ -462,6 +578,10 @@ print_summary() {
         echo -e "  ${BULLET} Check status:    ${YELLOW}launchctl list | grep borgbackupserver${NC}"
         echo -e "  ${BULLET} View logs:       ${YELLOW}tail -f /var/log/bbs-agent.log${NC}"
         echo -e "  ${BULLET} Restart agent:   ${YELLOW}launchctl kickstart -k system/com.borgbackupserver.agent${NC}"
+    elif [ "$SERVICE_TYPE" = "sysvinit" ]; then
+        echo -e "  ${BULLET} Check status:    ${YELLOW}/etc/init.d/bbs-agent status${NC}"
+        echo -e "  ${BULLET} View logs:       ${YELLOW}tail -f /var/log/bbs-agent.log${NC}"
+        echo -e "  ${BULLET} Restart agent:   ${YELLOW}/etc/init.d/bbs-agent restart${NC}"
     else
         echo -e "  ${BULLET} Check status:    ${YELLOW}systemctl status bbs-agent${NC}"
         echo -e "  ${BULLET} View logs:       ${YELLOW}journalctl -u bbs-agent -f${NC}"

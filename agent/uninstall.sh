@@ -39,7 +39,7 @@ if [[ "$OS" == "Darwin" ]]; then
     else
         warn "No launchd plist found — skipping"
     fi
-else
+elif [[ -f /etc/systemd/system/bbs-agent.service ]]; then
     # Linux — systemd
     if systemctl is-active --quiet bbs-agent 2>/dev/null; then
         systemctl stop bbs-agent
@@ -52,6 +52,19 @@ else
     rm -f /etc/systemd/system/bbs-agent.service
     systemctl daemon-reload 2>/dev/null
     ok "Removed systemd service"
+elif [[ -f /etc/init.d/bbs-agent ]]; then
+    # Linux — SysV init
+    /etc/init.d/bbs-agent stop 2>/dev/null || true
+    ok "Stopped bbs-agent service"
+    if command -v chkconfig &>/dev/null; then
+        chkconfig --del bbs-agent 2>/dev/null || true
+    elif command -v update-rc.d &>/dev/null; then
+        update-rc.d bbs-agent remove 2>/dev/null || true
+    fi
+    rm -f /etc/init.d/bbs-agent
+    ok "Removed SysV init service"
+else
+    warn "No service found — skipping"
 fi
 
 # Remove agent files
