@@ -88,26 +88,8 @@ All documentation lives on the **[GitHub Wiki](https://github.com/marcpope/borgb
 
 ## Architecture
 
-```
-Endpoint                                 BBS Server
-  [bbs-agent.py]                         [PHP + MySQL + borg]
-       |                                      |
-       |--- register (hostname, OS) --------> |  HTTPS
-       |--- download SSH key ---------------> |  HTTPS
-       |                                      |
-       |--- poll for tasks -----------------> |  HTTPS
-       |<-- backup command + passphrase ----- |
-       |                                      |
-       |  [borg create over SSH] -----------> |  SSH (borg serve --append-only)
-       |                                      |
-       |--- progress (files, bytes) --------> |  HTTPS (every 5s)
-       |--- status (completed/failed) ------> |  HTTPS
-       |--- file catalog (batch) -----------> |  HTTPS
-       |                                      |
-       |            [server runs borg prune]  |  local (server-side)
-       |                                      |
-       |--- poll for tasks -----------------> |  (next cycle)
-```
+<img width="100%" alt="Borg Backup Server Architecture" src="https://github.com/user-attachments/assets/5c9c2b9a-d639-43ba-b4e3-1406d8aa284c" />
+
 
 - **HTTPS** for control plane (task polling, progress, status)
 - **SSH** for data plane (borg backup/restore via `borg serve`)
