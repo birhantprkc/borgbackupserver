@@ -230,7 +230,11 @@ class ProfileController extends Controller
         $this->verifyCsrf();
 
         $enabled = isset($_POST['daily_report_email']) ? 1 : 0;
-        $this->db->update('users', ['daily_report_email' => $enabled], 'id = ?', [$_SESSION['user_id']]);
+        $hour = max(0, min(23, (int) ($_POST['daily_report_hour'] ?? 6)));
+        $this->db->update('users', [
+            'daily_report_email' => $enabled,
+            'daily_report_hour' => $hour,
+        ], 'id = ?', [$_SESSION['user_id']]);
         $this->flash('success', $enabled ? 'Daily report email enabled.' : 'Daily report email disabled.');
         $this->redirect('/profile?tab=reports');
     }

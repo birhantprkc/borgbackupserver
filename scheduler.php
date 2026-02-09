@@ -1275,14 +1275,6 @@ if (!$lastDailyReportTime || strtotime($lastDailyReportTime) < time() - 82800) {
             $reportService = new \BBS\Services\ReportService();
             $report = $reportService->generate();
             echo date('Y-m-d H:i:s') . " Generated daily report #{$report['id']}\n";
-
-            // Email to opted-in users
-            $subscribers = $db->fetchAll("SELECT id, email FROM users WHERE daily_report_email = 1 AND email != ''");
-            foreach ($subscribers as $sub) {
-                $reportService->emailReport($report['id'], $sub['id']);
-                echo date('Y-m-d H:i:s') . " Emailed daily report to {$sub['email']}\n";
-            }
-
             $reportService->cleanup();
         } catch (\Exception $e) {
             echo date('Y-m-d H:i:s') . " Daily report error: {$e->getMessage()}\n";
@@ -1291,6 +1283,35 @@ if (!$lastDailyReportTime || strtotime($lastDailyReportTime) < time() - 82800) {
         $db->query(
             "INSERT INTO settings (`key`, `value`) VALUES ('last_daily_report', ?) ON DUPLICATE KEY UPDATE `value` = ?",
             [date('Y-m-d H:i:s'), date('Y-m-d H:i:s')]
+        );
+    }
+}
+
+// Step 10b: Email daily report to subscribers at their preferred hour
+$currentHour = (int) date('G');
+$subscribers = $db->fetchAll(
+    "SELECT id, email FROM users WHERE daily_report_email = 1 AND email != '' AND daily_report_hour = ?",
+    [$currentHour]
+);
+if (!empty($subscribers)) {
+    $lastEmailRun = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'last_report_email_hour'");
+    $thisHourKey = date('Y-m-d-H');
+    if (($lastEmailRun['value'] ?? '') !== $thisHourKey) {
+        $todayReport = $db->fetchOne("SELECT id FROM daily_reports WHERE report_date = CURDATE()");
+        if ($todayReport) {
+            $reportService = $reportService ?? new \BBS\Services\ReportService();
+            foreach ($subscribers as $sub) {
+                try {
+                    $reportService->emailReport((int) $todayReport['id'], (int) $sub['id']);
+                    echo date('Y-m-d H:i:s') . " Emailed daily report to {$sub['email']}\n";
+                } catch (\Exception $e) {
+                    echo date('Y-m-d H:i:s') . " Report email failed for {$sub['email']}: {$e->getMessage()}\n";
+                }
+            }
+        }
+        $db->query(
+            "INSERT INTO settings (`key`, `value`) VALUES ('last_report_email_hour', ?) ON DUPLICATE KEY UPDATE `value` = ?",
+            [$thisHourKey, $thisHourKey]
         );
     }
 }

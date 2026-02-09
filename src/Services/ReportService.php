@@ -223,7 +223,7 @@ class ReportService
         $generatedAt = $data['generated_at'] ?? '';
 
         $html = <<<HTML
-        <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:700px;margin:0 auto;color:#333;">
+        <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:700px;margin:0 auto;color:#333;background:#fff;border-radius:8px;">
             <div style="background:#1a1a2e;color:#fff;padding:20px 24px;border-radius:8px 8px 0 0;">
                 <h2 style="margin:0 0 4px 0;font-size:20px;">Daily Backup Report</h2>
                 <div style="opacity:0.8;font-size:14px;">{$dateFormatted} &mdash; {$serverHost}</div>

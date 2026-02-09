@@ -1,0 +1,1 @@
+ALTER TABLE users ADD COLUMN daily_report_hour TINYINT NOT NULL DEFAULT 6;

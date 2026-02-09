@@ -339,13 +339,23 @@
                     <div class="card-body">
                         <form method="POST" action="/profile/reports/preferences">
                             <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                            <div class="form-check mb-3">
+                            <div class="form-check mb-2">
                                 <input class="form-check-input" type="checkbox" name="daily_report_email" id="dailyReportEmail" value="1"
                                     <?= ($user['daily_report_email'] ?? 0) ? 'checked' : '' ?>>
                                 <label class="form-check-label" for="dailyReportEmail">
                                     Email me a daily backup report
                                 </label>
-                                <div class="form-text">Sent each morning at 6 AM server time.</div>
+                            </div>
+                            <div class="mb-3 ms-4">
+                                <label class="form-label small mb-1" for="dailyReportHour">Delivery time (server time)</label>
+                                <select class="form-select form-select-sm" name="daily_report_hour" id="dailyReportHour" style="max-width:160px;">
+                                    <?php for ($h = 0; $h < 24; $h++):
+                                        $label = date('g:00 A', mktime($h, 0));
+                                        $selected = ((int)($user['daily_report_hour'] ?? 6)) === $h ? 'selected' : '';
+                                    ?>
+                                    <option value="<?= $h ?>" <?= $selected ?>><?= $label ?></option>
+                                    <?php endfor; ?>
+                                </select>
                             </div>
                             <button type="submit" class="btn btn-sm btn-primary">Save</button>
                         </form>
