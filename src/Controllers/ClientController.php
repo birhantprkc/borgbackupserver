@@ -672,7 +672,10 @@ class ClientController extends Controller
 
         // parent_dir for this level: strip trailing slash (root stays as '/')
         $parentDir = $prefix === '/' ? '/' : rtrim($prefix, '/');
-        $likePath = str_replace(['%', '_'], ['\\%', '\\_'], $parentDir) . '/%';
+        // Root '/' already ends with separator, so LIKE '/%'.
+        // Non-root '/foo' needs LIKE '/foo/%'.
+        $escaped = str_replace(['%', '_'], ['\\%', '\\_'], $parentDir);
+        $likePath = $parentDir === '/' ? '/%' : $escaped . '/%';
 
         // SUBSTRING start: skip past parentDir + separator.
         // Root '/' is the separator itself, so start at position 2.
