@@ -51,10 +51,23 @@ echo -e "${BOLD}[1/3] Restoring .env${NC}"
 
 if [[ -f "$DUMP_DIR/dot-env" ]]; then
     mkdir -p "$(dirname "$ENV_FILE")"
-    cp "$DUMP_DIR/dot-env" "$ENV_FILE"
-    chmod 600 "$ENV_FILE"
-    chown www-data:www-data "$ENV_FILE"
-    ok "Restored .env from dump (includes APP_KEY for SSH key decryption)"
+
+    if [[ -f "$ENV_FILE" ]]; then
+        # Preserve the NEW server's DB credentials, merge APP_KEY from dump
+        OLD_APP_KEY=$(grep -oP '^APP_KEY=\K.*' "$DUMP_DIR/dot-env" || echo "")
+        if [[ -n "$OLD_APP_KEY" ]]; then
+            sed -i "s|^APP_KEY=.*|APP_KEY=$OLD_APP_KEY|" "$ENV_FILE"
+            ok "Restored APP_KEY from dump (needed for SSH key decryption)"
+        fi
+        ok "Kept existing .env DB credentials"
+    else
+        # No existing .env — use the dump's .env as-is
+        cp "$DUMP_DIR/dot-env" "$ENV_FILE"
+        chmod 600 "$ENV_FILE"
+        chown www-data:www-data "$ENV_FILE"
+        ok "Restored .env from dump"
+        warn "DB credentials are from the old server — update if needed"
+    fi
 else
     [[ -f "$ENV_FILE" ]] || die "No .env in dump and no existing .env — cannot continue"
     warn "No .env in dump — keeping existing .env"
