@@ -18,6 +18,7 @@
                 <thead class="table-light">
                     <tr>
                         <th style="white-space: nowrap;">Time</th>
+                        <th style="white-space: nowrap;">Job</th>
                         <th style="white-space: nowrap;">Client</th>
                         <th>Level</th>
                         <th>Message</th>
@@ -25,8 +26,15 @@
                 </thead>
                 <tbody>
                     <?php foreach ($logs as $log): ?>
-                    <tr>
+                    <tr<?= $log['backup_job_id'] ? ' style="cursor:pointer" onclick="window.location=\'/queue/' . $log['backup_job_id'] . '\'"' : '' ?>>
                         <td class="small" style="white-space: nowrap;"><?= \BBS\Core\TimeHelper::format($log['created_at'], 'M j, g:i A') ?></td>
+                        <td style="white-space: nowrap;">
+                            <?php if ($log['backup_job_id']): ?>
+                                <a href="/queue/<?= $log['backup_job_id'] ?>" class="text-decoration-none">#<?= $log['backup_job_id'] ?></a>
+                            <?php else: ?>
+                                --
+                            <?php endif; ?>
+                        </td>
                         <td style="white-space: nowrap;">
                             <?php if ($log['agent_id']): ?>
                                 <a href="/clients/<?= $log['agent_id'] ?>" class="text-decoration-none"><?= htmlspecialchars($log['agent_name']) ?></a>
