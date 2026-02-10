@@ -74,9 +74,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
             </div>
             <div class="d-flex justify-content-between text-white-50 small">
                 <span><?= formatBytes($job['bytes_processed']) ?><?= ($job['bytes_total'] ?? 0) > 0 ? ' of ' . formatBytes($job['bytes_total']) : '' ?> processed</span>
-                <?php if (!empty($job['status_message'])): ?>
-                <span class="text-truncate ms-3" style="max-width: 60%; direction: rtl; text-align: right;" title="<?= htmlspecialchars($job['status_message']) ?>"><?= htmlspecialchars($job['status_message']) ?></span>
-                <?php endif; ?>
+                <span class="text-truncate ms-3" style="max-width: 60%; direction: rtl; text-align: right;" id="currentFile"></span>
             </div>
         <?php elseif ($job['status'] === 'running'): ?>
             <div class="text-white fw-semibold mb-1"><?= !empty($job['status_message']) ? htmlspecialchars($job['status_message']) : $taskLabel . ' in progress...' ?></div>
@@ -441,19 +439,24 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
                 (job.error_log ? '<div class="text-danger small mt-1"><i class="bi bi-exclamation-triangle me-1"></i>' + esc(job.error_log.substring(0,200)) + '</div>' : '') +
                 '</div></div>';
         } else if (isJobActive && job.status === 'running' && pct > 0) {
-            container.querySelector('.progress-bar')?.style && (function() {
+            var taskLabel = (job.task_type || 'backup').replace('_',' ').replace(/^\w/, c => c.toUpperCase());
+            var bytesText = fmtBytes(job.bytes_processed) + (job.bytes_total > 0 ? ' of ' + fmtBytes(job.bytes_total) : '') + ' processed';
+            var fileText = data.currentFile ? '<span class="text-truncate ms-3" style="max-width:60%;direction:rtl;text-align:right;" title="' + esc(data.currentFile) + '">' + esc(data.currentFile) + '</span>' : '';
+            var subRow = container.querySelector('.d-flex.justify-content-between');
+            if (subRow) {
+                // In-place update
                 const bar = container.querySelector('.progress-bar');
                 const label = container.querySelector('.fw-semibold');
                 if (bar) { bar.style.width = pct + '%'; bar.textContent = Number(job.files_processed).toLocaleString() + ' / ' + Number(job.files_total).toLocaleString() + ' files'; }
-                var taskLabel = (job.task_type || 'backup').replace('_',' ').replace(/^\w/, c => c.toUpperCase());
                 if (label) label.textContent = taskLabel + '... ' + pct + '%';
-                var subRow = container.querySelector('.d-flex.justify-content-between');
-                if (subRow) {
-                    var bytesText = fmtBytes(job.bytes_processed) + (job.bytes_total > 0 ? ' of ' + fmtBytes(job.bytes_total) : '') + ' processed';
-                    var fileText = job.status_message ? '<span class="text-truncate ms-3" style="max-width:60%;direction:rtl;text-align:right;" title="' + esc(job.status_message) + '">' + esc(job.status_message) + '</span>' : '';
-                    subRow.innerHTML = '<span>' + bytesText + '</span>' + fileText;
-                }
-            })();
+                subRow.innerHTML = '<span>' + bytesText + '</span>' + fileText;
+            } else {
+                // Full replace (transitioning from pre-progress state)
+                container.innerHTML = '<div class="card border-0 shadow-sm mb-4" style="background-color:#2c3e50"><div class="card-body py-3">' +
+                    '<div class="text-white fw-semibold mb-1">' + esc(taskLabel) + '... ' + pct + '%</div>' +
+                    '<div class="progress mb-1" style="height:22px;background-color:rgba(255,255,255,0.15)"><div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width:' + pct + '%;background-color:#5b9bd5">' + Number(job.files_processed).toLocaleString() + ' / ' + Number(job.files_total).toLocaleString() + ' files</div></div>' +
+                    '<div class="d-flex justify-content-between text-white-50 small"><span>' + bytesText + '</span>' + fileText + '</div></div></div>';
+            }
         } else if (isJobActive && job.status === 'running') {
             // Full replace when transitioning from queued/sent to running (pre-progress phase)
             var taskLabel2 = (job.task_type || 'backup').replace('_',' ').replace(/^\w/, c => c.toUpperCase());

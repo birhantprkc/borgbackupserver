@@ -20,7 +20,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "2.0.4"
+AGENT_VERSION = "2.0.3"
 
 # Ensure UTF-8 filesystem encoding for handling filenames with non-ASCII characters.
 # CentOS 7 and older systems may default to ASCII, causing encoding errors.
@@ -1772,7 +1772,6 @@ def execute_task(config, task):
                 if msg_type == "archive_progress":
                     files_processed = entry.get("nfiles", files_processed)
                     original_size = entry.get("original_size", original_size)
-                    current_path = entry.get("path", "")
 
                     # Report progress every 5 seconds
                     now = time.time()
@@ -1783,8 +1782,6 @@ def execute_task(config, task):
                             "files_processed": files_processed,
                             "bytes_processed": original_size,
                         }
-                        if current_path:
-                            progress_data["status_message"] = current_path[:255]
                         api_request(
                             config,
                             "/api/agent/progress",

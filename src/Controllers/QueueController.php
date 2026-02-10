@@ -201,6 +201,25 @@ class QueueController extends Controller
             $queuePosition = (int) $pos['cnt'];
         }
 
+        // For running backup jobs, tail the catalog log file to get the current file being backed up
+        $currentFile = null;
+        if ($job['status'] === 'running' && $job['task_type'] === 'backup') {
+            $storagePath = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
+            if ($storagePath && !empty($storagePath['value'])) {
+                $catalogPath = rtrim($storagePath['value'], '/') . '/' . $job['agent_id']
+                             . '/.catalog-logs/catalog-' . $id . '.jsonl';
+                if (file_exists($catalogPath)) {
+                    $lastLine = trim(shell_exec('tail -n 1 ' . escapeshellarg($catalogPath)) ?? '');
+                    if ($lastLine) {
+                        $entry = json_decode($lastLine, true);
+                        if ($entry && !empty($entry['path'])) {
+                            $currentFile = $entry['path'];
+                        }
+                    }
+                }
+            }
+        }
+
         header('Content-Type: application/json');
         echo json_encode([
             'job' => $job,
@@ -208,6 +227,7 @@ class QueueController extends Controller
             'activeCount' => $activeCount,
             'maxQueue' => $maxQueue,
             'queuePosition' => $queuePosition,
+            'currentFile' => $currentFile,
         ]);
     }
 
