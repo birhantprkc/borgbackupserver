@@ -20,22 +20,14 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
     <div class="card-body">
         <div class="d-flex justify-content-between align-items-start">
             <div>
-                <h4 class="mb-1">
+                <h4 class="mb-0">
                     <i class="bi bi-archive text-primary me-2"></i><?= htmlspecialchars($repo['name']) ?>
                     <?php if (($repo['storage_type'] ?? 'local') === 'remote_ssh'): ?>
                     <span class="badge bg-info ms-2" style="font-size: 0.6em; vertical-align: middle;"><i class="bi bi-hdd-network me-1"></i>Remote SSH</span>
+                    <?php else: ?>
+                    <span class="badge bg-secondary ms-2" style="font-size: 0.6em; vertical-align: middle;"><i class="bi bi-hdd me-1"></i>Local</span>
                     <?php endif; ?>
                 </h4>
-                <div class="text-muted small">
-                    <?php if (($repo['storage_type'] ?? 'local') === 'remote_ssh'): ?>
-                    <i class="bi bi-hdd-network me-1"></i><?= htmlspecialchars(($repo['remote_user'] ?? '') . '@' . ($repo['remote_host'] ?? '')) ?><?= ((int)($repo['remote_port'] ?? 22)) !== 22 ? ':' . (int)$repo['remote_port'] : '' ?>
-                    <?php if (!empty($repo['remote_config_name'])): ?>
-                    <span class="ms-2 text-muted">(<?= htmlspecialchars($repo['remote_config_name']) ?>)</span>
-                    <?php endif; ?>
-                    <?php else: ?>
-                    <i class="bi bi-folder me-1"></i><?= htmlspecialchars($localPath ?? $repo['path']) ?>
-                    <?php endif; ?>
-                </div>
             </div>
             <?php if ($activeJob): ?>
             <span class="badge bg-info"><i class="bi bi-hourglass-split me-1"></i>Active: <?= $activeJob['task_type'] ?></span>
@@ -289,26 +281,97 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                 <i class="bi bi-info-circle me-1"></i> Repository Info
             </div>
             <div class="card-body">
-                <table class="table table-sm mb-0">
+                <!-- Storage Location -->
+                <div class="d-flex align-items-start gap-3 p-3 bg-body-secondary rounded mb-3">
+                    <?php if (($repo['storage_type'] ?? 'local') === 'remote_ssh'): ?>
+                    <div class="text-info" style="font-size: 1.5rem;"><i class="bi bi-hdd-network"></i></div>
+                    <div>
+                        <h6 class="mb-1">Remote SSH</h6>
+                        <div class="small text-muted">
+                            <?php if (!empty($repo['remote_config_name'])): ?>
+                            <div><strong><?= htmlspecialchars($repo['remote_config_name']) ?></strong></div>
+                            <?php endif; ?>
+                            <div>
+                                <code class="text-muted"><?= htmlspecialchars(($repo['remote_user'] ?? '') . '@' . ($repo['remote_host'] ?? '')) ?><?= ((int)($repo['remote_port'] ?? 22)) !== 22 ? ':' . (int)$repo['remote_port'] : '' ?></code>
+                            </div>
+                            <div class="mt-1"><i class="bi bi-folder2 me-1"></i><?= htmlspecialchars($repo['path']) ?></div>
+                        </div>
+                    </div>
+                    <?php else: ?>
+                    <div class="text-primary" style="font-size: 1.5rem;"><i class="bi bi-hdd"></i></div>
+                    <div>
+                        <h6 class="mb-1">Local Storage</h6>
+                        <div class="small"><code class="text-muted"><?= htmlspecialchars($localPath ?? $repo['path']) ?></code></div>
+                    </div>
+                    <?php endif; ?>
+                </div>
+
+                <?php
+                // Dedup ratio
+                $dedupRatio = '--';
+                $dedupSaved = '';
+                if ($totalOriginal > 0 && $totalDedup > 0) {
+                    $ratio = $totalOriginal / $totalDedup;
+                    $dedupRatio = number_format($ratio, 1) . 'x';
+                    $saved = $totalOriginal - $totalDedup;
+                    if ($saved > 0) {
+                        $fmtBytes = function(int $b) {
+                            if ($b >= 1099511627776) return round($b / 1099511627776, 1) . ' TB';
+                            if ($b >= 1073741824) return round($b / 1073741824, 1) . ' GB';
+                            if ($b >= 1048576) return round($b / 1048576, 1) . ' MB';
+                            if ($b >= 1024) return round($b / 1024, 1) . ' KB';
+                            return $b . ' B';
+                        };
+                        $dedupSaved = $fmtBytes($saved) . ' saved';
+                    }
+                }
+                ?>
+
+                <!-- Dedup & Encryption Stats -->
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <div class="p-3 bg-body-secondary rounded text-center">
+                            <div class="fw-bold fs-5 text-success"><?= $dedupRatio ?></div>
+                            <div class="text-muted" style="font-size: 0.7rem;">Dedup Ratio</div>
+                            <?php if ($dedupSaved): ?>
+                            <div class="text-success" style="font-size: 0.7rem;"><?= $dedupSaved ?></div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-3 bg-body-secondary rounded text-center">
+                            <div class="fw-bold fs-5"><i class="bi bi-shield-lock text-warning me-1" style="font-size: 0.9rem;"></i><?= htmlspecialchars($repo['encryption'] ?: 'none') ?></div>
+                            <div class="text-muted" style="font-size: 0.7rem;">Encryption</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Details -->
+                <table class="table table-sm small mb-0">
+                    <?php
+                        $borgVer = $repo['borg_version_last'] ?: ($agentBorgVersion ?? null);
+                    ?>
+                    <?php if ($borgVer): ?>
                     <tr>
-                        <td class="text-muted" style="width: 40%;">Encryption</td>
-                        <td><code><?= htmlspecialchars($repo['encryption']) ?></code></td>
+                        <td class="text-muted" style="width: 40%;"><i class="bi bi-box-seam me-1"></i>Borg Version</td>
+                        <td><code><?= htmlspecialchars($borgVer) ?></code></td>
                     </tr>
+                    <?php endif; ?>
                     <tr>
-                        <td class="text-muted">Borg Version (created)</td>
-                        <td><?= $repo['borg_version_created'] ? htmlspecialchars($repo['borg_version_created']) : '<span class="text-muted">--</span>' ?></td>
-                    </tr>
-                    <tr>
-                        <td class="text-muted">Borg Version (last used)</td>
-                        <td><?= $repo['borg_version_last'] ? htmlspecialchars($repo['borg_version_last']) : '<span class="text-muted">--</span>' ?></td>
-                    </tr>
-                    <tr>
-                        <td class="text-muted">Created</td>
+                        <td class="text-muted"><i class="bi bi-calendar-plus me-1"></i>Created</td>
                         <td><?= \BBS\Core\TimeHelper::format($repo['created_at'], 'M j, Y g:i A') ?></td>
                     </tr>
                     <tr>
-                        <td class="text-muted">Backup Plans</td>
-                        <td><?= count($plans) ?></td>
+                        <td class="text-muted"><i class="bi bi-journal-text me-1"></i>Backup Plans</td>
+                        <td>
+                            <?php if (!empty($plans)): ?>
+                                <?php foreach ($plans as $plan): ?>
+                                <a href="/clients/<?= $agentId ?>?tab=plans" class="text-decoration-none"><?= htmlspecialchars($plan['name']) ?></a><?php if ($plan !== end($plans)) echo ', '; ?>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                            <span class="text-muted">None</span>
+                            <?php endif; ?>
+                        </td>
                     </tr>
                 </table>
             </div>

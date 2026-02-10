@@ -292,13 +292,18 @@ class AgentApiController extends Controller
                 'message' => "Archive created: \"{$input['archive_name']}\" — {$origSize} original, {$dedupSize} deduplicated",
             ]);
 
-            // Update repo stats
+            // Update repo stats + borg version
+            $borgVer = !empty($agent['borg_version']) ? preg_replace('/^borg\s+/', '', $agent['borg_version']) : null;
             $this->db->query("
                 UPDATE repositories SET
                     archive_count = (SELECT COUNT(*) FROM archives WHERE repository_id = ?),
                     size_bytes = COALESCE((SELECT SUM(deduplicated_size) FROM archives WHERE repository_id = ?), 0)
+                    " . ($borgVer ? ", borg_version_last = ?" : "") . "
                 WHERE id = ?
-            ", [$job['repository_id'], $job['repository_id'], $job['repository_id']]);
+            ", $borgVer
+                ? [$job['repository_id'], $job['repository_id'], $borgVer, $job['repository_id']]
+                : [$job['repository_id'], $job['repository_id'], $job['repository_id']]
+            );
 
             $this->db->insert('server_log', [
                 'agent_id' => $agent['id'],
@@ -469,13 +474,18 @@ class AgentApiController extends Controller
                     'message' => "Archive created: \"{$input['archive_name']}\" — {$origSize} original, {$dedupSize} deduplicated",
                 ]);
 
-                // Update repo stats
+                // Update repo stats + borg version
+                $borgVer2 = !empty($agent['borg_version']) ? preg_replace('/^borg\s+/', '', $agent['borg_version']) : null;
                 $this->db->query("
                     UPDATE repositories SET
                         archive_count = (SELECT COUNT(*) FROM archives WHERE repository_id = ?),
                         size_bytes = COALESCE((SELECT SUM(deduplicated_size) FROM archives WHERE repository_id = ?), 0)
+                        " . ($borgVer2 ? ", borg_version_last = ?" : "") . "
                     WHERE id = ?
-                ", [$job['repository_id'], $job['repository_id'], $job['repository_id']]);
+                ", $borgVer2
+                    ? [$job['repository_id'], $job['repository_id'], $borgVer2, $job['repository_id']]
+                    : [$job['repository_id'], $job['repository_id'], $job['repository_id']]
+                );
 
                 $this->db->insert('server_log', [
                     'agent_id' => $agent['id'],

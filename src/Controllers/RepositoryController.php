@@ -503,6 +503,15 @@ class RepositoryController extends Controller
         $oldestArchive = $this->db->fetchOne("SELECT MIN(created_at) as oldest FROM archives WHERE repository_id = ?", [$id]);
         $newestArchive = $this->db->fetchOne("SELECT MAX(created_at) as newest FROM archives WHERE repository_id = ?", [$id]);
 
+        // Dedup stats from archives
+        $dedupStats = $this->db->fetchOne(
+            "SELECT SUM(original_size) as total_original, SUM(deduplicated_size) as total_dedup FROM archives WHERE repository_id = ?",
+            [$id]
+        );
+
+        // Get agent's borg_version for display (repo columns may not be populated yet)
+        $agentInfo = $this->db->fetchOne("SELECT borg_version FROM agents WHERE id = ?", [$agentId]);
+
         $this->view('repositories/detail', [
             'pageTitle' => $repo['name'],
             'repo' => $repo,
@@ -518,6 +527,9 @@ class RepositoryController extends Controller
             'archiveCount' => $archiveCount,
             'oldestArchive' => $oldestArchive['oldest'] ?? null,
             'newestArchive' => $newestArchive['newest'] ?? null,
+            'totalOriginal' => (int) ($dedupStats['total_original'] ?? 0),
+            'totalDedup' => (int) ($dedupStats['total_dedup'] ?? 0),
+            'agentBorgVersion' => $agentInfo['borg_version'] ?? null,
         ]);
     }
 
