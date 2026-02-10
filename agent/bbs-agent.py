@@ -20,7 +20,7 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "2.0.4"
+AGENT_VERSION = "2.0.5"
 BORG_PATH = None  # Resolved in get_system_info()
 
 # Ensure UTF-8 filesystem encoding for handling filenames with non-ASCII characters.
