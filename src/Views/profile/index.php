@@ -347,7 +347,7 @@
                                 </label>
                             </div>
                             <div class="mb-3 ms-4">
-                                <label class="form-label small mb-1" for="dailyReportHour">Delivery time (server time)</label>
+                                <label class="form-label small mb-1" for="dailyReportHour">Delivery time (your timezone)</label>
                                 <select class="form-select form-select-sm" name="daily_report_hour" id="dailyReportHour" style="max-width:160px;">
                                     <?php for ($h = 0; $h < 24; $h++):
                                         $label = date('g:00 A', mktime($h, 0));

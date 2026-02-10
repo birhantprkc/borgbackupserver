@@ -1355,32 +1355,43 @@ if (!$existingReport) {
     }
 }
 
-// Step 10b: Email daily report to subscribers at their preferred hour
-$currentHour = (int) date('G');
+// Step 10b: Email daily report to subscribers at their preferred local hour
 $subscribers = $db->fetchAll(
-    "SELECT id, email FROM users WHERE daily_report_email = 1 AND email != '' AND daily_report_hour = ?",
-    [$currentHour]
+    "SELECT id, email, timezone, daily_report_hour FROM users WHERE daily_report_email = 1 AND email != ''"
 );
 if (!empty($subscribers)) {
-    $lastEmailRun = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'last_report_email_hour'");
-    $thisHourKey = date('Y-m-d-H');
-    if (($lastEmailRun['value'] ?? '') !== $thisHourKey) {
-        $todayReport = $db->fetchOne("SELECT id FROM daily_reports WHERE report_date = CURDATE() ORDER BY created_at DESC LIMIT 1");
-        if ($todayReport) {
-            $reportService = $reportService ?? new \BBS\Services\ReportService();
-            foreach ($subscribers as $sub) {
-                try {
-                    $reportService->emailReport((int) $todayReport['id'], (int) $sub['id']);
-                    echo date('Y-m-d H:i:s') . " Emailed daily report to {$sub['email']}\n";
-                } catch (\Exception $e) {
-                    echo date('Y-m-d H:i:s') . " Report email failed for {$sub['email']}: {$e->getMessage()}\n";
-                }
+    $todayReport = $db->fetchOne("SELECT id FROM daily_reports WHERE report_date = CURDATE() ORDER BY created_at DESC LIMIT 1");
+    if ($todayReport) {
+        $reportService = $reportService ?? new \BBS\Services\ReportService();
+        foreach ($subscribers as $sub) {
+            // Check if current time matches the user's preferred hour in their timezone
+            try {
+                $userNow = new \DateTime('now', new \DateTimeZone($sub['timezone'] ?: 'UTC'));
+            } catch (\Exception $e) {
+                $userNow = new \DateTime('now', new \DateTimeZone('UTC'));
+            }
+            $userHour = (int) $userNow->format('G');
+            if ($userHour !== (int) $sub['daily_report_hour']) {
+                continue;
+            }
+            // Dedup: only email once per user per calendar day (in their timezone)
+            $userDate = $userNow->format('Y-m-d');
+            $dedupKey = 'last_report_email_user_' . $sub['id'];
+            $lastSent = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = ?", [$dedupKey]);
+            if (($lastSent['value'] ?? '') === $userDate) {
+                continue;
+            }
+            try {
+                $reportService->emailReport((int) $todayReport['id'], (int) $sub['id']);
+                echo date('Y-m-d H:i:s') . " Emailed daily report to {$sub['email']}\n";
+                $db->query(
+                    "INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = ?",
+                    [$dedupKey, $userDate, $userDate]
+                );
+            } catch (\Exception $e) {
+                echo date('Y-m-d H:i:s') . " Report email failed for {$sub['email']}: {$e->getMessage()}\n";
             }
         }
-        $db->query(
-            "INSERT INTO settings (`key`, `value`) VALUES ('last_report_email_hour', ?) ON DUPLICATE KEY UPDATE `value` = ?",
-            [$thisHourKey, $thisHourKey]
-        );
     }
 }
 
