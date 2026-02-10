@@ -19,7 +19,7 @@ class SshKeyManager
         $keyFile = $tmpDir . '/id_rsa';
 
         try {
-            $cmd = ['ssh-keygen', '-t', 'rsa', '-b', '4096', '-N', '', '-f', $keyFile, '-C', 'bbs-agent'];
+            $cmd = ['ssh-keygen', '-t', 'rsa', '-b', '4096', '-m', 'PEM', '-N', '', '-f', $keyFile, '-C', 'bbs-agent'];
             $proc = proc_open($cmd, [
                 0 => ['pipe', 'r'],
                 1 => ['pipe', 'w'],
