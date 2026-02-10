@@ -9,17 +9,17 @@ class SshKeyManager
     private const SSH_HELPER = '/usr/local/bin/bbs-ssh-helper';
 
     /**
-     * Generate an SSH ed25519 key pair.
+     * Generate an SSH RSA key pair (RSA-4096 for maximum client compatibility).
      * Returns ['private_key' => string, 'public_key' => string].
      */
     public static function generateKeyPair(): array
     {
         $tmpDir = sys_get_temp_dir() . '/bbs-keygen-' . bin2hex(random_bytes(8));
         mkdir($tmpDir, 0700, true);
-        $keyFile = $tmpDir . '/id_ed25519';
+        $keyFile = $tmpDir . '/id_rsa';
 
         try {
-            $cmd = ['ssh-keygen', '-t', 'ed25519', '-N', '', '-f', $keyFile, '-C', 'bbs-agent'];
+            $cmd = ['ssh-keygen', '-t', 'rsa', '-b', '4096', '-N', '', '-f', $keyFile, '-C', 'bbs-agent'];
             $proc = proc_open($cmd, [
                 0 => ['pipe', 'r'],
                 1 => ['pipe', 'w'],
