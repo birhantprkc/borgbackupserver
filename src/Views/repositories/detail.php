@@ -330,7 +330,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                 <!-- Dedup & Encryption Stats -->
                 <div class="row g-2 mb-3">
                     <div class="col-6">
-                        <div class="p-3 bg-body-secondary rounded text-center">
+                        <div class="p-3 bg-body-secondary rounded text-center h-100">
                             <div class="fw-bold fs-5 text-success"><?= $dedupRatio ?></div>
                             <div class="text-muted" style="font-size: 0.7rem;">Dedup Ratio</div>
                             <?php if ($dedupSaved): ?>
@@ -339,7 +339,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                         </div>
                     </div>
                     <div class="col-6">
-                        <div class="p-3 bg-body-secondary rounded text-center">
+                        <div class="p-3 bg-body-secondary rounded text-center h-100">
                             <div class="fw-bold fs-5"><i class="bi bi-shield-lock text-warning me-1" style="font-size: 0.9rem;"></i><?= htmlspecialchars($repo['encryption'] ?: 'none') ?></div>
                             <div class="text-muted" style="font-size: 0.7rem;">Encryption</div>
                         </div>
