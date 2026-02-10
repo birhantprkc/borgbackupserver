@@ -700,6 +700,27 @@ case "$ACTION" in
         chmod 755 "$GATE_DST"
         chown root:root "$GATE_DST"
         echo "Installed bbs-ssh-gate to $GATE_DST"
+
+        # Ensure sshd accepts legacy ssh-rsa host key algorithm for older clients
+        # (CentOS 6 with OpenSSH 5.3 cannot negotiate modern algorithms)
+        SSHD_LEGACY="/etc/ssh/sshd_config.d/bbs-legacy-compat.conf"
+        SSHD_CONF_DIR="/etc/ssh/sshd_config.d"
+        if [ -d "$SSHD_CONF_DIR" ] && [ ! -f "$SSHD_LEGACY" ]; then
+            cat > "$SSHD_LEGACY" <<'SSHEOF'
+# Added by BBS to support agents on older OS with legacy SSH clients
+HostKeyAlgorithms +ssh-rsa
+PubkeyAcceptedAlgorithms +ssh-rsa
+SSHEOF
+            chmod 644 "$SSHD_LEGACY"
+            # Validate config before restarting
+            if sshd -t 2>/dev/null; then
+                systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null || true
+                echo "Enabled legacy SSH compatibility"
+            else
+                rm -f "$SSHD_LEGACY"
+                echo "Warning: sshd config invalid, removed legacy compat"
+            fi
+        fi
         echo "OK"
         ;;
 
