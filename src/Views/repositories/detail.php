@@ -172,6 +172,24 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                             </form>
                         </div>
                     </div>
+
+                    <!-- Rebuild Catalog -->
+                    <div class="d-flex align-items-start gap-3 p-3 bg-body-secondary rounded">
+                        <div class="text-info" style="font-size: 1.5rem;">
+                            <i class="bi bi-database-gear"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1">Rebuild Catalog</h6>
+                            <p class="text-muted small mb-2">Rebuild the file catalog by re-scanning all recovery points in this repository. Backups for this repo will be paused until complete.</p>
+                            <form method="POST" action="/repositories/<?= $repo['id'] ?>/maintenance" class="d-inline" data-confirm="Rebuild the file catalog for this repository?&#10;&#10;This will re-scan all recovery points and rebuild the browse catalog. No backups will run for this repository until the rebuild completes.&#10;&#10;This may take a while for large repositories.">
+                                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                <input type="hidden" name="action" value="catalog_rebuild">
+                                <button type="submit" class="btn btn-sm btn-outline-info" <?= $activeJob ? 'disabled' : '' ?>>
+                                    <i class="bi bi-play-fill me-1"></i>Rebuild Catalog
+                                </button>
+                            </form>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

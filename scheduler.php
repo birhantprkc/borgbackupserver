@@ -664,9 +664,30 @@ foreach ($serverJobs as $sj) {
             }
         }
 
+        $agentId = $sj['agent_id'];
+        $repoName = $crRepo['name'] ?? "repo #{$crRepo['id']}";
+
+        // Log: Starting
+        $db->insert('server_log', [
+            'agent_id' => $agentId,
+            'backup_job_id' => $sj['id'],
+            'level' => 'info',
+            'message' => "Starting catalog rebuild for repository \"{$repoName}\"",
+        ]);
+        echo date('Y-m-d H:i:s') . " Catalog rebuild job #{$sj['id']}: starting for \"{$repoName}\"\n";
+
         // Get all archives for this repo
         $crArchives = $db->fetchAll("SELECT id, archive_name FROM archives WHERE repository_id = ? ORDER BY created_at ASC", [$crRepo['id']]);
         $totalArchives = count($crArchives);
+
+        // Log: Listing recovery points
+        $db->insert('server_log', [
+            'agent_id' => $agentId,
+            'backup_job_id' => $sj['id'],
+            'level' => 'info',
+            'message' => "Listing recovery points: {$totalArchives} found",
+        ]);
+        echo date('Y-m-d H:i:s') . " Catalog rebuild job #{$sj['id']}: {$totalArchives} recovery points found\n";
 
         if ($totalArchives === 0) {
             $db->update('backup_jobs', [
@@ -674,7 +695,6 @@ foreach ($serverJobs as $sj) {
                 'completed_at' => date('Y-m-d H:i:s'),
                 'duration_seconds' => 0,
             ], 'id = ?', [$sj['id']]);
-            echo date('Y-m-d H:i:s') . " Catalog rebuild job #{$sj['id']} completed: no archives to process\n";
             continue;
         }
 
@@ -692,12 +712,30 @@ foreach ($serverJobs as $sj) {
         }
 
         $runAsUser = $sj['ssh_unix_user'] ?? null;
-        $agentId = $sj['agent_id'];
+
+        // Create temp rebuild tables (build into these, then swap on success)
+        $catalogTable = "file_catalog_{$agentId}";
+        $rebuildTable = "file_catalog_{$agentId}_rebuild";
+        $dirsTable = "catalog_dirs_{$agentId}";
+        $pdo = $db->getPdo();
+
+        $pdo->exec("DROP TABLE IF EXISTS `{$rebuildTable}`");
+        $pdo->exec("CREATE TABLE `{$rebuildTable}` (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            archive_id INT NOT NULL,
+            path VARCHAR(768) NOT NULL,
+            file_name VARCHAR(255) NOT NULL,
+            parent_dir VARCHAR(768) NOT NULL DEFAULT '',
+            file_size BIGINT DEFAULT 0,
+            status CHAR(1) DEFAULT 'U',
+            mtime DATETIME NULL,
+            KEY idx_archive_parent (archive_id, parent_dir(200)),
+            KEY idx_archive_path (archive_id, path(200))
+        ) ENGINE=MyISAM");
+
         $processedArchives = 0;
         $totalFiles = 0;
         $errors = [];
-
-        echo date('Y-m-d H:i:s') . " Catalog rebuild job #{$sj['id']}: processing {$totalArchives} archives...\n";
 
         foreach ($crArchives as $crArchive) {
             // Remote SSH repos: use RemoteSshService
@@ -757,7 +795,7 @@ foreach ($serverJobs as $sj) {
                 continue;
             }
 
-            // Parse JSON lines output and insert into per-agent catalog table
+            // Parse JSON lines output and insert into rebuild table
             $files = [];
             $lines = array_filter(explode("\n", trim($crOutput)));
             foreach ($lines as $line) {
@@ -780,10 +818,7 @@ foreach ($serverJobs as $sj) {
             }
 
             if (!empty($files)) {
-                $table = "file_catalog_{$agentId}";
-                \BBS\Services\CatalogImporter::ensureTable($db, (int) $agentId);
-
-                // Batch insert directly into flat per-agent table
+                // Batch insert into rebuild table
                 $placeholders = [];
                 $values = [];
                 foreach ($files as $file) {
@@ -797,16 +832,13 @@ foreach ($serverJobs as $sj) {
                     $values[] = $file['mtime'];
                 }
 
-                if (!empty($placeholders)) {
-                    // Insert in batches of 500 to avoid max_allowed_packet limits
-                    $batchSize = 500;
-                    $chunks = array_chunk($placeholders, $batchSize);
-                    $valueChunks = array_chunk($values, $batchSize * 7);
-                    foreach ($chunks as $i => $chunk) {
-                        $sql = "INSERT INTO `{$table}` (archive_id, path, file_name, parent_dir, file_size, status, mtime) VALUES "
-                             . implode(', ', $chunk);
-                        $db->query($sql, $valueChunks[$i]);
-                    }
+                $batchSize = 500;
+                $chunks = array_chunk($placeholders, $batchSize);
+                $valueChunks = array_chunk($values, $batchSize * 7);
+                foreach ($chunks as $i => $chunk) {
+                    $sql = "INSERT INTO `{$rebuildTable}` (archive_id, path, file_name, parent_dir, file_size, status, mtime) VALUES "
+                         . implode(', ', $chunk);
+                    $db->query($sql, $valueChunks[$i]);
                 }
 
                 $totalFiles += count($files);
@@ -822,7 +854,7 @@ foreach ($serverJobs as $sj) {
 
             // Log progress to server_log for UI visibility
             $db->insert('server_log', [
-                'agent_id' => $sj['agent_id'],
+                'agent_id' => $agentId,
                 'backup_job_id' => $sj['id'],
                 'level' => 'info',
                 'message' => "Catalog rebuild {$processedArchives}/{$totalArchives}: {$crArchive['archive_name']} ({$archiveFileCount} files)",
@@ -835,6 +867,44 @@ foreach ($serverJobs as $sj) {
         $duration = max(0, strtotime($crNow) - strtotime($startedAt));
 
         if (empty($errors)) {
+            // Swap: drop old tables, rename rebuild table to production
+            $pdo->exec("DROP TABLE IF EXISTS `{$catalogTable}`");
+            $pdo->exec("RENAME TABLE `{$rebuildTable}` TO `{$catalogTable}`");
+
+            // Rebuild catalog_dirs from the new catalog data
+            $pdo->exec("DROP TABLE IF EXISTS `{$dirsTable}`");
+            $pdo->exec("CREATE TABLE `{$dirsTable}` (
+                archive_id INT NOT NULL,
+                dir_path VARCHAR(768) NOT NULL,
+                parent_dir VARCHAR(768) NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                file_count INT NOT NULL DEFAULT 0,
+                total_size BIGINT NOT NULL DEFAULT 0,
+                KEY idx_lookup (archive_id, parent_dir(200)),
+                KEY idx_dir (archive_id, dir_path(200))
+            ) ENGINE=MyISAM");
+
+            $pdo->exec("INSERT INTO `{$dirsTable}` (archive_id, dir_path, parent_dir, name, file_count, total_size)
+                SELECT archive_id, parent_dir,
+                       CASE WHEN parent_dir = '/' THEN '' ELSE SUBSTRING_INDEX(TRIM(TRAILING '/' FROM parent_dir), '/', -1) END,
+                       CASE WHEN parent_dir = '/' THEN '/' ELSE SUBSTRING_INDEX(TRIM(TRAILING '/' FROM parent_dir), '/', -1) END,
+                       COUNT(*), SUM(file_size)
+                FROM `{$catalogTable}`
+                WHERE parent_dir != ''
+                GROUP BY archive_id, parent_dir");
+
+            // Fix parent_dir column in catalog_dirs (dirname of dir_path)
+            $pdo->exec("UPDATE `{$dirsTable}` SET
+                parent_dir = CASE
+                    WHEN dir_path = '/' THEN ''
+                    WHEN SUBSTRING_INDEX(dir_path, '/', -1) = SUBSTRING(dir_path, 2) THEN '/'
+                    ELSE LEFT(dir_path, LENGTH(dir_path) - LENGTH(SUBSTRING_INDEX(dir_path, '/', -1)) - 1)
+                END,
+                name = CASE
+                    WHEN dir_path = '/' THEN '/'
+                    ELSE SUBSTRING_INDEX(TRIM(TRAILING '/' FROM dir_path), '/', -1)
+                END");
+
             $db->update('backup_jobs', [
                 'status' => 'completed',
                 'completed_at' => $crNow,
@@ -842,13 +912,16 @@ foreach ($serverJobs as $sj) {
             ], 'id = ?', [$sj['id']]);
 
             $db->insert('server_log', [
-                'agent_id' => $sj['agent_id'],
+                'agent_id' => $agentId,
                 'backup_job_id' => $sj['id'],
                 'level' => 'info',
                 'message' => "Catalog rebuild completed: {$processedArchives} archives, {$totalFiles} files indexed",
             ]);
             echo date('Y-m-d H:i:s') . " Catalog rebuild job #{$sj['id']} completed: {$processedArchives} archives, {$totalFiles} files\n";
         } else {
+            // Cleanup temp table on failure
+            $pdo->exec("DROP TABLE IF EXISTS `{$rebuildTable}`");
+
             $errorSummary = count($errors) . " errors: " . implode('; ', array_slice($errors, 0, 3));
             $db->update('backup_jobs', [
                 'status' => 'failed',
@@ -858,7 +931,7 @@ foreach ($serverJobs as $sj) {
             ], 'id = ?', [$sj['id']]);
 
             $db->insert('server_log', [
-                'agent_id' => $sj['agent_id'],
+                'agent_id' => $agentId,
                 'backup_job_id' => $sj['id'],
                 'level' => 'error',
                 'message' => "Catalog rebuild failed: {$errorSummary}",

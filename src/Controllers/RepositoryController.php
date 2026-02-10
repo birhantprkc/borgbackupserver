@@ -356,7 +356,7 @@ class RepositoryController extends Controller
         $this->verifyCsrf();
 
         $action = $_POST['action'] ?? '';
-        $validActions = ['check', 'compact', 'repair', 'break_lock'];
+        $validActions = ['check', 'compact', 'repair', 'break_lock', 'catalog_rebuild'];
         if (!in_array($action, $validActions)) {
             $this->flash('danger', 'Invalid maintenance action.');
             $this->redirect('/clients');
@@ -393,6 +393,7 @@ class RepositoryController extends Controller
             'compact' => 'compact',
             'repair' => 'repo_repair',
             'break_lock' => 'break_lock',
+            'catalog_rebuild' => 'catalog_rebuild',
             default => null,
         };
 
@@ -401,6 +402,7 @@ class RepositoryController extends Controller
             'compact' => 'Compact',
             'repair' => 'Repair',
             'break_lock' => 'Break Lock',
+            'catalog_rebuild' => 'Rebuild Catalog',
             default => $action,
         };
 
