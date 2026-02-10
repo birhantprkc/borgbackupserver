@@ -558,7 +558,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
                 const jobActive = ['queued','sent','running'].includes(job.status);
                 if (jobActive) {
                     isActive = true;
-                    setTimeout(poll, 2500);
+                    setTimeout(poll, 1000);
                 } else if (job.completed_at) {
                     isActive = false;
                     completedAt = new Date(job.completed_at.replace(' ','T')+'Z').getTime();
@@ -575,7 +575,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
 
     // Start polling
     if (isActive) {
-        setTimeout(poll, 2500);
+        setTimeout(poll, 1000);
     } else if (completedAt && (Date.now() - completedAt < 120000)) {
         setTimeout(poll, 5000);
     }
