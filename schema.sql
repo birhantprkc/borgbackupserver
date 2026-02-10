@@ -336,7 +336,7 @@ CREATE TABLE notification_services (
 
 CREATE TABLE daily_reports (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    report_date DATE NOT NULL UNIQUE,
+    report_date DATE NOT NULL,
     data JSON NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

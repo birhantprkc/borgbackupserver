@@ -1297,7 +1297,7 @@ if (!empty($subscribers)) {
     $lastEmailRun = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'last_report_email_hour'");
     $thisHourKey = date('Y-m-d-H');
     if (($lastEmailRun['value'] ?? '') !== $thisHourKey) {
-        $todayReport = $db->fetchOne("SELECT id FROM daily_reports WHERE report_date = CURDATE()");
+        $todayReport = $db->fetchOne("SELECT id FROM daily_reports WHERE report_date = CURDATE() ORDER BY created_at DESC LIMIT 1");
         if ($todayReport) {
             $reportService = $reportService ?? new \BBS\Services\ReportService();
             foreach ($subscribers as $sub) {

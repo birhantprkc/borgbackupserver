@@ -156,20 +156,10 @@ class ReportService
             ],
         ];
 
-        // Upsert
-        $existing = $this->db->fetchOne("SELECT id FROM daily_reports WHERE report_date = ?", [$reportDate]);
-        if ($existing) {
-            $this->db->update('daily_reports', [
-                'data' => json_encode($data),
-                'created_at' => date('Y-m-d H:i:s'),
-            ], 'id = ?', [$existing['id']]);
-            $id = (int) $existing['id'];
-        } else {
-            $id = $this->db->insert('daily_reports', [
-                'report_date' => $reportDate,
-                'data' => json_encode($data),
-            ]);
-        }
+        $id = $this->db->insert('daily_reports', [
+            'report_date' => $reportDate,
+            'data' => json_encode($data),
+        ]);
 
         return ['id' => $id, 'data' => $data];
     }
@@ -191,7 +181,7 @@ class ReportService
     public function getRecentReports(int $limit = 7): array
     {
         return $this->db->fetchAll(
-            "SELECT id, report_date, created_at FROM daily_reports ORDER BY report_date DESC LIMIT ?",
+            "SELECT id, report_date, created_at FROM daily_reports ORDER BY created_at DESC LIMIT ?",
             [$limit]
         );
     }
@@ -413,11 +403,18 @@ class ReportService
     /**
      * Delete reports older than 7 days.
      */
-    public function cleanup(): void
+    public function cleanup(int $keep = 14): void
     {
-        $this->db->query(
-            "DELETE FROM daily_reports WHERE report_date < DATE_SUB(CURDATE(), INTERVAL 7 DAY)"
+        $rows = $this->db->fetchAll(
+            "SELECT id FROM daily_reports ORDER BY created_at DESC LIMIT " . (int) $keep
         );
+        $keepIds = array_column($rows, 'id');
+        if (!empty($keepIds)) {
+            $placeholders = implode(',', array_fill(0, count($keepIds), '?'));
+            $this->db->query("DELETE FROM daily_reports WHERE id NOT IN ({$placeholders})", $keepIds);
+        } else {
+            $this->db->query("DELETE FROM daily_reports");
+        }
     }
 
     private static function formatBytes(int $bytes): string
