@@ -20,7 +20,8 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-AGENT_VERSION = "2.0.3"
+AGENT_VERSION = "2.0.4"
+BORG_PATH = None  # Resolved in get_system_info()
 
 # Ensure UTF-8 filesystem encoding for handling filenames with non-ASCII characters.
 # CentOS 7 and older systems may default to ASCII, causing encoding errors.
@@ -194,6 +195,7 @@ def get_system_info():
             info["glibc_version"] = None
 
     # Get borg version and detect installation method
+    global BORG_PATH
     borg_path = None
     for candidate in ["/usr/local/bin/borg", "/usr/bin/borg", "/opt/homebrew/bin/borg"]:
         if os.path.exists(candidate):
@@ -209,6 +211,7 @@ def get_system_info():
         except Exception:
             pass
 
+    BORG_PATH = borg_path
     if borg_path:
         info["borg_binary_path"] = borg_path
         # Detect install method based on path
@@ -1237,6 +1240,8 @@ def execute_restore_pg(config, task):
     """Restore PostgreSQL databases from a borg archive."""
     job_id = task.get("job_id")
     command = task.get("command", [])
+    if command and command[0] == "borg" and BORG_PATH:
+        command[0] = BORG_PATH
     env_vars = task.get("env", {})
     cwd = task.get("cwd")
     databases = task.get("databases", [])
@@ -1404,6 +1409,8 @@ def execute_restore_mysql(config, task):
     """Restore MySQL databases from a borg archive."""
     job_id = task.get("job_id")
     command = task.get("command", [])
+    if command and command[0] == "borg" and BORG_PATH:
+        command[0] = BORG_PATH
     env_vars = task.get("env", {})
     cwd = task.get("cwd")
     databases = task.get("databases", [])
@@ -1598,6 +1605,11 @@ def execute_task(config, task):
     directories = task.get("directories", "")
     plugins = task.get("plugins", [])
     cwd = task.get("cwd")  # Working directory for extract (restore) tasks
+
+    # Replace bare "borg" with detected absolute path (server sends "borg" but
+    # it may not be in PATH on systems using SCL or non-standard installs)
+    if command and command[0] == "borg" and BORG_PATH:
+        command[0] = BORG_PATH
 
     logger.info(f"Executing {task_type} job #{job_id}: {' '.join(command)}")
 
