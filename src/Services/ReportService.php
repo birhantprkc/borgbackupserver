@@ -197,8 +197,9 @@ class ReportService
     public function renderHtml(array $data, int $userId): string
     {
         $perms = new PermissionService();
-        $isAdmin = $this->db->fetchOne("SELECT role FROM users WHERE id = ?", [$userId]);
-        $isAdmin = $isAdmin && $isAdmin['role'] === 'admin';
+        $userRow = $this->db->fetchOne("SELECT role, timezone FROM users WHERE id = ?", [$userId]);
+        $isAdmin = $userRow && $userRow['role'] === 'admin';
+        $tz = new \DateTimeZone($userRow['timezone'] ?? 'America/New_York');
 
         $accessibleIds = $perms->getAccessibleAgentIds($userId);
         $agents = array_filter($data['agents'] ?? [], fn($a) => in_array($a['id'], $accessibleIds));
@@ -217,10 +218,16 @@ class ReportService
             else $offline++;
         }
 
+        $fmtTime = function (string $utc, string $format) use ($tz): string {
+            $dt = new \DateTime($utc, new \DateTimeZone('UTC'));
+            $dt->setTimezone($tz);
+            return $dt->format($format);
+        };
+
         $reportDate = $data['report_date'] ?? date('Y-m-d');
         $dateFormatted = date('M j, Y', strtotime($reportDate));
         $serverHost = htmlspecialchars($data['server_host'] ?? 'BBS');
-        $generatedAt = $data['generated_at'] ?? '';
+        $generatedAt = !empty($data['generated_at']) ? $fmtTime($data['generated_at'], 'Y-m-d g:i A T') : '';
 
         $html = <<<HTML
         <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:700px;margin:0 auto;color:#333;background:#fff;border-radius:8px;">
@@ -280,7 +287,7 @@ class ReportService
 
             if ($agent['last_backup']) {
                 $lb = $agent['last_backup'];
-                $lastBackup = $lb['completed_at'] ? date('M j, g:i A', strtotime($lb['completed_at'])) : '--';
+                $lastBackup = $lb['completed_at'] ? $fmtTime($lb['completed_at'], 'M j, g:i A') : '--';
                 if ($lb['status'] === 'completed') {
                     $result = "<span style='color:#28a745;font-weight:600;'>OK</span>";
                 } else {
@@ -317,7 +324,7 @@ class ReportService
             $html .= "<h3 style='font-size:16px;margin:0 0 12px 0;color:#dc3545;'>Errors ({$errorCount})</h3>";
             $html .= '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
             foreach (array_slice($errors, 0, 20) as $err) {
-                $time = date('g:i A', strtotime($err['created_at']));
+                $time = $fmtTime($err['created_at'], 'g:i A');
                 $errAgent = htmlspecialchars($err['agent_name'] ?? 'System');
                 $msg = htmlspecialchars(substr($err['message'], 0, 200));
                 $html .= "<tr style='border-bottom:1px solid #f1f3f5;'>"
