@@ -1339,24 +1339,19 @@ if (!$lastJobCleanupTime || strtotime($lastJobCleanupTime) < time() - 86400) {
     );
 }
 
-// Step 10: Generate daily backup report (once daily, after 6 AM)
-$lastDailyReport = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'last_daily_report'");
-$lastDailyReportTime = $lastDailyReport['value'] ?? null;
-if (!$lastDailyReportTime || strtotime($lastDailyReportTime) < time() - 82800) {
-    if ((int) date('G') >= 6) {
-        try {
-            $reportService = new \BBS\Services\ReportService();
-            $report = $reportService->generate();
-            echo date('Y-m-d H:i:s') . " Generated daily report #{$report['id']}\n";
-            $reportService->cleanup();
-        } catch (\Exception $e) {
-            echo date('Y-m-d H:i:s') . " Daily report error: {$e->getMessage()}\n";
-        }
-
-        $db->query(
-            "INSERT INTO settings (`key`, `value`) VALUES ('last_daily_report', ?) ON DUPLICATE KEY UPDATE `value` = ?",
-            [date('Y-m-d H:i:s'), date('Y-m-d H:i:s')]
-        );
+// Step 10: Generate daily backup report (once per calendar day)
+// Check if a report already exists for today's date — prevents duplicate generation
+// regardless of what time zone or hour the scheduler runs.
+$todayDate = date('Y-m-d');
+$existingReport = $db->fetchOne("SELECT id FROM daily_reports WHERE report_date = ? LIMIT 1", [$todayDate]);
+if (!$existingReport) {
+    try {
+        $reportService = new \BBS\Services\ReportService();
+        $report = $reportService->generate($todayDate);
+        echo date('Y-m-d H:i:s') . " Generated daily report #{$report['id']}\n";
+        $reportService->cleanup();
+    } catch (\Exception $e) {
+        echo date('Y-m-d H:i:s') . " Daily report error: {$e->getMessage()}\n";
     }
 }
 
