@@ -409,7 +409,7 @@
                     <?php
                         $isSelected = ($selectedReport ?? null) && $selectedReport['id'] == $r['id'];
                         $dateLabel = date('l, M j, Y', strtotime($r['report_date']));
-                        $timeLabel = date('g:i A', strtotime($r['created_at']));
+                        $timeLabel = \BBS\Core\TimeHelper::format($r['created_at'], 'g:i A');
                     ?>
                     <a href="/profile?tab=reports&report_id=<?= $r['id'] ?>"
                        class="list-group-item list-group-item-action d-flex justify-content-between align-items-center <?= $isSelected ? 'active' : '' ?>">
@@ -430,7 +430,7 @@
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-body fw-semibold">
                 <i class="bi bi-file-earmark-bar-graph me-1"></i>
-                Report: <?= date('M j, Y', strtotime($selectedReport['report_date'])) ?>
+                Report: <?= date('M j, Y', strtotime($selectedReport['report_date'])) ?> — <?= \BBS\Core\TimeHelper::format($selectedReport['created_at'], 'g:i A T') ?>
             </div>
             <div class="card-body p-3">
                 <?php

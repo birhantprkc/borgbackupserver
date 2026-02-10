@@ -19,7 +19,12 @@ class ReportService
      */
     public function generate(?string $date = null): array
     {
-        $reportDate = $date ?: date('Y-m-d');
+        if ($date) {
+            $reportDate = $date;
+        } else {
+            $tz = $_SESSION['timezone'] ?? 'UTC';
+            $reportDate = (new \DateTime('now', new \DateTimeZone($tz)))->format('Y-m-d');
+        }
         $dayStart = $reportDate . ' 00:00:00';
         $dayEnd = $reportDate . ' 23:59:59';
 
