@@ -72,8 +72,11 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
                     <?= number_format($job['files_processed']) ?> / <?= number_format($job['files_total']) ?> files
                 </div>
             </div>
-            <div class="text-white-50 small">
-                <?= formatBytes($job['bytes_processed']) ?> of <?= formatBytes($job['bytes_total']) ?> processed
+            <div class="d-flex justify-content-between text-white-50 small">
+                <span><?= formatBytes($job['bytes_processed']) ?><?= ($job['bytes_total'] ?? 0) > 0 ? ' of ' . formatBytes($job['bytes_total']) : '' ?> processed</span>
+                <?php if (!empty($job['status_message'])): ?>
+                <span class="text-truncate ms-3" style="max-width: 60%; direction: rtl; text-align: right;" title="<?= htmlspecialchars($job['status_message']) ?>"><?= htmlspecialchars($job['status_message']) ?></span>
+                <?php endif; ?>
             </div>
         <?php elseif ($job['status'] === 'running'): ?>
             <div class="text-white fw-semibold mb-1"><?= !empty($job['status_message']) ? htmlspecialchars($job['status_message']) : $taskLabel . ' in progress...' ?></div>
@@ -441,11 +444,15 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
             container.querySelector('.progress-bar')?.style && (function() {
                 const bar = container.querySelector('.progress-bar');
                 const label = container.querySelector('.fw-semibold');
-                const sub = container.querySelector('.text-white-50');
                 if (bar) { bar.style.width = pct + '%'; bar.textContent = Number(job.files_processed).toLocaleString() + ' / ' + Number(job.files_total).toLocaleString() + ' files'; }
                 var taskLabel = (job.task_type || 'backup').replace('_',' ').replace(/^\w/, c => c.toUpperCase());
                 if (label) label.textContent = taskLabel + '... ' + pct + '%';
-                if (sub) sub.textContent = fmtBytes(job.bytes_processed) + ' of ' + fmtBytes(job.bytes_total) + ' processed';
+                var subRow = container.querySelector('.d-flex.justify-content-between');
+                if (subRow) {
+                    var bytesText = fmtBytes(job.bytes_processed) + (job.bytes_total > 0 ? ' of ' + fmtBytes(job.bytes_total) : '') + ' processed';
+                    var fileText = job.status_message ? '<span class="text-truncate ms-3" style="max-width:60%;direction:rtl;text-align:right;" title="' + esc(job.status_message) + '">' + esc(job.status_message) + '</span>' : '';
+                    subRow.innerHTML = '<span>' + bytesText + '</span>' + fileText;
+                }
             })();
         } else if (isJobActive && job.status === 'running') {
             // Full replace when transitioning from queued/sent to running (pre-progress phase)
