@@ -18,7 +18,6 @@ import time
 import urllib.error
 import urllib.request
 from configparser import ConfigParser
-from pathlib import Path
 
 AGENT_VERSION = "2.0.5"
 BORG_PATH = None  # Resolved in get_system_info()
@@ -85,7 +84,7 @@ def load_ssh_info():
 
 def load_config():
     if not os.path.exists(CONFIG_PATH):
-        logger.error(f"Config file not found: {CONFIG_PATH}")
+        logger.error("Config file not found: {}".format(CONFIG_PATH))
         sys.exit(1)
 
     config = ConfigParser()
@@ -100,9 +99,9 @@ def load_config():
 
 def api_request(config, endpoint, method="GET", data=None, timeout=30):
     """Make an authenticated request to the BBS server."""
-    url = f"{config['server_url']}{endpoint}"
+    url = "{}{}".format(config['server_url'], endpoint)
     headers = {
-        "Authorization": f"Bearer {config['api_key']}",
+        "Authorization": "Bearer {}".format(config['api_key']),
         "Content-Type": "application/json",
     }
 
@@ -117,13 +116,13 @@ def api_request(config, endpoint, method="GET", data=None, timeout=30):
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         error_body = e.read().decode("utf-8", errors="replace")
-        logger.error(f"API error {e.code} on {endpoint}: {error_body}")
+        logger.error("API error {} on {}: {}".format(e.code, endpoint, error_body))
         return None
     except urllib.error.URLError as e:
-        logger.error(f"Connection error on {endpoint}: {e.reason}")
+        logger.error("Connection error on {}: {}".format(endpoint, e.reason))
         return None
     except Exception as e:
-        logger.error(f"Request error on {endpoint}: {e}")
+        logger.error("Request error on {}: {}".format(endpoint, e))
         return None
 
 
@@ -147,14 +146,14 @@ def set_borg_source(source):
         with open(BORG_SOURCE_PATH, "w") as f:
             f.write(source)
     except Exception as e:
-        logger.warning(f"Failed to save borg source: {e}")
+        logger.warning("Failed to save borg source: {}".format(e))
 
 
 def get_system_info():
     """Gather system information for registration."""
     info = {
         "hostname": socket.getfqdn(),
-        "os_info": f"{platform.system()} {platform.release()} {platform.machine()}",
+        "os_info": "{} {} {}".format(platform.system(), platform.release(), platform.machine()),
         "agent_version": AGENT_VERSION,
     }
 
@@ -167,7 +166,7 @@ def get_system_info():
                     key, val = line.strip().split("=", 1)
                     os_release[key] = val.strip('"')
             if "PRETTY_NAME" in os_release:
-                info["os_info"] = f"{os_release['PRETTY_NAME']} {platform.machine()}"
+                info["os_info"] = "{} {}".format(os_release['PRETTY_NAME'], platform.machine())
     except FileNotFoundError:
         pass
 
@@ -255,13 +254,13 @@ def get_system_info():
 def register(config):
     """Register this agent with the server."""
     info = get_system_info()
-    logger.info(f"Registering with server: {config['server_url']}")
+    logger.info("Registering with server: {}".format(config['server_url']))
 
     result = api_request(config, "/api/agent/register", method="POST", data=info)
 
     if result and result.get("status") == "ok":
         logger.info(
-            f"Registered as agent #{result['agent_id']} ({result.get('name', '')})"
+            "Registered as agent #{} ({})".format(result['agent_id'], result.get('name', ''))
         )
         # Update poll interval from server
         if "poll_interval" in result:
@@ -311,11 +310,11 @@ def download_ssh_key(config):
         with open(SSH_KEY_PATH, "w") as f:
             f.write(private_key)
         os.chmod(SSH_KEY_PATH, 0o600)
-        logger.info(f"SSH key saved to {SSH_KEY_PATH}")
+        logger.info("SSH key saved to {}".format(SSH_KEY_PATH))
         _save_ssh_info(result)
         return True
     except Exception as e:
-        logger.error(f"Failed to save SSH key: {e}")
+        logger.error("Failed to save SSH key: {}".format(e))
         return False
 
 
@@ -332,7 +331,7 @@ def _save_ssh_info(result):
         }
         with open(SSH_INFO_PATH, "w") as f:
             json.dump(ssh_info, f)
-        logger.info(f"SSH configured: {ssh_user}@{server_host}:{ssh_port}")
+        logger.info("SSH configured: {}@{}:{}".format(ssh_user, server_host, ssh_port))
 
 
 def count_files(directories):
@@ -360,11 +359,11 @@ def execute_update_borg(config, task):
     fallback_to_pip = task.get("fallback_to_pip", True)
     source = task.get("source", "official")  # 'official' or 'server'
 
-    logger.info(f"Executing borg update job #{job_id} to v{target_version} via {install_method} (source={source})")
+    logger.info("Executing borg update job #{} to v{} via {} (source={})".format(job_id, target_version, install_method, source))
 
     # Handle skip - agent is incompatible with selected server version
     if install_method == "skip":
-        logger.info(f"Skipping borg update - no compatible binary for this agent")
+        logger.info("Skipping borg update - no compatible binary for this agent")
         api_request(config, "/api/agent/status", method="POST", data={
             "job_id": job_id,
             "result": "completed",
@@ -388,11 +387,11 @@ def execute_update_borg(config, task):
             )
             # If binary install failed, try package manager fallback
             if result == "failed" and fallback_to_pip:
-                logger.warning(f"Binary install failed ({error_output}), falling back to package manager")
+                logger.warning("Binary install failed ({}), falling back to package manager".format(error_output))
                 result, update_output, error_output = _install_borg_package_manager()
                 # If package manager also failed, try pip as last resort
                 if result == "failed":
-                    logger.warning(f"Package manager failed ({error_output}), falling back to pip")
+                    logger.warning("Package manager failed ({}), falling back to pip".format(error_output))
                     result, update_output, error_output = _install_borg_pip(target_version)
 
         elif install_method == "pip":
@@ -400,7 +399,7 @@ def execute_update_borg(config, task):
             # First try package manager (more reliable), then pip
             result, update_output, error_output = _install_borg_package_manager()
             if result == "failed":
-                logger.warning(f"Package manager failed ({error_output}), falling back to pip")
+                logger.warning("Package manager failed ({}), falling back to pip".format(error_output))
                 result, update_output, error_output = _install_borg_pip(target_version)
 
         else:
@@ -408,7 +407,7 @@ def execute_update_borg(config, task):
 
     except Exception as e:
         error_output = str(e)
-        logger.error(f"Borg update error: {e}")
+        logger.error("Borg update error: {}".format(e))
 
     # Report status
     status_data = {"job_id": job_id, "result": result}
@@ -424,29 +423,29 @@ def execute_update_borg(config, task):
         set_borg_source(source)
         info = get_system_info()
         api_request(config, "/api/agent/info", method="POST", data=info)
-        logger.info(f"Updated borg version: {info.get('borg_version', 'unknown')} (source={source})")
+        logger.info("Updated borg version: {} (source={})".format(info.get('borg_version', 'unknown'), source))
 
 
 def _install_borg_binary(download_url, binary_path, target_version):
     """Download a pre-compiled borg binary from GitHub and install it."""
-    logger.info(f"Downloading borg binary from {download_url}")
+    logger.info("Downloading borg binary from {}".format(download_url))
 
     req = urllib.request.Request(
         download_url,
-        headers={"User-Agent": f"bbs-agent/{AGENT_VERSION}"}
+        headers={"User-Agent": "bbs-agent/{}".format(AGENT_VERSION)}
     )
 
     try:
         with urllib.request.urlopen(req, timeout=300) as resp:
             binary_data = resp.read()
     except urllib.error.HTTPError as e:
-        return "failed", "", f"Download failed: HTTP {e.code}"
+        return "failed", "", "Download failed: HTTP {}".format(e.code)
     except Exception as e:
-        return "failed", "", f"Download failed: {e}"
+        return "failed", "", "Download failed: {}".format(e)
 
     # Basic size check (borg binaries are typically 10MB+)
     if len(binary_data) < 1 * 1024 * 1024:
-        return "failed", "", f"Downloaded file too small ({len(binary_data)} bytes), likely not a valid binary"
+        return "failed", "", "Downloaded file too small ({} bytes), likely not a valid binary".format(len(binary_data))
 
     # Write to temp file
     tmp_path = binary_path + ".tmp"
@@ -456,7 +455,7 @@ def _install_borg_binary(download_url, binary_path, target_version):
             f.write(binary_data)
         os.chmod(tmp_path, 0o755)
     except Exception as e:
-        return "failed", "", f"Failed to write binary: {e}"
+        return "failed", "", "Failed to write binary: {}".format(e)
 
     # Test the binary
     try:
@@ -467,14 +466,14 @@ def _install_borg_binary(download_url, binary_path, target_version):
         if test_proc.returncode != 0:
             os.remove(tmp_path)
             stderr = test_proc.stderr.decode("utf-8", errors="replace")
-            return "failed", "", f"Downloaded binary failed version check: {stderr}"
+            return "failed", "", "Downloaded binary failed version check: {}".format(stderr)
 
         actual_version = test_proc.stdout.decode("utf-8", errors="replace").strip().replace("borg ", "")
-        logger.info(f"Binary version check passed: {actual_version}")
+        logger.info("Binary version check passed: {}".format(actual_version))
     except Exception as e:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
-        return "failed", "", f"Binary test failed: {e}"
+        return "failed", "", "Binary test failed: {}".format(e)
 
     # Backup old binary and install new one
     try:
@@ -489,7 +488,7 @@ def _install_borg_binary(download_url, binary_path, target_version):
         # Try to restore backup
         if os.path.exists(backup_path) and not os.path.exists(binary_path):
             os.rename(backup_path, binary_path)
-        return "failed", "", f"Failed to install binary: {e}"
+        return "failed", "", "Failed to install binary: {}".format(e)
 
     # Remove package manager borg to avoid having two versions
     # /usr/local/bin takes precedence in PATH, but it's cleaner to have just one
@@ -509,11 +508,11 @@ def _install_borg_binary(download_url, binary_path, target_version):
             elif os.path.exists("/usr/bin/pacman"):
                 subprocess.run(["pacman", "-R", "--noconfirm", "borg"],
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
-            logger.info(f"Removed package manager borg to avoid duplicate installations")
+            logger.info("Removed package manager borg to avoid duplicate installations")
         except Exception as e:
-            logger.warning(f"Could not remove package manager borg: {e}")
+            logger.warning("Could not remove package manager borg: {}".format(e))
 
-    output = f"Borg updated to v{target_version} via binary install at {binary_path}"
+    output = "Borg updated to v{} via binary install at {}".format(target_version, binary_path)
     logger.info(output)
     return "completed", output, ""
 
@@ -528,16 +527,16 @@ def _install_borg_pip(target_version):
             # Check if it's a large binary (ELF binaries are typically 10MB+)
             size = os.path.getsize(existing_binary)
             if size > 5 * 1024 * 1024:  # > 5MB = likely a compiled binary, not pip
-                logger.info(f"Removing existing binary at {existing_binary} ({size} bytes) to allow pip install")
+                logger.info("Removing existing binary at {} ({} bytes) to allow pip install".format(existing_binary, size))
                 backup_path = existing_binary + ".bak"
                 os.rename(existing_binary, backup_path)
                 # Keep backup in case pip fails - we'll clean up on success
         except Exception as e:
-            logger.warning(f"Could not check/remove existing binary: {e}")
+            logger.warning("Could not check/remove existing binary: {}".format(e))
 
-    version_spec = f"borgbackup=={target_version}" if target_version and target_version != "latest" else "borgbackup"
+    version_spec = "borgbackup=={}".format(target_version) if target_version and target_version != "latest" else "borgbackup"
     cmd = ["pip3", "install", "--upgrade", version_spec]
-    logger.info(f"Installing borg via pip: {' '.join(cmd)}")
+    logger.info("Installing borg via pip: {}".format(' '.join(cmd)))
 
     try:
         proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=600)
@@ -557,11 +556,11 @@ def _install_borg_pip(target_version):
                 result = subprocess.run(["borg", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
                 if result.returncode == 0:
                     installed_ver = result.stdout.decode().strip().replace("borg ", "")
-                    output = f"Borg updated to v{installed_ver} via pip"
+                    output = "Borg updated to v{} via pip".format(installed_ver)
                 else:
-                    output = f"Borg updated via pip"
+                    output = "Borg updated via pip"
             except Exception:
-                output = f"Borg updated via pip"
+                output = "Borg updated via pip"
             logger.info(output)
             return "completed", output, ""
         else:
@@ -570,11 +569,11 @@ def _install_borg_pip(target_version):
             if os.path.exists(backup_path) and not os.path.exists(existing_binary):
                 try:
                     os.rename(backup_path, existing_binary)
-                    logger.info(f"Restored backup binary after pip failure")
+                    logger.info("Restored backup binary after pip failure")
                 except Exception:
                     pass
-            error = stderr_text or stdout_text or f"Exit code {proc.returncode}"
-            logger.error(f"pip install failed: {error}")
+            error = stderr_text or stdout_text or "Exit code {}".format(proc.returncode)
+            logger.error("pip install failed: {}".format(error))
             return "failed", "", error
     except subprocess.TimeoutExpired:
         return "failed", "", "pip install timed out"
@@ -589,11 +588,11 @@ def _install_borg_package_manager():
     if os.path.exists(existing_binary):
         try:
             size = os.path.getsize(existing_binary)
-            logger.info(f"Removing existing binary at {existing_binary} ({size} bytes) to use package manager")
+            logger.info("Removing existing binary at {} ({} bytes) to use package manager".format(existing_binary, size))
             backup_path = existing_binary + ".bak"
             os.rename(existing_binary, backup_path)
         except Exception as e:
-            logger.warning(f"Could not remove existing binary: {e}")
+            logger.warning("Could not remove existing binary: {}".format(e))
 
     if os.path.exists("/usr/bin/apt-get"):
         cmd = ["apt-get", "install", "-y", "borgbackup"]
@@ -638,7 +637,7 @@ def _install_borg_package_manager():
                 result = subprocess.run(["borg", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
                 if result.returncode == 0:
                     installed_ver = result.stdout.decode().strip().replace("borg ", "")
-                    output = f"Borg updated to v{installed_ver} via package manager"
+                    output = "Borg updated to v{} via package manager".format(installed_ver)
                 else:
                     output = "Borg installed via package manager"
             except Exception:
@@ -653,7 +652,7 @@ def _install_borg_package_manager():
                     logger.info("Restored backup binary after package manager failure")
                 except Exception:
                     pass
-            error = stderr_text or stdout_text or f"Exit code {proc.returncode}"
+            error = stderr_text or stdout_text or "Exit code {}".format(proc.returncode)
             return "failed", "", error
     except subprocess.TimeoutExpired:
         return "failed", "", "Update command timed out"
@@ -664,7 +663,7 @@ def _install_borg_package_manager():
 def execute_update_agent(config, task):
     """Download and replace the agent script from the server, then restart."""
     job_id = task.get("job_id")
-    logger.info(f"Executing agent update job #{job_id}")
+    logger.info("Executing agent update job #{}".format(job_id))
 
     # Report running
     api_request(config, "/api/agent/progress", method="POST", data={
@@ -677,9 +676,9 @@ def execute_update_agent(config, task):
 
     try:
         # Download new agent script from server
-        url = f"{config['server_url']}/api/agent/download?file=bbs-agent.py"
+        url = "{}/api/agent/download?file=bbs-agent.py".format(config['server_url'])
         headers = {
-            "Authorization": f"Bearer {config['api_key']}",
+            "Authorization": "Bearer {}".format(config['api_key']),
         }
         req = urllib.request.Request(url, headers=headers, method="GET")
 
@@ -693,7 +692,7 @@ def execute_update_agent(config, task):
         else:
             # Determine current script path
             script_path = os.path.abspath(__file__)
-            logger.info(f"Replacing agent at: {script_path}")
+            logger.info("Replacing agent at: {}".format(script_path))
 
             # Write new script to temp file first, then move
             tmp_path = script_path + ".tmp"
@@ -711,15 +710,15 @@ def execute_update_agent(config, task):
                     break
 
             result = "completed"
-            update_output = f"Agent updated to v{new_version}"
+            update_output = "Agent updated to v{}".format(new_version)
             logger.info(update_output)
 
     except urllib.error.HTTPError as e:
-        error_output = f"Download failed: HTTP {e.code}"
+        error_output = "Download failed: HTTP {}".format(e.code)
         logger.error(error_output)
     except Exception as e:
         error_output = str(e)
-        logger.error(f"Agent update error: {e}")
+        logger.error("Agent update error: {}".format(e))
 
     # Report status
     status_data = {"job_id": job_id, "result": result}
@@ -762,20 +761,20 @@ def execute_plugins(plugins, config=None, job_id=None):
         slug = plugin.get("slug", "")
         cfg = plugin.get("config", {})
         display = PLUGIN_DISPLAY_NAMES.get(slug, slug)
-        logger.info(f"Running pre-backup plugin: {slug}")
+        logger.info("Running pre-backup plugin: {}".format(slug))
         if config and job_id:
             api_request(config, "/api/agent/progress", method="POST", data={
                 "job_id": job_id,
-                "status_message": f"Running plugin: {display}",
+                "status_message": "Running plugin: {}".format(display),
             })
-        func_name = f"execute_plugin_{slug}"
+        func_name = "execute_plugin_{}".format(slug)
         func = globals().get(func_name)
         if not func:
-            logger.warning(f"Plugin {slug} not implemented, skipping")
+            logger.warning("Plugin {} not implemented, skipping".format(slug))
             continue
         result = func(cfg)
         results[slug] = result
-        logger.info(f"Plugin {slug} completed")
+        logger.info("Plugin {} completed".format(slug))
 
         # Send plugin summary to server log
         if config and job_id:
@@ -793,30 +792,30 @@ def _plugin_summary(slug, config, result):
         db_names = [os.path.basename(f).split(".")[0] for f in dump_files]
         total_size = sum(os.path.getsize(f) for f in dump_files if os.path.exists(f))
         size_str = _format_size(total_size)
-        return f"MySQL dump: {len(dump_files)} database(s) ({', '.join(db_names)}) dumped to {dump_dir} ({size_str})"
+        return "MySQL dump: {} database(s) ({}) dumped to {} ({})".format(len(dump_files), ', '.join(db_names), dump_dir, size_str)
     if slug == "pg_dump":
         dump_files = result.get("dump_files", [])
         dump_dir = result.get("dump_dir", "")
         db_names = [os.path.basename(f).split(".")[0] for f in dump_files]
         total_size = sum(os.path.getsize(f) for f in dump_files if os.path.exists(f))
         size_str = _format_size(total_size)
-        return f"PostgreSQL dump: {len(dump_files)} database(s) ({', '.join(db_names)}) dumped to {dump_dir} ({size_str})"
+        return "PostgreSQL dump: {} database(s) ({}) dumped to {} ({})".format(len(dump_files), ', '.join(db_names), dump_dir, size_str)
     if slug == "shell_hook":
         parts = []
         pre = result.get("pre_script", "")
         if pre:
             code = result.get("pre_exit_code", "?")
-            parts.append(f"pre-script: {pre} (exit {code})")
+            parts.append("pre-script: {} (exit {})".format(pre, code))
         post = result.get("post_script", "")
         if post:
-            parts.append(f"post-script: {post} (pending)")
+            parts.append("post-script: {} (pending)".format(post))
         output = result.get("pre_output", "").strip()
         if output:
             # Truncate for summary
             if len(output) > 200:
                 output = output[:200] + "..."
-            parts.append(f"output: {output}")
-        return f"Shell hook: {' | '.join(parts)}" if parts else None
+            parts.append("output: {}".format(output))
+        return "Shell hook: {}".format(' | '.join(parts)) if parts else None
     return None
 
 
@@ -824,9 +823,12 @@ def _format_size(bytes_val):
     """Format bytes into human-readable size."""
     for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
         if bytes_val < 1024:
-            return f"{bytes_val:.1f} {unit}" if unit != 'B' else f"{bytes_val} {unit}"
+            if unit != 'B':
+                return "{:.1f} {}".format(bytes_val, unit)
+            else:
+                return "{} {}".format(bytes_val, unit)
         bytes_val /= 1024
-    return f"{bytes_val:.1f} PB"
+    return "{:.1f} PB".format(bytes_val)
 
 
 def cleanup_plugins(plugins, plugin_results, config=None, job_id=None):
@@ -834,7 +836,7 @@ def cleanup_plugins(plugins, plugin_results, config=None, job_id=None):
     for plugin in plugins:
         slug = plugin.get("slug", "")
         cfg = plugin.get("config", {})
-        func = globals().get(f"cleanup_plugin_{slug}")
+        func = globals().get("cleanup_plugin_{}".format(slug))
         if func:
             try:
                 cleanup_result = func(cfg, plugin_results.get(slug, {}))
@@ -842,13 +844,13 @@ def cleanup_plugins(plugins, plugin_results, config=None, job_id=None):
                     if cfg.get("cleanup_after", True):
                         dump_dir = plugin_results.get(slug, {}).get("dump_dir", "")
                         if dump_dir:
-                            log_to_server(config, job_id, f"Plugin cleanup: removed dump files from {dump_dir}")
+                            log_to_server(config, job_id, "Plugin cleanup: removed dump files from {}".format(dump_dir))
                     if slug == "shell_hook" and cleanup_result:
-                        log_to_server(config, job_id, f"Shell hook post-script: {cleanup_result}")
+                        log_to_server(config, job_id, "Shell hook post-script: {}".format(cleanup_result))
             except Exception as e:
-                logger.warning(f"Plugin cleanup for {slug} failed: {e}")
+                logger.warning("Plugin cleanup for {} failed: {}".format(slug, e))
                 if config and job_id:
-                    log_to_server(config, job_id, f"Plugin cleanup for {slug} failed: {e}", "warning")
+                    log_to_server(config, job_id, "Plugin cleanup for {} failed: {}".format(slug, e), "warning")
 
 
 def execute_plugin_mysql_dump(config):
@@ -873,16 +875,16 @@ def execute_plugin_mysql_dump(config):
         # List all databases
         list_cmd = [
             "mysql",
-            f"--host={host}",
-            f"--port={port}",
-            f"--user={user}",
-            f"--password={password}",
+            "--host={}".format(host),
+            "--port={}".format(port),
+            "--user={}".format(user),
+            "--password={}".format(password),
             "-e", "SHOW DATABASES;",
             "-s", "--skip-column-names",
         ]
         result = subprocess.run(list_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if result.returncode != 0:
-            raise Exception(f"Failed to list databases: {result.stderr.decode('utf-8', errors='replace').strip()}")
+            raise Exception("Failed to list databases: {}".format(result.stderr.decode('utf-8', errors='replace').strip()))
         if isinstance(exclude, str):
             exclude = [x.strip() for x in exclude.split(",")]
         databases = [
@@ -892,7 +894,7 @@ def execute_plugin_mysql_dump(config):
     elif isinstance(databases, str):
         databases = [d.strip() for d in databases.split(",") if d.strip()]
 
-    base_cmd = ["mysqldump", f"--host={host}", f"--port={port}", f"--user={user}", f"--password={password}"]
+    base_cmd = ["mysqldump", "--host={}".format(host), "--port={}".format(port), "--user={}".format(user), "--password={}".format(password)]
     if extra_options:
         base_cmd.extend(extra_options.split())
 
@@ -900,9 +902,9 @@ def execute_plugin_mysql_dump(config):
 
     if per_database:
         for db in databases:
-            filename = f"{db}.sql.gz" if compress else f"{db}.sql"
+            filename = "{}.sql.gz".format(db) if compress else "{}.sql".format(db)
             dump_path = os.path.join(dump_dir, filename)
-            logger.info(f"Dumping database {db} to {dump_path}")
+            logger.info("Dumping database {} to {}".format(db, dump_path))
 
             cmd = base_cmd + [db]
             if compress:
@@ -914,18 +916,18 @@ def execute_plugin_mysql_dump(config):
                 dump_proc.wait()
                 if dump_proc.returncode != 0:
                     stderr = dump_proc.stderr.read().decode() if dump_proc.stderr else ""
-                    raise Exception(f"mysqldump failed for {db}: {stderr}")
+                    raise Exception("mysqldump failed for {}: {}".format(db, stderr))
             else:
                 with open(dump_path, "w") as f:
                     r = subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE)
                     if r.returncode != 0:
-                        raise Exception(f"mysqldump failed for {db}: {r.stderr.decode('utf-8', errors='replace')}")
+                        raise Exception("mysqldump failed for {}: {}".format(db, r.stderr.decode('utf-8', errors='replace')))
 
             dump_files.append(dump_path)
     else:
         filename = "all_databases.sql.gz" if compress else "all_databases.sql"
         dump_path = os.path.join(dump_dir, filename)
-        logger.info(f"Dumping all databases to {dump_path}")
+        logger.info("Dumping all databases to {}".format(dump_path))
 
         cmd = base_cmd + ["--all-databases"]
         if compress:
@@ -937,16 +939,16 @@ def execute_plugin_mysql_dump(config):
             dump_proc.wait()
             if dump_proc.returncode != 0:
                 stderr = dump_proc.stderr.read().decode() if dump_proc.stderr else ""
-                raise Exception(f"mysqldump failed: {stderr}")
+                raise Exception("mysqldump failed: {}".format(stderr))
         else:
             with open(dump_path, "w") as f:
                 r = subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE)
                 if r.returncode != 0:
-                    raise Exception(f"mysqldump failed: {r.stderr.decode('utf-8', errors='replace')}")
+                    raise Exception("mysqldump failed: {}".format(r.stderr.decode('utf-8', errors='replace')))
 
         dump_files.append(dump_path)
 
-    logger.info(f"MySQL dump complete: {len(dump_files)} file(s) in {dump_dir}")
+    logger.info("MySQL dump complete: {} file(s) in {}".format(len(dump_files), dump_dir))
     db_names = [os.path.basename(f).split(".")[0] for f in dump_files]
     return {
         "dump_files": dump_files,
@@ -965,7 +967,7 @@ def cleanup_plugin_mysql_dump(config, plugin_result):
     if not dump_dir or not os.path.exists(dump_dir):
         return
     import shutil
-    logger.info(f"Cleaning up MySQL dumps in {dump_dir}")
+    logger.info("Cleaning up MySQL dumps in {}".format(dump_dir))
     for f in os.listdir(dump_dir):
         fpath = os.path.join(dump_dir, f)
         if os.path.isfile(fpath) and (f.endswith(".sql") or f.endswith(".sql.gz")):
@@ -981,19 +983,19 @@ def test_plugin_mysql_dump(config):
     if not user or not password:
         raise Exception("MySQL plugin requires user and password")
 
-    cmd = ["mysql", f"--host={host}", f"--port={port}", f"--user={user}",
-           f"--password={password}", "-e", "SELECT 1;", "-s", "--skip-column-names"]
+    cmd = ["mysql", "--host={}".format(host), "--port={}".format(port), "--user={}".format(user),
+           "--password={}".format(password), "-e", "SELECT 1;", "-s", "--skip-column-names"]
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
     if result.returncode != 0:
-        raise Exception(f"Connection failed: {result.stderr.decode('utf-8', errors='replace').strip()}")
+        raise Exception("Connection failed: {}".format(result.stderr.decode('utf-8', errors='replace').strip()))
 
     # Test SHOW DATABASES for permissions
-    cmd2 = ["mysql", f"--host={host}", f"--port={port}", f"--user={user}",
-            f"--password={password}", "-e", "SHOW DATABASES;", "-s", "--skip-column-names"]
+    cmd2 = ["mysql", "--host={}".format(host), "--port={}".format(port), "--user={}".format(user),
+            "--password={}".format(password), "-e", "SHOW DATABASES;", "-s", "--skip-column-names"]
     result2 = subprocess.run(cmd2, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
     dbs = result2.stdout.decode("utf-8", errors="replace").strip().split("\n")
     dbs = [d for d in dbs if d]
-    return f"Connection successful. Found {len(dbs)} database(s): {', '.join(dbs[:10])}"
+    return "Connection successful. Found {} database(s): {}".format(len(dbs), ', '.join(dbs[:10]))
 
 
 def execute_plugin_pg_dump(config):
@@ -1018,10 +1020,10 @@ def execute_plugin_pg_dump(config):
 
     if isinstance(databases, str) and databases.strip() == "*":
         # List all databases via psql
-        list_cmd = ["psql", f"-h", host, "-p", port, "-U", user, "-l", "-t", "-A"]
+        list_cmd = ["psql", "-h", host, "-p", port, "-U", user, "-l", "-t", "-A"]
         result = subprocess.run(list_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=pg_env)
         if result.returncode != 0:
-            raise Exception(f"Failed to list databases: {result.stderr.decode('utf-8', errors='replace').strip()}")
+            raise Exception("Failed to list databases: {}".format(result.stderr.decode('utf-8', errors='replace').strip()))
         if isinstance(exclude, str):
             exclude = [x.strip() for x in exclude.split(",")]
         # psql -l -t -A outputs: dbname|owner|encoding|collate|ctype|access
@@ -1036,9 +1038,9 @@ def execute_plugin_pg_dump(config):
     dump_files = []
 
     for db in databases:
-        filename = f"{db}.sql.gz" if compress else f"{db}.sql"
+        filename = "{}.sql.gz".format(db) if compress else "{}.sql".format(db)
         dump_path = os.path.join(dump_dir, filename)
-        logger.info(f"Dumping PostgreSQL database {db} to {dump_path}")
+        logger.info("Dumping PostgreSQL database {} to {}".format(db, dump_path))
 
         cmd = ["pg_dump", "-h", host, "-p", port, "-U", user]
         if extra_options:
@@ -1054,16 +1056,16 @@ def execute_plugin_pg_dump(config):
             dump_proc.wait()
             if dump_proc.returncode != 0:
                 stderr = dump_proc.stderr.read().decode() if dump_proc.stderr else ""
-                raise Exception(f"pg_dump failed for {db}: {stderr}")
+                raise Exception("pg_dump failed for {}: {}".format(db, stderr))
         else:
             with open(dump_path, "w") as f:
                 r = subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE, env=pg_env)
                 if r.returncode != 0:
-                    raise Exception(f"pg_dump failed for {db}: {r.stderr.decode('utf-8', errors='replace')}")
+                    raise Exception("pg_dump failed for {}: {}".format(db, r.stderr.decode('utf-8', errors='replace')))
 
         dump_files.append(dump_path)
 
-    logger.info(f"PostgreSQL dump complete: {len(dump_files)} file(s) in {dump_dir}")
+    logger.info("PostgreSQL dump complete: {} file(s) in {}".format(len(dump_files), dump_dir))
     db_names = [os.path.basename(f).split(".")[0] for f in dump_files]
     return {
         "dump_files": dump_files,
@@ -1081,7 +1083,7 @@ def cleanup_plugin_pg_dump(config, plugin_result):
     dump_dir = plugin_result.get("dump_dir")
     if not dump_dir or not os.path.exists(dump_dir):
         return
-    logger.info(f"Cleaning up PostgreSQL dumps in {dump_dir}")
+    logger.info("Cleaning up PostgreSQL dumps in {}".format(dump_dir))
     for f in os.listdir(dump_dir):
         fpath = os.path.join(dump_dir, f)
         if os.path.isfile(fpath) and (f.endswith(".sql") or f.endswith(".sql.gz")):
@@ -1103,7 +1105,7 @@ def test_plugin_pg_dump(config):
     cmd = ["psql", "-h", host, "-p", port, "-U", user, "-c", "SELECT 1;", "-t", "-A", "postgres"]
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=pg_env, timeout=15)
     if result.returncode != 0:
-        raise Exception(f"Connection failed: {result.stderr.decode('utf-8', errors='replace').strip()}")
+        raise Exception("Connection failed: {}".format(result.stderr.decode('utf-8', errors='replace').strip()))
 
     # List databases
     cmd2 = ["psql", "-h", host, "-p", port, "-U", user, "-l", "-t", "-A"]
@@ -1113,7 +1115,7 @@ def test_plugin_pg_dump(config):
         parts = line.split("|")
         if parts and parts[0].strip():
             dbs.append(parts[0].strip())
-    return f"Connection successful. Found {len(dbs)} database(s): {', '.join(dbs[:10])}"
+    return "Connection successful. Found {} database(s): {}".format(len(dbs), ', '.join(dbs[:10]))
 
 
 def execute_plugin_shell_hook(config):
@@ -1135,41 +1137,41 @@ def execute_plugin_shell_hook(config):
         return result
 
     if not os.path.isfile(pre_script):
-        msg = f"Pre-script not found: {pre_script}"
+        msg = "Pre-script not found: {}".format(pre_script)
         if abort_on_failure:
             raise Exception(msg)
         logger.warning(msg)
         return result
 
     if not os.access(pre_script, os.X_OK):
-        msg = f"Pre-script not executable: {pre_script}"
+        msg = "Pre-script not executable: {}".format(pre_script)
         if abort_on_failure:
             raise Exception(msg)
         logger.warning(msg)
         return result
 
-    logger.info(f"Shell hook: running pre-script {pre_script}")
+    logger.info("Shell hook: running pre-script {}".format(pre_script))
     try:
         proc = subprocess.run(
             [pre_script],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             timeout=timeout,
-            text=True,
+            universal_newlines=True,
         )
         output = proc.stdout[:10240] if proc.stdout else ""
         result["pre_output"] = output
         result["pre_exit_code"] = proc.returncode
 
         if proc.returncode != 0:
-            msg = f"Pre-script exited with code {proc.returncode}: {output}"
+            msg = "Pre-script exited with code {}: {}".format(proc.returncode, output)
             if abort_on_failure:
                 raise Exception(msg)
             logger.warning(msg)
         else:
-            logger.info(f"Pre-script completed successfully (exit 0)")
+            logger.info("Pre-script completed successfully (exit 0)")
     except subprocess.TimeoutExpired:
-        msg = f"Pre-script timed out after {timeout}s: {pre_script}"
+        msg = "Pre-script timed out after {}s: {}".format(timeout, pre_script)
         if abort_on_failure:
             raise Exception(msg)
         logger.warning(msg)
@@ -1186,32 +1188,32 @@ def cleanup_plugin_shell_hook(config, plugin_result):
         return None
 
     if not os.path.isfile(post_script):
-        logger.warning(f"Post-script not found: {post_script}")
-        return f"{post_script} not found"
+        logger.warning("Post-script not found: {}".format(post_script))
+        return "{} not found".format(post_script)
 
     if not os.access(post_script, os.X_OK):
-        logger.warning(f"Post-script not executable: {post_script}")
-        return f"{post_script} not executable"
+        logger.warning("Post-script not executable: {}".format(post_script))
+        return "{} not executable".format(post_script)
 
-    logger.info(f"Shell hook: running post-script {post_script}")
+    logger.info("Shell hook: running post-script {}".format(post_script))
     try:
         proc = subprocess.run(
             [post_script],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             timeout=timeout,
-            text=True,
+            universal_newlines=True,
         )
         output = proc.stdout[:10240] if proc.stdout else ""
         if proc.returncode != 0:
-            logger.warning(f"Post-script exited with code {proc.returncode}: {output}")
-            return f"{post_script} exited {proc.returncode}: {output[:500]}"
+            logger.warning("Post-script exited with code {}: {}".format(proc.returncode, output))
+            return "{} exited {}: {}".format(post_script, proc.returncode, output[:500])
         else:
-            logger.info(f"Post-script completed successfully (exit 0)")
-            return f"{post_script} completed (exit 0)" + (f": {output[:500]}" if output.strip() else "")
+            logger.info("Post-script completed successfully (exit 0)")
+            return "{} completed (exit 0)".format(post_script) + (": {}".format(output[:500]) if output.strip() else "")
     except subprocess.TimeoutExpired:
-        logger.warning(f"Post-script timed out after {timeout}s: {post_script}")
-        return f"{post_script} timed out after {timeout}s"
+        logger.warning("Post-script timed out after {}s: {}".format(timeout, post_script))
+        return "{} timed out after {}s".format(post_script, timeout)
 
 
 def test_plugin_shell_hook(config):
@@ -1225,13 +1227,13 @@ def test_plugin_shell_hook(config):
 
     for label, path in [("Pre-script", pre_script), ("Post-script", post_script)]:
         if not path:
-            results.append(f"{label}: not configured (skipped)")
+            results.append("{}: not configured (skipped)".format(label))
             continue
         if not os.path.isfile(path):
-            raise Exception(f"{label} not found: {path}")
+            raise Exception("{} not found: {}".format(label, path))
         if not os.access(path, os.X_OK):
-            raise Exception(f"{label} not executable: {path} - run: chmod +x {path}")
-        results.append(f"{label}: {path} ok")
+            raise Exception("{} not executable: {} - run: chmod +x {}".format(label, path, path))
+        results.append("{}: {} ok".format(label, path))
 
     return " | ".join(results)
 
@@ -1272,10 +1274,10 @@ def execute_restore_pg(config, task):
             os.chmod(remote_key_path, 0o600)
             logger.info("Wrote temporary SSH key for remote repo")
         except Exception as e:
-            logger.error(f"Failed to write remote SSH key: {e}")
+            logger.error("Failed to write remote SSH key: {}".format(e))
             api_request(config, "/api/agent/status", method="POST", data={
                 "job_id": job_id, "result": "failed",
-                "error_log": f"Failed to write remote SSH key: {e}",
+                "error_log": "Failed to write remote SSH key: {}".format(e),
             })
             return
 
@@ -1283,7 +1285,7 @@ def execute_restore_pg(config, task):
     pg_env["PGPASSWORD"] = password
 
     # Step 1: Extract dump files from borg archive
-    logger.info(f"Job #{job_id}: Extracting PostgreSQL dumps from archive")
+    logger.info("Job #{}: Extracting PostgreSQL dumps from archive".format(job_id))
     if cwd:
         os.makedirs(cwd, exist_ok=True)
 
@@ -1299,13 +1301,13 @@ def execute_restore_pg(config, task):
         if proc.returncode > 1:
             api_request(config, "/api/agent/status", method="POST", data={
                 "job_id": job_id, "result": "failed",
-                "error_log": f"borg extract failed: {proc.stderr.decode('utf-8', errors='replace')[:5000]}",
+                "error_log": "borg extract failed: {}".format(proc.stderr.decode('utf-8', errors='replace')[:5000]),
             })
             return
     except Exception as e:
         api_request(config, "/api/agent/status", method="POST", data={
             "job_id": job_id, "result": "failed",
-            "error_log": f"borg extract error: {e}",
+            "error_log": "borg extract error: {}".format(e),
         })
         return
     finally:
@@ -1323,26 +1325,26 @@ def execute_restore_pg(config, task):
     for i, db_entry in enumerate(databases):
         db_name = db_entry.get("database")
         mode = db_entry.get("mode", "replace")
-        target_db = db_entry.get("target_name", f"{db_name}_copy") if mode == "rename" else db_name
+        target_db = db_entry.get("target_name", "{}_copy".format(db_name)) if mode == "rename" else db_name
 
         # Find the dump file
         if compress:
-            dump_file = os.path.join(dump_dir, f"{db_name}.sql.gz")
+            dump_file = os.path.join(dump_dir, "{}.sql.gz".format(db_name))
         else:
-            dump_file = os.path.join(dump_dir, f"{db_name}.sql")
+            dump_file = os.path.join(dump_dir, "{}.sql".format(db_name))
 
         if not os.path.exists(dump_file):
-            errors.append(f"{db_name}: dump file not found at {dump_file}")
+            errors.append("{}: dump file not found at {}".format(db_name, dump_file))
             continue
 
-        logger.info(f"Job #{job_id}: Importing {db_name} as {target_db} ({i+1}/{total})")
+        logger.info("Job #{}: Importing {} as {} ({}/{})".format(job_id, db_name, target_db, i+1, total))
 
         # Report progress
         api_request(config, "/api/agent/progress", method="POST", data={
             "job_id": job_id,
             "files_processed": i,
             "files_total": total,
-            "output_log": f"Importing {db_name} as {target_db}...",
+            "output_log": "Importing {} as {}...".format(db_name, target_db),
         })
 
         try:
@@ -1350,12 +1352,12 @@ def execute_restore_pg(config, task):
 
             # Create target database if renaming
             if mode == "rename":
-                create_cmd = psql_base + ["-c", f'CREATE DATABASE "{target_db}";', "postgres"]
+                create_cmd = psql_base + ["-c", 'CREATE DATABASE "{}";'.format(target_db), "postgres"]
                 r = subprocess.run(create_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=pg_env, timeout=30)
                 if r.returncode != 0:
                     stderr = r.stderr.decode('utf-8', errors='replace')
                     if "already exists" not in stderr:
-                        errors.append(f"{db_name}: failed to create {target_db}: {stderr}")
+                        errors.append("{}: failed to create {}: {}".format(db_name, target_db, stderr))
                         continue
 
             # Import the dump
@@ -1369,19 +1371,19 @@ def execute_restore_pg(config, task):
                 gunzip.wait()
                 if psql_proc.returncode != 0:
                     stderr = psql_proc.stderr.read().decode("utf-8", errors="replace")
-                    errors.append(f"{db_name}: import failed: {stderr[:500]}")
+                    errors.append("{}: import failed: {}".format(db_name, stderr[:500]))
                     continue
             else:
                 with open(dump_file, "r") as f:
                     r = subprocess.run(import_cmd, stdin=f, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=pg_env, timeout=3600)
                     if r.returncode != 0:
-                        errors.append(f"{db_name}: import failed: {r.stderr.decode('utf-8', errors='replace')[:500]}")
+                        errors.append("{}: import failed: {}".format(db_name, r.stderr.decode('utf-8', errors='replace')[:500]))
                         continue
 
-            imported.append(f"{db_name} -> {target_db}")
+            imported.append("{} -> {}".format(db_name, target_db))
 
         except Exception as e:
-            errors.append(f"{db_name}: {e}")
+            errors.append("{}: {}".format(db_name, e))
 
     # Report final status
     if errors and not imported:
@@ -1400,7 +1402,7 @@ def execute_restore_pg(config, task):
     if error_log:
         status_data["error_log"] = error_log[:10000]
     if imported:
-        status_data["output_log"] = f"Imported: {', '.join(imported)}"
+        status_data["output_log"] = "Imported: {}".format(', '.join(imported))
 
     api_request(config, "/api/agent/status", method="POST", data=status_data)
 
@@ -1442,15 +1444,15 @@ def execute_restore_mysql(config, task):
             os.chmod(remote_key_path, 0o600)
             logger.info("Wrote temporary SSH key for remote repo")
         except Exception as e:
-            logger.error(f"Failed to write remote SSH key: {e}")
+            logger.error("Failed to write remote SSH key: {}".format(e))
             api_request(config, "/api/agent/status", method="POST", data={
                 "job_id": job_id, "result": "failed",
-                "error_log": f"Failed to write remote SSH key: {e}",
+                "error_log": "Failed to write remote SSH key: {}".format(e),
             })
             return
 
     # Step 1: Extract dump files from borg archive
-    logger.info(f"Job #{job_id}: Extracting MySQL dumps from archive")
+    logger.info("Job #{}: Extracting MySQL dumps from archive".format(job_id))
     if cwd:
         os.makedirs(cwd, exist_ok=True)
 
@@ -1466,13 +1468,13 @@ def execute_restore_mysql(config, task):
         if proc.returncode > 1:
             api_request(config, "/api/agent/status", method="POST", data={
                 "job_id": job_id, "result": "failed",
-                "error_log": f"borg extract failed: {proc.stderr.decode('utf-8', errors='replace')[:5000]}",
+                "error_log": "borg extract failed: {}".format(proc.stderr.decode('utf-8', errors='replace')[:5000]),
             })
             return
     except Exception as e:
         api_request(config, "/api/agent/status", method="POST", data={
             "job_id": job_id, "result": "failed",
-            "error_log": f"borg extract error: {e}",
+            "error_log": "borg extract error: {}".format(e),
         })
         return
     finally:
@@ -1490,40 +1492,40 @@ def execute_restore_mysql(config, task):
     for i, db_entry in enumerate(databases):
         db_name = db_entry.get("database")
         mode = db_entry.get("mode", "replace")  # replace or rename
-        target_db = db_entry.get("target_name", f"{db_name}_copy") if mode == "rename" else db_name
+        target_db = db_entry.get("target_name", "{}_copy".format(db_name)) if mode == "rename" else db_name
 
         # Find the dump file
         if per_database:
             if compress:
-                dump_file = os.path.join(dump_dir, f"{db_name}.sql.gz")
+                dump_file = os.path.join(dump_dir, "{}.sql.gz".format(db_name))
             else:
-                dump_file = os.path.join(dump_dir, f"{db_name}.sql")
+                dump_file = os.path.join(dump_dir, "{}.sql".format(db_name))
         else:
             dump_file = os.path.join(dump_dir, "all_databases.sql.gz" if compress else "all_databases.sql")
 
         if not os.path.exists(dump_file):
-            errors.append(f"{db_name}: dump file not found at {dump_file}")
+            errors.append("{}: dump file not found at {}".format(db_name, dump_file))
             continue
 
-        logger.info(f"Job #{job_id}: Importing {db_name} as {target_db} ({i+1}/{total})")
+        logger.info("Job #{}: Importing {} as {} ({}/{})".format(job_id, db_name, target_db, i+1, total))
 
         # Report progress
         api_request(config, "/api/agent/progress", method="POST", data={
             "job_id": job_id,
             "files_processed": i,
             "files_total": total,
-            "output_log": f"Importing {db_name} as {target_db}...",
+            "output_log": "Importing {} as {}...".format(db_name, target_db),
         })
 
         try:
-            mysql_base = ["mysql", f"--host={host}", f"--port={port}", f"--user={user}", f"--password={password}"]
+            mysql_base = ["mysql", "--host={}".format(host), "--port={}".format(port), "--user={}".format(user), "--password={}".format(password)]
 
             # Create target database if renaming
             if mode == "rename":
-                create_cmd = mysql_base + ["-e", f"CREATE DATABASE IF NOT EXISTS `{target_db}`;"]
+                create_cmd = mysql_base + ["-e", "CREATE DATABASE IF NOT EXISTS `{}`;".format(target_db)]
                 r = subprocess.run(create_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
                 if r.returncode != 0:
-                    errors.append(f"{db_name}: failed to create {target_db}: {r.stderr.decode('utf-8', errors='replace')}")
+                    errors.append("{}: failed to create {}: {}".format(db_name, target_db, r.stderr.decode('utf-8', errors='replace')))
                     continue
 
             # Import the dump
@@ -1539,13 +1541,13 @@ def execute_restore_mysql(config, task):
                     gunzip.wait()
                     if mysql_proc.returncode != 0:
                         stderr = mysql_proc.stderr.read().decode("utf-8", errors="replace")
-                        errors.append(f"{db_name}: import failed: {stderr[:500]}")
+                        errors.append("{}: import failed: {}".format(db_name, stderr[:500]))
                         continue
                 else:
                     with open(dump_file, "r") as f:
                         r = subprocess.run(import_cmd, stdin=f, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=3600)
                         if r.returncode != 0:
-                            errors.append(f"{db_name}: import failed: {r.stderr.decode('utf-8', errors='replace')[:500]}")
+                            errors.append("{}: import failed: {}".format(db_name, r.stderr.decode('utf-8', errors='replace')[:500]))
                             continue
             else:
                 # all_databases dump -- import without specifying target db (uses embedded USE statements)
@@ -1558,20 +1560,20 @@ def execute_restore_mysql(config, task):
                     gunzip.wait()
                     if mysql_proc.returncode != 0:
                         stderr = mysql_proc.stderr.read().decode("utf-8", errors="replace")
-                        errors.append(f"all_databases: import failed: {stderr[:500]}")
+                        errors.append("all_databases: import failed: {}".format(stderr[:500]))
                 else:
                     with open(dump_file, "r") as f:
                         r = subprocess.run(import_cmd, stdin=f, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=3600)
                         if r.returncode != 0:
-                            errors.append(f"all_databases: import failed: {r.stderr.decode('utf-8', errors='replace')[:500]}")
+                            errors.append("all_databases: import failed: {}".format(r.stderr.decode('utf-8', errors='replace')[:500]))
                 # Only import once for all_databases mode
-                imported.append(f"all databases (from {dump_file})")
+                imported.append("all databases (from {})".format(dump_file))
                 break
 
-            imported.append(f"{db_name} -> {target_db}")
+            imported.append("{} -> {}".format(db_name, target_db))
 
         except Exception as e:
-            errors.append(f"{db_name}: {e}")
+            errors.append("{}: {}".format(db_name, e))
 
     # Report final status
     if errors and not imported:
@@ -1590,7 +1592,7 @@ def execute_restore_mysql(config, task):
     if error_log:
         status_data["error_log"] = error_log[:10000]
     if imported:
-        status_data["output_log"] = f"Imported: {', '.join(imported)}"
+        status_data["output_log"] = "Imported: {}".format(', '.join(imported))
 
     api_request(config, "/api/agent/status", method="POST", data=status_data)
 
@@ -1611,14 +1613,14 @@ def execute_task(config, task):
     if command and command[0] == "borg" and BORG_PATH:
         command[0] = BORG_PATH
 
-    logger.info(f"Executing {task_type} job #{job_id}: {' '.join(command)}")
+    logger.info("Executing {} job #{}: {}".format(task_type, job_id, ' '.join(command)))
 
     # Handle plugin test
     if task_type == "plugin_test":
         plugin_data = task.get("plugin", {})
         slug = plugin_data.get("slug", "")
         cfg = plugin_data.get("config", {})
-        test_func = globals().get(f"test_plugin_{slug}")
+        test_func = globals().get("test_plugin_{}".format(slug))
         if test_func:
             try:
                 result_msg = test_func(cfg)
@@ -1632,7 +1634,7 @@ def execute_task(config, task):
         else:
             api_request(config, "/api/agent/status", method="POST", data={
                 "job_id": job_id, "result": "failed",
-                "error_log": f"No test handler for plugin: {slug}",
+                "error_log": "No test handler for plugin: {}".format(slug),
             })
         return
 
@@ -1656,14 +1658,14 @@ def execute_task(config, task):
     plugin_results = {}
     if task_type == "backup" and plugins:
         try:
-            logger.info(f"Running {len(plugins)} pre-backup plugin(s)")
+            logger.info("Running {} pre-backup plugin(s)".format(len(plugins)))
             plugin_results = execute_plugins(plugins, config, job_id)
         except Exception as e:
-            logger.error(f"Pre-backup plugin failed: {e}")
+            logger.error("Pre-backup plugin failed: {}".format(e))
             api_request(config, "/api/agent/status", method="POST", data={
                 "job_id": job_id,
                 "result": "failed",
-                "error_log": f"Pre-backup plugin failed: {e}",
+                "error_log": "Pre-backup plugin failed: {}".format(e),
             })
             return
 
@@ -1675,14 +1677,14 @@ def execute_task(config, task):
             "status_message": "Counting files...",
         })
         files_total = count_files(directories)
-        logger.info(f"Pre-counted {files_total} files to backup")
+        logger.info("Pre-counted {} files to backup".format(files_total))
 
     # Report initial progress with file count
     api_request(config, "/api/agent/progress", method="POST", data={
         "job_id": job_id,
         "files_total": files_total,
         "files_processed": 0,
-        "status_message": f"Backing up {files_total:,} files..." if task_type == "backup" else None,
+        "status_message": "Backing up {:,} files...".format(files_total) if task_type == "backup" else None,
     })
 
     # Build environment
@@ -1723,16 +1725,16 @@ def execute_task(config, task):
                         "-p", str(ssh_info.get("ssh_port", 22)),
                         "-o", "StrictHostKeyChecking=no",
                         "-o", "BatchMode=yes",
-                        f"{ssh_info['ssh_unix_user']}@{ssh_info['server_host']}",
-                        f"catalog-write {job_id}",
+                        "{}@{}".format(ssh_info['ssh_unix_user'], ssh_info['server_host']),
+                        "catalog-write {}".format(job_id),
                     ],
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                 )
-                logger.info(f"Catalog SSH pipe opened for job {job_id}")
+                logger.info("Catalog SSH pipe opened for job {}".format(job_id))
             except Exception as e:
-                logger.warning(f"Could not open catalog SSH pipe: {e}")
+                logger.warning("Could not open catalog SSH pipe: {}".format(e))
                 catalog_ssh = None
         else:
             logger.info("SSH info not available, catalog streaming disabled")
@@ -1753,10 +1755,10 @@ def execute_task(config, task):
             os.chmod(remote_key_path, 0o600)
             logger.info("Wrote temporary SSH key for remote repo")
         except Exception as e:
-            logger.error(f"Failed to write remote SSH key: {e}")
+            logger.error("Failed to write remote SSH key: {}".format(e))
             api_request(config, "/api/agent/status", method="POST", data={
                 "job_id": job_id, "result": "failed",
-                "error_log": f"Failed to write remote SSH key: {e}",
+                "error_log": "Failed to write remote SSH key: {}".format(e),
             })
             return
 
@@ -1833,13 +1835,13 @@ def execute_task(config, task):
                     message = entry.get("message", "")
                     if log_level in ("WARNING", "ERROR", "CRITICAL"):
                         error_output += message + "\n"
-                        logger.warning(f"borg: {message}")
+                        logger.warning("borg: {}".format(message))
 
             except json.JSONDecodeError:
                 # Non-JSON output, might be regular progress text
                 if "Error" in line or "error" in line:
                     error_output += line + "\n"
-                logger.debug(f"borg: {line}")
+                logger.debug("borg: {}".format(line))
 
         # Wait for process to complete
         proc.wait(timeout=86400)  # 24h timeout
@@ -1860,34 +1862,34 @@ def execute_task(config, task):
         if proc.returncode == 0:
             result = "completed"
             logger.info(
-                f"Job #{job_id} completed: {files_processed} files, "
-                f"{original_size} bytes original, {deduplicated_size} bytes dedup"
+                "Job #{} completed: {} files, "
+                "{} bytes original, {} bytes dedup".format(job_id, files_processed, original_size, deduplicated_size)
             )
         elif proc.returncode == 1:
             # borg returns 1 for warnings (still successful)
             result = "completed"
-            logger.warning(f"Job #{job_id} completed with warnings")
+            logger.warning("Job #{} completed with warnings".format(job_id))
         else:
             result = "failed"
             logger.error(
-                f"Job #{job_id} failed with return code {proc.returncode}"
+                "Job #{} failed with return code {}".format(job_id, proc.returncode)
             )
             if not error_output:
-                error_output = f"borg exited with code {proc.returncode}"
+                error_output = "borg exited with code {}".format(proc.returncode)
 
     except subprocess.TimeoutExpired:
         proc.kill()
         result = "failed"
         error_output = "Task timed out after 24 hours"
-        logger.error(f"Job #{job_id} timed out")
+        logger.error("Job #{} timed out".format(job_id))
     except FileNotFoundError:
         result = "failed"
         error_output = "borg command not found"
-        logger.error(f"Job #{job_id}: borg not found")
+        logger.error("Job #{}: borg not found".format(job_id))
     except Exception as e:
         result = "failed"
         error_output = str(e)
-        logger.error(f"Job #{job_id} error: {e}")
+        logger.error("Job #{} error: {}".format(job_id, e))
     finally:
         # Close the catalog SSH pipe
         if catalog_ssh:
@@ -1895,12 +1897,12 @@ def execute_task(config, task):
                 catalog_ssh.stdin.close()
                 catalog_ssh.wait(timeout=30)
                 if catalog_ssh.returncode != 0:
-                    logger.error(f"Catalog SSH pipe exited with code {catalog_ssh.returncode}")
+                    logger.error("Catalog SSH pipe exited with code {}".format(catalog_ssh.returncode))
                     catalog_pipe_failed = True
                 else:
-                    logger.info(f"Catalog SSH pipe closed, {catalog_count} entries streamed")
+                    logger.info("Catalog SSH pipe closed, {} entries streamed".format(catalog_count))
             except Exception as e:
-                logger.error(f"Error closing catalog SSH pipe: {e}")
+                logger.error("Error closing catalog SSH pipe: {}".format(e))
                 catalog_pipe_failed = True
                 try:
                     catalog_ssh.kill()
@@ -1911,7 +1913,7 @@ def execute_task(config, task):
     if result == "completed" and catalog_pipe_failed:
         result = "failed"
         error_output = "Backup completed but catalog streaming failed"
-        logger.error(f"Job #{job_id}: {error_output}")
+        logger.error("Job #{}: {}".format(job_id, error_output))
 
     # Build status data
     status_data = {
@@ -1962,7 +1964,7 @@ def execute_task(config, task):
             os.unlink(remote_key_path)
             logger.info("Cleaned up temporary SSH key")
         except Exception as e:
-            logger.warning(f"Failed to clean up temporary SSH key: {e}")
+            logger.warning("Failed to clean up temporary SSH key: {}".format(e))
 
 
 def clear_stale_cache_locks():
@@ -1979,9 +1981,9 @@ def clear_stale_cache_locks():
                     shutil.rmtree(lock_path)
                 else:
                     os.remove(lock_path)
-                logger.info(f"Cleared stale cache lock: {lock_path}")
+                logger.info("Cleared stale cache lock: {}".format(lock_path))
             except Exception as e:
-                logger.warning(f"Could not clear cache lock {lock_path}: {e}")
+                logger.warning("Could not clear cache lock {}: {}".format(lock_path, e))
 
 
 def signal_handler(signum, frame):
@@ -2006,7 +2008,7 @@ def heartbeat_thread(config):
                 # Send a lightweight heartbeat ping
                 api_request(config, "/api/agent/heartbeat", method="POST", data={})
             except Exception as e:
-                logger.debug(f"Heartbeat failed: {e}")
+                logger.debug("Heartbeat failed: {}".format(e))
 
         # Sleep in small increments so we can exit promptly
         for _ in range(heartbeat_interval):
@@ -2019,7 +2021,7 @@ def main():
     global running, task_running
 
     setup_logging()
-    logger.info(f"BBS Agent v{AGENT_VERSION} starting")
+    logger.info("BBS Agent v{} starting".format(AGENT_VERSION))
 
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
@@ -2035,7 +2037,7 @@ def main():
             sys.exit(1)
 
     logger.info(
-        f"Polling {config['server_url']} every {config['poll_interval']}s"
+        "Polling {} every {}s".format(config['server_url'], config['poll_interval'])
     )
 
     # Start heartbeat thread for keeping alive during long tasks
@@ -2071,7 +2073,7 @@ def main():
                 logger.warning("Failed to poll server, will retry")
 
         except Exception as e:
-            logger.error(f"Poll loop error: {e}")
+            logger.error("Poll loop error: {}".format(e))
 
         # Wait for next poll
         for _ in range(config["poll_interval"]):
