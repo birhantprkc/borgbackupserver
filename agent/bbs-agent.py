@@ -482,7 +482,8 @@ def _install_borg_binary(download_url, binary_path, target_version):
     except Exception as e:
         return "failed", "", "Failed to write binary: {}".format(e)
 
-    # Test the binary
+    # Test the binary — run both --version and a functional test (help create)
+    # to catch glibc incompatibilities that --version alone may not trigger
     try:
         test_proc = subprocess.run(
             [tmp_path, "--version"],
@@ -495,6 +496,17 @@ def _install_borg_binary(download_url, binary_path, target_version):
 
         actual_version = test_proc.stdout.decode("utf-8", errors="replace").strip().replace("borg ", "")
         logger.info("Binary version check passed: {}".format(actual_version))
+
+        # Functional test: exercises more of the binary to catch glibc issues
+        func_proc = subprocess.run(
+            [tmp_path, "help", "create"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10
+        )
+        if func_proc.returncode != 0:
+            os.remove(tmp_path)
+            stderr = func_proc.stderr.decode("utf-8", errors="replace")
+            return "failed", "", "Downloaded binary failed functional test: {}".format(stderr)
+        logger.info("Binary functional test passed")
     except Exception as e:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
@@ -506,9 +518,8 @@ def _install_borg_binary(download_url, binary_path, target_version):
         if os.path.exists(binary_path):
             os.rename(binary_path, backup_path)
         os.rename(tmp_path, binary_path)
-        # Clean up backup
-        if os.path.exists(backup_path):
-            os.remove(backup_path)
+        # Keep .bak around for manual recovery if needed — it will be
+        # overwritten on the next successful update anyway
     except Exception as e:
         # Try to restore backup
         if os.path.exists(backup_path) and not os.path.exists(binary_path):
