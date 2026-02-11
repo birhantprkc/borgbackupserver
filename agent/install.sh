@@ -222,25 +222,25 @@ install_borg() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Verify python3 >= 3.6 is available (required for the agent)
-# Sets PYTHON3 to the best available python3 path.
+# Verify python3 >= 3.4 is available (required for the agent)
+# Sets PYTHON3 to the best available python3 path (prefers newest).
 # ═══════════════════════════════════════════════════════════════════════════════
 PYTHON3=""
 
 check_python3() {
-    # Find the best Python 3.6+ available
+    # Find the best Python 3.4+ available (prefer highest version)
     find_best_python3() {
         local candidates=(
-            /usr/bin/python3
-            /usr/local/bin/python3
-            /opt/rh/rh-python36/root/usr/bin/python3
             /opt/rh/rh-python38/root/usr/bin/python3
+            /opt/rh/rh-python36/root/usr/bin/python3
+            /usr/local/bin/python3
+            /usr/bin/python3
         )
         for p in "${candidates[@]}"; do
             if [ -x "$p" ]; then
                 local ver
                 ver=$("$p" -c 'import sys; print(sys.version_info.minor)' 2>/dev/null) || continue
-                if [ "$ver" -ge 6 ] 2>/dev/null; then
+                if [ "$ver" -ge 4 ] 2>/dev/null; then
                     PYTHON3="$p"
                     return 0
                 fi
@@ -253,8 +253,8 @@ check_python3() {
         return
     fi
 
-    # python3 >= 3.6 not found — try to install it
-    print_warning "python3 >= 3.6 not found, attempting to install..."
+    # python3 >= 3.4 not found — try to install it
+    print_warning "python3 >= 3.4 not found, attempting to install..."
 
     case "$OS" in
         ubuntu|debian|pop|linuxmint)
@@ -279,8 +279,8 @@ check_python3() {
     if find_best_python3; then
         print_success "python3 found: $PYTHON3"
     else
-        print_error "python3 >= 3.6 is required but could not be found."
-        print_info "Install python3 >= 3.6 manually, then re-run this installer."
+        print_error "python3 >= 3.4 is required but could not be found."
+        print_info "Install python3 manually, then re-run this installer."
         exit 1
     fi
 }
