@@ -1862,7 +1862,7 @@ def execute_task(config, task):
                         error_output += message + "\n"
                         logger.warning("borg: {}".format(message))
 
-            except json.JSONDecodeError:
+            except ValueError:
                 # Non-JSON output, might be regular progress text
                 if "Error" in line or "error" in line:
                     error_output += line + "\n"
@@ -1881,7 +1881,7 @@ def execute_task(config, task):
                     original_size = stats.get("original_size", original_size)
                     deduplicated_size = stats.get("deduplicated_size", deduplicated_size)
                     files_processed = stats.get("nfiles", files_processed)
-            except (json.JSONDecodeError, KeyError):
+            except (ValueError, KeyError):
                 pass
 
         if proc.returncode == 0:
