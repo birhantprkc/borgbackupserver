@@ -1840,7 +1840,7 @@ def execute_task(config, task):
                         )
                         last_progress_time = now
 
-                elif msg_type == "file_status" and task_type == "backup" and catalog_ssh:
+                elif msg_type in ("file_status", "file_item") and task_type == "backup" and catalog_ssh:
                     # Stream file entry to server via SSH pipe
                     fpath = entry.get("path", "")
                     fsize = 0
@@ -1860,6 +1860,7 @@ def execute_task(config, task):
                     }) + "\n"
                     try:
                         catalog_ssh.stdin.write(line.encode("utf-8"))
+                        catalog_ssh.stdin.flush()
                     except (BrokenPipeError, OSError):
                         logger.error("Catalog SSH pipe broken, catalog streaming stopped")
                         catalog_ssh = None
