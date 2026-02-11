@@ -19,6 +19,31 @@ import urllib.error
 import urllib.request
 from configparser import ConfigParser
 
+# Python 3.4 compatibility: subprocess.run() was added in Python 3.5.
+# Provide a minimal polyfill so all code can use subprocess.run() uniformly.
+if not hasattr(subprocess, "run"):
+    class _CompletedProcess(object):
+        def __init__(self, args, returncode, stdout=None, stderr=None):
+            self.args = args
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = stderr
+
+    def _subprocess_run(cmd, stdin=None, stdout=None, stderr=None, timeout=None,
+                        env=None, cwd=None, universal_newlines=False, **kwargs):
+        proc = subprocess.Popen(cmd, stdin=stdin, stdout=stdout, stderr=stderr,
+                                env=env, cwd=cwd, universal_newlines=universal_newlines)
+        try:
+            out, err = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.communicate()
+            raise
+        return _CompletedProcess(cmd, proc.returncode, out, err)
+
+    subprocess.run = _subprocess_run
+    subprocess.CompletedProcess = _CompletedProcess
+
 AGENT_VERSION = "2.0.5"
 BORG_PATH = None  # Resolved in get_system_info()
 
