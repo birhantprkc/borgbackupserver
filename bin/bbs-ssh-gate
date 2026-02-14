@@ -48,6 +48,11 @@ case "${SSH_ORIGINAL_COMMAND:-}" in
         chmod 640 "$TARGET" 2>/dev/null || true
         ;;
 
+    "ping")
+        # Simple connectivity test for agent self-diagnosis
+        echo "pong"
+        ;;
+
     *)
         echo "ERROR: command not allowed" >&2
         exit 1

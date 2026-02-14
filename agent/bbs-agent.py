@@ -44,7 +44,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.0.5"
+AGENT_VERSION = "2.0.6"
 BORG_PATH = None  # Resolved in get_system_info()
 
 # Ensure UTF-8 filesystem encoding for handling filenames with non-ASCII characters.
@@ -294,6 +294,9 @@ def register(config):
         # Download SSH key for borg SSH access
         download_ssh_key(config)
 
+        # Test SSH connectivity and re-download key if broken
+        test_ssh_connection(config)
+
         return True
     else:
         logger.error("Registration failed")
@@ -357,6 +360,87 @@ def _save_ssh_info(result):
         with open(SSH_INFO_PATH, "w") as f:
             json.dump(ssh_info, f)
         logger.info("SSH configured: {}@{}:{}".format(ssh_user, server_host, ssh_port))
+
+
+def test_ssh_connection(config):
+    """Test SSH connectivity to the server and re-download key if broken."""
+    ssh_info = load_ssh_info()
+    if not ssh_info or not os.path.exists(SSH_KEY_PATH):
+        return  # No SSH setup yet, nothing to test
+
+    ssh_user = ssh_info.get("ssh_unix_user", "")
+    server_host = ssh_info.get("server_host", "")
+    ssh_port = str(ssh_info.get("ssh_port", 22))
+    if not ssh_user or not server_host:
+        return
+
+    def _try_ssh():
+        """Attempt SSH connection, return (success, stderr_output).
+
+        Uses 'ping' command via bbs-ssh-gate. Return code 0 means
+        auth + command both succeeded. 'command not allowed' means
+        auth succeeded but gate doesn't support ping yet (still OK).
+        'Permission denied' means auth actually failed (key mismatch).
+        """
+        try:
+            proc = subprocess.Popen(
+                [
+                    "ssh",
+                    "-i", SSH_KEY_PATH,
+                    "-p", ssh_port,
+                    "-o", "StrictHostKeyChecking=no",
+                    "-o", "BatchMode=yes",
+                    "-o", "ConnectTimeout=10",
+                    "{}@{}".format(ssh_user, server_host),
+                    "ping",
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            stdout, stderr = proc.communicate(timeout=30)
+            stdout_str = stdout.decode("utf-8", errors="replace").strip()
+            stderr_str = stderr.decode("utf-8", errors="replace").strip()
+            if proc.returncode == 0 and "pong" in stdout_str:
+                return True, ""
+            # Gate rejected command = auth worked, gate just needs update
+            if "command not allowed" in stderr_str:
+                return True, ""
+            # Auth failure = key mismatch, needs re-download
+            if "Permission denied" in stderr_str:
+                return False, stderr_str
+            # Other errors (network, timeout) -- not a key issue
+            return True, ""
+        except Exception as e:
+            return True, ""  # Network issues aren't key problems
+
+    ok, err = _try_ssh()
+    if ok:
+        logger.info("SSH connectivity test passed")
+        return
+
+    logger.warning("SSH connectivity test failed: {}".format(err))
+
+    # Force re-download the key
+    logger.info("Re-downloading SSH key from server...")
+    try:
+        os.unlink(SSH_KEY_PATH)
+    except OSError:
+        pass
+    try:
+        os.unlink(SSH_INFO_PATH)
+    except OSError:
+        pass
+
+    if not download_ssh_key(config):
+        logger.error("SSH key re-download failed")
+        return
+
+    # Retry with fresh key
+    ok, err = _try_ssh()
+    if ok:
+        logger.info("SSH connectivity test passed after key re-download")
+    else:
+        logger.error("SSH connectivity test still failing after key re-download: {}".format(err))
 
 
 def count_files(directories):
