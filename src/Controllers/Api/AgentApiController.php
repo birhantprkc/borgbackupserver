@@ -240,11 +240,25 @@ class AgentApiController extends Controller
         // keep job as "running" so it doesn't appear completed prematurely
         $isCataloging = ($result === 'cataloging');
 
+        // Check if a catalog file exists that needs importing — if so, defer
+        // marking the job as completed until after the import finishes
+        $hasPendingCatalog = false;
+        if ($result === 'completed' && $job['task_type'] === 'backup') {
+            $sp = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
+            if ($sp && !empty($sp['value'])) {
+                $cp = rtrim($sp['value'], '/') . '/' . $agent['id']
+                    . '/.catalog-logs/catalog-' . $jobId . '.jsonl';
+                $hasPendingCatalog = file_exists($cp) && filesize($cp) > 0;
+            }
+        }
+
         $data = [
-            'status' => $isCataloging ? 'running' : $result,
+            'status' => ($isCataloging || $hasPendingCatalog) ? 'running' : $result,
         ];
 
-        if (!$isCataloging) {
+        if ($hasPendingCatalog) {
+            $data['status_message'] = 'Importing file catalog...';
+        } elseif (!$isCataloging) {
             $data['completed_at'] = $now;
             $data['duration_seconds'] = max(0, $duration);
             $data['status_message'] = null;
@@ -581,6 +595,14 @@ class AgentApiController extends Controller
                 ]);
             }
             @unlink($catalogImport['path']);
+
+            // Now mark the job as completed (was kept as 'running' during import)
+            $this->db->update('backup_jobs', [
+                'status' => 'completed',
+                'completed_at' => date('Y-m-d H:i:s'),
+                'duration_seconds' => max(0, strtotime(date('Y-m-d H:i:s')) - strtotime($startedAt)),
+                'status_message' => null,
+            ], 'id = ?', [$jobId]);
         }
 
         // Auto-queue prune AFTER catalog import is complete to avoid table lock contention

@@ -31,6 +31,12 @@ class CatalogImporter
             try { $db->insert('server_log', $data); } catch (\Exception $e) { /* ignore */ }
         };
 
+        // Update job status_message so the UI shows import progress
+        $updateStatus = function (string $msg) use ($db, $jobId) {
+            if (!$jobId) return;
+            try { $db->update('backup_jobs', ['status_message' => $msg], 'id = ?', [$jobId]); } catch (\Exception $e) { /* ignore */ }
+        };
+
         $handle = fopen($filePath, 'r');
         if (!$handle) {
             throw new \RuntimeException("Cannot open catalog file: {$filePath}");
@@ -112,6 +118,7 @@ class CatalogImporter
             // Try server-side LOAD DATA first (fastest), fall back to LOCAL
             $loadMethod = $useServerSide ? 'server-side' : 'client-side (LOCAL)';
             $log("Catalog TSV generated: " . number_format($count) . " rows, {$tsvSize} MB in {$tsvElapsed}s — loading via {$loadMethod}");
+            $updateStatus("Importing " . number_format($count) . " catalog entries...");
 
             $loadStart = microtime(true);
 
@@ -130,6 +137,7 @@ class CatalogImporter
 
             $loadElapsed = round(microtime(true) - $loadStart, 1);
             $log("Catalog MySQL load complete: {$loadElapsed}s ({$loadMethod} into {$table})");
+            $updateStatus("Building directory index...");
 
             // Build catalog_dirs table for fast directory browsing
             $this->buildDirIndex($db, $pdo, $agentId, $archiveId, $dirStats, $tsvDir, $useServerSide, $log);
