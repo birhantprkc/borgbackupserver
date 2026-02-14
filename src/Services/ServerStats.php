@@ -209,16 +209,16 @@ class ServerStats
     {
         $db = \BBS\Core\Database::getInstance();
 
-        // Sum catalog entries across per-agent tables
-        $catalogTotal = 0;
-        $agents = $db->fetchAll("SELECT id FROM agents");
-        foreach ($agents as $a) {
-            try {
-                $row = $db->fetchOne("SELECT COUNT(*) AS cnt FROM `file_catalog_{$a['id']}`");
-                $catalogTotal += (int) ($row['cnt'] ?? 0);
-            } catch (\Exception $e) { /* table may not exist yet */ }
-        }
-        $catalogFiles = ['cnt' => $catalogTotal];
+        // Sum catalog entries across per-agent tables using INFORMATION_SCHEMA
+        // to avoid blocking on MyISAM table-level locks during LOAD DATA imports
+        $dbName = \BBS\Core\Config::get('DB_NAME', 'bbs');
+        $catalogRow = $db->fetchOne(
+            "SELECT COALESCE(SUM(TABLE_ROWS), 0) AS cnt
+               FROM INFORMATION_SCHEMA.TABLES
+              WHERE TABLE_SCHEMA = ? AND TABLE_NAME LIKE 'file\\_catalog\\_%'",
+            [$dbName]
+        );
+        $catalogFiles = ['cnt' => (int) ($catalogRow['cnt'] ?? 0)];
         $archives = $db->fetchOne("SELECT COUNT(*) AS cnt FROM archives");
         $jobs = $db->fetchOne("SELECT COALESCE(MAX(id), 0) AS cnt FROM backup_jobs");
 
