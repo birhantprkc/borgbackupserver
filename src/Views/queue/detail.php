@@ -359,7 +359,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
 
 <!-- Actions -->
 <div id="actions-section" class="d-flex gap-2">
-    <?php if (in_array($job['status'], ['queued', 'sent'])): ?>
+    <?php if (in_array($job['status'], ['queued', 'sent', 'running'])): ?>
     <form method="POST" action="/queue/<?= $job['id'] ?>/cancel" data-confirm="Cancel this job?">
         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
         <button class="btn btn-danger"><i class="bi bi-x-circle me-1"></i> Cancel Job</button>
@@ -520,7 +520,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
         const actions = document.getElementById('actions-section');
         if (!actions) return;
         let html = '';
-        if (job.status === 'queued' || job.status === 'sent') {
+        if (job.status === 'queued' || job.status === 'sent' || job.status === 'running') {
             html += '<form method="POST" action="/queue/' + jobId + '/cancel" data-confirm="Cancel this job?"><input type="hidden" name="csrf_token" value="' + csrfToken + '"><button class="btn btn-danger"><i class="bi bi-x-circle me-1"></i> Cancel Job</button></form>';
         }
         if (job.status === 'failed') {
