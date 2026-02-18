@@ -209,16 +209,12 @@ class ServerStats
     {
         $db = \BBS\Core\Database::getInstance();
 
-        // Sum catalog entries across per-agent tables using INFORMATION_SCHEMA
-        // to avoid blocking on MyISAM table-level locks during LOAD DATA imports
-        $dbName = \BBS\Core\Config::get('DB_NAME', 'bbs');
+        // Read cached catalog count from settings (updated by CatalogImporter)
+        // Avoids querying INFORMATION_SCHEMA which triggers MyISAM table checks
         $catalogRow = $db->fetchOne(
-            "SELECT COALESCE(SUM(TABLE_ROWS), 0) AS cnt
-               FROM INFORMATION_SCHEMA.TABLES
-              WHERE TABLE_SCHEMA = ? AND TABLE_NAME LIKE 'file\\_catalog\\_%'",
-            [$dbName]
+            "SELECT `value` FROM settings WHERE `key` = 'catalog_total_files'"
         );
-        $catalogFiles = ['cnt' => (int) ($catalogRow['cnt'] ?? 0)];
+        $catalogFiles = ['cnt' => (int) ($catalogRow['value'] ?? 0)];
         $archives = $db->fetchOne("SELECT COUNT(*) AS cnt FROM archives");
         $jobs = $db->fetchOne("SELECT COALESCE(MAX(id), 0) AS cnt FROM backup_jobs");
 
@@ -284,11 +280,14 @@ class ServerStats
     {
         $db = \BBS\Core\Database::getInstance();
 
-        // Total size of all tables in the current database
+        // Total size of all tables, excluding MyISAM catalog tables which
+        // trigger slow 'Checking table' operations on INFORMATION_SCHEMA queries
         $row = $db->fetchOne("
             SELECT SUM(data_length + index_length) AS db_bytes
             FROM information_schema.TABLES
             WHERE table_schema = DATABASE()
+              AND TABLE_NAME NOT LIKE 'file\\_catalog\\_%'
+              AND TABLE_NAME NOT LIKE 'catalog\\_dirs\\_%'
         ");
         $dbBytes = (int) ($row['db_bytes'] ?? 0);
 

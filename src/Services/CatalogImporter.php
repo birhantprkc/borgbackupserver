@@ -142,6 +142,9 @@ class CatalogImporter
             // Build catalog_dirs table for fast directory browsing
             $this->buildDirIndex($db, $pdo, $agentId, $archiveId, $dirStats, $tsvDir, $useServerSide, $log);
 
+            // Update cached catalog total for dashboard (avoids INFORMATION_SCHEMA on MyISAM)
+            self::updateCachedTotal($db);
+
             return $count;
         } finally {
             if ($handle) fclose($handle);
@@ -353,4 +356,27 @@ class CatalogImporter
             @unlink($dirsTsv);
         }
     }
-}
+
+    /**
+     * Update the cached catalog_total_files in settings by summing row counts
+     * from each per-agent catalog table. Uses COUNT(*) which is instant on
+     * MyISAM (stored in metadata) — safe to call after LOAD DATA completes
+     * since the table lock is already released.
+     */
+    public static function updateCachedTotal(Database $db): void
+    {
+        try {
+            $agents = $db->fetchAll("SELECT id FROM agents");
+            $total = 0;
+            foreach ($agents as $a) {
+                try {
+                    $row = $db->fetchOne("SELECT COUNT(*) AS cnt FROM `file_catalog_{$a['id']}`");
+                    $total += (int) ($row['cnt'] ?? 0);
+                } catch (\Exception $e) { /* table may not exist */ }
+            }
+            $db->getPdo()->exec(
+                "INSERT INTO settings (`key`, `value`) VALUES ('catalog_total_files', '{$total}')
+                 ON DUPLICATE KEY UPDATE `value` = '{$total}'"
+            );
+        } catch (\Exception $e) { /* ignore */ }
+    }
