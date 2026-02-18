@@ -44,7 +44,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.0.6"
+AGENT_VERSION = "2.0.8"
 BORG_PATH = None  # Resolved in get_system_info()
 
 # Ensure UTF-8 filesystem encoding for handling filenames with non-ASCII characters.
