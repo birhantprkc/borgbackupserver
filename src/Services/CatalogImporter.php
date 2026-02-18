@@ -380,3 +380,4 @@ class CatalogImporter
             );
         } catch (\Exception $e) { /* ignore */ }
     }
+}
