@@ -122,17 +122,19 @@ class CatalogImporter
 
             $loadStart = microtime(true);
 
+            // CONCURRENT allows concurrent reads on MyISAM during the insert,
+            // preventing table-level locks from blocking the entire server
             if ($useServerSide) {
                 try {
-                    $pdo->exec($loadSql('LOAD DATA INFILE'));
+                    $pdo->exec($loadSql('LOAD DATA CONCURRENT INFILE'));
                 } catch (\Exception $e) {
                     // FILE privilege missing or secure_file_priv issue — fall back to LOCAL
                     $loadMethod = 'client-side (LOCAL fallback)';
                     $log("Server-side LOAD DATA failed: " . $e->getMessage() . " — falling back to LOCAL");
-                    $pdo->exec($loadSql('LOAD DATA LOCAL INFILE'));
+                    $pdo->exec($loadSql('LOAD DATA CONCURRENT LOCAL INFILE'));
                 }
             } else {
-                $pdo->exec($loadSql('LOAD DATA LOCAL INFILE'));
+                $pdo->exec($loadSql('LOAD DATA CONCURRENT LOCAL INFILE'));
             }
 
             $loadElapsed = round(microtime(true) - $loadStart, 1);
@@ -342,12 +344,12 @@ class CatalogImporter
         try {
             if ($useServerSide) {
                 try {
-                    $pdo->exec($loadSql('LOAD DATA INFILE'));
+                    $pdo->exec($loadSql('LOAD DATA CONCURRENT INFILE'));
                 } catch (\Exception $e) {
-                    $pdo->exec($loadSql('LOAD DATA LOCAL INFILE'));
+                    $pdo->exec($loadSql('LOAD DATA CONCURRENT LOCAL INFILE'));
                 }
             } else {
-                $pdo->exec($loadSql('LOAD DATA LOCAL INFILE'));
+                $pdo->exec($loadSql('LOAD DATA CONCURRENT LOCAL INFILE'));
             }
             $log("Catalog dirs index: " . number_format(count($allDirs)) . " directories indexed");
         } catch (\Exception $e) {
