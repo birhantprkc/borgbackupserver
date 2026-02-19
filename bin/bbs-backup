@@ -49,8 +49,15 @@ chmod 750 "$BACKUP_DIR"
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
-# 1. MySQL dump
+# 1. MySQL dump (exclude MyISAM catalog tables to avoid lock contention)
 echo "Dumping MySQL database '$DB_NAME'..."
+IGNORE_TABLES=()
+for t in $(mysql -h "${DB_HOST:-localhost}" -u "$DB_USER" -p"$DB_PASS" -N -e \
+    "SELECT TABLE_NAME FROM information_schema.TABLES
+     WHERE TABLE_SCHEMA='$DB_NAME'
+       AND (TABLE_NAME LIKE 'file\_catalog\_%' OR TABLE_NAME LIKE 'catalog\_dirs\_%')" 2>/dev/null); do
+    IGNORE_TABLES+=(--ignore-table="$DB_NAME.$t")
+done
 mysqldump \
     -h "${DB_HOST:-localhost}" \
     -u "$DB_USER" \
@@ -58,6 +65,7 @@ mysqldump \
     --single-transaction \
     --routines \
     --triggers \
+    "${IGNORE_TABLES[@]}" \
     "$DB_NAME" > "$TMPDIR/dump.sql" 2>/dev/null
 
 # 2. Copy .env
