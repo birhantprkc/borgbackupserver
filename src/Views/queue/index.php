@@ -146,7 +146,7 @@
                         </td>
                         <td class="text-end" onclick="event.stopPropagation()">
                             <a href="/queue/<?= $job['id'] ?>" class="btn btn-sm btn-outline-secondary" title="View Details"><i class="bi bi-eye"></i></a>
-                            <?php if (in_array($job['status'], ['queued', 'sent'])): ?>
+                            <?php if (in_array($job['status'], ['queued', 'sent', 'running'])): ?>
                             <form method="POST" action="/queue/<?= $job['id'] ?>/cancel" class="d-inline"
                                   data-confirm="Cancel this job?">
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
@@ -292,7 +292,7 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
         }
 
         let actions = '<a href="/queue/' + job.id + '" class="btn btn-sm btn-outline-secondary" title="View Details"><i class="bi bi-eye"></i></a>';
-        if (job.status === 'queued' || job.status === 'sent') {
+        if (job.status === 'queued' || job.status === 'sent' || job.status === 'running') {
             actions += ' <form method="POST" action="/queue/' + job.id + '/cancel" class="d-inline" data-confirm="Cancel this job?">' +
                 '<input type="hidden" name="csrf_token" value="' + csrfToken + '">' +
                 '<button class="btn btn-sm btn-outline-danger" title="Cancel"><i class="bi bi-x-circle"></i></button></form>';

@@ -237,7 +237,7 @@ class QueueController extends Controller
         $this->verifyCsrf();
 
         $job = $this->db->fetchOne("SELECT * FROM backup_jobs WHERE id = ?", [$id]);
-        if (!$job || !in_array($job['status'], ['queued', 'sent'])) {
+        if (!$job || !in_array($job['status'], ['queued', 'sent', 'running'])) {
             $this->flash('danger', 'Job cannot be cancelled.');
             $this->redirect('/queue');
         }
