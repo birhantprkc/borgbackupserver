@@ -274,11 +274,7 @@
         return number_format($n);
     };
     $chStats = $clickhouseStats ?? null;
-    $donutColors = ['#36a2eb', '#ff6384', '#ffce56', '#4bc0c0', '#9966ff'];
-    $totalDiskAll = $chStats && !empty($chStats['top_repos']) ? array_sum(array_column($chStats['top_repos'], 'disk_bytes')) : 0;
-    $donutR = 58;
-    $donutC = 2 * M_PI * $donutR;
-    $donutOffset = 0;
+    $pieColors = ['#36a2eb', '#ff6384', '#ffce56', '#4bc0c0', '#9966ff', '#6c757d'];
     ?>
     <div class="<?= (!empty($storage) && $storage['disk_total'] !== null) ? 'col-lg-8' : 'col-12' ?>">
         <div class="card border-0 shadow-sm h-100">
@@ -286,16 +282,16 @@
                 <div class="d-flex">
                     <!-- Left: Stats + Table -->
                     <div class="flex-grow-1" style="min-width:0;">
-                        <!-- Files Tracked (left) + Archives/Jobs (right) -->
+                        <!-- ClickHouse Catalog header -->
                         <div class="d-flex align-items-center mb-2">
                             <div class="me-auto">
-                                <div class="text-muted small mb-0">Files Tracked</div>
-                                <div class="fw-bold" style="font-size:2.2rem;line-height:1;color:#e67e22;" id="stat-catalog"><?= $compactNum($mysqlStats['catalog_files']) ?></div>
+                                <div class="text-muted small mb-0">ClickHouse Catalog</div>
+                                <div class="fw-bold" style="font-size:2.2rem;line-height:1;color:#e67e22;"><span id="stat-catalog"><?= $compactNum($mysqlStats['catalog_files']) ?></span> <span style="font-size:1rem;color:#999;">Rows</span></div>
                             </div>
-                            <div class="d-flex gap-3 text-center" style="font-size:.75rem;">
+                            <div class="d-flex gap-4 text-center" style="font-size:.75rem;">
                                 <div>
                                     <div class="fw-bold" style="font-size:1rem;" id="stat-archives"><?= $compactNum($mysqlStats['archives']) ?></div>
-                                    <div class="text-muted">Archives</div>
+                                    <div class="text-muted">Recovery Points</div>
                                 </div>
                                 <div>
                                     <div class="fw-bold" style="font-size:1rem;" id="stat-completed-jobs"><?= $compactNum($mysqlStats['completed_jobs']) ?></div>
@@ -340,7 +336,7 @@
                                 <tbody>
                                     <?php foreach ($chStats['top_repos'] as $i => $repo): ?>
                                     <tr>
-                                        <td class="border-0 py-0 ps-0"><span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:<?= $donutColors[$i % 5] ?>;margin-right:4px;"></span><span class="fw-semibold"><?= htmlspecialchars($repo['name']) ?></span></td>
+                                        <td class="border-0 py-0 ps-0"><span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:<?= $pieColors[$i % 5] ?>;margin-right:4px;"></span><span class="fw-semibold"><?= htmlspecialchars($repo['name']) ?></span></td>
                                         <td class="border-0 py-0 text-end text-muted"><?= $compactNum($repo['rows']) ?> rows</td>
                                         <td class="border-0 py-0 text-end text-muted d-none d-xl-table-cell"><?= $repo['archives'] ?> archives</td>
                                         <td class="border-0 py-0 text-end text-muted"><?= \BBS\Services\ServerStats::formatBytes($repo['disk_bytes']) ?></td>
@@ -352,28 +348,20 @@
                         <?php endif; ?>
                         <?php endif; ?>
                     </div>
-                    <!-- Right: Large Donut Chart -->
+                    <!-- Right: Pie Chart -->
                     <?php if ($chStats && !empty($chStats['top_repos'])): ?>
-                    <div class="d-none d-md-flex align-items-center justify-content-center border-start ms-3 ps-3" style="flex:0 0 33%;max-width:33%;" id="ch-donut-wrap">
-                        <div style="width:200px;">
-                            <svg viewBox="0 0 150 150" style="width:100%;height:auto;transform:rotate(-90deg);">
-                                <circle cx="75" cy="75" r="<?= $donutR ?>" fill="none" class="donut-track" stroke-width="18"/>
-                                <?php foreach ($chStats['top_repos'] as $i => $repo):
-                                    $pct = $totalDiskAll > 0 ? $repo['disk_bytes'] / $totalDiskAll * 100 : 0;
-                                    $seg = $donutC * $pct / 100;
-                                ?>
-                                <?php if ($pct > 0): ?>
-                                <circle cx="75" cy="75" r="<?= $donutR ?>" fill="none" stroke="<?= $donutColors[$i % 5] ?>" stroke-width="18"
-                                    stroke-dasharray="<?= round($seg, 2) ?> <?= round($donutC - $seg, 2) ?>"
-                                    stroke-dashoffset="-<?= round($donutOffset, 2) ?>"/>
-                                <?php endif; ?>
-                                <?php $donutOffset += $seg; endforeach; ?>
-                            </svg>
-                            <div class="text-center" style="margin-top:-95px;position:relative;line-height:1.2;">
-                                <div class="fw-bold" style="font-size:1.3rem;"><?= \BBS\Services\ServerStats::formatBytes($totalDiskAll) ?></div>
-                                <div class="text-muted" style="font-size:.65rem;">catalog disk</div>
-                            </div>
-                        </div>
+                    <?php
+                        $top5Disk = array_sum(array_column($chStats['top_repos'], 'disk_bytes'));
+                        $otherDisk = max($chStats['disk_bytes'] - $top5Disk, 0);
+                        $pieLabels = array_map(fn($r) => $r['name'], $chStats['top_repos']);
+                        $pieData = array_map(fn($r) => $r['disk_bytes'], $chStats['top_repos']);
+                        if ($otherDisk > 0) {
+                            $pieLabels[] = 'Other';
+                            $pieData[] = $otherDisk;
+                        }
+                    ?>
+                    <div class="d-none d-md-flex align-items-center justify-content-center border-start ms-3 ps-3" style="flex:0 0 33%;max-width:33%;" id="ch-pie-wrap">
+                        <canvas id="catalogPieChart" style="max-width:200px;max-height:200px;"></canvas>
                     </div>
                     <?php endif; ?>
                 </div>
@@ -644,6 +632,44 @@ new Chart(ctx, {
     }
 });
 
+// Catalog Pie Chart
+const pieColors = ['#36a2eb','#ff6384','#ffce56','#4bc0c0','#9966ff','#6c757d'];
+const fmtBytes = b => { b = Number(b); if (b >= 1099511627776) return (b/1099511627776).toFixed(1)+' TB'; if (b >= 1073741824) return (b/1073741824).toFixed(1)+' GB'; if (b >= 1048576) return (b/1048576).toFixed(1)+' MB'; return (b/1024).toFixed(1)+' KB'; };
+<?php if ($chStats && !empty($chStats['top_repos'])): ?>
+const pieCanvas = document.getElementById('catalogPieChart');
+let catalogPieChart = null;
+if (pieCanvas) {
+    catalogPieChart = new Chart(pieCanvas.getContext('2d'), {
+        type: 'pie',
+        data: {
+            labels: <?= json_encode($pieLabels) ?>,
+            datasets: [{
+                data: <?= json_encode($pieData) ?>,
+                backgroundColor: pieColors.slice(0, <?= count($pieData) ?>),
+                borderWidth: isDark ? 0 : 1,
+                borderColor: isDark ? 'transparent' : '#fff',
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(ctx) {
+                            const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                            const pct = total > 0 ? (ctx.raw / total * 100).toFixed(1) : 0;
+                            return ctx.label + ': ' + fmtBytes(ctx.raw) + ' (' + pct + '%)';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+<?php endif; ?>
+
 // Helper: escape HTML
 function esc(str) { const d = document.createElement('div'); d.textContent = str ?? ''; return d.innerHTML; }
 
@@ -818,31 +844,26 @@ setInterval(function() {
                     const el = document.getElementById(id);
                     if (el) el.textContent = val;
                 }
-                // Top repos table + donut
+                // Top repos table + pie chart
                 const repoTable = document.getElementById('ch-top-repos');
-                const donutWrap = document.getElementById('ch-donut-wrap');
-                const colors = ['#36a2eb','#ff6384','#ffce56','#4bc0c0','#9966ff'];
                 if (repoTable && ch.top_repos) {
                     let html = '<tbody>';
                     ch.top_repos.forEach((r, i) => {
-                        html += '<tr><td class="border-0 py-0 ps-0"><span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:'+colors[i%5]+';margin-right:4px;"></span><span class="fw-semibold">'+esc(r.name)+'</span></td><td class="border-0 py-0 text-end text-muted">'+fmt(r.rows)+' rows</td><td class="border-0 py-0 text-end text-muted d-none d-xl-table-cell">'+r.archives+' archives</td><td class="border-0 py-0 text-end text-muted">'+fmtB(r.disk_bytes)+'</td></tr>';
+                        html += '<tr><td class="border-0 py-0 ps-0"><span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:'+pieColors[i%5]+';margin-right:4px;"></span><span class="fw-semibold">'+esc(r.name)+'</span></td><td class="border-0 py-0 text-end text-muted">'+fmt(r.rows)+' rows</td><td class="border-0 py-0 text-end text-muted d-none d-xl-table-cell">'+r.archives+' archives</td><td class="border-0 py-0 text-end text-muted">'+fmtB(r.disk_bytes)+'</td></tr>';
                     });
                     html += '</tbody>';
                     repoTable.innerHTML = html;
                 }
-                if (donutWrap && ch.top_repos) {
-                    const totalDisk = ch.top_repos.reduce((s, r) => s + Number(r.disk_bytes), 0);
-                    const R = 58, C = 2 * Math.PI * R;
-                    let svg = '<div style="width:200px;"><svg viewBox="0 0 150 150" style="width:100%;height:auto;transform:rotate(-90deg);"><circle cx="75" cy="75" r="'+R+'" fill="none" class="donut-track" stroke-width="18"/>';
-                    let off = 0;
-                    ch.top_repos.forEach((r, i) => {
-                        const pct = totalDisk > 0 ? r.disk_bytes / totalDisk * 100 : 0;
-                        const seg = C * pct / 100;
-                        if (pct > 0) svg += '<circle cx="75" cy="75" r="'+R+'" fill="none" stroke="'+colors[i%5]+'" stroke-width="18" stroke-dasharray="'+seg.toFixed(2)+' '+(C-seg).toFixed(2)+'" stroke-dashoffset="-'+off.toFixed(2)+'"/>';
-                        off += seg;
-                    });
-                    svg += '</svg><div class="text-center" style="margin-top:-95px;position:relative;line-height:1.2;"><div class="fw-bold" style="font-size:1.3rem;">'+fmtB(totalDisk)+'</div><div class="text-muted" style="font-size:.65rem;">catalog disk</div></div></div>';
-                    donutWrap.innerHTML = svg;
+                if (typeof catalogPieChart !== 'undefined' && catalogPieChart && ch.top_repos) {
+                    const top5Disk = ch.top_repos.reduce((s, r) => s + Number(r.disk_bytes), 0);
+                    const otherDisk = Math.max(Number(ch.disk_bytes) - top5Disk, 0);
+                    const labels = ch.top_repos.map(r => r.name);
+                    const data = ch.top_repos.map(r => Number(r.disk_bytes));
+                    if (otherDisk > 0) { labels.push('Other'); data.push(otherDisk); }
+                    catalogPieChart.data.labels = labels;
+                    catalogPieChart.data.datasets[0].data = data;
+                    catalogPieChart.data.datasets[0].backgroundColor = pieColors.slice(0, data.length);
+                    catalogPieChart.update('none');
                 }
             }
             <?php endif; ?>
