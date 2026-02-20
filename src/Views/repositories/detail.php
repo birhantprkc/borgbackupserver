@@ -379,12 +379,19 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                         </div>
                         <div class="flex-grow-1">
                             <h6 class="mb-1">Rebuild Catalog</h6>
-                            <p class="text-muted small mb-2">Rebuild the file catalog by re-scanning all recovery points in this repository. Backups for this repo will be paused until complete.</p>
-                            <form method="POST" action="/repositories/<?= $repo['id'] ?>/maintenance" class="d-inline" data-confirm="Rebuild the file catalog for this repository?&#10;&#10;This will re-scan all recovery points and rebuild the browse catalog. No backups will run for this repository until the rebuild completes.&#10;&#10;This may take a while for large repositories.">
+                            <p class="text-muted small mb-2">Re-scan recovery points to rebuild the browse catalog. <strong>Missing</strong> only indexes recovery points not yet in the catalog. <strong>Full</strong> drops all catalog data and re-indexes everything from scratch.</p>
+                            <form method="POST" action="/repositories/<?= $repo['id'] ?>/maintenance" class="d-inline" data-confirm="Rebuild missing catalog entries for this repository?&#10;&#10;This will scan for recovery points not yet indexed and add them to the catalog. Already-indexed data is preserved.">
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                 <input type="hidden" name="action" value="catalog_rebuild">
                                 <button type="submit" class="btn btn-sm btn-outline-info" <?= $activeJob ? 'disabled' : '' ?>>
-                                    <i class="bi bi-play-fill me-1"></i>Rebuild Catalog
+                                    <i class="bi bi-play-fill me-1"></i>Rebuild Missing
+                                </button>
+                            </form>
+                            <form method="POST" action="/repositories/<?= $repo['id'] ?>/maintenance" class="d-inline ms-2" data-confirm="FULL catalog rebuild for this repository?&#10;&#10;This will DROP all existing catalog data for this client and re-scan every recovery point from scratch.&#10;&#10;This may take a long time for large repositories.">
+                                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                <input type="hidden" name="action" value="catalog_rebuild_full">
+                                <button type="submit" class="btn btn-sm btn-outline-warning" <?= $activeJob ? 'disabled' : '' ?>>
+                                    <i class="bi bi-arrow-clockwise me-1"></i>Rebuild Full
                                 </button>
                             </form>
                         </div>

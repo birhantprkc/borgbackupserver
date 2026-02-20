@@ -123,7 +123,7 @@ try {
             // Concurrent rebuilds for same agent contend on borg repo locks
             $pending = $db->fetchOne(
                 "SELECT id FROM backup_jobs
-                 WHERE (repository_id = ? OR agent_id = ?) AND task_type = 'catalog_rebuild'
+                 WHERE (repository_id = ? OR agent_id = ?) AND task_type IN ('catalog_rebuild', 'catalog_rebuild_full')
                    AND status IN ('queued','sent','running')",
                 [$repoId, $agentId]
             );
@@ -689,7 +689,8 @@ foreach ($serverJobs as $sj) {
     }
 
     // Catalog rebuild — extract file listings from all archives to populate per-agent catalog table
-    if ($sj['task_type'] === 'catalog_rebuild') {
+    if ($sj['task_type'] === 'catalog_rebuild' || $sj['task_type'] === 'catalog_rebuild_full') {
+        $isFullRebuild = ($sj['task_type'] === 'catalog_rebuild_full');
         $crRepo = $db->fetchOne("SELECT * FROM repositories WHERE id = ?", [$sj['repository_id']]);
         if (!$crRepo) {
             $db->update('backup_jobs', [
@@ -754,28 +755,39 @@ foreach ($serverJobs as $sj) {
 
         $runAsUser = $sj['ssh_unix_user'] ?? null;
 
-        // Incremental rebuild: only process archives not already in ClickHouse
         $ch = \BBS\Core\ClickHouse::getInstance();
-        $existingArchiveIds = [];
-        try {
-            $existing = $ch->fetchAll("SELECT DISTINCT archive_id FROM file_catalog WHERE agent_id = {$agentId}");
-            $existingArchiveIds = array_flip(array_column($existing, 'archive_id'));
-        } catch (\Exception $e) { /* table may be empty */ }
 
-        // Filter to only missing archives
-        $missingArchives = array_filter($crArchives, fn($a) => !isset($existingArchiveIds[$a['id']]));
-        $missingArchives = array_values($missingArchives);
-
-        // Also clean up ClickHouse data for archives that were pruned from MySQL
-        $mysqlArchiveIds = array_column($crArchives, 'id');
-        $orphanedInCh = array_diff(array_keys($existingArchiveIds), $mysqlArchiveIds);
-        if (!empty($orphanedInCh)) {
-            $orphanList = implode(',', array_map('intval', $orphanedInCh));
+        if ($isFullRebuild) {
+            // Full rebuild: drop all existing data for this agent, then re-populate
             try {
-                $ch->exec("ALTER TABLE file_catalog DELETE WHERE agent_id = {$agentId} AND archive_id IN ({$orphanList})");
-                $ch->exec("ALTER TABLE catalog_dirs DELETE WHERE agent_id = {$agentId} AND archive_id IN ({$orphanList})");
-            } catch (\Exception $e) { /* non-fatal */ }
-            echo date('Y-m-d H:i:s') . " Catalog rebuild job #{$sj['id']}: cleaned up " . count($orphanedInCh) . " pruned archives from ClickHouse\n";
+                $ch->exec("ALTER TABLE file_catalog DROP PARTITION {$agentId}");
+                $ch->exec("ALTER TABLE catalog_dirs DROP PARTITION {$agentId}");
+            } catch (\Exception $e) { /* partitions may not exist yet */ }
+            $missingArchives = $crArchives;
+            echo date('Y-m-d H:i:s') . " Catalog rebuild job #{$sj['id']}: FULL rebuild — dropped existing data, re-indexing all {$totalArchives} archives\n";
+        } else {
+            // Incremental rebuild: only process archives not already in ClickHouse
+            $existingArchiveIds = [];
+            try {
+                $existing = $ch->fetchAll("SELECT DISTINCT archive_id FROM file_catalog WHERE agent_id = {$agentId}");
+                $existingArchiveIds = array_flip(array_column($existing, 'archive_id'));
+            } catch (\Exception $e) { /* table may be empty */ }
+
+            // Filter to only missing archives
+            $missingArchives = array_filter($crArchives, fn($a) => !isset($existingArchiveIds[$a['id']]));
+            $missingArchives = array_values($missingArchives);
+
+            // Also clean up ClickHouse data for archives that were pruned from MySQL
+            $mysqlArchiveIds = array_column($crArchives, 'id');
+            $orphanedInCh = array_diff(array_keys($existingArchiveIds), $mysqlArchiveIds);
+            if (!empty($orphanedInCh)) {
+                $orphanList = implode(',', array_map('intval', $orphanedInCh));
+                try {
+                    $ch->exec("ALTER TABLE file_catalog DELETE WHERE agent_id = {$agentId} AND archive_id IN ({$orphanList})");
+                    $ch->exec("ALTER TABLE catalog_dirs DELETE WHERE agent_id = {$agentId} AND archive_id IN ({$orphanList})");
+                } catch (\Exception $e) { /* non-fatal */ }
+                echo date('Y-m-d H:i:s') . " Catalog rebuild job #{$sj['id']}: cleaned up " . count($orphanedInCh) . " pruned archives from ClickHouse\n";
+            }
         }
 
         $totalToProcess = count($missingArchives);

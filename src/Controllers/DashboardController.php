@@ -78,6 +78,8 @@ class DashboardController extends Controller
                 'plugin_test' => 'Plugin Test',
                 'prune' => 'Prune',
                 'compact' => 'Compact',
+                'catalog_rebuild' => 'Catalog Rebuild',
+                'catalog_rebuild_full' => 'Catalog Rebuild (Full)',
                 default => ucfirst($job['task_type']),
             };
             if ($job['status'] === 'running') {

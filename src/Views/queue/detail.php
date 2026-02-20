@@ -29,7 +29,7 @@ function formatBytes($bytes) {
 }
 
 $isActive = in_array($job['status'], ['queued', 'sent', 'running']);
-$isServerSide = in_array($job['task_type'], ['prune', 'compact', 's3_sync', 's3_restore', 'catalog_sync', 'catalog_rebuild']);
+$isServerSide = in_array($job['task_type'], ['prune', 'compact', 's3_sync', 's3_restore', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full']);
 $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
 ?>
 
