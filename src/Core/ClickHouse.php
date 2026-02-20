@@ -67,21 +67,17 @@ class ClickHouse
         $cols = implode(', ', $columns);
         $sql = "INSERT INTO {$table} ({$cols}) FORMAT TabSeparated";
 
-        $fh = fopen($tsvFilePath, 'r');
-        if (!$fh) {
-            throw new \RuntimeException("Cannot open TSV file: {$tsvFilePath}");
+        $data = file_get_contents($tsvFilePath);
+        if ($data === false) {
+            throw new \RuntimeException("Cannot read TSV file: {$tsvFilePath}");
         }
-
-        $fileSize = filesize($tsvFilePath);
 
         $ch = curl_init();
         curl_setopt_array($ch, [
             CURLOPT_URL => $this->baseUrl . '/?database=' . urlencode($this->database)
                          . '&query=' . urlencode($sql),
             CURLOPT_POST => true,
-            CURLOPT_INFILE => $fh,
-            CURLOPT_INFILESIZE => $fileSize,
-            CURLOPT_UPLOAD => true,
+            CURLOPT_POSTFIELDS => $data,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER => ['Content-Type: application/octet-stream'],
             CURLOPT_TIMEOUT => 600,
@@ -90,7 +86,6 @@ class ClickHouse
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
         curl_close($ch);
-        fclose($fh);
 
         if ($error) {
             throw new \RuntimeException("ClickHouse TSV upload failed: {$error}");
