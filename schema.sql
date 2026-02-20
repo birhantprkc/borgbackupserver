@@ -228,23 +228,10 @@ CREATE TABLE archives (
 );
 
 -- --------------------------------------------------------
--- File Catalog (flat per-agent tables, created dynamically)
+-- File Catalog (ClickHouse)
 -- --------------------------------------------------------
--- Each agent gets a table named file_catalog_{agent_id}, created by
--- CatalogImporter::ensureTable(). Schema per table:
---
---   CREATE TABLE file_catalog_{agent_id} (
---       id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
---       archive_id INT NOT NULL,
---       path VARCHAR(768) NOT NULL,
---       file_name VARCHAR(255) NOT NULL,
---       parent_dir VARCHAR(768) NOT NULL DEFAULT '',
---       file_size BIGINT DEFAULT 0,
---       status CHAR(1) DEFAULT 'U',
---       mtime DATETIME NULL,
---       KEY idx_archive_parent (archive_id, parent_dir(200)),
---       KEY idx_archive_path (archive_id, path(200))
---   ) ENGINE=MyISAM;
+-- Catalog data (file_catalog, catalog_dirs) is stored in ClickHouse.
+-- See schema-clickhouse.sql for the ClickHouse table definitions.
 
 -- --------------------------------------------------------
 -- Logging & Settings

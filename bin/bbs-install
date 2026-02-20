@@ -256,8 +256,40 @@ ok "Apprise installed"
 a2enmod rewrite ssl headers > /dev/null 2>&1
 ok "Apache modules enabled (rewrite, ssl, headers)"
 
-# ─── Step 3: Create database ────────────────────────────────────────────────
-step "3/10" "Create database"
+# ─── Step 3: Install ClickHouse ──────────────────────────────────────────────
+step "3/11" "Install ClickHouse"
+
+if command -v clickhouse-server &>/dev/null; then
+    ok "ClickHouse already installed ($(clickhouse-client --version 2>/dev/null | head -1 || echo 'unknown'))"
+else
+    info "Adding ClickHouse repository..."
+    curl -fsSL 'https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key' | \
+        gpg --dearmor -o /usr/share/keyrings/clickhouse-keyring.gpg 2>/dev/null
+    echo "deb [signed-by=/usr/share/keyrings/clickhouse-keyring.gpg] https://packages.clickhouse.com/deb stable main" \
+        > /etc/apt/sources.list.d/clickhouse.list
+    apt-get update -qq 2>/dev/null
+
+    info "Installing ClickHouse server and client..."
+    DEBIAN_FRONTEND=noninteractive apt-get install -y clickhouse-server clickhouse-client > /dev/null 2>&1
+    systemctl enable --now clickhouse-server > /dev/null 2>&1
+
+    # Wait for startup
+    for i in {1..10}; do
+        curl -sf http://localhost:8123/ping >/dev/null 2>&1 && break
+        sleep 1
+    done
+
+    ok "ClickHouse installed and started"
+fi
+
+# Create ClickHouse database and tables
+info "Creating ClickHouse catalog tables..."
+clickhouse-client --query "CREATE DATABASE IF NOT EXISTS bbs" 2>/dev/null
+clickhouse-client -d bbs --multiquery < "$BBS_DIR/schema-clickhouse.sql" 2>/dev/null
+ok "ClickHouse catalog tables ready"
+
+# ─── Step 4: Create database ────────────────────────────────────────────────
+step "4/11" "Create database"
 
 # Check if database already exists
 if mysql -e "USE $DB_NAME" 2>/dev/null; then
@@ -280,7 +312,7 @@ mysql -e "GRANT ALL PRIVILEGES ON \`$DB_NAME\`.* TO '$DB_USER'@'localhost'; FLUS
 ok "Privileges granted"
 
 # ─── Step 4: Download BBS ───────────────────────────────────────────────────
-step "4/10" "Download BBS"
+step "5/11" "Download BBS"
 
 if [[ -d "$BBS_DIR/.git" ]]; then
     warn "Repository already cloned — fetching latest"
@@ -313,7 +345,7 @@ chown -R www-data:www-data "$BBS_DIR"
 ok "Ownership set to www-data"
 
 # ─── Step 5: Create system directories ───────────────────────────────────────
-step "5/10" "Create system directories"
+step "6/11" "Create system directories"
 
 mkdir -p /var/bbs/cache /var/bbs/home
 chown www-data:www-data /var/bbs /var/bbs/cache /var/bbs/home
@@ -322,7 +354,7 @@ ok "Created /var/bbs/cache"
 ok "Created /var/bbs/home (default storage path)"
 
 # ─── Step 6: SSH helper & sudoers ───────────────────────────────────────────
-step "6/10" "Install SSH helper & sudoers"
+step "7/11" "Install SSH helper & sudoers"
 
 cp "$BBS_DIR/bin/bbs-ssh-helper" /usr/local/bin/bbs-ssh-helper
 chmod 755 /usr/local/bin/bbs-ssh-helper
@@ -359,7 +391,7 @@ if [ -d "$BORG_PUBLIC" ]; then
 fi
 
 # ─── Step 7: Configure Apache ───────────────────────────────────────────────
-step "7/10" "Configure Apache"
+step "8/11" "Configure Apache"
 
 a2dissite 000-default > /dev/null 2>&1 || true
 
@@ -404,7 +436,7 @@ systemctl reload apache2
 ok "Apache reloaded"
 
 # ─── Step 8: SSL certificate ────────────────────────────────────────────────
-step "8/10" "SSL certificate"
+step "9/11" "SSL certificate"
 
 if [[ "$NO_SSL" == true ]]; then
     ok "Skipped (--no-ssl)"
@@ -422,7 +454,7 @@ else
 fi
 
 # ─── Step 9: Setup cron ─────────────────────────────────────────────────────
-step "9/10" "Setup cron"
+step "10/11" "Setup cron"
 
 touch /var/log/bbs-scheduler.log
 chown www-data:www-data /var/log/bbs-scheduler.log
@@ -431,7 +463,7 @@ CRON_LINE="* * * * * /usr/bin/php $BBS_DIR/scheduler.php >> /var/log/bbs-schedul
 ok "Scheduler cron installed"
 
 # ─── Step 10: Set timezone ──────────────────────────────────────────────────
-step "10/10" "Set server timezone to UTC"
+step "11/11" "Set server timezone to UTC"
 
 ln -sf /usr/share/zoneinfo/UTC /etc/localtime
 echo "UTC" > /etc/timezone

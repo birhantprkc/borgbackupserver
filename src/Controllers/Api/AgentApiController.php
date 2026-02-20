@@ -657,34 +657,37 @@ class AgentApiController extends Controller
         }
 
         $agentId = (int) $agent['id'];
-        $table = "file_catalog_{$agentId}";
+        $ch = \BBS\Core\ClickHouse::getInstance();
 
-        // Ensure per-agent table exists
-        CatalogImporter::ensureTable($this->db, $agentId);
-
-        // Batch insert directly into flat per-agent table
-        $placeholders = [];
-        $values = [];
-        foreach ($files as $file) {
-            $path = $file['path'] ?? '';
-            if (empty($path)) continue;
-
-            $placeholders[] = '(?, ?, ?, ?, ?, ?, ?)';
-            $values[] = $archiveId;
-            $values[] = $path;
-            $values[] = basename($path);
-            $values[] = dirname($path);
-            $values[] = (int) ($file['size'] ?? 0);
-            $values[] = $file['status'] ?? 'U';
-            $values[] = $file['mtime'] ?? null;
-        }
-
+        // Build TSV and upload to ClickHouse
+        $escape = fn(string $s) => str_replace(["\t", "\n", "\\"], ["\\t", "\\n", "\\\\"], $s);
+        $tsvFile = sys_get_temp_dir() . "/catalog_api_{$agentId}_{$archiveId}_" . getmypid() . '.tsv';
+        $fh = fopen($tsvFile, 'w');
         $batchSize = 0;
-        if (!empty($placeholders)) {
-            $sql = "INSERT INTO `{$table}` (archive_id, path, file_name, parent_dir, file_size, status, mtime) VALUES "
-                 . implode(', ', $placeholders);
-            $this->db->query($sql, $values);
-            $batchSize = count($placeholders);
+
+        if ($fh) {
+            foreach ($files as $file) {
+                $path = $file['path'] ?? '';
+                if (empty($path)) continue;
+
+                $status = substr($file['status'] ?? 'U', 0, 1);
+                $mtime = $file['mtime'] ?? '\\N';
+                fwrite($fh, "{$agentId}\t{$archiveId}\t{$escape($path)}\t{$escape(basename($path))}\t{$escape(dirname($path))}\t" . (int) ($file['size'] ?? 0) . "\t{$status}\t{$mtime}\n");
+                $batchSize++;
+            }
+            fclose($fh);
+
+            if ($batchSize > 0) {
+                try {
+                    $ch->insertTsv('file_catalog', $tsvFile, [
+                        'agent_id', 'archive_id', 'path', 'file_name', 'parent_dir', 'file_size', 'status', 'mtime'
+                    ]);
+                } finally {
+                    @unlink($tsvFile);
+                }
+            } else {
+                @unlink($tsvFile);
+            }
         }
 
         $isDone = !empty($input['done']);
@@ -693,12 +696,13 @@ class AgentApiController extends Controller
             $archiveRow = $this->db->fetchOne("SELECT backup_job_id FROM archives WHERE id = ?", [$archiveId]);
             $logJobId = $archiveRow['backup_job_id'] ?? null;
 
-            $totalIndexed = (int) $this->db->fetchOne(
-                "SELECT COUNT(*) as cnt FROM `{$table}` WHERE archive_id = ?",
-                [$archiveId]
-            )['cnt'];
+            $totalRow = $ch->fetchOne(
+                "SELECT count() as cnt FROM file_catalog WHERE agent_id = ? AND archive_id = ?",
+                [$agentId, $archiveId]
+            );
+            $totalIndexed = (int) ($totalRow['cnt'] ?? 0);
 
-            // Build catalog_dirs index from the uploaded data
+            // Build catalog_dirs index from ClickHouse data
             $this->buildDirsFromCatalog($agentId, $archiveId);
 
             $this->db->insert('server_log', [
@@ -713,30 +717,24 @@ class AgentApiController extends Controller
     }
 
     /**
-     * POST /api/agent/heartbeat
-     * Simple health check — authentication already updates last_heartbeat.
-     */
-    /**
-     * Build catalog_dirs index from file_catalog data for a given archive.
+     * Build catalog_dirs index from file_catalog data in ClickHouse.
      */
     private function buildDirsFromCatalog(int $agentId, int $archiveId): void
     {
-        CatalogImporter::ensureDirsTable($this->db, $agentId);
-
-        $table = "file_catalog_{$agentId}";
-        $dirsTable = "catalog_dirs_{$agentId}";
-        $pdo = $this->db->getPdo();
+        $ch = \BBS\Core\ClickHouse::getInstance();
 
         // Remove old dir entries for this archive
-        $pdo->exec("DELETE FROM `{$dirsTable}` WHERE archive_id = " . (int) $archiveId);
+        try {
+            $ch->exec("ALTER TABLE catalog_dirs DELETE WHERE agent_id = {$agentId} AND archive_id = {$archiveId} SETTINGS mutations_sync = 1");
+        } catch (\Exception $e) { /* ignore */ }
 
-        // Get dir stats grouped by parent_dir (exact indexed reads)
-        $dirRows = $this->db->fetchAll("
-            SELECT parent_dir, COUNT(*) as file_count, SUM(file_size) as total_size
-            FROM `{$table}`
-            WHERE archive_id = ? AND status != 'D'
+        // Get dir stats grouped by parent_dir from ClickHouse
+        $dirRows = $ch->fetchAll("
+            SELECT parent_dir, count() as file_count, sum(file_size) as total_size
+            FROM file_catalog
+            WHERE agent_id = ? AND archive_id = ? AND status != 'D'
             GROUP BY parent_dir
-        ", [$archiveId]);
+        ", [$agentId, $archiveId]);
 
         $allDirs = [];
         foreach ($dirRows as $d) {
@@ -759,26 +757,26 @@ class AgentApiController extends Controller
 
         if (empty($allDirs)) return;
 
-        $values = [];
-        $params = [];
+        // Write dirs TSV and upload to ClickHouse
+        $escape = fn(string $s) => str_replace(["\t", "\n", "\\"], ["\\t", "\\n", "\\\\"], $s);
+        $dirsTsv = sys_get_temp_dir() . "/catalog_dirs_api_{$agentId}_{$archiveId}_" . getmypid() . '.tsv';
+        $fh = fopen($dirsTsv, 'w');
+        if (!$fh) return;
+
         foreach ($allDirs as $dirPath => [$fc, $sz]) {
             $parent = dirname($dirPath);
             if ($parent === '.') $parent = '/';
             $name = basename($dirPath);
-            $values[] = "(?, ?, ?, ?, ?, ?)";
-            array_push($params, $archiveId, $dirPath, $parent, $name, $fc, $sz);
+            fwrite($fh, "{$agentId}\t{$archiveId}\t{$escape($dirPath)}\t{$escape($parent)}\t{$escape($name)}\t{$fc}\t{$sz}\n");
+        }
+        fclose($fh);
 
-            if (count($values) >= 1000) {
-                $pdo->prepare("INSERT INTO `{$dirsTable}` (archive_id, dir_path, parent_dir, name, file_count, total_size) VALUES " . implode(',', $values))
-                    ->execute($params);
-                $values = [];
-                $params = [];
-            }
-        }
-        if (!empty($values)) {
-            $pdo->prepare("INSERT INTO `{$dirsTable}` (archive_id, dir_path, parent_dir, name, file_count, total_size) VALUES " . implode(',', $values))
-                ->execute($params);
-        }
+        try {
+            $ch->insertTsv('catalog_dirs', $dirsTsv, [
+                'agent_id', 'archive_id', 'dir_path', 'parent_dir', 'name', 'file_count', 'total_size'
+            ]);
+        } catch (\Exception $e) { /* ignore */ }
+        @unlink($dirsTsv);
     }
 
     public function heartbeat(): void

@@ -210,7 +210,7 @@ class ServerStats
         $db = \BBS\Core\Database::getInstance();
 
         // Read cached catalog count from settings (updated by CatalogImporter)
-        // Avoids querying INFORMATION_SCHEMA which triggers MyISAM table checks
+        // Avoids querying ClickHouse on every dashboard load
         $catalogRow = $db->fetchOne(
             "SELECT `value` FROM settings WHERE `key` = 'catalog_total_files'"
         );
@@ -280,14 +280,10 @@ class ServerStats
     {
         $db = \BBS\Core\Database::getInstance();
 
-        // Total size of all tables, excluding MyISAM catalog tables which
-        // trigger slow 'Checking table' operations on INFORMATION_SCHEMA queries
         $row = $db->fetchOne("
             SELECT SUM(data_length + index_length) AS db_bytes
             FROM information_schema.TABLES
             WHERE table_schema = DATABASE()
-              AND TABLE_NAME NOT LIKE 'file\\_catalog\\_%'
-              AND TABLE_NAME NOT LIKE 'catalog\\_dirs\\_%'
         ");
         $dbBytes = (int) ($row['db_bytes'] ?? 0);
 

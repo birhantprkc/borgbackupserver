@@ -487,47 +487,54 @@ class S3SyncService
             $archiveNameById[$a['id']] = $a['archive_name'];
         }
 
-        // Stream file catalog in batches to handle millions of files
-        $catalogTable = "file_catalog_{$agent['id']}";
+        // Stream file catalog from ClickHouse in batches
+        $ch = \BBS\Core\ClickHouse::getInstance();
+        $agentId = (int) $agent['id'];
         fwrite($fp, '  "file_catalog": [' . "\n");
 
         $batchSize = 10000;
-        $offset = 0;
+        $chOffset = 0;
         $firstFile = true;
         $fileCount = 0;
 
-        do {
-            $files = $this->db->fetchAll(
-                "SELECT archive_id, path, file_size, mtime
-                 FROM `{$catalogTable}`
-                 WHERE archive_id IN (SELECT id FROM archives WHERE repository_id = ?)
-                 ORDER BY archive_id, path
-                 LIMIT ? OFFSET ?",
-                [$repo['id'], $batchSize, $offset]
-            );
+        // Get archive IDs for this repo
+        $archiveIdList = array_keys($archiveNameById);
+        if (!empty($archiveIdList)) {
+            $idListStr = implode(',', array_map('intval', $archiveIdList));
 
-            foreach ($files as $file) {
-                $archiveName = $archiveNameById[$file['archive_id']] ?? null;
-                if ($archiveName) {
-                    $fileJson = json_encode([
-                        'archive' => $archiveName,
-                        'path' => $file['path'],
-                        'size' => (int) $file['file_size'],
-                        'mtime' => $file['mtime'],
-                    ], JSON_UNESCAPED_SLASHES);
+            do {
+                $files = $ch->fetchAll(
+                    "SELECT archive_id, path, file_size,
+                            formatDateTime(mtime, '%Y-%m-%d %H:%i:%S') as mtime
+                     FROM file_catalog
+                     WHERE agent_id = {$agentId}
+                       AND archive_id IN ({$idListStr})
+                     ORDER BY archive_id, path
+                     LIMIT {$batchSize} OFFSET {$chOffset}"
+                );
 
-                    // Add comma before all entries except the first
-                    if (!$firstFile) {
-                        fwrite($fp, ",\n");
+                foreach ($files as $file) {
+                    $archiveName = $archiveNameById[$file['archive_id']] ?? null;
+                    if ($archiveName) {
+                        $fileJson = json_encode([
+                            'archive' => $archiveName,
+                            'path' => $file['path'],
+                            'size' => (int) $file['file_size'],
+                            'mtime' => $file['mtime'],
+                        ], JSON_UNESCAPED_SLASHES);
+
+                        if (!$firstFile) {
+                            fwrite($fp, ",\n");
+                        }
+                        fwrite($fp, "    {$fileJson}");
+                        $firstFile = false;
+                        $fileCount++;
                     }
-                    fwrite($fp, "    {$fileJson}");
-                    $firstFile = false;
-                    $fileCount++;
                 }
-            }
 
-            $offset += $batchSize;
-        } while (count($files) === $batchSize);
+                $chOffset += $batchSize;
+            } while (count($files) === $batchSize);
+        }
 
         fwrite($fp, "\n  ]\n");
         fwrite($fp, "}\n");
@@ -766,44 +773,42 @@ class S3SyncService
             $totalSize += $ar['deduplicated_size'] ?? 0;
         }
 
-        // Get agent_id for per-agent catalog table
+        // Get agent_id for ClickHouse catalog
         $repo = $this->db->fetchOne("SELECT agent_id FROM repositories WHERE id = ?", [$repoId]);
         $agentId = (int) ($repo['agent_id'] ?? 0);
 
-        // Ensure per-agent catalog table exists
-        CatalogImporter::ensureTable($this->db, $agentId);
-        $catalogTable = "file_catalog_{$agentId}";
-
-        // Import file catalog in batches
+        // Import file catalog via ClickHouse TSV upload
+        $ch = \BBS\Core\ClickHouse::getInstance();
+        $escape = fn(string $s) => str_replace(["\t", "\n", "\\"], ["\\t", "\\n", "\\\\"], $s);
         $fileCount = 0;
         $fileCatalog = $manifest['file_catalog'] ?? [];
-        $batchSize = 1000;
 
-        for ($i = 0; $i < count($fileCatalog); $i += $batchSize) {
-            $batch = array_slice($fileCatalog, $i, $batchSize);
-            $placeholders = [];
-            $values = [];
+        if (!empty($fileCatalog)) {
+            $tsvFile = sys_get_temp_dir() . "/s3_import_catalog_{$agentId}_" . getmypid() . '.tsv';
+            $tsvFh = fopen($tsvFile, 'w');
 
-            foreach ($batch as $file) {
+            foreach ($fileCatalog as $file) {
                 $archiveId = $archiveNameToId[$file['archive']] ?? null;
                 $path = $file['path'] ?? '';
                 if ($archiveId && $path) {
-                    $placeholders[] = '(?, ?, ?, ?, ?, ?)';
-                    $values[] = $archiveId;
-                    $values[] = $path;
-                    $values[] = basename($path);
-                    $values[] = dirname($path);
-                    $values[] = (int) ($file['size'] ?? 0);
-                    $values[] = $file['mtime'] ?? null;
+                    $mtime = $file['mtime'] ?? '\\N';
+                    fwrite($tsvFh, "{$agentId}\t{$archiveId}\t{$escape($path)}\t{$escape(basename($path))}\t{$escape(dirname($path))}\t" . ((int) ($file['size'] ?? 0)) . "\tU\t{$mtime}\n");
                     $fileCount++;
                 }
             }
+            fclose($tsvFh);
 
-            if (!empty($placeholders)) {
-                $sql = "INSERT INTO `{$catalogTable}` (archive_id, path, file_name, parent_dir, file_size, mtime) VALUES "
-                     . implode(', ', $placeholders);
-                $this->db->query($sql, $values);
+            if ($fileCount > 0) {
+                try {
+                    $ch->insertTsv('file_catalog', $tsvFile, [
+                        'agent_id', 'archive_id', 'path', 'file_name', 'parent_dir', 'file_size', 'status', 'mtime'
+                    ]);
+                } catch (\Exception $e) {
+                    @unlink($tsvFile);
+                    // Non-fatal — archives are still imported
+                }
             }
+            @unlink($tsvFile);
         }
 
         // Update repository stats

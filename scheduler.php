@@ -95,6 +95,39 @@ foreach ($created as $job) {
     echo date('Y-m-d H:i:s') . " Queued: {$job['plan']} (job #{$job['job_id']}, agent #{$job['agent_id']})\n";
 }
 
+// Step 3b: Auto-queue catalog rebuilds if ClickHouse has no data for repos with archives
+try {
+    $ch = \BBS\Core\ClickHouse::getInstance();
+    if ($ch->isAvailable()) {
+        $repos = $db->fetchAll(
+            "SELECT r.id, r.agent_id FROM repositories r
+             WHERE EXISTS (SELECT 1 FROM archives WHERE repository_id = r.id)"
+        );
+        foreach ($repos as $repo) {
+            $chRow = $ch->fetchOne("SELECT count() as cnt FROM file_catalog WHERE agent_id = ?", [(int) $repo['agent_id']]);
+            if (($chRow['cnt'] ?? 0) == 0) {
+                $pending = $db->fetchOne(
+                    "SELECT id FROM backup_jobs
+                     WHERE repository_id = ? AND task_type = 'catalog_rebuild'
+                       AND status IN ('queued','sent','running')",
+                    [$repo['id']]
+                );
+                if (!$pending) {
+                    $db->insert('backup_jobs', [
+                        'agent_id' => $repo['agent_id'],
+                        'repository_id' => $repo['id'],
+                        'task_type' => 'catalog_rebuild',
+                        'status' => 'queued',
+                    ]);
+                    echo date('Y-m-d H:i:s') . " Auto-queued catalog_rebuild for repo #{$repo['id']} (ClickHouse empty)\n";
+                }
+            }
+        }
+    }
+} catch (\Exception $e) {
+    // ClickHouse not available yet — skip auto-rebuild
+}
+
 // Step 4: Process queue - promote queued jobs to sent
 $queueManager = new QueueManager();
 $promoted = $queueManager->processQueue();
@@ -713,25 +746,14 @@ foreach ($serverJobs as $sj) {
 
         $runAsUser = $sj['ssh_unix_user'] ?? null;
 
-        // Create temp rebuild tables (build into these, then swap on success)
-        $catalogTable = "file_catalog_{$agentId}";
-        $rebuildTable = "file_catalog_{$agentId}_rebuild";
-        $dirsTable = "catalog_dirs_{$agentId}";
-        $pdo = $db->getPdo();
+        // ClickHouse: drop all existing data for this agent, then re-populate
+        $ch = \BBS\Core\ClickHouse::getInstance();
+        try {
+            $ch->exec("ALTER TABLE file_catalog DROP PARTITION {$agentId}");
+            $ch->exec("ALTER TABLE catalog_dirs DROP PARTITION {$agentId}");
+        } catch (\Exception $e) { /* partitions may not exist yet */ }
 
-        $pdo->exec("DROP TABLE IF EXISTS `{$rebuildTable}`");
-        $pdo->exec("CREATE TABLE `{$rebuildTable}` (
-            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            archive_id INT NOT NULL,
-            path VARCHAR(768) NOT NULL,
-            file_name VARCHAR(255) NOT NULL,
-            parent_dir VARCHAR(768) NOT NULL DEFAULT '',
-            file_size BIGINT DEFAULT 0,
-            status CHAR(1) DEFAULT 'U',
-            mtime DATETIME NULL,
-            KEY idx_archive_parent (archive_id, parent_dir(200)),
-            KEY idx_archive_path (archive_id, path(200))
-        ) ENGINE=MyISAM");
+        $escape = fn(string $s) => str_replace(["\t", "\n", "\\"], ["\\t", "\\n", "\\\\"], $s);
 
         $processedArchives = 0;
         $totalFiles = 0;
@@ -795,57 +817,85 @@ foreach ($serverJobs as $sj) {
                 continue;
             }
 
-            // Parse JSON lines output and insert into rebuild table
-            $files = [];
+            // Parse JSON lines output and write to TSV for ClickHouse
+            $tsvFile = sys_get_temp_dir() . "/catalog_rebuild_{$agentId}_{$crArchive['id']}_" . getmypid() . '.tsv';
+            $tsvFh = fopen($tsvFile, 'w');
+            $archiveFileCount = 0;
+            $dirStats = []; // dirPath => [file_count, total_size]
+
             $lines = array_filter(explode("\n", trim($crOutput)));
             foreach ($lines as $line) {
                 $fileData = json_decode($line, true);
                 if ($fileData && isset($fileData['path'])) {
-                    // Only include files (not directories)
                     if (($fileData['type'] ?? '') !== 'd') {
-                        // Ensure path starts with / (borg outputs relative paths)
                         $path = $fileData['path'];
                         if ($path !== '' && $path[0] !== '/') {
                             $path = '/' . $path;
                         }
-                        $files[] = [
-                            'path' => $path,
-                            'size' => $fileData['size'] ?? 0,
-                            'mtime' => isset($fileData['mtime']) ? date('Y-m-d H:i:s', strtotime($fileData['mtime'])) : null,
-                        ];
+                        $size = (int) ($fileData['size'] ?? 0);
+                        $mtime = isset($fileData['mtime']) ? date('Y-m-d H:i:s', strtotime($fileData['mtime'])) : '\\N';
+                        $rawParent = dirname($path);
+
+                        fwrite($tsvFh, "{$agentId}\t{$crArchive['id']}\t{$escape($path)}\t{$escape(basename($path))}\t{$escape($rawParent)}\t{$size}\tU\t{$mtime}\n");
+                        $archiveFileCount++;
+
+                        if (!isset($dirStats[$rawParent])) {
+                            $dirStats[$rawParent] = [0, 0];
+                        }
+                        $dirStats[$rawParent][0]++;
+                        $dirStats[$rawParent][1] += $size;
                     }
                 }
             }
+            fclose($tsvFh);
 
-            if (!empty($files)) {
-                // Batch insert into rebuild table
-                $placeholders = [];
-                $values = [];
-                foreach ($files as $file) {
-                    $placeholders[] = '(?, ?, ?, ?, ?, ?, ?)';
-                    $values[] = $crArchive['id'];
-                    $values[] = $file['path'];
-                    $values[] = basename($file['path']);
-                    $values[] = dirname($file['path']);
-                    $values[] = (int) $file['size'];
-                    $values[] = 'U';
-                    $values[] = $file['mtime'];
+            if ($archiveFileCount > 0) {
+                try {
+                    $ch->insertTsv('file_catalog', $tsvFile, [
+                        'agent_id', 'archive_id', 'path', 'file_name', 'parent_dir', 'file_size', 'status', 'mtime'
+                    ]);
+                } catch (\Exception $e) {
+                    $errors[] = "Archive {$crArchive['archive_name']}: ClickHouse insert failed: " . $e->getMessage();
+                    @unlink($tsvFile);
+                    continue;
                 }
+                $totalFiles += $archiveFileCount;
 
-                $batchSize = 500;
-                $chunks = array_chunk($placeholders, $batchSize);
-                $valueChunks = array_chunk($values, $batchSize * 7);
-                foreach ($chunks as $i => $chunk) {
-                    $sql = "INSERT INTO `{$rebuildTable}` (archive_id, path, file_name, parent_dir, file_size, status, mtime) VALUES "
-                         . implode(', ', $chunk);
-                    $db->query($sql, $valueChunks[$i]);
+                // Build dirs for this archive
+                if (!empty($dirStats)) {
+                    $allDirs = [];
+                    foreach ($dirStats as $dirPath => [$fc, $sz]) {
+                        if (!isset($allDirs[$dirPath])) $allDirs[$dirPath] = [0, 0];
+                        $allDirs[$dirPath][0] += $fc;
+                        $allDirs[$dirPath][1] += $sz;
+                        $p = dirname($dirPath);
+                        while ($p !== '/' && $p !== '.' && !isset($allDirs[$p])) {
+                            $allDirs[$p] = [0, 0];
+                            $p = dirname($p);
+                        }
+                    }
+                    unset($allDirs['/']);
+
+                    $dirsTsv = sys_get_temp_dir() . "/catalog_dirs_{$agentId}_{$crArchive['id']}_" . getmypid() . '.tsv';
+                    $dirsFh = fopen($dirsTsv, 'w');
+                    foreach ($allDirs as $dPath => [$dFc, $dSz]) {
+                        $dParent = dirname($dPath);
+                        if ($dParent === '.') $dParent = '/';
+                        $dName = basename($dPath);
+                        fwrite($dirsFh, "{$agentId}\t{$crArchive['id']}\t{$escape($dPath)}\t{$escape($dParent)}\t{$escape($dName)}\t{$dFc}\t{$dSz}\n");
+                    }
+                    fclose($dirsFh);
+                    try {
+                        $ch->insertTsv('catalog_dirs', $dirsTsv, [
+                            'agent_id', 'archive_id', 'dir_path', 'parent_dir', 'name', 'file_count', 'total_size'
+                        ]);
+                    } catch (\Exception $e) { /* non-fatal */ }
+                    @unlink($dirsTsv);
                 }
-
-                $totalFiles += count($files);
             }
+            @unlink($tsvFile);
 
             $processedArchives++;
-            $archiveFileCount = count($files);
 
             // Update progress for UI progress bar (files_processed = archives processed)
             $db->update('backup_jobs', [
@@ -867,43 +917,8 @@ foreach ($serverJobs as $sj) {
         $duration = max(0, strtotime($crNow) - strtotime($startedAt));
 
         if (empty($errors)) {
-            // Swap: drop old tables, rename rebuild table to production
-            $pdo->exec("DROP TABLE IF EXISTS `{$catalogTable}`");
-            $pdo->exec("RENAME TABLE `{$rebuildTable}` TO `{$catalogTable}`");
-
-            // Rebuild catalog_dirs from the new catalog data
-            $pdo->exec("DROP TABLE IF EXISTS `{$dirsTable}`");
-            $pdo->exec("CREATE TABLE `{$dirsTable}` (
-                archive_id INT NOT NULL,
-                dir_path VARCHAR(768) NOT NULL,
-                parent_dir VARCHAR(768) NOT NULL,
-                name VARCHAR(255) NOT NULL,
-                file_count INT NOT NULL DEFAULT 0,
-                total_size BIGINT NOT NULL DEFAULT 0,
-                KEY idx_lookup (archive_id, parent_dir(200)),
-                KEY idx_dir (archive_id, dir_path(200))
-            ) ENGINE=MyISAM");
-
-            $pdo->exec("INSERT INTO `{$dirsTable}` (archive_id, dir_path, parent_dir, name, file_count, total_size)
-                SELECT archive_id, parent_dir,
-                       CASE WHEN parent_dir = '/' THEN '' ELSE SUBSTRING_INDEX(TRIM(TRAILING '/' FROM parent_dir), '/', -1) END,
-                       CASE WHEN parent_dir = '/' THEN '/' ELSE SUBSTRING_INDEX(TRIM(TRAILING '/' FROM parent_dir), '/', -1) END,
-                       COUNT(*), SUM(file_size)
-                FROM `{$catalogTable}`
-                WHERE parent_dir != ''
-                GROUP BY archive_id, parent_dir");
-
-            // Fix parent_dir column in catalog_dirs (dirname of dir_path)
-            $pdo->exec("UPDATE `{$dirsTable}` SET
-                parent_dir = CASE
-                    WHEN dir_path = '/' THEN ''
-                    WHEN SUBSTRING_INDEX(dir_path, '/', -1) = SUBSTRING(dir_path, 2) THEN '/'
-                    ELSE LEFT(dir_path, LENGTH(dir_path) - LENGTH(SUBSTRING_INDEX(dir_path, '/', -1)) - 1)
-                END,
-                name = CASE
-                    WHEN dir_path = '/' THEN '/'
-                    ELSE SUBSTRING_INDEX(TRIM(TRAILING '/' FROM dir_path), '/', -1)
-                END");
+            // Update cached catalog total for dashboard
+            \BBS\Services\CatalogImporter::updateCachedTotal($db);
 
             $db->update('backup_jobs', [
                 'status' => 'completed',
@@ -919,9 +934,6 @@ foreach ($serverJobs as $sj) {
             ]);
             echo date('Y-m-d H:i:s') . " Catalog rebuild job #{$sj['id']} completed: {$processedArchives} archives, {$totalFiles} files\n";
         } else {
-            // Cleanup temp table on failure
-            $pdo->exec("DROP TABLE IF EXISTS `{$rebuildTable}`");
-
             $errorSummary = count($errors) . " errors: " . implode('; ', array_slice($errors, 0, 3));
             $db->update('backup_jobs', [
                 'status' => 'failed',
@@ -1153,13 +1165,13 @@ foreach ($serverJobs as $sj) {
             foreach ($dbArchives as $dbA) {
                 if (!in_array($dbA['archive_name'], $borgArchives, true)) {
                     $db->delete('archives', 'id = ?', [$dbA['id']]);
-                    // Clean up catalog entries for the pruned archive
-                    $catalogTable = "file_catalog_{$agentId}";
-                    $dirsTable = "catalog_dirs_{$agentId}";
+                    // Clean up catalog entries for the pruned archive in ClickHouse
                     try {
-                        $db->getPdo()->exec("DELETE FROM `{$catalogTable}` WHERE archive_id = " . (int) $dbA['id']);
-                        $db->getPdo()->exec("DELETE FROM `{$dirsTable}` WHERE archive_id = " . (int) $dbA['id']);
-                    } catch (\Exception $e) { /* table may not exist yet */ }
+                        $chPrune = \BBS\Core\ClickHouse::getInstance();
+                        $archiveIdInt = (int) $dbA['id'];
+                        $chPrune->exec("ALTER TABLE file_catalog DELETE WHERE agent_id = {$agentId} AND archive_id = {$archiveIdInt}");
+                        $chPrune->exec("ALTER TABLE catalog_dirs DELETE WHERE agent_id = {$agentId} AND archive_id = {$archiveIdInt}");
+                    } catch (\Exception $e) { /* ClickHouse may not be available */ }
                     $removedNames[] = $dbA['archive_name'];
                     $removed++;
                 }

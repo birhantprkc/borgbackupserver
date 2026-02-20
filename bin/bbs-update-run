@@ -34,9 +34,41 @@ chmod 755 /usr/local/bin/bbs-ssh-helper
 /usr/local/bin/bbs-ssh-helper install-gate
 /usr/local/bin/bbs-ssh-helper update-all-keys
 
-# 5. Enable MySQL local_infile for fast catalog imports
-echo "[5/12] Enabling MySQL local_infile..."
-/usr/local/bin/bbs-ssh-helper enable-local-infile "$BBS_DIR"
+# 5. Install/update ClickHouse for catalog storage
+echo "[5/12] Setting up ClickHouse..."
+if ! command -v clickhouse-server &>/dev/null; then
+    echo "  Installing ClickHouse..."
+    curl -fsSL 'https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key' | \
+        gpg --dearmor -o /usr/share/keyrings/clickhouse-keyring.gpg 2>/dev/null
+    echo "deb [signed-by=/usr/share/keyrings/clickhouse-keyring.gpg] https://packages.clickhouse.com/deb stable main" \
+        > /etc/apt/sources.list.d/clickhouse.list
+    apt-get update -qq 2>/dev/null
+    DEBIAN_FRONTEND=noninteractive apt-get install -y clickhouse-server clickhouse-client > /dev/null 2>&1
+    systemctl enable --now clickhouse-server > /dev/null 2>&1
+    # Wait for startup
+    for i in {1..10}; do
+        curl -sf http://localhost:8123/ping >/dev/null 2>&1 && break
+        sleep 1
+    done
+    echo "  ClickHouse installed and started"
+else
+    # Ensure service is running
+    systemctl is-active --quiet clickhouse-server || systemctl start clickhouse-server 2>/dev/null || true
+    echo "  OK"
+fi
+# Ensure database and tables exist (idempotent)
+clickhouse-client --query "CREATE DATABASE IF NOT EXISTS bbs" 2>/dev/null || true
+clickhouse-client -d bbs --multiquery < "$BBS_DIR/schema-clickhouse.sql" 2>/dev/null || true
+
+# Add ClickHouse env vars if missing
+ENV_FILE="$BBS_DIR/config/.env"
+if [ -f "$ENV_FILE" ] && ! grep -q 'CLICKHOUSE_HOST' "$ENV_FILE"; then
+    echo "" >> "$ENV_FILE"
+    echo "CLICKHOUSE_HOST=localhost" >> "$ENV_FILE"
+    echo "CLICKHOUSE_PORT=8123" >> "$ENV_FILE"
+    echo "CLICKHOUSE_DB=bbs" >> "$ENV_FILE"
+    echo "  Added ClickHouse config to .env"
+fi
 
 # 6. Fix runtime directories
 echo "[6/12] Fixing runtime permissions..."
@@ -137,12 +169,8 @@ fi
 echo "[10/12] Running database migrations..."
 sudo -u www-data php "$BBS_DIR/migrate.php" 2>&1 || echo "  Warning: migration runner returned an error (migrations may run on next page load)"
 
-# 11. Migrate catalog data to per-agent tables
-echo "[11/12] Migrating catalog data..."
-sudo -u www-data php "$BBS_DIR/bin/migrate-catalog.php" 2>&1 || echo "  Warning: catalog migration incomplete (will retry on next update)"
-
-# 12. Fix storage path permissions
-echo "[12/12] Fixing storage path permissions..."
+# 11. Fix storage path permissions
+echo "[11/12] Fixing storage path permissions..."
 ENV_FILE="$BBS_DIR/config/.env"
 if [ -f "$ENV_FILE" ]; then
     DB_HOST=$(grep '^DB_HOST=' "$ENV_FILE" | cut -d= -f2-)
@@ -174,7 +202,8 @@ else
     echo "  Warning: .env not found, skipping"
 fi
 
-# Restart PHP-FPM to clear OPcache (CLI opcache_reset won't affect FPM)
+# 12. Restart PHP-FPM to clear OPcache
+echo "[12/12] Restarting PHP..."
 PHP_FPM=$(systemctl list-units --type=service --no-legend 2>/dev/null | grep -oP 'php[0-9.]+-fpm\.service' | head -1 || true)
 if [ -n "$PHP_FPM" ]; then
     echo "  Restarting $PHP_FPM..."
