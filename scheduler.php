@@ -95,32 +95,41 @@ foreach ($created as $job) {
     echo date('Y-m-d H:i:s') . " Queued: {$job['plan']} (job #{$job['job_id']}, agent #{$job['agent_id']})\n";
 }
 
-// Step 3b: Auto-queue catalog rebuilds if ClickHouse has no data for repos with archives
+// Step 3b: Auto-queue catalog rebuilds for repos with unindexed archives
 try {
     $ch = \BBS\Core\ClickHouse::getInstance();
     if ($ch->isAvailable()) {
+        // Get all archive IDs currently in ClickHouse
+        $chArchives = $ch->fetchAll("SELECT DISTINCT archive_id FROM file_catalog");
+        $indexedIds = array_flip(array_column($chArchives, 'archive_id'));
+
+        // Find repos that have archives not yet in ClickHouse
         $repos = $db->fetchAll(
-            "SELECT r.id, r.agent_id FROM repositories r
-             WHERE EXISTS (SELECT 1 FROM archives WHERE repository_id = r.id)"
+            "SELECT r.id, r.agent_id, a.id AS archive_id
+             FROM repositories r
+             JOIN archives a ON a.repository_id = r.id"
         );
-        foreach ($repos as $repo) {
-            $chRow = $ch->fetchOne("SELECT count() as cnt FROM file_catalog WHERE agent_id = ?", [(int) $repo['agent_id']]);
-            if (($chRow['cnt'] ?? 0) == 0) {
-                $pending = $db->fetchOne(
-                    "SELECT id FROM backup_jobs
-                     WHERE repository_id = ? AND task_type = 'catalog_rebuild'
-                       AND status IN ('queued','sent','running')",
-                    [$repo['id']]
-                );
-                if (!$pending) {
-                    $db->insert('backup_jobs', [
-                        'agent_id' => $repo['agent_id'],
-                        'repository_id' => $repo['id'],
-                        'task_type' => 'catalog_rebuild',
-                        'status' => 'queued',
-                    ]);
-                    echo date('Y-m-d H:i:s') . " Auto-queued catalog_rebuild for repo #{$repo['id']} (ClickHouse empty)\n";
-                }
+        $needsRebuild = [];
+        foreach ($repos as $row) {
+            if (!isset($indexedIds[$row['archive_id']])) {
+                $needsRebuild[$row['id']] = $row['agent_id'];
+            }
+        }
+        foreach ($needsRebuild as $repoId => $agentId) {
+            $pending = $db->fetchOne(
+                "SELECT id FROM backup_jobs
+                 WHERE repository_id = ? AND task_type = 'catalog_rebuild'
+                   AND status IN ('queued','sent','running')",
+                [$repoId]
+            );
+            if (!$pending) {
+                $db->insert('backup_jobs', [
+                    'agent_id' => $agentId,
+                    'repository_id' => $repoId,
+                    'task_type' => 'catalog_rebuild',
+                    'status' => 'queued',
+                ]);
+                echo date('Y-m-d H:i:s') . " Auto-queued catalog_rebuild for repo #{$repoId} (missing archives in ClickHouse)\n";
             }
         }
     }
@@ -1683,4 +1692,28 @@ if (!file_exists('/usr/local/bin/bbs-ssh-gate')) {
             'message' => 'SSH gate auto-installed by scheduler (post-update migration)',
         ]);
     }
+}
+
+// Step 16: Clean up orphaned temp files from catalog imports
+// Files are created in /tmp by CatalogImporter, scheduler, and AgentApiController.
+// If a process crashes before cleanup, they persist. We evict files older than 4 hours
+// that are not actively being written to (check if mtime is still advancing).
+$tmpDir = sys_get_temp_dir();
+$maxAge = 4 * 3600; // 4 hours
+$patterns = ['catalog_*.tsv', 'catalog_dirs_*.tsv', 'catalog_api_*.tsv',
+             'catalog_dirs_api_*.tsv', 'catalog_rebuild_*.tsv',
+             'bbs-manifest-*', 's3_import_catalog_*.tsv'];
+$cleaned = 0;
+foreach ($patterns as $pattern) {
+    foreach (glob("{$tmpDir}/{$pattern}") as $file) {
+        if (!is_file($file)) continue;
+        $mtime = filemtime($file);
+        if ($mtime === false || (time() - $mtime) < $maxAge) continue;
+        // File hasn't been modified in 4+ hours — safe to remove
+        @unlink($file);
+        $cleaned++;
+    }
+}
+if ($cleaned > 0) {
+    echo date('Y-m-d H:i:s') . " Cleaned up {$cleaned} orphaned temp file(s)\n";
 }
