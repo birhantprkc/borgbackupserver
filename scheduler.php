@@ -104,10 +104,13 @@ try {
         $indexedIds = array_flip(array_column($chArchives, 'archive_id'));
 
         // Find repos that have archives not yet in ClickHouse
+        // Skip archives created in the last 30 minutes — the normal post-backup
+        // catalog indexing handles those; triggering a rebuild too early causes loops
         $repos = $db->fetchAll(
             "SELECT r.id, r.agent_id, a.id AS archive_id
              FROM repositories r
-             JOIN archives a ON a.repository_id = r.id"
+             JOIN archives a ON a.repository_id = r.id
+             WHERE a.created_at < DATE_SUB(NOW(), INTERVAL 30 MINUTE)"
         );
         $needsRebuild = [];
         foreach ($repos as $row) {
@@ -116,11 +119,13 @@ try {
             }
         }
         foreach ($needsRebuild as $repoId => $agentId) {
+            // Check for pending/running rebuild on this repo OR any repo for same agent
+            // Concurrent rebuilds for same agent contend on borg repo locks
             $pending = $db->fetchOne(
                 "SELECT id FROM backup_jobs
-                 WHERE repository_id = ? AND task_type = 'catalog_rebuild'
+                 WHERE (repository_id = ? OR agent_id = ?) AND task_type = 'catalog_rebuild'
                    AND status IN ('queued','sent','running')",
-                [$repoId]
+                [$repoId, $agentId]
             );
             if (!$pending) {
                 $db->insert('backup_jobs', [
@@ -740,12 +745,6 @@ foreach ($serverJobs as $sj) {
             continue;
         }
 
-        // Set files_total to archive count for progress bar display
-        $db->update('backup_jobs', [
-            'files_total' => $totalArchives,
-            'files_processed' => 0,
-        ], 'id = ?', [$sj['id']]);
-
         // For remote SSH repos, load config
         $crRemoteConfig = null;
         if ($isRemoteSsh && !empty($sj['remote_ssh_config_id'])) {
@@ -755,12 +754,48 @@ foreach ($serverJobs as $sj) {
 
         $runAsUser = $sj['ssh_unix_user'] ?? null;
 
-        // ClickHouse: drop all existing data for this agent, then re-populate
+        // Incremental rebuild: only process archives not already in ClickHouse
         $ch = \BBS\Core\ClickHouse::getInstance();
+        $existingArchiveIds = [];
         try {
-            $ch->exec("ALTER TABLE file_catalog DROP PARTITION {$agentId}");
-            $ch->exec("ALTER TABLE catalog_dirs DROP PARTITION {$agentId}");
-        } catch (\Exception $e) { /* partitions may not exist yet */ }
+            $existing = $ch->fetchAll("SELECT DISTINCT archive_id FROM file_catalog WHERE agent_id = {$agentId}");
+            $existingArchiveIds = array_flip(array_column($existing, 'archive_id'));
+        } catch (\Exception $e) { /* table may be empty */ }
+
+        // Filter to only missing archives
+        $missingArchives = array_filter($crArchives, fn($a) => !isset($existingArchiveIds[$a['id']]));
+        $missingArchives = array_values($missingArchives);
+
+        // Also clean up ClickHouse data for archives that were pruned from MySQL
+        $mysqlArchiveIds = array_column($crArchives, 'id');
+        $orphanedInCh = array_diff(array_keys($existingArchiveIds), $mysqlArchiveIds);
+        if (!empty($orphanedInCh)) {
+            $orphanList = implode(',', array_map('intval', $orphanedInCh));
+            try {
+                $ch->exec("ALTER TABLE file_catalog DELETE WHERE agent_id = {$agentId} AND archive_id IN ({$orphanList})");
+                $ch->exec("ALTER TABLE catalog_dirs DELETE WHERE agent_id = {$agentId} AND archive_id IN ({$orphanList})");
+            } catch (\Exception $e) { /* non-fatal */ }
+            echo date('Y-m-d H:i:s') . " Catalog rebuild job #{$sj['id']}: cleaned up " . count($orphanedInCh) . " pruned archives from ClickHouse\n";
+        }
+
+        $totalToProcess = count($missingArchives);
+        if ($totalToProcess === 0) {
+            $db->update('backup_jobs', [
+                'status' => 'completed',
+                'completed_at' => date('Y-m-d H:i:s'),
+                'duration_seconds' => 0,
+            ], 'id = ?', [$sj['id']]);
+            echo date('Y-m-d H:i:s') . " Catalog rebuild job #{$sj['id']}: all {$totalArchives} archives already indexed, nothing to do\n";
+            continue;
+        }
+
+        echo date('Y-m-d H:i:s') . " Catalog rebuild job #{$sj['id']}: {$totalToProcess} of {$totalArchives} archives need indexing\n";
+
+        // Set files_total to missing archive count for progress bar display
+        $db->update('backup_jobs', [
+            'files_total' => $totalToProcess,
+            'files_processed' => 0,
+        ], 'id = ?', [$sj['id']]);
 
         $escape = fn(string $s) => str_replace(["\t", "\n", "\\"], ["\\t", "\\n", "\\\\"], $s);
 
@@ -768,7 +803,7 @@ foreach ($serverJobs as $sj) {
         $totalFiles = 0;
         $errors = [];
 
-        foreach ($crArchives as $crArchive) {
+        foreach ($missingArchives as $crArchive) {
             // Remote SSH repos: use RemoteSshService
             if ($isRemoteSsh && $crRemoteConfig) {
                 $crResult = $remoteSshService->runBorgCommand(
@@ -916,10 +951,10 @@ foreach ($serverJobs as $sj) {
                 'agent_id' => $agentId,
                 'backup_job_id' => $sj['id'],
                 'level' => 'info',
-                'message' => "Catalog rebuild {$processedArchives}/{$totalArchives}: {$crArchive['archive_name']} ({$archiveFileCount} files)",
+                'message' => "Catalog rebuild {$processedArchives}/{$totalToProcess}: {$crArchive['archive_name']} ({$archiveFileCount} files)",
             ]);
 
-            echo date('Y-m-d H:i:s') . "   Catalog rebuild {$processedArchives}/{$totalArchives}: {$crArchive['archive_name']} ({$archiveFileCount} files)\n";
+            echo date('Y-m-d H:i:s') . "   Catalog rebuild {$processedArchives}/{$totalToProcess}: {$crArchive['archive_name']} ({$archiveFileCount} files)\n";
         }
 
         $crNow = date('Y-m-d H:i:s');
