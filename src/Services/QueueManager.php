@@ -84,7 +84,9 @@ class QueueManager
             LEFT JOIN repositories r ON r.id = bj.repository_id
             LEFT JOIN remote_ssh_configs rsc ON rsc.id = r.remote_ssh_config_id
             WHERE bj.status = 'queued'
-            ORDER BY bj.queued_at ASC
+            ORDER BY
+                CASE WHEN bj.task_type IN ('catalog_rebuild', 'catalog_rebuild_full') THEN 1 ELSE 0 END,
+                bj.queued_at ASC
         ");
 
         $promoted = [];
