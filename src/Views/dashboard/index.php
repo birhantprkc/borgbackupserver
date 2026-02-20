@@ -322,23 +322,53 @@
                     </div>
                 </div>
                 <?php if (!empty($chStats['top_repos'])): ?>
+                <?php
+                    $donutColors = ['#36a2eb', '#ff6384', '#ffce56', '#4bc0c0', '#9966ff'];
+                    $totalDiskAll = array_sum(array_column($chStats['top_repos'], 'disk_bytes'));
+                    $donutR = 45;
+                    $donutC = 2 * M_PI * $donutR;
+                    $donutOffset = 0;
+                ?>
                 <div class="border-top pt-2 mt-2">
                     <div class="d-flex align-items-center mb-1">
                         <i class="bi bi-trophy me-1 text-muted" style="font-size:.7rem;"></i>
                         <span class="fw-semibold text-muted" style="font-size:.65rem;text-transform:uppercase;letter-spacing:.5px;">Top Repositories</span>
                     </div>
-                    <table class="table table-sm mb-0" style="font-size:.7rem;" id="ch-top-repos">
-                        <tbody>
-                            <?php foreach ($chStats['top_repos'] as $repo): ?>
-                            <tr>
-                                <td class="border-0 py-0 ps-0 fw-semibold"><?= htmlspecialchars($repo['name']) ?></td>
-                                <td class="border-0 py-0 text-end text-muted"><?= $compactNum($repo['rows']) ?> rows</td>
-                                <td class="border-0 py-0 text-end text-muted"><?= $repo['archives'] ?> archives</td>
-                                <td class="border-0 py-0 text-end text-muted"><?= \BBS\Services\ServerStats::formatBytes($repo['disk_bytes']) ?></td>
-                            </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <table class="table table-sm mb-0" style="font-size:.7rem;" id="ch-top-repos">
+                                <tbody>
+                                    <?php foreach ($chStats['top_repos'] as $i => $repo): ?>
+                                    <tr>
+                                        <td class="border-0 py-0 ps-0"><span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:<?= $donutColors[$i % 5] ?>;margin-right:4px;"></span><span class="fw-semibold"><?= htmlspecialchars($repo['name']) ?></span></td>
+                                        <td class="border-0 py-0 text-end text-muted"><?= $compactNum($repo['rows']) ?> rows</td>
+                                        <td class="border-0 py-0 text-end text-muted d-none d-xl-table-cell"><?= $repo['archives'] ?> archives</td>
+                                        <td class="border-0 py-0 text-end text-muted"><?= \BBS\Services\ServerStats::formatBytes($repo['disk_bytes']) ?></td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div style="width:110px;flex-shrink:0;" class="ms-2" id="ch-donut-wrap">
+                            <svg viewBox="0 0 120 120" style="width:100%;height:auto;transform:rotate(-90deg);">
+                                <circle cx="60" cy="60" r="<?= $donutR ?>" fill="none" class="donut-track" stroke-width="14"/>
+                                <?php foreach ($chStats['top_repos'] as $i => $repo):
+                                    $pct = $totalDiskAll > 0 ? $repo['disk_bytes'] / $totalDiskAll * 100 : 0;
+                                    $seg = $donutC * $pct / 100;
+                                ?>
+                                <?php if ($pct > 0): ?>
+                                <circle cx="60" cy="60" r="<?= $donutR ?>" fill="none" stroke="<?= $donutColors[$i % 5] ?>" stroke-width="14"
+                                    stroke-dasharray="<?= round($seg, 2) ?> <?= round($donutC - $seg, 2) ?>"
+                                    stroke-dashoffset="-<?= round($donutOffset, 2) ?>"/>
+                                <?php endif; ?>
+                                <?php $donutOffset += $seg; endforeach; ?>
+                            </svg>
+                            <div class="text-center" style="margin-top:-72px;position:relative;line-height:1.2;">
+                                <div class="fw-bold" style="font-size:.85rem;"><?= \BBS\Services\ServerStats::formatBytes($totalDiskAll) ?></div>
+                                <div class="text-muted" style="font-size:.5rem;">total</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <?php endif; ?>
                 <?php endif; ?>
@@ -783,15 +813,31 @@ setInterval(function() {
                     const el = document.getElementById(id);
                     if (el) el.textContent = val;
                 }
-                // Top repos table
+                // Top repos table + donut
                 const repoTable = document.getElementById('ch-top-repos');
+                const donutWrap = document.getElementById('ch-donut-wrap');
+                const colors = ['#36a2eb','#ff6384','#ffce56','#4bc0c0','#9966ff'];
                 if (repoTable && ch.top_repos) {
                     let html = '<tbody>';
-                    ch.top_repos.forEach(r => {
-                        html += '<tr><td class="border-0 py-0 ps-0 fw-semibold">'+esc(r.name)+'</td><td class="border-0 py-0 text-end text-muted">'+fmt(r.rows)+' rows</td><td class="border-0 py-0 text-end text-muted">'+r.archives+' archives</td><td class="border-0 py-0 text-end text-muted">'+fmtB(r.disk_bytes)+'</td></tr>';
+                    ch.top_repos.forEach((r, i) => {
+                        html += '<tr><td class="border-0 py-0 ps-0"><span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:'+colors[i%5]+';margin-right:4px;"></span><span class="fw-semibold">'+esc(r.name)+'</span></td><td class="border-0 py-0 text-end text-muted">'+fmt(r.rows)+' rows</td><td class="border-0 py-0 text-end text-muted d-none d-xl-table-cell">'+r.archives+' archives</td><td class="border-0 py-0 text-end text-muted">'+fmtB(r.disk_bytes)+'</td></tr>';
                     });
                     html += '</tbody>';
                     repoTable.innerHTML = html;
+                }
+                if (donutWrap && ch.top_repos) {
+                    const totalDisk = ch.top_repos.reduce((s, r) => s + Number(r.disk_bytes), 0);
+                    const R = 45, C = 2 * Math.PI * R;
+                    let svg = '<svg viewBox="0 0 120 120" style="width:100%;height:auto;transform:rotate(-90deg);"><circle cx="60" cy="60" r="'+R+'" fill="none" class="donut-track" stroke-width="14"/>';
+                    let off = 0;
+                    ch.top_repos.forEach((r, i) => {
+                        const pct = totalDisk > 0 ? r.disk_bytes / totalDisk * 100 : 0;
+                        const seg = C * pct / 100;
+                        if (pct > 0) svg += '<circle cx="60" cy="60" r="'+R+'" fill="none" stroke="'+colors[i%5]+'" stroke-width="14" stroke-dasharray="'+seg.toFixed(2)+' '+(C-seg).toFixed(2)+'" stroke-dashoffset="-'+off.toFixed(2)+'"/>';
+                        off += seg;
+                    });
+                    svg += '</svg><div class="text-center" style="margin-top:-72px;position:relative;line-height:1.2;"><div class="fw-bold" style="font-size:.85rem;">'+fmtB(totalDisk)+'</div><div class="text-muted" style="font-size:.5rem;">total</div></div>';
+                    donutWrap.innerHTML = svg;
                 }
             }
             <?php endif; ?>
