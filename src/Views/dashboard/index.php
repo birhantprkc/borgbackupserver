@@ -276,7 +276,7 @@
     $chStats = $clickhouseStats ?? null;
     $donutColors = ['#36a2eb', '#ff6384', '#ffce56', '#4bc0c0', '#9966ff'];
     $totalDiskAll = $chStats && !empty($chStats['top_repos']) ? array_sum(array_column($chStats['top_repos'], 'disk_bytes')) : 0;
-    $donutR = 54;
+    $donutR = 58;
     $donutC = 2 * M_PI * $donutR;
     $donutOffset = 0;
     ?>
@@ -354,24 +354,24 @@
                     </div>
                     <!-- Right: Large Donut Chart -->
                     <?php if ($chStats && !empty($chStats['top_repos'])): ?>
-                    <div class="d-none d-md-flex align-items-center justify-content-center border-start ms-3 ps-3" style="width:180px;flex-shrink:0;" id="ch-donut-wrap">
-                        <div style="width:160px;">
-                            <svg viewBox="0 0 140 140" style="width:100%;height:auto;transform:rotate(-90deg);">
-                                <circle cx="70" cy="70" r="<?= $donutR ?>" fill="none" class="donut-track" stroke-width="16"/>
+                    <div class="d-none d-md-flex align-items-center justify-content-center border-start ms-3 ps-3" style="flex:0 0 33%;max-width:33%;" id="ch-donut-wrap">
+                        <div style="width:200px;">
+                            <svg viewBox="0 0 150 150" style="width:100%;height:auto;transform:rotate(-90deg);">
+                                <circle cx="75" cy="75" r="<?= $donutR ?>" fill="none" class="donut-track" stroke-width="18"/>
                                 <?php foreach ($chStats['top_repos'] as $i => $repo):
                                     $pct = $totalDiskAll > 0 ? $repo['disk_bytes'] / $totalDiskAll * 100 : 0;
                                     $seg = $donutC * $pct / 100;
                                 ?>
                                 <?php if ($pct > 0): ?>
-                                <circle cx="70" cy="70" r="<?= $donutR ?>" fill="none" stroke="<?= $donutColors[$i % 5] ?>" stroke-width="16"
+                                <circle cx="75" cy="75" r="<?= $donutR ?>" fill="none" stroke="<?= $donutColors[$i % 5] ?>" stroke-width="18"
                                     stroke-dasharray="<?= round($seg, 2) ?> <?= round($donutC - $seg, 2) ?>"
                                     stroke-dashoffset="-<?= round($donutOffset, 2) ?>"/>
                                 <?php endif; ?>
                                 <?php $donutOffset += $seg; endforeach; ?>
                             </svg>
-                            <div class="text-center" style="margin-top:-90px;position:relative;line-height:1.2;">
-                                <div class="fw-bold" style="font-size:1.1rem;"><?= \BBS\Services\ServerStats::formatBytes($totalDiskAll) ?></div>
-                                <div class="text-muted" style="font-size:.6rem;">catalog disk</div>
+                            <div class="text-center" style="margin-top:-95px;position:relative;line-height:1.2;">
+                                <div class="fw-bold" style="font-size:1.3rem;"><?= \BBS\Services\ServerStats::formatBytes($totalDiskAll) ?></div>
+                                <div class="text-muted" style="font-size:.65rem;">catalog disk</div>
                             </div>
                         </div>
                     </div>
@@ -832,16 +832,16 @@ setInterval(function() {
                 }
                 if (donutWrap && ch.top_repos) {
                     const totalDisk = ch.top_repos.reduce((s, r) => s + Number(r.disk_bytes), 0);
-                    const R = 54, C = 2 * Math.PI * R;
-                    let svg = '<div style="width:160px;"><svg viewBox="0 0 140 140" style="width:100%;height:auto;transform:rotate(-90deg);"><circle cx="70" cy="70" r="'+R+'" fill="none" class="donut-track" stroke-width="16"/>';
+                    const R = 58, C = 2 * Math.PI * R;
+                    let svg = '<div style="width:200px;"><svg viewBox="0 0 150 150" style="width:100%;height:auto;transform:rotate(-90deg);"><circle cx="75" cy="75" r="'+R+'" fill="none" class="donut-track" stroke-width="18"/>';
                     let off = 0;
                     ch.top_repos.forEach((r, i) => {
                         const pct = totalDisk > 0 ? r.disk_bytes / totalDisk * 100 : 0;
                         const seg = C * pct / 100;
-                        if (pct > 0) svg += '<circle cx="70" cy="70" r="'+R+'" fill="none" stroke="'+colors[i%5]+'" stroke-width="16" stroke-dasharray="'+seg.toFixed(2)+' '+(C-seg).toFixed(2)+'" stroke-dashoffset="-'+off.toFixed(2)+'"/>';
+                        if (pct > 0) svg += '<circle cx="75" cy="75" r="'+R+'" fill="none" stroke="'+colors[i%5]+'" stroke-width="18" stroke-dasharray="'+seg.toFixed(2)+' '+(C-seg).toFixed(2)+'" stroke-dashoffset="-'+off.toFixed(2)+'"/>';
                         off += seg;
                     });
-                    svg += '</svg><div class="text-center" style="margin-top:-90px;position:relative;line-height:1.2;"><div class="fw-bold" style="font-size:1.1rem;">'+fmtB(totalDisk)+'</div><div class="text-muted" style="font-size:.6rem;">catalog disk</div></div></div>';
+                    svg += '</svg><div class="text-center" style="margin-top:-95px;position:relative;line-height:1.2;"><div class="fw-bold" style="font-size:1.3rem;">'+fmtB(totalDisk)+'</div><div class="text-muted" style="font-size:.65rem;">catalog disk</div></div></div>';
                     donutWrap.innerHTML = svg;
                 }
             }
