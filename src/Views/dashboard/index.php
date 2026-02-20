@@ -274,68 +274,68 @@
         return number_format($n);
     };
     $chStats = $clickhouseStats ?? null;
+    $donutColors = ['#36a2eb', '#ff6384', '#ffce56', '#4bc0c0', '#9966ff'];
+    $totalDiskAll = $chStats && !empty($chStats['top_repos']) ? array_sum(array_column($chStats['top_repos'], 'disk_bytes')) : 0;
+    $donutR = 54;
+    $donutC = 2 * M_PI * $donutR;
+    $donutOffset = 0;
     ?>
     <div class="<?= (!empty($storage) && $storage['disk_total'] !== null) ? 'col-lg-8' : 'col-12' ?>">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body py-3">
-                <!-- Files Tracked (left) + Archives/Jobs (right) -->
-                <div class="d-flex align-items-center mb-2">
-                    <div class="me-auto">
-                        <div class="text-muted small mb-0">Files Tracked</div>
-                        <div class="fw-bold" style="font-size:2.2rem;line-height:1;color:#e67e22;" id="stat-catalog"><?= $compactNum($mysqlStats['catalog_files']) ?></div>
-                    </div>
-                    <div class="d-flex gap-3 text-center" style="font-size:.75rem;">
-                        <div>
-                            <div class="fw-bold" style="font-size:1rem;" id="stat-archives"><?= $compactNum($mysqlStats['archives']) ?></div>
-                            <div class="text-muted">Archives</div>
+                <div class="d-flex">
+                    <!-- Left: Stats + Table -->
+                    <div class="flex-grow-1" style="min-width:0;">
+                        <!-- Files Tracked (left) + Archives/Jobs (right) -->
+                        <div class="d-flex align-items-center mb-2">
+                            <div class="me-auto">
+                                <div class="text-muted small mb-0">Files Tracked</div>
+                                <div class="fw-bold" style="font-size:2.2rem;line-height:1;color:#e67e22;" id="stat-catalog"><?= $compactNum($mysqlStats['catalog_files']) ?></div>
+                            </div>
+                            <div class="d-flex gap-3 text-center" style="font-size:.75rem;">
+                                <div>
+                                    <div class="fw-bold" style="font-size:1rem;" id="stat-archives"><?= $compactNum($mysqlStats['archives']) ?></div>
+                                    <div class="text-muted">Archives</div>
+                                </div>
+                                <div>
+                                    <div class="fw-bold" style="font-size:1rem;" id="stat-completed-jobs"><?= $compactNum($mysqlStats['completed_jobs']) ?></div>
+                                    <div class="text-muted">Jobs Run</div>
+                                </div>
+                            </div>
                         </div>
-                        <div>
-                            <div class="fw-bold" style="font-size:1rem;" id="stat-completed-jobs"><?= $compactNum($mysqlStats['completed_jobs']) ?></div>
-                            <div class="text-muted">Jobs Run</div>
+                        <?php if ($chStats): ?>
+                        <!-- ClickHouse Catalog Stats -->
+                        <div class="border-top pt-2 mt-1">
+                            <div class="d-flex align-items-center mb-1">
+                                <i class="bi bi-lightning-charge me-1 text-muted" style="font-size:.7rem;"></i>
+                                <span class="fw-semibold text-muted" style="font-size:.65rem;text-transform:uppercase;letter-spacing:.5px;">ClickHouse Catalog</span>
+                            </div>
+                            <div class="row g-1 text-center" style="font-size:.7rem;">
+                                <div class="col-3">
+                                    <div class="fw-bold" style="font-size:.85rem;" id="stat-ch-disk"><?= \BBS\Services\ServerStats::formatBytes($chStats['disk_bytes']) ?></div>
+                                    <div class="text-muted">Disk Usage</div>
+                                </div>
+                                <div class="col-3">
+                                    <div class="fw-bold" style="font-size:.85rem;" id="stat-ch-compression"><?= $chStats['compression_ratio'] ?>x</div>
+                                    <div class="text-muted">Compress</div>
+                                </div>
+                                <div class="col-3">
+                                    <div class="fw-bold" style="font-size:.85rem;" id="stat-ch-agents"><?= $chStats['agent_count'] ?></div>
+                                    <div class="text-muted">Agents</div>
+                                </div>
+                                <div class="col-3">
+                                    <div class="fw-bold" style="font-size:.85rem;" id="stat-ch-avg-archive"><?= $compactNum($chStats['avg_per_archive']) ?></div>
+                                    <div class="text-muted">Avg/Archive</div>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
-                <!-- ClickHouse Catalog Stats -->
-                <?php if ($chStats): ?>
-                <div class="border-top pt-2 mt-1">
-                    <div class="d-flex align-items-center mb-1">
-                        <i class="bi bi-lightning-charge me-1 text-muted" style="font-size:.7rem;"></i>
-                        <span class="fw-semibold text-muted" style="font-size:.65rem;text-transform:uppercase;letter-spacing:.5px;">ClickHouse Catalog</span>
-                    </div>
-                    <div class="row g-1 text-center" style="font-size:.7rem;">
-                        <div class="col-3">
-                            <div class="fw-bold" style="font-size:.85rem;" id="stat-ch-disk"><?= \BBS\Services\ServerStats::formatBytes($chStats['disk_bytes']) ?></div>
-                            <div class="text-muted">Disk Usage</div>
-                        </div>
-                        <div class="col-3">
-                            <div class="fw-bold" style="font-size:.85rem;" id="stat-ch-compression"><?= $chStats['compression_ratio'] ?>x</div>
-                            <div class="text-muted">Compress</div>
-                        </div>
-                        <div class="col-3">
-                            <div class="fw-bold" style="font-size:.85rem;" id="stat-ch-agents"><?= $chStats['agent_count'] ?></div>
-                            <div class="text-muted">Agents</div>
-                        </div>
-                        <div class="col-3">
-                            <div class="fw-bold" style="font-size:.85rem;" id="stat-ch-avg-archive"><?= $compactNum($chStats['avg_per_archive']) ?></div>
-                            <div class="text-muted">Avg/Archive</div>
-                        </div>
-                    </div>
-                </div>
-                <?php if (!empty($chStats['top_repos'])): ?>
-                <?php
-                    $donutColors = ['#36a2eb', '#ff6384', '#ffce56', '#4bc0c0', '#9966ff'];
-                    $totalDiskAll = array_sum(array_column($chStats['top_repos'], 'disk_bytes'));
-                    $donutR = 45;
-                    $donutC = 2 * M_PI * $donutR;
-                    $donutOffset = 0;
-                ?>
-                <div class="border-top pt-2 mt-2">
-                    <div class="d-flex align-items-center mb-1">
-                        <i class="bi bi-trophy me-1 text-muted" style="font-size:.7rem;"></i>
-                        <span class="fw-semibold text-muted" style="font-size:.65rem;text-transform:uppercase;letter-spacing:.5px;">Top Repositories</span>
-                    </div>
-                    <div class="d-flex align-items-center">
-                        <div class="flex-grow-1">
+                        <!-- Top Repositories Table -->
+                        <?php if (!empty($chStats['top_repos'])): ?>
+                        <div class="border-top pt-2 mt-2">
+                            <div class="d-flex align-items-center mb-1">
+                                <i class="bi bi-trophy me-1 text-muted" style="font-size:.7rem;"></i>
+                                <span class="fw-semibold text-muted" style="font-size:.65rem;text-transform:uppercase;letter-spacing:.5px;">Top Repositories</span>
+                            </div>
                             <table class="table table-sm mb-0" style="font-size:.7rem;" id="ch-top-repos">
                                 <tbody>
                                     <?php foreach ($chStats['top_repos'] as $i => $repo): ?>
@@ -349,29 +349,34 @@
                                 </tbody>
                             </table>
                         </div>
-                        <div style="width:110px;flex-shrink:0;" class="ms-2" id="ch-donut-wrap">
-                            <svg viewBox="0 0 120 120" style="width:100%;height:auto;transform:rotate(-90deg);">
-                                <circle cx="60" cy="60" r="<?= $donutR ?>" fill="none" class="donut-track" stroke-width="14"/>
+                        <?php endif; ?>
+                        <?php endif; ?>
+                    </div>
+                    <!-- Right: Large Donut Chart -->
+                    <?php if ($chStats && !empty($chStats['top_repos'])): ?>
+                    <div class="d-none d-md-flex align-items-center justify-content-center border-start ms-3 ps-3" style="width:180px;flex-shrink:0;" id="ch-donut-wrap">
+                        <div style="width:160px;">
+                            <svg viewBox="0 0 140 140" style="width:100%;height:auto;transform:rotate(-90deg);">
+                                <circle cx="70" cy="70" r="<?= $donutR ?>" fill="none" class="donut-track" stroke-width="16"/>
                                 <?php foreach ($chStats['top_repos'] as $i => $repo):
                                     $pct = $totalDiskAll > 0 ? $repo['disk_bytes'] / $totalDiskAll * 100 : 0;
                                     $seg = $donutC * $pct / 100;
                                 ?>
                                 <?php if ($pct > 0): ?>
-                                <circle cx="60" cy="60" r="<?= $donutR ?>" fill="none" stroke="<?= $donutColors[$i % 5] ?>" stroke-width="14"
+                                <circle cx="70" cy="70" r="<?= $donutR ?>" fill="none" stroke="<?= $donutColors[$i % 5] ?>" stroke-width="16"
                                     stroke-dasharray="<?= round($seg, 2) ?> <?= round($donutC - $seg, 2) ?>"
                                     stroke-dashoffset="-<?= round($donutOffset, 2) ?>"/>
                                 <?php endif; ?>
                                 <?php $donutOffset += $seg; endforeach; ?>
                             </svg>
-                            <div class="text-center" style="margin-top:-72px;position:relative;line-height:1.2;">
-                                <div class="fw-bold" style="font-size:.85rem;"><?= \BBS\Services\ServerStats::formatBytes($totalDiskAll) ?></div>
-                                <div class="text-muted" style="font-size:.5rem;">total</div>
+                            <div class="text-center" style="margin-top:-90px;position:relative;line-height:1.2;">
+                                <div class="fw-bold" style="font-size:1.1rem;"><?= \BBS\Services\ServerStats::formatBytes($totalDiskAll) ?></div>
+                                <div class="text-muted" style="font-size:.6rem;">catalog disk</div>
                             </div>
                         </div>
                     </div>
+                    <?php endif; ?>
                 </div>
-                <?php endif; ?>
-                <?php endif; ?>
             </div>
         </div>
     </div>
@@ -827,16 +832,16 @@ setInterval(function() {
                 }
                 if (donutWrap && ch.top_repos) {
                     const totalDisk = ch.top_repos.reduce((s, r) => s + Number(r.disk_bytes), 0);
-                    const R = 45, C = 2 * Math.PI * R;
-                    let svg = '<svg viewBox="0 0 120 120" style="width:100%;height:auto;transform:rotate(-90deg);"><circle cx="60" cy="60" r="'+R+'" fill="none" class="donut-track" stroke-width="14"/>';
+                    const R = 54, C = 2 * Math.PI * R;
+                    let svg = '<div style="width:160px;"><svg viewBox="0 0 140 140" style="width:100%;height:auto;transform:rotate(-90deg);"><circle cx="70" cy="70" r="'+R+'" fill="none" class="donut-track" stroke-width="16"/>';
                     let off = 0;
                     ch.top_repos.forEach((r, i) => {
                         const pct = totalDisk > 0 ? r.disk_bytes / totalDisk * 100 : 0;
                         const seg = C * pct / 100;
-                        if (pct > 0) svg += '<circle cx="60" cy="60" r="'+R+'" fill="none" stroke="'+colors[i%5]+'" stroke-width="14" stroke-dasharray="'+seg.toFixed(2)+' '+(C-seg).toFixed(2)+'" stroke-dashoffset="-'+off.toFixed(2)+'"/>';
+                        if (pct > 0) svg += '<circle cx="70" cy="70" r="'+R+'" fill="none" stroke="'+colors[i%5]+'" stroke-width="16" stroke-dasharray="'+seg.toFixed(2)+' '+(C-seg).toFixed(2)+'" stroke-dashoffset="-'+off.toFixed(2)+'"/>';
                         off += seg;
                     });
-                    svg += '</svg><div class="text-center" style="margin-top:-72px;position:relative;line-height:1.2;"><div class="fw-bold" style="font-size:.85rem;">'+fmtB(totalDisk)+'</div><div class="text-muted" style="font-size:.5rem;">total</div></div>';
+                    svg += '</svg><div class="text-center" style="margin-top:-90px;position:relative;line-height:1.2;"><div class="fw-bold" style="font-size:1.1rem;">'+fmtB(totalDisk)+'</div><div class="text-muted" style="font-size:.6rem;">catalog disk</div></div></div>';
                     donutWrap.innerHTML = svg;
                 }
             }
