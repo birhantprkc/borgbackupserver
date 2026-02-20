@@ -369,6 +369,52 @@
     </div>
     <?php endif; ?>
 </div>
+
+<!-- Row 4: MySQL Health -->
+<?php if (!empty($mysqlStats)): ?>
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-body fw-semibold py-2">
+                <i class="bi bi-database me-1"></i> MySQL Health
+            </div>
+            <div class="card-body py-2">
+                <div class="row g-3 text-center" style="font-size:.75rem;">
+                    <div class="col-3 col-md">
+                        <div class="fw-bold" style="font-size:1rem;" id="stat-qps"><?= $mysqlStats['qps'] ?></div>
+                        <div class="text-muted">QPS</div>
+                    </div>
+                    <div class="col-3 col-md">
+                        <div class="fw-bold" style="font-size:1rem;" id="stat-connections"><?= $mysqlStats['threads_connected'] ?></div>
+                        <div class="text-muted">Connections</div>
+                    </div>
+                    <div class="col-3 col-md">
+                        <div class="fw-bold" style="font-size:1rem;" id="stat-hit-rate"><?= $mysqlStats['hit_rate'] ?>%</div>
+                        <div class="text-muted">Hit Rate</div>
+                    </div>
+                    <div class="col-3 col-md">
+                        <?php
+                        $uptimeDays = floor($mysqlStats['uptime'] / 86400);
+                        $uptimeHrs = floor(($mysqlStats['uptime'] % 86400) / 3600);
+                        $uptimeStr = $uptimeDays > 0 ? "{$uptimeDays}d {$uptimeHrs}h" : "{$uptimeHrs}h";
+                        ?>
+                        <div class="fw-bold" style="font-size:1rem;" id="stat-uptime"><?= $uptimeStr ?></div>
+                        <div class="text-muted">Uptime</div>
+                    </div>
+                    <div class="col-6 col-md">
+                        <div class="fw-bold" style="font-size:1rem;" id="stat-bp-usage"><?= $mysqlStats['buffer_pool_used_pct'] ?>%</div>
+                        <div class="text-muted">Buffer Pool</div>
+                    </div>
+                    <div class="col-6 col-md">
+                        <div class="fw-bold" style="font-size:1rem;" id="stat-slow"><?= number_format($mysqlStats['slow_queries']) ?></div>
+                        <div class="text-muted">Slow Queries</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 <?php endif; ?>
 
 <div class="row g-4">
@@ -828,6 +874,23 @@ setInterval(function() {
                     const el = document.getElementById(id);
                     if (el) el.textContent = fmt(val);
                 }
+                // MySQL Health card
+                const qpsEl = document.getElementById('stat-qps');
+                if (qpsEl) qpsEl.textContent = ms.qps;
+                const connEl = document.getElementById('stat-connections');
+                if (connEl) connEl.textContent = ms.threads_connected;
+                const hitEl = document.getElementById('stat-hit-rate');
+                if (hitEl) hitEl.textContent = ms.hit_rate + '%';
+                const upEl = document.getElementById('stat-uptime');
+                if (upEl) {
+                    const u = Number(ms.uptime);
+                    const d = Math.floor(u / 86400), h = Math.floor((u % 86400) / 3600);
+                    upEl.textContent = d > 0 ? d + 'd ' + h + 'h' : h + 'h';
+                }
+                const bpEl = document.getElementById('stat-bp-usage');
+                if (bpEl) bpEl.textContent = ms.buffer_pool_used_pct + '%';
+                const slowEl = document.getElementById('stat-slow');
+                if (slowEl) slowEl.textContent = Number(ms.slow_queries).toLocaleString();
             }
             if (data.clickhouseStats) {
                 const ch = data.clickhouseStats;
