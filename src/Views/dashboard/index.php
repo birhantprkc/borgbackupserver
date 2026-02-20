@@ -165,29 +165,40 @@
 </div>
 
 <?php if ($isAdmin): ?>
-<!-- Row 3: Storage Pool | MySQL Stats -->
+<?php
+// Compact number formatter: 1234 → "1,234", 51200 → "51.2K", 1100000 → "1.1M"
+$compactNum = function(int $n): string {
+    if ($n >= 1000000) return round($n / 1000000, 1) . 'M';
+    if ($n >= 10000) return round($n / 1000, 1) . 'K';
+    return number_format($n);
+};
+$chStats = $clickhouseStats ?? null;
+$pieColors = ['#36a2eb', '#ff6384', '#ffce56', '#4bc0c0', '#9966ff', '#6c757d'];
+?>
+<!-- Row 3: Storage Pool + MySQL Health (left) | ClickHouse Catalog (right) -->
 <div class="row g-4 mb-4">
-    <?php if (!empty($storage) && $storage['disk_total'] !== null): ?>
-    <?php
-        $stUsed = $storage['disk_used'] ?? ($storage['disk_total'] - $storage['disk_free']);
-        $stRepoPct = $storage['disk_total'] > 0 ? round($storage['total_repo_bytes'] / $storage['disk_total'] * 100, 1) : 0;
-        $stOtherPct = $storage['disk_total'] > 0 ? round(($stUsed - $storage['total_repo_bytes']) / $storage['disk_total'] * 100, 1) : 0;
-        if ($stOtherPct < 0) $stOtherPct = 0;
-        $stFreePct = $storage['disk_total'] > 0 ? round($storage['disk_free'] / $storage['disk_total'] * 100, 1) : 0;
-        $stUsedPct = round(100 - $stFreePct, 1);
-        // SVG donut
-        $r = 45; $c = 2 * M_PI * $r;
-        $seg1 = $c * $stRepoPct / 100;
-        $seg2 = $c * $stOtherPct / 100;
-        $off2 = $seg1;
-        // Dedup ratio
-        $dedupSavings = $storage['dedup_savings'] ?? 0;
-        $totalOrig = (int)($storage['total_original'] ?? 0);
-        $totalDedup = (int)($storage['total_dedup'] ?? 0);
-        $dedupRatio = ($totalDedup > 0 && $totalOrig > 0) ? round($totalOrig / $totalDedup, 1) : 0;
-    ?>
+    <!-- Left column: Storage Pool + MySQL Health stacked -->
     <div class="col-lg-4">
-        <div class="card border-0 shadow-sm h-100">
+        <?php if (!empty($storage) && $storage['disk_total'] !== null): ?>
+        <?php
+            $stUsed = $storage['disk_used'] ?? ($storage['disk_total'] - $storage['disk_free']);
+            $stRepoPct = $storage['disk_total'] > 0 ? round($storage['total_repo_bytes'] / $storage['disk_total'] * 100, 1) : 0;
+            $stOtherPct = $storage['disk_total'] > 0 ? round(($stUsed - $storage['total_repo_bytes']) / $storage['disk_total'] * 100, 1) : 0;
+            if ($stOtherPct < 0) $stOtherPct = 0;
+            $stFreePct = $storage['disk_total'] > 0 ? round($storage['disk_free'] / $storage['disk_total'] * 100, 1) : 0;
+            $stUsedPct = round(100 - $stFreePct, 1);
+            // SVG donut
+            $r = 45; $c = 2 * M_PI * $r;
+            $seg1 = $c * $stRepoPct / 100;
+            $seg2 = $c * $stOtherPct / 100;
+            $off2 = $seg1;
+            // Dedup ratio
+            $dedupSavings = $storage['dedup_savings'] ?? 0;
+            $totalOrig = (int)($storage['total_original'] ?? 0);
+            $totalDedup = (int)($storage['total_dedup'] ?? 0);
+            $dedupRatio = ($totalDedup > 0 && $totalOrig > 0) ? round($totalOrig / $totalDedup, 1) : 0;
+        ?>
+        <div class="card border-0 shadow-sm">
             <div class="card-header bg-body d-flex justify-content-between align-items-center">
                 <span class="fw-semibold"><i class="bi bi-device-hdd me-1"></i> Storage Pool</span>
                 <span class="text-muted" style="font-size:.7rem;"><?= htmlspecialchars($storage['path']) ?></span>
@@ -263,26 +274,59 @@
                 </div>
             </div>
         </div>
+        <?php endif; ?>
+
+        <?php if (!empty($mysqlStats)): ?>
+        <div class="card border-0 shadow-sm mt-4">
+            <div class="card-header bg-body fw-semibold py-2">
+                <i class="bi bi-database me-1"></i> MySQL Health
+            </div>
+            <div class="card-body py-2">
+                <div class="row g-2 text-center" style="font-size:.7rem;">
+                    <div class="col-4">
+                        <div class="fw-bold" style="font-size:.9rem;" id="stat-qps"><?= $mysqlStats['qps'] ?></div>
+                        <div class="text-muted">QPS</div>
+                    </div>
+                    <div class="col-4">
+                        <div class="fw-bold" style="font-size:.9rem;" id="stat-connections"><?= $mysqlStats['threads_connected'] ?></div>
+                        <div class="text-muted">Connections</div>
+                    </div>
+                    <div class="col-4">
+                        <div class="fw-bold" style="font-size:.9rem;" id="stat-hit-rate"><?= $mysqlStats['hit_rate'] ?>%</div>
+                        <div class="text-muted">Hit Rate</div>
+                    </div>
+                    <div class="col-4">
+                        <?php
+                        $uptimeDays = floor($mysqlStats['uptime'] / 86400);
+                        $uptimeHrs = floor(($mysqlStats['uptime'] % 86400) / 3600);
+                        $uptimeStr = $uptimeDays > 0 ? "{$uptimeDays}d {$uptimeHrs}h" : "{$uptimeHrs}h";
+                        ?>
+                        <div class="fw-bold" style="font-size:.9rem;" id="stat-uptime"><?= $uptimeStr ?></div>
+                        <div class="text-muted">Uptime</div>
+                    </div>
+                    <div class="col-4">
+                        <div class="fw-bold" style="font-size:.9rem;" id="stat-bp-usage"><?= $mysqlStats['buffer_pool_used_pct'] ?>%</div>
+                        <div class="text-muted">Buffer Pool</div>
+                    </div>
+                    <div class="col-4">
+                        <div class="fw-bold" style="font-size:.9rem;" id="stat-slow"><?= number_format($mysqlStats['slow_queries']) ?></div>
+                        <div class="text-muted">Slow Queries</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
     </div>
-    <?php endif; ?>
+
+    <!-- Right column: ClickHouse Catalog (spans full height) -->
     <?php if (!empty($mysqlStats)): ?>
-    <?php
-    // Compact number formatter: 1234 → "1,234", 51200 → "51.2K", 1100000 → "1.1M"
-    $compactNum = function(int $n): string {
-        if ($n >= 1000000) return round($n / 1000000, 1) . 'M';
-        if ($n >= 10000) return round($n / 1000, 1) . 'K';
-        return number_format($n);
-    };
-    $chStats = $clickhouseStats ?? null;
-    $pieColors = ['#36a2eb', '#ff6384', '#ffce56', '#4bc0c0', '#9966ff', '#6c757d'];
-    ?>
-    <div class="<?= (!empty($storage) && $storage['disk_total'] !== null) ? 'col-lg-8' : 'col-12' ?>">
+    <div class="col-lg-8">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-header bg-body fw-semibold">
                 <img src="/images/clickhouse.svg" alt="" style="height:1em;vertical-align:-.1em;" class="me-1"> ClickHouse Catalog
             </div>
             <div class="card-body py-3">
-                <div class="d-flex">
+                <div class="d-flex h-100">
                     <!-- Left: Stats + Table -->
                     <div class="flex-grow-1" style="min-width:0;">
                         <!-- Row count + Recovery Points + Jobs -->
@@ -369,52 +413,6 @@
     </div>
     <?php endif; ?>
 </div>
-
-<!-- Row 4: MySQL Health -->
-<?php if (!empty($mysqlStats)): ?>
-<div class="row g-4 mb-4">
-    <div class="col-12">
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-body fw-semibold py-2">
-                <i class="bi bi-database me-1"></i> MySQL Health
-            </div>
-            <div class="card-body py-2">
-                <div class="row g-3 text-center" style="font-size:.75rem;">
-                    <div class="col-3 col-md">
-                        <div class="fw-bold" style="font-size:1rem;" id="stat-qps"><?= $mysqlStats['qps'] ?></div>
-                        <div class="text-muted">QPS</div>
-                    </div>
-                    <div class="col-3 col-md">
-                        <div class="fw-bold" style="font-size:1rem;" id="stat-connections"><?= $mysqlStats['threads_connected'] ?></div>
-                        <div class="text-muted">Connections</div>
-                    </div>
-                    <div class="col-3 col-md">
-                        <div class="fw-bold" style="font-size:1rem;" id="stat-hit-rate"><?= $mysqlStats['hit_rate'] ?>%</div>
-                        <div class="text-muted">Hit Rate</div>
-                    </div>
-                    <div class="col-3 col-md">
-                        <?php
-                        $uptimeDays = floor($mysqlStats['uptime'] / 86400);
-                        $uptimeHrs = floor(($mysqlStats['uptime'] % 86400) / 3600);
-                        $uptimeStr = $uptimeDays > 0 ? "{$uptimeDays}d {$uptimeHrs}h" : "{$uptimeHrs}h";
-                        ?>
-                        <div class="fw-bold" style="font-size:1rem;" id="stat-uptime"><?= $uptimeStr ?></div>
-                        <div class="text-muted">Uptime</div>
-                    </div>
-                    <div class="col-6 col-md">
-                        <div class="fw-bold" style="font-size:1rem;" id="stat-bp-usage"><?= $mysqlStats['buffer_pool_used_pct'] ?>%</div>
-                        <div class="text-muted">Buffer Pool</div>
-                    </div>
-                    <div class="col-6 col-md">
-                        <div class="fw-bold" style="font-size:1rem;" id="stat-slow"><?= number_format($mysqlStats['slow_queries']) ?></div>
-                        <div class="text-muted">Slow Queries</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-<?php endif; ?>
 <?php endif; ?>
 
 <div class="row g-4">
