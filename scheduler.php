@@ -861,49 +861,90 @@ foreach ($serverJobs as $sj) {
                 }
 
                 fclose($crPipes[0]);
-                $crOutput = stream_get_contents($crPipes[1]);
-                $crError = stream_get_contents($crPipes[2]);
-                fclose($crPipes[1]);
-                fclose($crPipes[2]);
-                $crExitCode = proc_close($crProc);
-            }
 
-            if ($crExitCode !== 0) {
-                $errors[] = "Archive {$crArchive['archive_name']}: exit code {$crExitCode}";
-                continue;
-            }
+                // Stream borg stdout line-by-line to TSV — constant memory usage
+                // instead of buffering entire output (which can be multi-GB for large archives)
+                $tsvFile = sys_get_temp_dir() . "/catalog_rebuild_{$agentId}_{$crArchive['id']}_" . getmypid() . '.tsv';
+                $tsvFh = fopen($tsvFile, 'w');
+                $archiveFileCount = 0;
+                $dirStats = [];
 
-            // Parse JSON lines output and write to TSV for ClickHouse
-            $tsvFile = sys_get_temp_dir() . "/catalog_rebuild_{$agentId}_{$crArchive['id']}_" . getmypid() . '.tsv';
-            $tsvFh = fopen($tsvFile, 'w');
-            $archiveFileCount = 0;
-            $dirStats = []; // dirPath => [file_count, total_size]
+                while (($line = fgets($crPipes[1])) !== false) {
+                    $line = trim($line);
+                    if ($line === '') continue;
+                    $fileData = json_decode($line, true);
+                    if ($fileData && isset($fileData['path'])) {
+                        if (($fileData['type'] ?? '') !== 'd') {
+                            $path = $fileData['path'];
+                            if ($path !== '' && $path[0] !== '/') {
+                                $path = '/' . $path;
+                            }
+                            $size = (int) ($fileData['size'] ?? 0);
+                            $mtime = isset($fileData['mtime']) ? date('Y-m-d H:i:s', strtotime($fileData['mtime'])) : '\\N';
+                            $rawParent = dirname($path);
 
-            $lines = array_filter(explode("\n", trim($crOutput)));
-            foreach ($lines as $line) {
-                $fileData = json_decode($line, true);
-                if ($fileData && isset($fileData['path'])) {
-                    if (($fileData['type'] ?? '') !== 'd') {
-                        $path = $fileData['path'];
-                        if ($path !== '' && $path[0] !== '/') {
-                            $path = '/' . $path;
+                            fwrite($tsvFh, "{$agentId}\t{$crArchive['id']}\t{$escape($path)}\t{$escape(basename($path))}\t{$escape($rawParent)}\t{$size}\tU\t{$mtime}\n");
+                            $archiveFileCount++;
+
+                            if (!isset($dirStats[$rawParent])) {
+                                $dirStats[$rawParent] = [0, 0];
+                            }
+                            $dirStats[$rawParent][0]++;
+                            $dirStats[$rawParent][1] += $size;
                         }
-                        $size = (int) ($fileData['size'] ?? 0);
-                        $mtime = isset($fileData['mtime']) ? date('Y-m-d H:i:s', strtotime($fileData['mtime'])) : '\\N';
-                        $rawParent = dirname($path);
-
-                        fwrite($tsvFh, "{$agentId}\t{$crArchive['id']}\t{$escape($path)}\t{$escape(basename($path))}\t{$escape($rawParent)}\t{$size}\tU\t{$mtime}\n");
-                        $archiveFileCount++;
-
-                        if (!isset($dirStats[$rawParent])) {
-                            $dirStats[$rawParent] = [0, 0];
-                        }
-                        $dirStats[$rawParent][0]++;
-                        $dirStats[$rawParent][1] += $size;
                     }
                 }
+                fclose($tsvFh);
+                fclose($crPipes[1]);
+                $crError = stream_get_contents($crPipes[2]);
+                fclose($crPipes[2]);
+                $crExitCode = proc_close($crProc);
+
+                if ($crExitCode !== 0) {
+                    $errors[] = "Archive {$crArchive['archive_name']}: exit code {$crExitCode}";
+                    @unlink($tsvFile);
+                    continue;
+                }
             }
-            fclose($tsvFh);
+
+            // Remote SSH path: output is already buffered, parse it into TSV
+            if ($isRemoteSsh && $crRemoteConfig) {
+                if ($crExitCode !== 0) {
+                    $errors[] = "Archive {$crArchive['archive_name']}: exit code {$crExitCode}";
+                    continue;
+                }
+
+                $tsvFile = sys_get_temp_dir() . "/catalog_rebuild_{$agentId}_{$crArchive['id']}_" . getmypid() . '.tsv';
+                $tsvFh = fopen($tsvFile, 'w');
+                $archiveFileCount = 0;
+                $dirStats = [];
+
+                $lines = array_filter(explode("\n", trim($crOutput)));
+                foreach ($lines as $line) {
+                    $fileData = json_decode($line, true);
+                    if ($fileData && isset($fileData['path'])) {
+                        if (($fileData['type'] ?? '') !== 'd') {
+                            $path = $fileData['path'];
+                            if ($path !== '' && $path[0] !== '/') {
+                                $path = '/' . $path;
+                            }
+                            $size = (int) ($fileData['size'] ?? 0);
+                            $mtime = isset($fileData['mtime']) ? date('Y-m-d H:i:s', strtotime($fileData['mtime'])) : '\\N';
+                            $rawParent = dirname($path);
+
+                            fwrite($tsvFh, "{$agentId}\t{$crArchive['id']}\t{$escape($path)}\t{$escape(basename($path))}\t{$escape($rawParent)}\t{$size}\tU\t{$mtime}\n");
+                            $archiveFileCount++;
+
+                            if (!isset($dirStats[$rawParent])) {
+                                $dirStats[$rawParent] = [0, 0];
+                            }
+                            $dirStats[$rawParent][0]++;
+                            $dirStats[$rawParent][1] += $size;
+                        }
+                    }
+                }
+                fclose($tsvFh);
+            }
 
             if ($archiveFileCount > 0) {
                 try {
