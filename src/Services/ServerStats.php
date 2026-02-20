@@ -353,6 +353,105 @@ class ServerStats
     }
 
     /**
+     * Get ClickHouse catalog statistics for the dashboard.
+     * Returns null if ClickHouse is unavailable.
+     */
+    public static function getClickHouseStats(): ?array
+    {
+        try {
+            $ch = \BBS\Core\ClickHouse::getInstance();
+            if (!$ch->isAvailable()) return null;
+
+            // Aggregate stats from file_catalog
+            $totals = $ch->fetchOne("
+                SELECT count() AS total_rows,
+                       uniqExact(agent_id) AS agent_count,
+                       uniqExact(archive_id) AS archive_count
+                FROM file_catalog
+            ");
+            if (!$totals) return null;
+
+            $totalRows = (int) ($totals['total_rows'] ?? 0);
+            $agentCount = (int) ($totals['agent_count'] ?? 0);
+            $archiveCount = (int) ($totals['archive_count'] ?? 0);
+            $avgPerArchive = $archiveCount > 0 ? round($totalRows / $archiveCount) : 0;
+
+            // Disk usage from system.parts (active parts only)
+            $diskRow = $ch->fetchOne("
+                SELECT sum(bytes_on_disk) AS disk_bytes,
+                       sum(data_uncompressed_bytes) AS raw_bytes
+                FROM system.parts
+                WHERE database = 'bbs' AND table = 'file_catalog' AND active = 1
+            ");
+            $diskBytes = (int) ($diskRow['disk_bytes'] ?? 0);
+            $rawBytes = (int) ($diskRow['raw_bytes'] ?? 0);
+            $compressionRatio = $diskBytes > 0 ? round($rawBytes / $diskBytes, 0) : 0;
+
+            // Per-agent stats: rows, disk, archives — join agent names from MySQL
+            $perAgent = $ch->fetchAll("
+                SELECT partition AS agent_id,
+                       sum(rows) AS rows,
+                       sum(bytes_on_disk) AS disk_bytes
+                FROM system.parts
+                WHERE database = 'bbs' AND table = 'file_catalog' AND active = 1
+                GROUP BY partition
+                ORDER BY rows DESC
+            ");
+
+            // Get archive counts per agent from ClickHouse
+            $archivesPerAgent = $ch->fetchAll("
+                SELECT agent_id, uniqExact(archive_id) AS archives
+                FROM file_catalog
+                GROUP BY agent_id
+            ");
+            $archiveMap = [];
+            foreach ($archivesPerAgent as $a) {
+                $archiveMap[(int) $a['agent_id']] = (int) $a['archives'];
+            }
+
+            // Get agent names from MySQL
+            $db = \BBS\Core\Database::getInstance();
+            $agentIds = array_map(fn($r) => (int) $r['agent_id'], $perAgent);
+            $agentNames = [];
+            if (!empty($agentIds)) {
+                $placeholders = implode(',', array_fill(0, count($agentIds), '?'));
+                $rows = $db->fetchAll(
+                    "SELECT id, name FROM agents WHERE id IN ({$placeholders})",
+                    $agentIds
+                );
+                foreach ($rows as $r) {
+                    $agentNames[(int) $r['id']] = $r['name'];
+                }
+            }
+
+            // Build top repos list (max 5)
+            $topRepos = [];
+            foreach (array_slice($perAgent, 0, 5) as $agent) {
+                $aid = (int) $agent['agent_id'];
+                $topRepos[] = [
+                    'name' => $agentNames[$aid] ?? "Agent #{$aid}",
+                    'rows' => (int) $agent['rows'],
+                    'archives' => $archiveMap[$aid] ?? 0,
+                    'disk_bytes' => (int) $agent['disk_bytes'],
+                ];
+            }
+
+            return [
+                'total_rows' => $totalRows,
+                'agent_count' => $agentCount,
+                'archive_count' => $archiveCount,
+                'avg_per_archive' => $avgPerArchive,
+                'disk_bytes' => $diskBytes,
+                'raw_bytes' => $rawBytes,
+                'compression_ratio' => $compressionRatio,
+                'top_repos' => $topRepos,
+            ];
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /**
      * Format bytes to human readable.
      */
     public static function formatBytes(int $bytes, int $precision = 1): string

@@ -265,107 +265,83 @@
         </div>
     </div>
     <?php endif; ?>
-    <?php if (!empty($mysqlStorage) || !empty($mysqlStats)): ?>
+    <?php if (!empty($mysqlStats)): ?>
+    <?php
+    // Compact number formatter: 1234 → "1,234", 51200 → "51.2K", 1100000 → "1.1M"
+    $compactNum = function(int $n): string {
+        if ($n >= 1000000) return round($n / 1000000, 1) . 'M';
+        if ($n >= 10000) return round($n / 1000, 1) . 'K';
+        return number_format($n);
+    };
+    $chStats = $clickhouseStats ?? null;
+    ?>
     <div class="<?= (!empty($storage) && $storage['disk_total'] !== null) ? 'col-lg-8' : 'col-12' ?>">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body py-3">
-                <div class="row">
-                    <?php if (!empty($mysqlStorage) && $mysqlStorage['disk_total'] > 0): ?>
-                    <div class="col-md-5">
-                        <div class="d-flex align-items-center mb-2">
-                            <i class="bi bi-database me-1 text-muted"></i>
-                            <span class="fw-semibold small">MySQL Partition</span>
+                <!-- Files Tracked (left) + Archives/Jobs (right) -->
+                <div class="d-flex align-items-center mb-2">
+                    <div class="me-auto">
+                        <div class="text-muted small mb-0">Files Tracked</div>
+                        <div class="fw-bold" style="font-size:2.2rem;line-height:1;color:#e67e22;" id="stat-catalog"><?= $compactNum($mysqlStats['catalog_files']) ?></div>
+                    </div>
+                    <div class="d-flex gap-3 text-center" style="font-size:.75rem;">
+                        <div>
+                            <div class="fw-bold" style="font-size:1rem;" id="stat-archives"><?= $compactNum($mysqlStats['archives']) ?></div>
+                            <div class="text-muted">Archives</div>
                         </div>
-                        <?php
-                            $ms = $mysqlStorage;
-                            $dbPct = round($ms['db_bytes'] / $ms['disk_total'] * 100, 1);
-                            $usedPct = round($ms['disk_used'] / $ms['disk_total'] * 100, 1);
-                            $freePct = round($ms['disk_free'] / $ms['disk_total'] * 100, 1);
-                        ?>
-                        <div class="rounded overflow-hidden d-flex mysql-partition-bar" id="mysql-bar" style="height:22px;font-size:.65rem;">
-                            <div class="mysql-bar-db" style="width:<?= $dbPct ?>%;overflow:hidden;white-space:nowrap;padding:0 4px;line-height:22px;"
-                                 title="MySQL Data: <?= \BBS\Services\ServerStats::formatBytes($ms['db_bytes']) ?>">
-                                DB <?= \BBS\Services\ServerStats::formatBytes($ms['db_bytes']) ?>
-                            </div>
-                            <div class="mysql-bar-other" style="width:<?= max($usedPct - $dbPct, 0) ?>%;overflow:hidden;white-space:nowrap;padding:0 4px;line-height:22px;"
-                                 title="Other used: <?= \BBS\Services\ServerStats::formatBytes($ms['disk_used'] - $ms['db_bytes']) ?>">
-                                Other
-                            </div>
-                            <div class="mysql-bar-free" style="width:<?= $freePct ?>%;overflow:hidden;white-space:nowrap;padding:0 4px;line-height:22px;"
-                                 title="Free: <?= \BBS\Services\ServerStats::formatBytes($ms['disk_free']) ?>">
-                                <?= \BBS\Services\ServerStats::formatBytes($ms['disk_free']) ?> free
-                            </div>
-                        </div>
-                        <div class="d-flex justify-content-between mt-1 text-muted" style="font-size:.6rem;">
-                            <span>Total: <?= \BBS\Services\ServerStats::formatBytes($ms['disk_total']) ?></span>
-                            <span id="mysql-free-text"><?= $freePct ?>% free</span>
-                        </div>
-                        <div class="mt-2 text-muted" style="font-size:.65rem;line-height:1.4;">
-                            <strong id="mysql-summary-text">MySQL Data: <?= \BBS\Services\ServerStats::formatBytes($ms['db_bytes']) ?> (<?= $dbPct ?>% of partition)</strong><br>
-                            This chart shows disk usage on the MySQL partition. BBS stores file catalog data in MySQL, enabling fast search and restore operations without locking the Borg repository.
+                        <div>
+                            <div class="fw-bold" style="font-size:1rem;" id="stat-completed-jobs"><?= $compactNum($mysqlStats['completed_jobs']) ?></div>
+                            <div class="text-muted">Jobs Run</div>
                         </div>
                     </div>
-                    <?php endif; ?>
-                    <?php if (!empty($mysqlStats)): ?>
-                    <?php
-                    // Compact number formatter: 1234 → "1,234", 51200 → "51.2K", 1100000 → "1.1M"
-                    $compactNum = function(int $n): string {
-                        if ($n >= 1000000) return round($n / 1000000, 1) . 'M';
-                        if ($n >= 10000) return round($n / 1000, 1) . 'K';
-                        return number_format($n);
-                    };
-                    ?>
-                    <div class="col-md-7 mt-3 mt-md-0 pt-3 pt-md-0 border-top border-top-0-md<?= !empty($mysqlStorage) && $mysqlStorage['disk_total'] > 0 ? ' border-md-start' : '' ?>">
-                        <!-- Files Tracked (left) + Archives/Jobs (right) -->
-                        <div class="d-flex align-items-center mb-2">
-                            <div class="me-auto">
-                                <div class="text-muted small mb-0">Files Tracked</div>
-                                <div class="fw-bold" style="font-size:2.2rem;line-height:1;color:#e67e22;" id="stat-catalog"><?= $compactNum($mysqlStats['catalog_files']) ?></div>
-                            </div>
-                            <div class="d-flex gap-3 text-center" style="font-size:.75rem;">
-                                <div>
-                                    <div class="fw-bold" style="font-size:1rem;" id="stat-archives"><?= $compactNum($mysqlStats['archives']) ?></div>
-                                    <div class="text-muted">Archives</div>
-                                </div>
-                                <div>
-                                    <div class="fw-bold" style="font-size:1rem;" id="stat-completed-jobs"><?= $compactNum($mysqlStats['completed_jobs']) ?></div>
-                                    <div class="text-muted">Jobs Run</div>
-                                </div>
-                            </div>
-                        </div>
-                        <!-- MySQL Performance -->
-                        <div class="border-top pt-2 mt-1">
-                            <div class="d-flex align-items-center mb-1">
-                                <i class="bi bi-activity me-1 text-muted" style="font-size:.7rem;"></i>
-                                <span class="fw-semibold text-muted" style="font-size:.65rem;text-transform:uppercase;letter-spacing:.5px;">MySQL Performance</span>
-                            </div>
-                            <div class="row g-1 text-center" style="font-size:.7rem;">
-                                <div class="col-3">
-                                    <div class="fw-bold" style="font-size:.85rem;" id="stat-qps"><?= $mysqlStats['qps'] ?></div>
-                                    <div class="text-muted">QPS</div>
-                                </div>
-                                <div class="col-3">
-                                    <div class="fw-bold" style="font-size:.85rem;" id="stat-connections"><?= $mysqlStats['threads_connected'] ?></div>
-                                    <div class="text-muted">Connections</div>
-                                </div>
-                                <div class="col-3">
-                                    <div class="fw-bold" style="font-size:.85rem;" id="stat-hit-rate"><?= $mysqlStats['hit_rate'] ?>%</div>
-                                    <div class="text-muted">Hit Rate</div>
-                                </div>
-                                <div class="col-3">
-                                    <?php
-                                    $uptimeDays = floor($mysqlStats['uptime'] / 86400);
-                                    $uptimeHrs = floor(($mysqlStats['uptime'] % 86400) / 3600);
-                                    $uptimeStr = $uptimeDays > 0 ? "{$uptimeDays}d {$uptimeHrs}h" : "{$uptimeHrs}h";
-                                    ?>
-                                    <div class="fw-bold" style="font-size:.85rem;" id="stat-uptime"><?= $uptimeStr ?></div>
-                                    <div class="text-muted">Uptime</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <?php endif; ?>
                 </div>
+                <!-- ClickHouse Catalog Stats -->
+                <?php if ($chStats): ?>
+                <div class="border-top pt-2 mt-1">
+                    <div class="d-flex align-items-center mb-1">
+                        <i class="bi bi-lightning-charge me-1 text-muted" style="font-size:.7rem;"></i>
+                        <span class="fw-semibold text-muted" style="font-size:.65rem;text-transform:uppercase;letter-spacing:.5px;">ClickHouse Catalog</span>
+                    </div>
+                    <div class="row g-1 text-center" style="font-size:.7rem;">
+                        <div class="col-3">
+                            <div class="fw-bold" style="font-size:.85rem;" id="stat-ch-disk"><?= \BBS\Services\ServerStats::formatBytes($chStats['disk_bytes']) ?></div>
+                            <div class="text-muted">Disk Usage</div>
+                        </div>
+                        <div class="col-3">
+                            <div class="fw-bold" style="font-size:.85rem;" id="stat-ch-compression"><?= $chStats['compression_ratio'] ?>x</div>
+                            <div class="text-muted">Compress</div>
+                        </div>
+                        <div class="col-3">
+                            <div class="fw-bold" style="font-size:.85rem;" id="stat-ch-agents"><?= $chStats['agent_count'] ?></div>
+                            <div class="text-muted">Agents</div>
+                        </div>
+                        <div class="col-3">
+                            <div class="fw-bold" style="font-size:.85rem;" id="stat-ch-avg-archive"><?= $compactNum($chStats['avg_per_archive']) ?></div>
+                            <div class="text-muted">Avg/Archive</div>
+                        </div>
+                    </div>
+                </div>
+                <?php if (!empty($chStats['top_repos'])): ?>
+                <div class="border-top pt-2 mt-2">
+                    <div class="d-flex align-items-center mb-1">
+                        <i class="bi bi-trophy me-1 text-muted" style="font-size:.7rem;"></i>
+                        <span class="fw-semibold text-muted" style="font-size:.65rem;text-transform:uppercase;letter-spacing:.5px;">Top Repositories</span>
+                    </div>
+                    <table class="table table-sm mb-0" style="font-size:.7rem;" id="ch-top-repos">
+                        <tbody>
+                            <?php foreach ($chStats['top_repos'] as $repo): ?>
+                            <tr>
+                                <td class="border-0 py-0 ps-0 fw-semibold"><?= htmlspecialchars($repo['name']) ?></td>
+                                <td class="border-0 py-0 text-end text-muted"><?= $compactNum($repo['rows']) ?> rows</td>
+                                <td class="border-0 py-0 text-end text-muted"><?= $repo['archives'] ?> archives</td>
+                                <td class="border-0 py-0 text-end text-muted"><?= \BBS\Services\ServerStats::formatBytes($repo['disk_bytes']) ?></td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php endif; ?>
+                <?php endif; ?>
             </div>
         </div>
     </div>
@@ -792,36 +768,31 @@ setInterval(function() {
                     const el = document.getElementById(id);
                     if (el) el.textContent = fmt(val);
                 }
-                // MySQL perf stats
-                const qps = document.getElementById('stat-qps');
-                if (qps) qps.textContent = ms.qps;
-                const conn = document.getElementById('stat-connections');
-                if (conn) conn.textContent = ms.threads_connected;
-                const hr = document.getElementById('stat-hit-rate');
-                if (hr) hr.textContent = ms.hit_rate + '%';
-                const up = document.getElementById('stat-uptime');
-                if (up) {
-                    const d = Math.floor(ms.uptime / 86400), h = Math.floor((ms.uptime % 86400) / 3600);
-                    up.textContent = d > 0 ? d + 'd ' + h + 'h' : h + 'h';
-                }
             }
-            if (data.mysqlStorage && data.mysqlStorage.disk_total > 0) {
-                const ms = data.mysqlStorage, t = ms.disk_total;
-                const dbPct = (ms.db_bytes / t * 100).toFixed(1);
-                const usedPct = (ms.disk_used / t * 100).toFixed(1);
-                const freePct = (ms.disk_free / t * 100).toFixed(1);
-                const bar = document.getElementById('mysql-bar');
-                if (bar) {
-                    const c = bar.children;
-                    c[0].style.width = dbPct + '%';
-                    c[1].style.width = Math.max(usedPct - dbPct, 0) + '%';
-                    c[2].style.width = freePct + '%';
+            if (data.clickhouseStats) {
+                const ch = data.clickhouseStats;
+                const fmt = n => { n = Number(n); if (n >= 1000000) return (n/1000000).toFixed(1)+'M'; if (n >= 10000) return (n/1000).toFixed(1)+'K'; return n.toLocaleString(); };
+                const fmtB = b => { b = Number(b); if (b >= 1099511627776) return (b/1099511627776).toFixed(1)+'TB'; if (b >= 1073741824) return (b/1073741824).toFixed(1)+'GB'; if (b >= 1048576) return (b/1048576).toFixed(1)+'MB'; return (b/1024).toFixed(1)+'KB'; };
+                const chMap = {
+                    'stat-ch-disk': fmtB(ch.disk_bytes),
+                    'stat-ch-compression': ch.compression_ratio + 'x',
+                    'stat-ch-agents': ch.agent_count,
+                    'stat-ch-avg-archive': fmt(ch.avg_per_archive)
+                };
+                for (const [id, val] of Object.entries(chMap)) {
+                    const el = document.getElementById(id);
+                    if (el) el.textContent = val;
                 }
-                const ft = document.getElementById('mysql-free-text');
-                if (ft) ft.textContent = freePct + '% free';
-                const st = document.getElementById('mysql-summary-text');
-                const fmtB = b => b >= 1073741824 ? (b/1073741824).toFixed(2)+' GB' : b >= 1048576 ? (b/1048576).toFixed(1)+' MB' : (b/1024).toFixed(1)+' KB';
-                if (st) st.textContent = 'MySQL Data: ' + fmtB(ms.db_bytes) + ' (' + dbPct + '% of partition)';
+                // Top repos table
+                const repoTable = document.getElementById('ch-top-repos');
+                if (repoTable && ch.top_repos) {
+                    let html = '<tbody>';
+                    ch.top_repos.forEach(r => {
+                        html += '<tr><td class="border-0 py-0 ps-0 fw-semibold">'+esc(r.name)+'</td><td class="border-0 py-0 text-end text-muted">'+fmt(r.rows)+' rows</td><td class="border-0 py-0 text-end text-muted">'+r.archives+' archives</td><td class="border-0 py-0 text-end text-muted">'+fmtB(r.disk_bytes)+'</td></tr>';
+                    });
+                    html += '</tbody>';
+                    repoTable.innerHTML = html;
+                }
             }
             <?php endif; ?>
 
