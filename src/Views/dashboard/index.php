@@ -278,14 +278,16 @@
     ?>
     <div class="<?= (!empty($storage) && $storage['disk_total'] !== null) ? 'col-lg-8' : 'col-12' ?>">
         <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-body fw-semibold">
+                <img src="/images/clickhouse.svg" alt="" style="height:1em;vertical-align:-.1em;" class="me-1"> ClickHouse Catalog
+            </div>
             <div class="card-body py-3">
                 <div class="d-flex">
                     <!-- Left: Stats + Table -->
                     <div class="flex-grow-1" style="min-width:0;">
-                        <!-- ClickHouse Catalog header -->
+                        <!-- Row count + Recovery Points + Jobs -->
                         <div class="d-flex align-items-center mb-2">
                             <div class="me-auto">
-                                <div class="text-muted small mb-0">ClickHouse Catalog</div>
                                 <div class="fw-bold" style="font-size:2.2rem;line-height:1;color:#e67e22;"><span id="stat-catalog"><?= $compactNum($mysqlStats['catalog_files']) ?></span> <span style="font-size:1rem;color:#999;">Rows</span></div>
                             </div>
                             <div class="d-flex gap-4 text-center" style="font-size:.75rem;">
@@ -300,12 +302,8 @@
                             </div>
                         </div>
                         <?php if ($chStats): ?>
-                        <!-- ClickHouse Catalog Stats -->
+                        <!-- ClickHouse Stats Grid -->
                         <div class="border-top pt-2 mt-1">
-                            <div class="d-flex align-items-center mb-1">
-                                <i class="bi bi-lightning-charge me-1 text-muted" style="font-size:.7rem;"></i>
-                                <span class="fw-semibold text-muted" style="font-size:.65rem;text-transform:uppercase;letter-spacing:.5px;">ClickHouse Catalog</span>
-                            </div>
                             <div class="row g-1 text-center" style="font-size:.7rem;">
                                 <div class="col-3">
                                     <div class="fw-bold" style="font-size:.85rem;" id="stat-ch-disk"><?= \BBS\Services\ServerStats::formatBytes($chStats['disk_bytes']) ?></div>
@@ -360,7 +358,8 @@
                             $pieData[] = $otherDisk;
                         }
                     ?>
-                    <div class="d-none d-md-flex align-items-center justify-content-center border-start ms-3 ps-3" style="flex:0 0 33%;max-width:33%;" id="ch-pie-wrap">
+                    <div class="d-none d-md-flex flex-column align-items-center justify-content-center border-start ms-3 ps-3" style="flex:0 0 33%;max-width:33%;" id="ch-pie-wrap">
+                        <div class="fw-semibold text-muted mb-2" style="font-size:.65rem;text-transform:uppercase;letter-spacing:.5px;">Top Repositories</div>
                         <canvas id="catalogPieChart" style="max-width:200px;max-height:200px;"></canvas>
                     </div>
                     <?php endif; ?>
