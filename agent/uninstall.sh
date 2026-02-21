@@ -33,7 +33,8 @@ if [[ "$OS" == "Darwin" ]]; then
     # macOS — launchd
     PLIST="/Library/LaunchDaemons/com.borgbackupserver.agent.plist"
     if [[ -f "$PLIST" ]]; then
-        launchctl unload "$PLIST" 2>/dev/null || true
+        launchctl bootout system/com.borgbackupserver.agent 2>/dev/null || \
+            launchctl unload "$PLIST" 2>/dev/null || true
         rm -f "$PLIST"
         ok "Removed launchd service"
     else

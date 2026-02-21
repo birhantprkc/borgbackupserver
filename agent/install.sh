@@ -406,12 +406,45 @@ install_service() {
     if [ "$OS" = "macos" ]; then
         start_spinner "Configuring launchd service..."
 
-        if command -v curl &>/dev/null; then
-            curl -sf -o /Library/LaunchDaemons/com.borgbackupserver.agent.plist \
-                "$SERVER_URL/api/agent/download?file=com.borgbackupserver.agent.plist" 2>/dev/null || true
-        fi
-        launchctl unload /Library/LaunchDaemons/com.borgbackupserver.agent.plist 2>/dev/null || true
-        launchctl load /Library/LaunchDaemons/com.borgbackupserver.agent.plist
+        # Build PATH that includes Homebrew bin dirs so borg/python3 are findable
+        LAUNCH_PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        [ -d /opt/homebrew/bin ] && LAUNCH_PATH="/opt/homebrew/bin:$LAUNCH_PATH"
+
+        # Generate plist dynamically with the detected python3 path
+        cat > /Library/LaunchDaemons/com.borgbackupserver.agent.plist <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.borgbackupserver.agent</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$PYTHON3</string>
+        <string>$INSTALL_DIR/bbs-agent.py</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>$LAUNCH_PATH</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/var/log/bbs-agent.log</string>
+    <key>StandardErrorPath</key>
+    <string>/var/log/bbs-agent.log</string>
+</dict>
+</plist>
+PLIST
+
+        # Use bootout/bootstrap (modern launchctl) with fallback to load/unload
+        launchctl bootout system/com.borgbackupserver.agent 2>/dev/null || \
+            launchctl unload /Library/LaunchDaemons/com.borgbackupserver.agent.plist 2>/dev/null || true
+        launchctl bootstrap system /Library/LaunchDaemons/com.borgbackupserver.agent.plist 2>/dev/null || \
+            launchctl load /Library/LaunchDaemons/com.borgbackupserver.agent.plist
 
         stop_spinner
         print_success "Service installed ${DIM}(launchd)${NC}"
