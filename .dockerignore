@@ -1,6 +1,7 @@
 .git
 .gitignore
 .DS_Store
+.github
 design/
 CLAUDE.md
 *.swp

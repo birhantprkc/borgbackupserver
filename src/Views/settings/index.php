@@ -2536,6 +2536,7 @@ function testHetznerConnection() {
     $currentVersion = $updateSvc->getCurrentVersion();
     $latest = $updateSvc->getLatestRelease();
     $hasUpdate = $updateSvc->isUpdateAvailable();
+    $isDocker = \BBS\Services\UpdateService::isRunningInDocker();
     $upgradeResult = $_SESSION['upgrade_result'] ?? null;
     unset($_SESSION['upgrade_result']);
 ?>
@@ -2604,7 +2605,7 @@ $outdatedCount = count($outdatedAgents);
                             <i class="bi bi-arrow-clockwise me-1"></i> Check for Updates
                         </button>
                     </form>
-                    <?php if ($hasUpdate): ?>
+                    <?php if ($hasUpdate && !$isDocker): ?>
                     <form method="POST" action="/settings/upgrade" data-confirm="This will start a background upgrade to v<?= htmlspecialchars($latest['version']) ?>. You'll be redirected to a progress page.&#10;&#10;Active backups must complete first. New backups will be paused during the upgrade.&#10;&#10;Proceed?">
                         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                         <button type="submit" class="btn btn-sm btn-primary">
@@ -2613,6 +2614,18 @@ $outdatedCount = count($outdatedAgents);
                     </form>
                     <?php endif; ?>
                 </div>
+
+                <?php if ($isDocker && $hasUpdate): ?>
+                <div class="alert alert-info small mt-3 mb-0">
+                    <i class="bi bi-box me-1"></i> <strong>Docker Upgrade Instructions</strong>
+                    <p class="mt-2 mb-2">To upgrade to v<?= htmlspecialchars($latest['version']) ?>, pull the latest image and recreate the container:</p>
+                    <pre class="bg-dark text-light p-2 rounded mb-2" style="font-size: 0.85em;">docker compose pull
+docker compose up -d</pre>
+                    <p class="mb-2">Or pin a specific version in your <code>docker-compose.yml</code>:</p>
+                    <pre class="bg-dark text-light p-2 rounded mb-2" style="font-size: 0.85em;">image: marcpope/borgbackupserver:v<?= htmlspecialchars($latest['version']) ?></pre>
+                    <p class="mb-0">Your data is stored on the Docker volume and will be preserved. See the <a href="https://github.com/marcpope/borgbackupserver/wiki/Docker-Installation" target="_blank">Docker Installation wiki</a> for full instructions.</p>
+                </div>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -2677,6 +2690,7 @@ $outdatedCount = count($outdatedAgents);
     <?php endif; ?>
 </div>
 
+<?php if (!$isDocker): ?>
 <hr>
 
 <div class="row g-4">
@@ -2700,6 +2714,7 @@ $outdatedCount = count($outdatedAgents);
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 <?php if ($upgradeResult): ?>
 <div class="card border-0 shadow-sm mt-4">

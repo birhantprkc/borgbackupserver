@@ -72,6 +72,15 @@ RUN mkdir -p /var/www/bbs /var/bbs/home /var/bbs/backups /var/bbs/cache /run/mys
     && chown -R www-data:www-data /var/www/bbs /var/bbs \
     && chown mysql:mysql /run/mysqld
 
+# Copy application code and install dependencies
+COPY . /var/www/bbs/
+RUN cd /var/www/bbs && composer install --no-dev --optimize-autoloader --no-interaction --quiet
+RUN chown -R www-data:www-data /var/www/bbs
+
+# Install SSH helper
+RUN cp /var/www/bbs/bin/bbs-ssh-helper /usr/local/bin/bbs-ssh-helper \
+    && chmod 755 /usr/local/bin/bbs-ssh-helper
+
 # Configure scoped sudoers for www-data
 RUN echo "www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper, /var/www/bbs/bin/bbs-update" > /etc/sudoers.d/bbs-ssh-helper \
     && echo "www-data ALL=(bbs-*) NOPASSWD: /usr/bin/borg, /usr/local/bin/borg, /usr/bin/rclone, /usr/bin/env" > /etc/sudoers.d/bbs-borg \

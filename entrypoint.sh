@@ -1,11 +1,8 @@
 #!/bin/bash
 set -e
 
-BBS_VERSION="${BBS_VERSION:-latest}"
-BBS_REPO="https://github.com/marcpope/borgbackupserver.git"
-
 echo "=== BBS Container Starting ==="
-echo "Version: $BBS_VERSION"
+echo "Version: $(cat /var/www/bbs/VERSION 2>/dev/null || echo 'unknown')"
 
 # --- SSH host key persistence ---
 # Persist host keys on the data volume so agents don't see "host key changed"
@@ -91,65 +88,12 @@ if ! mysql -e "SELECT 1 FROM mysql.user WHERE user='bbs'" 2>/dev/null | grep -q 
     mysql -e "FLUSH PRIVILEGES;"
 fi
 
-# --- Clone or update BBS code ---
-# Resolve "latest" to the most recent release tag from GitHub
-if [ "$BBS_VERSION" = "latest" ]; then
-    echo "Fetching latest release tag from GitHub..."
-    LATEST_TAG=$(git ls-remote --tags --sort=-v:refname "$BBS_REPO" 'refs/tags/v*' 2>/dev/null | head -1 | sed 's|.*refs/tags/||')
-    if [ -n "$LATEST_TAG" ]; then
-        echo "Latest release: $LATEST_TAG"
-        BBS_VERSION="$LATEST_TAG"
-    else
-        echo "Warning: Could not determine latest tag, falling back to main"
-        BBS_VERSION="main"
-    fi
-fi
-
-git config --global --add safe.directory /var/www/bbs
-
-if [ ! -d "/var/www/bbs/.git" ]; then
-    echo "Cloning BBS repository ($BBS_VERSION)..."
-    rm -rf /var/www/bbs/*
-    # Clone main branch first so bbs-update can reference origin/main
-    git clone --depth 1 "$BBS_REPO" /var/www/bbs
-    if [ "$BBS_VERSION" != "main" ]; then
-        cd /var/www/bbs
-        git fetch --depth 1 origin tag "$BBS_VERSION"
-        git checkout "$BBS_VERSION"
-    fi
-else
-    echo "Updating BBS repository ($BBS_VERSION)..."
-    cd /var/www/bbs
-    git config --global --add safe.directory /var/www/bbs
-    git fetch origin --tags
-    git checkout main 2>/dev/null || true
-    git pull origin main 2>/dev/null || true
-    if [ "$BBS_VERSION" != "main" ]; then
-        git checkout "$BBS_VERSION"
-    fi
-fi
-
-# Install Composer dependencies
-if [ -f "/var/www/bbs/composer.json" ]; then
-    echo "Installing Composer dependencies..."
-    cd /var/www/bbs
-    composer install --no-dev --optimize-autoloader --no-interaction 2>/dev/null || true
-fi
-
-# Install bbs-ssh-helper
-if [ -f "/var/www/bbs/bin/bbs-ssh-helper" ]; then
-    echo "Installing bbs-ssh-helper..."
-    cp /var/www/bbs/bin/bbs-ssh-helper /usr/local/bin/bbs-ssh-helper
-    chmod 755 /usr/local/bin/bbs-ssh-helper
-fi
-
 # --- Storage directories ---
 mkdir -p /var/bbs/home
 mkdir -p /var/bbs/cache
 mkdir -p /var/bbs/backups
 
-# Set permissions (precise ordering to avoid overwriting mysql ownership)
-chown -R www-data:www-data /var/www/bbs
+# Set permissions on persistent volume directories
 chown -R www-data:www-data /var/bbs/home /var/bbs/cache /var/bbs/backups
 chown -R mysql:mysql "$MYSQL_DATADIR"
 

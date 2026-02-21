@@ -23,6 +23,14 @@ class UpdateService
         return trim(file_get_contents($file));
     }
 
+    /**
+     * Detect if the application is running inside a Docker container.
+     */
+    public static function isRunningInDocker(): bool
+    {
+        return file_exists('/.dockerenv');
+    }
+
     public function getLatestRelease(): array
     {
         return [
