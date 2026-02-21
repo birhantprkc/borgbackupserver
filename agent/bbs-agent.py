@@ -44,7 +44,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.6.0"
+AGENT_VERSION = "2.7.5"
 BORG_PATH = None  # Resolved in get_system_info()
 
 # Ensure UTF-8 filesystem encoding for handling filenames with non-ASCII characters.
@@ -177,7 +177,7 @@ def set_borg_source(source):
 def get_system_info():
     """Gather system information for registration."""
     info = {
-        "hostname": socket.getfqdn(),
+        "hostname": socket.gethostname() or socket.getfqdn(),
         "os_info": "{} {} {}".format(platform.system(), platform.release(), platform.machine()),
         "agent_version": AGENT_VERSION,
     }
