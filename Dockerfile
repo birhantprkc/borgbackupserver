@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install ClickHouse (catalog engine)
-RUN curl -fsSL 'https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key' | \
+RUN curl -fsSL 'https://packages.clickhouse.com/keys/GPG-KEY-clickhouse.asc' | \
         gpg --dearmor -o /usr/share/keyrings/clickhouse-keyring.gpg && \
     echo "deb [signed-by=/usr/share/keyrings/clickhouse-keyring.gpg] https://packages.clickhouse.com/deb stable main" \
         > /etc/apt/sources.list.d/clickhouse.list && \
