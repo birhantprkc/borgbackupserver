@@ -54,7 +54,7 @@ echo "Starting ClickHouse..."
 if command -v clickhouse-server &>/dev/null; then
     mkdir -p /var/lib/clickhouse /var/log/clickhouse-server
     chown -R clickhouse:clickhouse /var/lib/clickhouse /var/log/clickhouse-server
-    clickhouse-server --daemon --config-file=/etc/clickhouse-server/config.xml 2>/dev/null || true
+    sudo -u clickhouse clickhouse-server --daemon --config-file=/etc/clickhouse-server/config.xml 2>/dev/null || true
     for i in {1..15}; do
         curl -sf http://localhost:8123/ping >/dev/null 2>&1 && break
         sleep 1
