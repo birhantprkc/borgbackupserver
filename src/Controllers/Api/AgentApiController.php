@@ -78,21 +78,6 @@ class AgentApiController extends Controller
         $agent = $this->authenticateAgent();
         $input = $this->getJsonInput();
 
-        // Prevent key reuse: if this agent was active in the last 5 minutes AND
-        // the hostname is different, it's running on another machine — reject.
-        // Same hostname (or first-time registration) is always allowed.
-        $incomingHostname = $input['hostname'] ?? '';
-        $existingHostname = $agent['hostname'] ?? '';
-        if (!empty($agent['last_heartbeat']) && !empty($existingHostname) && !empty($incomingHostname)
-            && $existingHostname !== $incomingHostname) {
-            $lastSeen = strtotime($agent['last_heartbeat']);
-            if ($lastSeen && (time() - $lastSeen) < 300) {
-                $this->json([
-                    'error' => "This key is already in use by an active client ({$existingHostname}). Please create a new client."
-                ], 409);
-            }
-        }
-
         $data = [];
         if (!empty($input['hostname']))             $data['hostname'] = substr($input['hostname'], 0, 255);
         if (!empty($input['ip_address']))           $data['ip_address'] = substr($input['ip_address'], 0, 45);
