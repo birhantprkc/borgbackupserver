@@ -65,6 +65,14 @@ if command -v clickhouse-server &>/dev/null; then
     done
     if curl -sf http://localhost:8123/ping >/dev/null 2>&1; then
         echo "  ClickHouse started"
+        # Drop old system log tables to reclaim disk space
+        for tbl in trace_log text_log metric_log asynchronous_metric_log part_log \
+                   processors_profile_log query_log query_thread_log query_views_log \
+                   query_metric_log session_log opentelemetry_span_log \
+                   asynchronous_insert_log backup_log s3_queue_log blob_storage_log \
+                   background_schedule_pool_log error_log; do
+            clickhouse-client --query "DROP TABLE IF EXISTS system.$tbl" 2>/dev/null || true
+        done
     else
         echo "  Warning: ClickHouse failed to start"
     fi

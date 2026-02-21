@@ -59,6 +59,19 @@ else
         cp "$BBS_DIR/config/clickhouse-server-override.xml" /etc/clickhouse-server/config.d/bbs-override.xml
         # Restart to pick up config changes
         systemctl restart clickhouse-server 2>/dev/null || true
+        # Wait for restart
+        for i in {1..10}; do
+            curl -sf http://localhost:8123/ping >/dev/null 2>&1 && break
+            sleep 1
+        done
+        # Drop old system log tables to reclaim disk space
+        for tbl in trace_log text_log metric_log asynchronous_metric_log part_log \
+                   processors_profile_log query_log query_thread_log query_views_log \
+                   query_metric_log session_log opentelemetry_span_log \
+                   asynchronous_insert_log backup_log s3_queue_log blob_storage_log \
+                   background_schedule_pool_log error_log; do
+            clickhouse-client --query "DROP TABLE IF EXISTS system.$tbl" 2>/dev/null || true
+        done
     fi
     # Ensure service is running
     systemctl is-active --quiet clickhouse-server || systemctl start clickhouse-server 2>/dev/null || true
