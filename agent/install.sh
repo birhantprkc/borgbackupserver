@@ -406,11 +406,12 @@ install_service() {
     if [ "$OS" = "macos" ]; then
         start_spinner "Configuring launchd service..."
 
-        # Build PATH that includes Homebrew bin dirs so borg/python3 are findable
-        LAUNCH_PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-        [ -d /opt/homebrew/bin ] && LAUNCH_PATH="/opt/homebrew/bin:$LAUNCH_PATH"
+        # Download the compiled macOS wrapper binary (handles FDA permissions)
+        curl -sf -o "$INSTALL_DIR/bbs-mac-agent" \
+            "$SERVER_URL/api/agent/download?file=bbs-mac-agent" 2>/dev/null || true
+        chmod 755 "$INSTALL_DIR/bbs-mac-agent"
 
-        # Generate plist dynamically with the detected python3 path
+        # Generate plist using the compiled wrapper (users grant FDA to this binary)
         cat > /Library/LaunchDaemons/com.borgbackupserver.agent.plist <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -420,14 +421,8 @@ install_service() {
     <string>com.borgbackupserver.agent</string>
     <key>ProgramArguments</key>
     <array>
-        <string>$PYTHON3</string>
-        <string>$INSTALL_DIR/bbs-agent.py</string>
+        <string>$INSTALL_DIR/bbs-mac-agent</string>
     </array>
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>PATH</key>
-        <string>$LAUNCH_PATH</string>
-    </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
@@ -633,14 +628,12 @@ print_summary() {
     if [ "$SERVICE_TYPE" = "launchd" ]; then
         echo -e "  ${BOLD}${YELLOW}macOS: Grant Full Disk Access${NC}"
         echo -e "  ─────────────────────────────────────────────────────────────"
-        echo -e "  Borg needs Full Disk Access to back up protected directories."
+        echo -e "  The agent needs Full Disk Access to back up protected directories."
         echo -e "  1. Open ${BOLD}System Settings > Privacy & Security > Full Disk Access${NC}"
         echo -e "  2. Click ${BOLD}+${NC} (unlock with your password if needed)"
-        echo -e "  3. Press ${BOLD}Cmd+Shift+G${NC} and type the path below, then click Add:"
-        echo -e "     ${CYAN}$PYTHON3${NC}"
-        echo -e "  4. Repeat for borg:"
-        echo -e "     ${CYAN}$(command -v borg 2>/dev/null || echo /opt/homebrew/bin/borg)${NC}"
-        echo -e "  5. Restart the agent:"
+        echo -e "  3. Press ${BOLD}Cmd+Shift+G${NC} and type:"
+        echo -e "     ${CYAN}$INSTALL_DIR/bbs-mac-agent${NC}"
+        echo -e "  4. Click Add, then restart the agent:"
         echo -e "     ${YELLOW}sudo launchctl kickstart -k system/com.borgbackupserver.agent${NC}"
         echo ""
     fi

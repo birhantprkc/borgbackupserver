@@ -863,6 +863,7 @@ class AgentApiController extends Controller
             'install.sh' => 'agent/install.sh',
             'bbs-agent.py' => 'agent/bbs-agent.py',
             'com.borgbackupserver.agent.plist' => 'agent/com.borgbackupserver.agent.plist',
+            'bbs-mac-agent' => 'agent/bbs-mac-agent',
             'uninstall.sh' => 'agent/uninstall.sh',
         ];
 
@@ -880,7 +881,10 @@ class AgentApiController extends Controller
             exit;
         }
 
-        header('Content-Type: text/plain; charset=utf-8');
+        $contentType = str_ends_with($filename, '.sh') || str_ends_with($filename, '.py') || str_ends_with($filename, '.plist')
+            ? 'text/plain; charset=utf-8'
+            : 'application/octet-stream';
+        header('Content-Type: ' . $contentType);
         header('Content-Disposition: inline; filename="' . $filename . '"');
         readfile($path);
         exit;
