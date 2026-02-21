@@ -49,12 +49,20 @@ done
 # Start ClickHouse (catalog engine)
 echo "Starting ClickHouse..."
 if command -v clickhouse-server &>/dev/null; then
-    mkdir -p /var/lib/clickhouse /var/log/clickhouse-server /etc/clickhouse-server/config.d
-    chown -R clickhouse:clickhouse /var/lib/clickhouse /var/log/clickhouse-server
+    # Store ClickHouse data on persistent volume (same pattern as MariaDB)
+    mkdir -p /var/bbs/clickhouse /var/log/clickhouse-server /etc/clickhouse-server/config.d
+    chown -R clickhouse:clickhouse /var/bbs/clickhouse /var/log/clickhouse-server
     # Install config override to disable system log tables (reduces idle disk I/O)
     if [ -f "/var/www/bbs/config/clickhouse-server-override.xml" ]; then
         cp /var/www/bbs/config/clickhouse-server-override.xml /etc/clickhouse-server/config.d/bbs-override.xml
     fi
+    # Point ClickHouse data to persistent volume so it survives container recreation
+    cat > /etc/clickhouse-server/config.d/bbs-docker-paths.xml << 'CHXML'
+<clickhouse>
+    <path>/var/bbs/clickhouse/</path>
+    <tmp_path>/var/bbs/clickhouse/tmp/</tmp_path>
+</clickhouse>
+CHXML
     sudo -u clickhouse clickhouse-server --daemon --config-file=/etc/clickhouse-server/config.xml 2>/dev/null || true
     for i in {1..15}; do
         curl -sf http://localhost:8123/ping >/dev/null 2>&1 && break
