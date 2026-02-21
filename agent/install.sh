@@ -614,9 +614,9 @@ print_summary() {
     echo -e "  ${BOLD}Useful Commands${NC}"
     echo -e "  ─────────────────────────────────────────────────────────────"
     if [ "$SERVICE_TYPE" = "launchd" ]; then
-        echo -e "  ${BULLET} Check status:    ${YELLOW}launchctl list | grep borgbackupserver${NC}"
+        echo -e "  ${BULLET} Check status:    ${YELLOW}sudo launchctl list | grep borgbackupserver${NC}"
         echo -e "  ${BULLET} View logs:       ${YELLOW}tail -f /var/log/bbs-agent.log${NC}"
-        echo -e "  ${BULLET} Restart agent:   ${YELLOW}launchctl kickstart -k system/com.borgbackupserver.agent${NC}"
+        echo -e "  ${BULLET} Restart agent:   ${YELLOW}sudo launchctl kickstart -k system/com.borgbackupserver.agent${NC}"
     elif [ "$SERVICE_TYPE" = "sysvinit" ]; then
         echo -e "  ${BULLET} Check status:    ${YELLOW}/etc/init.d/bbs-agent status${NC}"
         echo -e "  ${BULLET} View logs:       ${YELLOW}tail -f /var/log/bbs-agent.log${NC}"
