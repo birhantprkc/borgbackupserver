@@ -114,12 +114,17 @@ class AgentApiController extends Controller
 
         // Return server config the agent needs
         $pollInterval = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'agent_poll_interval'");
+        $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
+        $sshPort = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'ssh_port'");
 
         $this->json([
             'status' => 'ok',
             'agent_id' => $agent['id'],
             'name' => $agent['name'],
             'poll_interval' => (int) ($pollInterval['value'] ?? 30),
+            'ssh_unix_user' => $agent['ssh_unix_user'] ?? '',
+            'server_host' => $serverHost['value'] ?? '',
+            'ssh_port' => (int) ($sshPort['value'] ?? 22),
         ]);
     }
 

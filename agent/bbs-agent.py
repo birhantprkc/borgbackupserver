@@ -291,6 +291,10 @@ def register(config):
         if "poll_interval" in result:
             config["poll_interval"] = result["poll_interval"]
 
+        # Update SSH connection info from server (handles server changes/re-installs)
+        if result.get("server_host") and result.get("ssh_unix_user"):
+            _save_ssh_info(result)
+
         # Download SSH key for borg SSH access
         download_ssh_key(config)
 
