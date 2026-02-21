@@ -49,6 +49,25 @@ for i in {1..30}; do
     sleep 1
 done
 
+# Start ClickHouse (catalog engine)
+echo "Starting ClickHouse..."
+if command -v clickhouse-server &>/dev/null; then
+    mkdir -p /var/lib/clickhouse /var/log/clickhouse-server
+    chown -R clickhouse:clickhouse /var/lib/clickhouse /var/log/clickhouse-server
+    clickhouse-server --daemon --config-file=/etc/clickhouse-server/config.xml 2>/dev/null || true
+    for i in {1..15}; do
+        curl -sf http://localhost:8123/ping >/dev/null 2>&1 && break
+        sleep 1
+    done
+    if curl -sf http://localhost:8123/ping >/dev/null 2>&1; then
+        echo "  ClickHouse started"
+    else
+        echo "  Warning: ClickHouse failed to start"
+    fi
+else
+    echo "  Warning: ClickHouse not installed — catalog features will not work"
+fi
+
 # Create database and user if needed
 if ! mysql -e "SELECT 1 FROM mysql.user WHERE user='bbs'" 2>/dev/null | grep -q 1; then
     echo "Creating BBS database and user..."
@@ -151,6 +170,24 @@ fi
 if ! grep -q '^APP_KEY=' /var/www/bbs/config/.env 2>/dev/null; then
     echo "Adding APP_KEY to existing .env..."
     echo "APP_KEY=$APP_KEY" >> /var/www/bbs/config/.env
+fi
+
+# Add ClickHouse env vars if missing
+if ! grep -q 'CLICKHOUSE_HOST' /var/www/bbs/config/.env 2>/dev/null; then
+    echo "" >> /var/www/bbs/config/.env
+    echo "CLICKHOUSE_HOST=localhost" >> /var/www/bbs/config/.env
+    echo "CLICKHOUSE_PORT=8123" >> /var/www/bbs/config/.env
+    echo "CLICKHOUSE_DB=bbs" >> /var/www/bbs/config/.env
+fi
+
+# Create ClickHouse database and tables
+if curl -sf http://localhost:8123/ping >/dev/null 2>&1; then
+    echo "Setting up ClickHouse catalog tables..."
+    clickhouse-client --query "CREATE DATABASE IF NOT EXISTS bbs" 2>/dev/null || true
+    if [ -f "/var/www/bbs/schema-clickhouse.sql" ]; then
+        clickhouse-client -d bbs --multiquery < /var/www/bbs/schema-clickhouse.sql 2>/dev/null || true
+    fi
+    echo "  ClickHouse catalog tables ready"
 fi
 
 # --- Database setup ---
