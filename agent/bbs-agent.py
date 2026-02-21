@@ -86,13 +86,15 @@ def setup_logging():
     if log_dir and not os.path.exists(log_dir):
         os.makedirs(log_dir, exist_ok=True)
 
+    handlers = [logging.FileHandler(LOG_PATH, encoding="utf-8")]
+    # Only add stdout handler if stdout is a real terminal (not redirected to the
+    # same log file by launchd/systemd, which would cause duplicate lines)
+    if os.isatty(sys.stdout.fileno()):
+        handlers.append(logging.StreamHandler(sys.stdout))
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.FileHandler(LOG_PATH, encoding="utf-8"),
-            logging.StreamHandler(sys.stdout),
-        ],
+        handlers=handlers,
     )
 
 
