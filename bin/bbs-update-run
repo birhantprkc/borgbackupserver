@@ -53,6 +53,13 @@ if ! command -v clickhouse-server &>/dev/null; then
     done
     echo "  ClickHouse installed and started"
 else
+    # Install/update config override to disable system log tables (reduces idle disk I/O)
+    mkdir -p /etc/clickhouse-server/config.d
+    if [ -f "$BBS_DIR/config/clickhouse-server-override.xml" ]; then
+        cp "$BBS_DIR/config/clickhouse-server-override.xml" /etc/clickhouse-server/config.d/bbs-override.xml
+        # Restart to pick up config changes
+        systemctl restart clickhouse-server 2>/dev/null || true
+    fi
     # Ensure service is running
     systemctl is-active --quiet clickhouse-server || systemctl start clickhouse-server 2>/dev/null || true
     echo "  OK"

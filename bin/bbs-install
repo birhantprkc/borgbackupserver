@@ -272,6 +272,13 @@ else
 
     info "Installing ClickHouse server and client..."
     DEBIAN_FRONTEND=noninteractive apt-get install -y clickhouse-server clickhouse-client > /dev/null 2>&1
+
+    # Disable system log tables (reduces idle disk I/O and CPU)
+    mkdir -p /etc/clickhouse-server/config.d
+    if [ -f "$BBS_DIR/config/clickhouse-server-override.xml" ]; then
+        cp "$BBS_DIR/config/clickhouse-server-override.xml" /etc/clickhouse-server/config.d/bbs-override.xml
+    fi
+
     systemctl enable --now clickhouse-server > /dev/null 2>&1
 
     # Wait for startup

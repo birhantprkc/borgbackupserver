@@ -33,6 +33,9 @@ RUN ARCH=$(dpkg --print-architecture) && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y clickhouse-server clickhouse-client && \
     rm -rf /var/lib/apt/lists/*
 
+# Disable ClickHouse system log tables (heavy idle disk I/O)
+COPY config/clickhouse-server-override.xml /etc/clickhouse-server/config.d/bbs-override.xml
+
 # Install Apprise (notification tool supporting 100+ services)
 RUN pip3 install --break-system-packages --no-cache-dir apprise
 
