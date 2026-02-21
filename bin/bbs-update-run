@@ -38,9 +38,10 @@ chmod 755 /usr/local/bin/bbs-ssh-helper
 echo "[5/12] Setting up ClickHouse..."
 if ! command -v clickhouse-server &>/dev/null; then
     echo "  Installing ClickHouse..."
-    curl -fsSL 'https://packages.clickhouse.com/keys/GPG-KEY-clickhouse.asc' | \
+    curl -fsSL 'https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key' | \
         gpg --dearmor -o /usr/share/keyrings/clickhouse-keyring.gpg 2>/dev/null
-    echo "deb [signed-by=/usr/share/keyrings/clickhouse-keyring.gpg] https://packages.clickhouse.com/deb stable main" \
+    ARCH=$(dpkg --print-architecture)
+    echo "deb [signed-by=/usr/share/keyrings/clickhouse-keyring.gpg arch=${ARCH}] https://packages.clickhouse.com/deb stable main" \
         > /etc/apt/sources.list.d/clickhouse.list
     apt-get update -qq 2>/dev/null
     DEBIAN_FRONTEND=noninteractive apt-get install -y clickhouse-server clickhouse-client > /dev/null 2>&1
