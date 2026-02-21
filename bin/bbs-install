@@ -263,7 +263,7 @@ if command -v clickhouse-server &>/dev/null; then
     ok "ClickHouse already installed ($(clickhouse-client --version 2>/dev/null | head -1 || echo 'unknown'))"
 else
     info "Adding ClickHouse repository..."
-    curl -fsSL 'https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key' | \
+    curl -fsSL -A 'Mozilla/5.0' 'https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key' | \
         gpg --dearmor -o /usr/share/keyrings/clickhouse-keyring.gpg 2>/dev/null
     ARCH=$(dpkg --print-architecture)
     echo "deb [signed-by=/usr/share/keyrings/clickhouse-keyring.gpg arch=${ARCH}] https://packages.clickhouse.com/deb stable main" \
