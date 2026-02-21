@@ -634,9 +634,14 @@ print_summary() {
         echo -e "  ${BOLD}${YELLOW}macOS: Grant Full Disk Access${NC}"
         echo -e "  ─────────────────────────────────────────────────────────────"
         echo -e "  Borg needs Full Disk Access to back up protected directories."
-        echo -e "  ${ARROW} Open ${BOLD}System Settings > Privacy & Security > Full Disk Access${NC}"
-        echo -e "  ${ARROW} Click ${BOLD}+${NC} and add: ${CYAN}$PYTHON3${NC}"
-        echo -e "  ${ARROW} Also add: ${CYAN}$(command -v borg 2>/dev/null || echo /opt/homebrew/bin/borg)${NC}"
+        echo -e "  1. Open ${BOLD}System Settings > Privacy & Security > Full Disk Access${NC}"
+        echo -e "  2. Click ${BOLD}+${NC} (unlock with your password if needed)"
+        echo -e "  3. Press ${BOLD}Cmd+Shift+G${NC} and type the path below, then click Add:"
+        echo -e "     ${CYAN}$PYTHON3${NC}"
+        echo -e "  4. Repeat for borg:"
+        echo -e "     ${CYAN}$(command -v borg 2>/dev/null || echo /opt/homebrew/bin/borg)${NC}"
+        echo -e "  5. Restart the agent:"
+        echo -e "     ${YELLOW}sudo launchctl kickstart -k system/com.borgbackupserver.agent${NC}"
         echo ""
     fi
 
