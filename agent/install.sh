@@ -410,6 +410,8 @@ install_service() {
         curl -sf -o "$INSTALL_DIR/bbs-mac-agent" \
             "$SERVER_URL/api/agent/download?file=bbs-mac-agent" 2>/dev/null || true
         chmod 755 "$INSTALL_DIR/bbs-mac-agent"
+        # Ad-hoc code sign so macOS recognizes it in Full Disk Access settings
+        codesign -s - -f --identifier com.borgbackupserver.agent "$INSTALL_DIR/bbs-mac-agent" 2>/dev/null || true
 
         # Generate plist using the compiled wrapper (users grant FDA to this binary)
         cat > /Library/LaunchDaemons/com.borgbackupserver.agent.plist <<PLIST
