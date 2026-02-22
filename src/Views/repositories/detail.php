@@ -264,7 +264,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                         <td>
                             <?php if (!empty($plans)): ?>
                                 <?php foreach ($plans as $plan): ?>
-                                <a href="/clients/<?= $agentId ?>?tab=plans" class="text-decoration-none"><?= htmlspecialchars($plan['name']) ?></a><?php if ($plan !== end($plans)) echo ', '; ?>
+                                <a href="/clients/<?= $agentId ?>?tab=schedules" class="text-decoration-none"><?= htmlspecialchars($plan['name']) ?></a><?php if ($plan !== end($plans)) echo ', '; ?>
                                 <?php endforeach; ?>
                             <?php else: ?>
                             <span class="text-muted">None</span>
