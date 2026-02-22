@@ -44,7 +44,7 @@ RUN ARCH=$(dpkg --print-architecture) && \
 COPY config/clickhouse-server-override.xml /etc/clickhouse-server/config.d/bbs-override.xml
 
 # Install Apprise (notification tool supporting 100+ services)
-RUN pip3 install --break-system-packages --no-cache-dir apprise
+RUN pip3 install --break-system-packages --no-cache-dir apprise wheel>=0.46.2
 
 # Install PHP extensions
 RUN docker-php-ext-install pdo pdo_mysql mbstring
