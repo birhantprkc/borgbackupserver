@@ -74,7 +74,7 @@ $fmtElapsed = function(int $s): string { return floor($s/60) . ':' . str_pad($s%
         <?php endif; ?>
     </div>
     <div class="card-body small">
-        <?php $parsedown = new \Parsedown(); $parsedown->setSafeMode(true); $oldLevel = error_reporting(error_reporting() & ~E_DEPRECATED); echo $parsedown->text($release['notes']); error_reporting($oldLevel); ?>
+        <?php $converter = new \League\CommonMark\GithubFlavoredMarkdownConverter(['html_input' => 'strip']); echo $converter->convert($release['notes']); ?>
     </div>
 </div>
 <?php endif; ?>

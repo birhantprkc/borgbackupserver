@@ -10,7 +10,7 @@
         "spomky-labs/otphp": "^11.2",
         "bacon/bacon-qr-code": "^2.0",
         "filp/whoops": "^2.18",
-        "erusev/parsedown": "^1.7"
+        "league/commonmark": "^2.6"
     },
     "autoload": {
         "psr-4": {
