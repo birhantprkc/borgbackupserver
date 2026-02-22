@@ -23,7 +23,11 @@ services:
       # - ADMIN_PASS=changeme
     volumes:
       - bbs-data:/var/bbs
+      # To store data on a specific disk or path instead of Docker's internal storage,
+      # replace the line above with a bind mount:
+      # - /mnt/backups:/var/bbs
     restart: unless-stopped
 
 volumes:
   bbs-data:
+  # Remove this 'volumes' section entirely if using a bind mount above
