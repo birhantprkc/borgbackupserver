@@ -158,13 +158,21 @@ if [ ! -f "$BORG_SUDOERS" ] || ! grep -q "/usr/bin/rclone" "$BORG_SUDOERS"; then
     echo "  Updated borg sudoers rule"
 fi
 
-# 8. Ensure rclone is installed (needed for S3 offsite sync)
-echo "[8/12] Checking rclone..."
-if command -v rclone &>/dev/null; then
+# 8. Install/upgrade rclone from official binary (apt package ships outdated Go runtime with CVEs)
+echo "[8/12] Updating rclone..."
+ARCH=$(dpkg --print-architecture)
+if curl -fsSL "https://downloads.rclone.org/rclone-current-linux-${ARCH}.zip" -o /tmp/rclone.zip 2>/dev/null; then
+    unzip -qo /tmp/rclone.zip -d /tmp \
+        && cp /tmp/rclone-*/rclone /usr/bin/rclone \
+        && chmod 755 /usr/bin/rclone \
+        && rm -rf /tmp/rclone*
     echo "  OK ($(rclone --version 2>/dev/null | head -1))"
 else
-    echo "  Installing rclone..."
-    apt-get install -y rclone 2>/dev/null || echo "  Warning: rclone install failed (S3 sync will not work)"
+    if command -v rclone &>/dev/null; then
+        echo "  Warning: could not download rclone update, keeping $(rclone --version 2>/dev/null | head -1)"
+    else
+        echo "  Warning: rclone install failed (S3 sync will not work)"
+    fi
 fi
 
 # 9. Ensure Apprise is installed (needed for push notifications)

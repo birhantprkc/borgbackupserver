@@ -229,7 +229,7 @@ PACKAGES=(
     apache2 libapache2-mod-php
     php php-mysql php-mbstring php-xml php-curl php-memcached
     mysql-server borgbackup composer git openssh-server
-    memcached certbot python3-certbot-apache rclone
+    memcached certbot python3-certbot-apache
     dnsutils  # for dig
     python3-pip  # for apprise
 )
@@ -251,6 +251,16 @@ info "Installing Apprise notification tool..."
 pip3 install --break-system-packages --no-cache-dir apprise > /dev/null 2>&1 \
     || pip3 install --no-cache-dir apprise > /dev/null 2>&1
 ok "Apprise installed"
+
+# Install rclone from official binary (apt package ships outdated Go runtime with CVEs)
+info "Installing rclone..."
+ARCH=$(dpkg --print-architecture)
+curl -fsSL "https://downloads.rclone.org/rclone-current-linux-${ARCH}.zip" -o /tmp/rclone.zip \
+    && unzip -qo /tmp/rclone.zip -d /tmp \
+    && cp /tmp/rclone-*/rclone /usr/bin/rclone \
+    && chmod 755 /usr/bin/rclone \
+    && rm -rf /tmp/rclone*
+ok "rclone installed ($(rclone --version 2>/dev/null | head -1))"
 
 # Enable Apache modules
 a2enmod rewrite ssl headers > /dev/null 2>&1
