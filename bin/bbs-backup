@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
 #
-# BBS Self-Backup — dumps MySQL + config for disaster recovery.
+# BBS Self-Backup — comprehensive disaster recovery backup.
 #
 # Usage:
 #   sudo /var/www/bbs/bin/bbs-backup [backup_dir]
 #
 # Creates a timestamped tar.gz containing:
-#   - dump.sql (full MySQL dump)
-#   - env (config/.env with APP_KEY and DB credentials)
-#   - version (BBS version at time of backup)
+#   - dump.sql          Full MySQL dump (excludes catalog tables)
+#   - env               config/.env (APP_KEY, DB credentials, etc.)
+#   - version           BBS version at time of backup
+#   - ssh-host-keys/    SSH host keys (so agents don't get "host key changed" errors)
+#   - clickhouse.sql    ClickHouse catalog data (file_catalog table)
+#   - cron              Scheduler cron job definition
+#   - sudoers/          Sudoers files for www-data privileges
 #
 # Keeps the 7 most recent backups, deletes older ones.
 #
@@ -50,7 +54,7 @@ TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
 # 1. MySQL dump (exclude MyISAM catalog tables to avoid lock contention)
-echo "Dumping MySQL database '$DB_NAME'..."
+echo "[1/6] Dumping MySQL database '$DB_NAME'..."
 IGNORE_TABLES=()
 for t in $(mysql -h "${DB_HOST:-localhost}" -u "$DB_USER" -p"$DB_PASS" -N -e \
     "SELECT TABLE_NAME FROM information_schema.TABLES
@@ -67,28 +71,69 @@ mysqldump \
     --triggers \
     "${IGNORE_TABLES[@]}" \
     "$DB_NAME" > "$TMPDIR/dump.sql" 2>/dev/null
+echo "  OK"
 
-# 2. Copy .env
+# 2. Copy .env and VERSION
+echo "[2/6] Backing up config..."
 cp "$ENV_FILE" "$TMPDIR/env"
-
-# 3. Copy VERSION
 if [ -f "$BBS_DIR/VERSION" ]; then
     cp "$BBS_DIR/VERSION" "$TMPDIR/version"
 else
     echo "unknown" > "$TMPDIR/version"
 fi
+echo "  OK"
 
-# 4. Create tar.gz
+# 3. SSH host keys (critical — agents verify these on every connection)
+echo "[3/6] Backing up SSH host keys..."
+mkdir -p "$TMPDIR/ssh-host-keys"
+cp /etc/ssh/ssh_host_*_key /etc/ssh/ssh_host_*_key.pub "$TMPDIR/ssh-host-keys/" 2>/dev/null || true
+KEY_COUNT=$(ls "$TMPDIR/ssh-host-keys/" 2>/dev/null | wc -l)
+if [ "$KEY_COUNT" -gt 0 ]; then
+    echo "  OK ($KEY_COUNT files)"
+else
+    echo "  Warning: no SSH host keys found"
+fi
+
+# 4. ClickHouse catalog data
+echo "[4/6] Backing up ClickHouse catalogs..."
+if command -v clickhouse-client &>/dev/null && curl -sf http://localhost:8123/ping >/dev/null 2>&1; then
+    # Export file_catalog as native SQL inserts — most portable for restore
+    clickhouse-client -d bbs --query \
+        "SELECT * FROM file_catalog FORMAT CSVWithNames" \
+        > "$TMPDIR/clickhouse-file-catalog.csv" 2>/dev/null || true
+    if [ -s "$TMPDIR/clickhouse-file-catalog.csv" ]; then
+        ROWS=$(wc -l < "$TMPDIR/clickhouse-file-catalog.csv")
+        ROWS=$((ROWS - 1))  # subtract header
+        echo "  OK ($ROWS rows exported)"
+    else
+        rm -f "$TMPDIR/clickhouse-file-catalog.csv"
+        echo "  OK (catalog is empty)"
+    fi
+else
+    echo "  Skipped (ClickHouse not running)"
+fi
+
+# 5. Sudoers and cron config
+echo "[5/6] Backing up system config..."
+mkdir -p "$TMPDIR/sudoers"
+[ -f /etc/sudoers.d/bbs-ssh-helper ] && cp /etc/sudoers.d/bbs-ssh-helper "$TMPDIR/sudoers/" 2>/dev/null || true
+[ -f /etc/sudoers.d/bbs-borg ] && cp /etc/sudoers.d/bbs-borg "$TMPDIR/sudoers/" 2>/dev/null || true
+[ -f /etc/cron.d/bbs-scheduler ] && cp /etc/cron.d/bbs-scheduler "$TMPDIR/cron" 2>/dev/null || true
+echo "  OK"
+
+# 6. Create tar.gz
+echo "[6/6] Creating backup archive..."
 TIMESTAMP=$(date '+%Y-%m-%d_%H%M%S')
 ARCHIVE="bbs-backup-${TIMESTAMP}.tar.gz"
-tar -czf "$BACKUP_DIR/$ARCHIVE" -C "$TMPDIR" dump.sql env version
+tar -czf "$BACKUP_DIR/$ARCHIVE" -C "$TMPDIR" .
 chown root:www-data "$BACKUP_DIR/$ARCHIVE"
 chmod 640 "$BACKUP_DIR/$ARCHIVE"
 
 SIZE=$(du -h "$BACKUP_DIR/$ARCHIVE" | cut -f1)
+echo ""
 echo "Backup created: $BACKUP_DIR/$ARCHIVE ($SIZE)"
 
-# 5. Retention — keep newest $KEEP, delete the rest
+# Retention — keep newest $KEEP, delete the rest
 cd "$BACKUP_DIR"
 # shellcheck disable=SC2012
 ls -1t bbs-backup-*.tar.gz 2>/dev/null | tail -n +$((KEEP + 1)) | while read -r old; do
