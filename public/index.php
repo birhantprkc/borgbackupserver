@@ -2,6 +2,11 @@
 
 require_once dirname(__DIR__) . '/vendor/autoload.php';
 
+// Security headers — safe for both HTTP (LAN) and HTTPS deployments
+header('X-Frame-Options: SAMEORIGIN');
+header('X-Content-Type-Options: nosniff');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+
 // Setup wizard: if .env doesn't exist, run the installer
 if (!file_exists(dirname(__DIR__) . '/config/.env')) {
     require_once dirname(__DIR__) . '/src/Setup/SetupWizard.php';

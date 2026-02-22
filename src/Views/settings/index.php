@@ -137,6 +137,7 @@ $updateAvailable = $updateService->isUpdateAvailable();
                         <input type="number" class="form-control" name="session_timeout_hours" value="<?= htmlspecialchars($settings['session_timeout_hours'] ?? '8') ?>" min="1" max="720">
                         <div class="form-text">Log out after this many hours of inactivity.</div>
                     </div>
+                    <?php if (isset($_GET['debug']) && $_GET['debug'] === '1'): ?>
                     <div class="mb-0">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" name="debug_mode" value="1"
@@ -149,6 +150,7 @@ $updateAvailable = $updateService->isUpdateAvailable();
                             Shows detailed error pages with stack traces. Disable in production for security.
                         </div>
                     </div>
+                    <?php endif; ?>
                 </div>
             </div>
 

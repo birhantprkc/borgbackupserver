@@ -14,11 +14,15 @@ class App
         // doesn't delete session files before our app-level timeout
         ini_set('session.gc_maxlifetime', 30 * 86400);
 
+        $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https');
+
         session_set_cookie_params([
             'lifetime' => 30 * 86400,
             'path' => '/',
             'httponly' => true,
             'samesite' => 'Strict',
+            'secure' => $isHttps,
         ]);
         session_start();
         $this->router = new \AltoRouter();
