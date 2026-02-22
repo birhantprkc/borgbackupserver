@@ -16,12 +16,19 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     mariadb-server \
     mariadb-client \
     borgbackup \
-    rclone \
     openssh-client \
     openssh-server \
     python3-pip \
     gnupg \
     && rm -rf /var/lib/apt/lists/*
+
+# Install rclone from official binary (Debian package ships with outdated Go runtime)
+RUN ARCH=$(dpkg --print-architecture) && \
+    curl -fsSL "https://downloads.rclone.org/rclone-current-linux-${ARCH}.zip" -o /tmp/rclone.zip && \
+    unzip -q /tmp/rclone.zip -d /tmp && \
+    cp /tmp/rclone-*/rclone /usr/bin/rclone && \
+    chmod 755 /usr/bin/rclone && \
+    rm -rf /tmp/rclone*
 
 # Install ClickHouse (catalog engine)
 RUN ARCH=$(dpkg --print-architecture) && \
