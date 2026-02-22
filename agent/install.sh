@@ -410,10 +410,33 @@ install_service() {
         curl -sf -o "$INSTALL_DIR/bbs-mac-agent" \
             "$SERVER_URL/api/agent/download?file=bbs-mac-agent" 2>/dev/null || true
         chmod 755 "$INSTALL_DIR/bbs-mac-agent"
-        # Ad-hoc code sign so macOS recognizes it in Full Disk Access settings
-        codesign -s - -f --identifier com.borgbackupserver.agent "$INSTALL_DIR/bbs-mac-agent" 2>/dev/null || true
 
-        # Generate plist using the compiled wrapper (users grant FDA to this binary)
+        # Create a minimal .app bundle so macOS shows it properly in Full Disk Access
+        APP_BUNDLE="$INSTALL_DIR/BBS Agent.app"
+        mkdir -p "$APP_BUNDLE/Contents/MacOS"
+        cp "$INSTALL_DIR/bbs-mac-agent" "$APP_BUNDLE/Contents/MacOS/bbs-mac-agent"
+        cat > "$APP_BUNDLE/Contents/Info.plist" <<INFOPLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.borgbackupserver.agent</string>
+    <key>CFBundleName</key>
+    <string>BBS Agent</string>
+    <key>CFBundleExecutable</key>
+    <string>bbs-mac-agent</string>
+    <key>CFBundleVersion</key>
+    <string>1.0</string>
+    <key>LSUIElement</key>
+    <true/>
+</dict>
+</plist>
+INFOPLIST
+        # Code sign the app bundle
+        codesign -s - -f --deep "$APP_BUNDLE" 2>/dev/null || true
+
+        # Generate launchd plist pointing to the app bundle's binary
         cat > /Library/LaunchDaemons/com.borgbackupserver.agent.plist <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -423,7 +446,7 @@ install_service() {
     <string>com.borgbackupserver.agent</string>
     <key>ProgramArguments</key>
     <array>
-        <string>$INSTALL_DIR/bbs-mac-agent</string>
+        <string>$APP_BUNDLE/Contents/MacOS/bbs-mac-agent</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
@@ -634,7 +657,7 @@ print_summary() {
         echo -e "  1. Open ${BOLD}System Settings > Privacy & Security > Full Disk Access${NC}"
         echo -e "  2. Click ${BOLD}+${NC} (unlock with your password if needed)"
         echo -e "  3. Press ${BOLD}Cmd+Shift+G${NC} and type:"
-        echo -e "     ${CYAN}$INSTALL_DIR/bbs-mac-agent${NC}"
+        echo -e "     ${CYAN}$INSTALL_DIR/BBS Agent.app${NC}"
         echo -e "  4. Click Add, then restart the agent:"
         echo -e "     ${YELLOW}sudo launchctl kickstart -k system/com.borgbackupserver.agent${NC}"
         echo ""
