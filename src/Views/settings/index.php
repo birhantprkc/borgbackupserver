@@ -2683,7 +2683,7 @@ docker compose up -d</pre>
                 <?php endif; ?>
             </div>
             <div class="card-body small release-notes-md">
-                <?php $parsedown = new \Parsedown(); $parsedown->setSafeMode(true); echo $parsedown->text($latest['notes']); ?>
+                <?php $parsedown = new \Parsedown(); $parsedown->setSafeMode(true); $oldLevel = error_reporting(error_reporting() & ~E_DEPRECATED); echo $parsedown->text($latest['notes']); error_reporting($oldLevel); ?>
             </div>
         </div>
     </div>
