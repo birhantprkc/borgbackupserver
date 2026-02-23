@@ -2063,14 +2063,12 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
     </div>
     <!-- rsync.net -->
     <div class="col-md-6 col-lg-3">
-        <div class="card border-0 shadow-sm h-100 text-center" style="opacity:0.6">
+        <div class="card border-0 shadow-sm h-100 text-center" style="cursor:pointer;background:rgba(60,80,120,0.08)" onclick="showWizardForm('rsyncnet')">
             <div class="card-body py-4">
-                <div class="rounded-circle bg-secondary bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width:48px;height:48px">
-                    <i class="bi bi-hdd-rack fs-4 text-secondary"></i>
-                </div>
+                <img src="/images/rsyncnet-logo.png" alt="rsync.net" class="mb-3" style="width:48px;height:48px;border-radius:50%">
                 <h6 class="mb-1">rsync.net</h6>
-                <p class="text-muted small mb-2">Cloud storage for borg</p>
-                <span class="badge bg-secondary">Coming Soon</span>
+                <p class="text-muted small mb-2">Cloud Storage for Borg</p>
+                <span class="btn btn-sm" style="background:#3c5078;color:#fff">Setup</span>
             </div>
         </div>
     </div>
@@ -2236,6 +2234,92 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
     </div>
 </div>
 
+<!-- rsync.net Wizard Form -->
+<div id="wizardRsyncnet" style="display:none">
+    <div class="card border-0 shadow-sm">
+        <div class="card-header fw-semibold" style="background:rgba(60,80,120,0.10)">
+            <img src="/images/rsyncnet-logo.png" alt="" style="width:18px;height:18px;border-radius:50%;vertical-align:text-bottom" class="me-1"> rsync.net Setup
+        </div>
+        <div class="card-body">
+            <p class="text-muted small mb-3">Enter the connection details from your <a href="https://www.rsync.net/products/borg.html" target="_blank">rsync.net</a> account.</p>
+
+            <form method="POST" action="/remote-ssh-configs/create" id="rsyncnetWizardForm">
+                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                <input type="hidden" name="provider" value="rsync.net">
+                <input type="hidden" name="remote_port" value="22">
+                <input type="hidden" name="remote_base_path" value="./">
+                <input type="hidden" name="append_repo_name" value="1">
+
+                <div class="row g-3 mb-3">
+                    <div class="col-sm-6">
+                        <label class="form-label fw-semibold">Username</label>
+                        <input type="text" class="form-control" id="rsnUsername" name="remote_user" placeholder="deXXXX" required>
+                        <div class="form-text">Your rsync.net account ID.</div>
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="form-label fw-semibold">Hostname</label>
+                        <input type="text" class="form-control" id="rsnHostname" name="remote_host" placeholder="deXXXX.rsync.net" required>
+                        <div class="form-text">Your rsync.net SSH hostname.</div>
+                    </div>
+                </div>
+
+                <div class="alert alert-warning small py-2 px-3 mb-3">
+                    <i class="bi bi-key me-1"></i> <strong>SSH Key Setup</strong> &mdash; <code>ssh-copy-id</code> does not work with rsync.net. Create and copy your key manually:
+                    <pre class="mt-2 mb-0 bg-dark text-light p-2 rounded small" style="white-space:pre-wrap"><code># Generate a new key pair
+ssh-keygen -t ed25519 -C "rsync.net" -f ~/.ssh/rsyncnet
+
+# Copy the public key to rsync.net
+scp ~/.ssh/rsyncnet.pub <span class="text-warning" id="rsnScpUser">USERNAME</span>@<span class="text-warning" id="rsnScpHost">USERNAME.rsync.net</span>:.ssh/authorized_keys</code></pre>
+                    <div class="mt-2">Then paste your <strong>private</strong> key (<code>cat ~/.ssh/rsyncnet</code>) into the box below.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">SSH Private Key</label>
+                    <textarea class="form-control font-monospace" name="ssh_private_key" id="rsnSshKey" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;..." required></textarea>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Remote Borg Version</label>
+                    <select class="form-select" id="rsnBorgVersion" name="borg_remote_path">
+                        <option value="borg12">Borg 1.2.x &mdash; remote command: borg12</option>
+                        <option value="borg14">Borg 1.4.x &mdash; remote command: borg14</option>
+                    </select>
+                    <div class="form-text">rsync.net provides multiple borg versions. This is passed as <code>--remote-path</code> in all borg commands.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Name</label>
+                    <input type="text" class="form-control" name="name" id="rsnName" placeholder="e.g., rsync.net - deXXXX" required>
+                    <div class="form-text">A friendly name to identify this host in BBS.</div>
+                </div>
+
+                <!-- Parsed summary -->
+                <div id="rsnParsedDetails" class="alert alert-light border small py-2 px-3 mb-3" style="display:none">
+                    <div class="row g-2">
+                        <div class="col-sm-6"><strong>Host:</strong> <span id="rsnParsedHost"></span></div>
+                        <div class="col-sm-6"><strong>User:</strong> <span id="rsnParsedUser"></span></div>
+                        <div class="col-sm-6"><strong>Port:</strong> 22</div>
+                        <div class="col-sm-6"><strong>Path:</strong> ./<em>&lt;repo-name&gt;</em></div>
+                        <div class="col-sm-6"><strong>Borg:</strong> <span id="rsnParsedBorg"></span></div>
+                    </div>
+                </div>
+
+                <div id="rsnTestResult" style="display:none" class="mb-3"></div>
+
+                <div class="d-flex gap-2 align-items-center">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="rsnTestBtn" disabled onclick="testRsyncnetConnection()" style="border-color:#3c5078;color:#3c5078">
+                        <i class="bi bi-plug me-1"></i> Test Connection
+                    </button>
+                    <button type="submit" class="btn btn-sm" id="rsnSubmitBtn" style="display:none;background:#3c5078;color:#fff">
+                        <i class="bi bi-plus-lg me-1"></i> Add Host
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="hideWizardForm()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
 function showWizardForm(provider) {
     document.getElementById('wizardProviders').style.display = 'none';
@@ -2262,6 +2346,16 @@ function hideWizardForm() {
     document.getElementById('hzSubmitBtn').style.display = 'none';
     document.getElementById('hzTestResult').style.display = 'none';
     hzNameUserEdited = false;
+    // Reset rsync.net form
+    document.getElementById('rsyncnetWizardForm').reset();
+    rsnTestPassed = false;
+    document.getElementById('rsnParsedDetails').style.display = 'none';
+    document.getElementById('rsnTestBtn').disabled = true;
+    document.getElementById('rsnSubmitBtn').style.display = 'none';
+    document.getElementById('rsnTestResult').style.display = 'none';
+    document.getElementById('rsnScpUser').textContent = 'USERNAME';
+    document.getElementById('rsnScpHost').textContent = 'USERNAME.rsync.net';
+    rsnNameUserEdited = false;
 }
 
 // BorgBase connection string parser
@@ -2487,6 +2581,132 @@ function testHetznerConnection() {
         resultDiv.style.display = 'block';
         if (data.status === 'ok') {
             hzTestPassed = true;
+            resultDiv.innerHTML = '<div class="alert alert-success small py-2 px-3 mb-0"><i class="bi bi-check-circle me-1"></i> Connected — ' + (data.version || 'borg detected').replace(/</g, '&lt;') + '</div>';
+            if (nameField.value.trim()) {
+                submitBtn.style.display = '';
+            }
+        } else {
+            resultDiv.innerHTML = '<div class="alert alert-danger small py-2 px-3 mb-0"><i class="bi bi-x-circle me-1"></i> ' + (data.error || 'Connection failed').replace(/</g, '&lt;') + '</div>';
+        }
+    })
+    .catch(function() {
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = '<div class="alert alert-danger small py-2 px-3 mb-0"><i class="bi bi-x-circle me-1"></i> Request failed</div>';
+    })
+    .finally(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-plug me-1"></i> Test Connection';
+    });
+}
+
+// ---- rsync.net wizard ----
+var rsnTestPassed = false;
+var rsnNameUserEdited = false;
+
+function updateRsnParsedDetails() {
+    var host = document.getElementById('rsnHostname').value.trim();
+    var user = document.getElementById('rsnUsername').value.trim();
+    var borg = document.getElementById('rsnBorgVersion').value;
+    var detailsEl = document.getElementById('rsnParsedDetails');
+
+    if (host && user) {
+        document.getElementById('rsnParsedHost').textContent = host;
+        document.getElementById('rsnParsedUser').textContent = user;
+        document.getElementById('rsnParsedBorg').textContent = borg;
+        detailsEl.style.display = 'block';
+    } else {
+        detailsEl.style.display = 'none';
+    }
+}
+
+function updateRsnScpExample() {
+    var user = document.getElementById('rsnUsername').value.trim();
+    var host = document.getElementById('rsnHostname').value.trim();
+    document.getElementById('rsnScpUser').textContent = user || 'USERNAME';
+    document.getElementById('rsnScpHost').textContent = host || 'USERNAME.rsync.net';
+}
+
+function updateRsnSubmit() {
+    var host = document.getElementById('rsnHostname').value.trim();
+    var user = document.getElementById('rsnUsername').value.trim();
+    var key = document.getElementById('rsnSshKey').value.trim();
+    var name = document.getElementById('rsnName').value.trim();
+    var canTest = !!(host && user && key);
+    document.getElementById('rsnTestBtn').disabled = !canTest;
+    if (!rsnTestPassed) {
+        document.getElementById('rsnSubmitBtn').style.display = 'none';
+        document.getElementById('rsnTestResult').style.display = 'none';
+    } else {
+        document.getElementById('rsnSubmitBtn').style.display = name ? '' : 'none';
+    }
+}
+
+function updateRsnName() {
+    if (!rsnNameUserEdited) {
+        var user = document.getElementById('rsnUsername').value.trim();
+        if (user) {
+            document.getElementById('rsnName').value = 'rsync.net - ' + user;
+        }
+    }
+}
+
+document.getElementById('rsnUsername').addEventListener('input', function() {
+    rsnTestPassed = false;
+    updateRsnParsedDetails();
+    updateRsnScpExample();
+    updateRsnName();
+    updateRsnSubmit();
+});
+document.getElementById('rsnHostname').addEventListener('input', function() {
+    rsnTestPassed = false;
+    updateRsnParsedDetails();
+    updateRsnScpExample();
+    updateRsnSubmit();
+});
+document.getElementById('rsnSshKey').addEventListener('input', function() {
+    rsnTestPassed = false;
+    updateRsnSubmit();
+});
+document.getElementById('rsnBorgVersion').addEventListener('change', function() {
+    rsnTestPassed = false;
+    updateRsnParsedDetails();
+    updateRsnSubmit();
+});
+document.getElementById('rsnName').addEventListener('input', function() {
+    rsnNameUserEdited = true;
+    updateRsnSubmit();
+});
+
+function testRsyncnetConnection() {
+    var btn = document.getElementById('rsnTestBtn');
+    var resultDiv = document.getElementById('rsnTestResult');
+    var submitBtn = document.getElementById('rsnSubmitBtn');
+    var nameField = document.getElementById('rsnName');
+
+    rsnTestPassed = false;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Testing...';
+    resultDiv.style.display = 'none';
+    submitBtn.style.display = 'none';
+
+    var formData = new URLSearchParams();
+    formData.append('csrf_token', document.querySelector('#rsyncnetWizardForm [name=csrf_token]').value);
+    formData.append('remote_host', document.getElementById('rsnHostname').value.trim());
+    formData.append('remote_port', '22');
+    formData.append('remote_user', document.getElementById('rsnUsername').value.trim());
+    formData.append('ssh_private_key', document.getElementById('rsnSshKey').value);
+    formData.append('borg_remote_path', document.getElementById('rsnBorgVersion').value);
+
+    fetch('/remote-ssh-configs/test-new', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: formData.toString()
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        resultDiv.style.display = 'block';
+        if (data.status === 'ok') {
+            rsnTestPassed = true;
             resultDiv.innerHTML = '<div class="alert alert-success small py-2 px-3 mb-0"><i class="bi bi-check-circle me-1"></i> Connected — ' + (data.version || 'borg detected').replace(/</g, '&lt;') + '</div>';
             if (nameField.value.trim()) {
                 submitBtn.style.display = '';
