@@ -27,6 +27,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Force TLS 1.2+ (PowerShell 5.1 defaults to TLS 1.0 which most servers reject)
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Configuration
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -95,7 +98,6 @@ if (Test-Path $borgExe) {
     $borgZip = "$env:TEMP\borg-windows.zip"
 
     try {
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         Invoke-WebRequest -Uri $borgZipUrl -OutFile $borgZip -UseBasicParsing
         Write-Ok "Downloaded borg-windows.zip"
     } catch {
