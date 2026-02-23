@@ -368,7 +368,13 @@ def download_ssh_key(config):
         os.makedirs(key_dir, exist_ok=True)
         with open(SSH_KEY_PATH, "w") as f:
             f.write(private_key)
-        if not IS_WINDOWS:
+        if IS_WINDOWS:
+            # Lock down SSH key so OpenSSH doesn't reject it for "too open" permissions
+            subprocess.run(
+                ["icacls", SSH_KEY_PATH, "/inheritance:r", "/grant:r", "SYSTEM:(R)", "Administrators:(R)"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+        else:
             os.chmod(SSH_KEY_PATH, 0o600)
         logger.info("SSH key saved to {}".format(SSH_KEY_PATH))
         _save_ssh_info(result)
@@ -1472,7 +1478,12 @@ def execute_restore_pg(config, task):
             normalized_key = remote_ssh_key.replace("\r\n", "\n").replace("\r", "\n").rstrip() + "\n"
             with open(remote_key_path, "w") as kf:
                 kf.write(normalized_key)
-            if not IS_WINDOWS:
+            if IS_WINDOWS:
+                subprocess.run(
+                    ["icacls", remote_key_path, "/inheritance:r", "/grant:r", "SYSTEM:(R)", "Administrators:(R)"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+            else:
                 os.chmod(remote_key_path, 0o600)
             logger.info("Wrote temporary SSH key for remote repo")
         except Exception as e:
@@ -1655,7 +1666,12 @@ def execute_restore_mysql(config, task):
             normalized_key = remote_ssh_key.replace("\r\n", "\n").replace("\r", "\n").rstrip() + "\n"
             with open(remote_key_path, "w") as kf:
                 kf.write(normalized_key)
-            if not IS_WINDOWS:
+            if IS_WINDOWS:
+                subprocess.run(
+                    ["icacls", remote_key_path, "/inheritance:r", "/grant:r", "SYSTEM:(R)", "Administrators:(R)"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+            else:
                 os.chmod(remote_key_path, 0o600)
             logger.info("Wrote temporary SSH key for remote repo")
         except Exception as e:
@@ -1987,7 +2003,12 @@ def execute_task(config, task):
             normalized_key = remote_ssh_key.replace("\r\n", "\n").replace("\r", "\n").rstrip() + "\n"
             with open(remote_key_path, "w") as kf:
                 kf.write(normalized_key)
-            if not IS_WINDOWS:
+            if IS_WINDOWS:
+                subprocess.run(
+                    ["icacls", remote_key_path, "/inheritance:r", "/grant:r", "SYSTEM:(R)", "Administrators:(R)"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+            else:
                 os.chmod(remote_key_path, 0o600)
             logger.info("Wrote temporary SSH key for remote repo")
         except Exception as e:

@@ -214,6 +214,8 @@ try {
         -Headers @{ "Authorization" = "Bearer $Key" } `
         -OutFile $sshKeyPath -UseBasicParsing
     if ((Get-Item $sshKeyPath).Length -gt 0) {
+        # Lock down SSH key permissions (SSH rejects keys readable by others)
+        icacls $sshKeyPath /inheritance:r /grant:r "SYSTEM:(R)" "Administrators:(R)" | Out-Null
         Write-Ok "SSH key saved"
     } else {
         Write-Warn "SSH key not yet available (will be downloaded on first run)"
