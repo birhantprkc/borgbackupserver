@@ -158,14 +158,50 @@ try {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Install Python embeddable (zero-dependency Python runtime for the agent)
+# ═══════════════════════════════════════════════════════════════════════════════
+$pythonDir = "$AgentDir\python"
+$pythonExe = "$pythonDir\python.exe"
+
+if (Test-Path $pythonExe) {
+    $pyVer = & $pythonExe --version 2>&1 | Select-Object -First 1
+    Write-Ok "Python already installed: $pyVer"
+} else {
+    Write-Step "Downloading Python embeddable..."
+    $pyZipUrl = "https://www.python.org/ftp/python/3.11.4/python-3.11.4-embed-amd64.zip"
+    $pyZip = "$env:TEMP\python-embed.zip"
+
+    try {
+        Invoke-WebRequest -Uri $pyZipUrl -OutFile $pyZip -UseBasicParsing
+        Write-Ok "Downloaded Python embeddable"
+    } catch {
+        Write-Fail "Failed to download Python: $_"
+        Write-Warn "Install Python 3.9+ manually and ensure it is in PATH"
+        $pyZip = $null
+    }
+
+    if ($pyZip -and (Test-Path $pyZip)) {
+        Write-Step "Installing Python to $pythonDir..."
+        New-Item -ItemType Directory -Path $pythonDir -Force | Out-Null
+        Expand-Archive -Path $pyZip -DestinationPath $pythonDir -Force
+        Remove-Item $pyZip -Force -ErrorAction SilentlyContinue
+
+        if (Test-Path $pythonExe) {
+            $pyVer = & $pythonExe --version 2>&1 | Select-Object -First 1
+            Write-Ok "Installed: $pyVer"
+        } else {
+            Write-Warn "Python extraction may have failed — agent will try system Python"
+        }
+    }
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Write config
 # ═══════════════════════════════════════════════════════════════════════════════
 Write-Step "Writing configuration..."
-@"
-[server]
-url = $Server
-api_key = $Key
-"@ | Set-Content -Path $ConfigPath -Encoding UTF8
+# Write config without BOM (Python's configparser rejects BOM)
+$configText = "[server]`nurl = $Server`napi_key = $Key`n"
+[System.IO.File]::WriteAllText($ConfigPath, $configText, (New-Object System.Text.UTF8Encoding $false))
 Write-Ok "Config written to $ConfigPath"
 
 # ═══════════════════════════════════════════════════════════════════════════════

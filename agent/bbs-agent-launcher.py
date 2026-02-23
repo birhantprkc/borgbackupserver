@@ -2,10 +2,13 @@
 """
 BBS Agent Launcher for Windows.
 
-This is a tiny launcher compiled to bbs-agent.exe via PyInstaller.
-It implements the Windows Service API so sc.exe can manage it,
-then loads and executes bbs-agent-run.py in-process.
-Self-update replaces only the .py file — the exe never changes.
+Compiled to bbs-agent.exe via PyInstaller. Implements the Windows Service API
+and manages bbs-agent-run.py as a subprocess using the bundled Python.
+
+The installer places Python embeddable alongside this exe so no system Python
+is needed. Falls back to system Python if bundled one isn't found.
+
+Self-update replaces only bbs-agent-run.py — the exe and Python never change.
 
 Build (requires pywin32):
     pip install pyinstaller pywin32
@@ -14,7 +17,9 @@ Build (requires pywin32):
 
 import os
 import sys
-import threading
+import subprocess
+import time
+import logging
 
 # Determine the directory where the exe (or script) lives
 if getattr(sys, 'frozen', False):
@@ -23,10 +28,95 @@ else:
     _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 AGENT_SCRIPT = os.path.join(_BASE_DIR, "bbs-agent-run.py")
+LOG_FILE = os.path.join(_BASE_DIR, "bbs-agent-launcher.log")
+
+# Set up launcher logging (separate from agent log)
+logging.basicConfig(
+    filename=LOG_FILE,
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+)
+log = logging.getLogger("launcher")
+
+
+def find_python():
+    """Find a working Python 3 interpreter. Prefers bundled, then system."""
+    candidates = []
+
+    # 1. Bundled Python embeddable in agent dir
+    bundled = os.path.join(_BASE_DIR, "python", "python.exe")
+    if os.path.isfile(bundled):
+        candidates.append(bundled)
+
+    # 2. System Python via PATH (may not be visible to LocalSystem)
+    import shutil
+    for name in ("python3", "python"):
+        p = shutil.which(name)
+        if p:
+            candidates.append(p)
+
+    # 3. Common install locations on Windows
+    if sys.platform == "win32":
+        for env_var in ("LocalAppData", "ProgramFiles"):
+            root = os.environ.get(env_var, "")
+            if not root:
+                continue
+            for ver in ("Python313", "Python312", "Python311", "Python310", "Python39"):
+                for subdir in ("Programs\\Python", "Python"):
+                    p = os.path.join(root, subdir, ver, "python.exe")
+                    if os.path.isfile(p):
+                        candidates.append(p)
+
+        # Also check all user profiles (service runs as LocalSystem)
+        users_dir = os.path.join(os.environ.get("SystemDrive", "C:"), "\\Users")
+        if os.path.isdir(users_dir):
+            try:
+                for user in os.listdir(users_dir):
+                    for ver in ("Python313", "Python312", "Python311", "Python310", "Python39"):
+                        p = os.path.join(users_dir, user, "AppData", "Local",
+                                         "Programs", "Python", ver, "python.exe")
+                        if os.path.isfile(p):
+                            candidates.append(p)
+            except PermissionError:
+                pass
+
+    # Deduplicate and verify
+    seen = set()
+    for c in candidates:
+        norm = os.path.normcase(os.path.abspath(c))
+        if norm in seen:
+            continue
+        seen.add(norm)
+        try:
+            r = subprocess.run([c, "--version"], capture_output=True, timeout=5)
+            if r.returncode == 0:
+                ver = r.stdout.decode().strip()
+                log.info("Found Python: %s (%s)", c, ver)
+                return c
+        except Exception as e:
+            log.debug("Python candidate %s failed: %s", c, e)
+            continue
+
+    return None
+
+
+def run_agent_subprocess(python_exe):
+    """Run the agent script as a subprocess, return the Popen object."""
+    env = os.environ.copy()
+    env["PYTHONUNBUFFERED"] = "1"
+
+    log.info("Starting agent: %s %s", python_exe, AGENT_SCRIPT)
+    return subprocess.Popen(
+        [python_exe, AGENT_SCRIPT],
+        cwd=_BASE_DIR,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
 
 def run_agent_directly():
-    """Run the agent script directly (non-service mode)."""
+    """Run the agent script directly (non-frozen mode only)."""
     if not os.path.isfile(AGENT_SCRIPT):
         print("ERROR: {} not found".format(AGENT_SCRIPT), file=sys.stderr)
         sys.exit(1)
@@ -54,13 +144,20 @@ if HAS_WIN32:
         def __init__(self, args):
             win32serviceutil.ServiceFramework.__init__(self, args)
             self.stop_event = win32event.CreateEvent(None, 0, 0, None)
+            self.process = None
+            self.python_exe = None
 
         def SvcStop(self):
+            log.info("Service stop requested")
             self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
             win32event.SetEvent(self.stop_event)
-            # Send SIGBREAK to our own process to trigger the agent's shutdown
-            import signal
-            os.kill(os.getpid(), signal.CTRL_BREAK_EVENT)
+            if self.process and self.process.poll() is None:
+                log.info("Terminating agent process (pid=%d)", self.process.pid)
+                self.process.terminate()
+                try:
+                    self.process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    self.process.kill()
 
         def SvcDoRun(self):
             servicemanager.LogMsg(
@@ -68,25 +165,66 @@ if HAS_WIN32:
                 servicemanager.PYS_SERVICE_STARTED,
                 (self._svc_name_, '')
             )
+            log.info("Service starting")
             self.main()
+            log.info("Service stopped")
 
         def main(self):
             if not os.path.isfile(AGENT_SCRIPT):
-                servicemanager.LogErrorMsg(
-                    "BBS Agent script not found: {}".format(AGENT_SCRIPT)
-                )
+                msg = "Agent script not found: {}".format(AGENT_SCRIPT)
+                log.error(msg)
+                servicemanager.LogErrorMsg(msg)
                 return
 
-            # Run the agent script in a thread so the service framework
-            # can handle stop requests on the main thread
-            agent_thread = threading.Thread(target=run_agent_directly, daemon=True)
-            agent_thread.start()
+            self.python_exe = find_python()
+            if self.python_exe is None:
+                msg = "No Python interpreter found. Install Python 3.9+ or place python embeddable in {}".format(
+                    os.path.join(_BASE_DIR, "python")
+                )
+                log.error(msg)
+                servicemanager.LogErrorMsg(msg)
+                return
 
-            # Wait for the stop event
-            win32event.WaitForSingleObject(self.stop_event, win32event.INFINITE)
+            log.info("Using Python: %s", self.python_exe)
 
-            # Give the agent thread a moment to clean up
-            agent_thread.join(timeout=15)
+            # Start the agent subprocess
+            try:
+                self.process = run_agent_subprocess(self.python_exe)
+            except Exception as e:
+                log.error("Failed to start agent: %s", e)
+                servicemanager.LogErrorMsg("Failed to start agent: {}".format(e))
+                return
+
+            log.info("Agent started (pid=%d)", self.process.pid)
+
+            # Monitor loop: wait for stop event or process exit
+            while True:
+                result = win32event.WaitForSingleObject(self.stop_event, 5000)
+                if result == win32event.WAIT_OBJECT_0:
+                    log.info("Stop event received")
+                    break
+                if self.process.poll() is not None:
+                    # Process exited — check if stop was requested
+                    if win32event.WaitForSingleObject(self.stop_event, 0) == win32event.WAIT_OBJECT_0:
+                        break
+                    rc = self.process.returncode
+                    log.info("Agent exited (code=%s), restarting in 5s...", rc)
+                    time.sleep(5)
+                    try:
+                        self.process = run_agent_subprocess(self.python_exe)
+                        log.info("Agent restarted (pid=%d)", self.process.pid)
+                    except Exception as e:
+                        log.error("Failed to restart agent: %s", e)
+                        servicemanager.LogErrorMsg("Failed to restart agent: {}".format(e))
+                        break
+
+            # Cleanup
+            if self.process and self.process.poll() is None:
+                self.process.terminate()
+                try:
+                    self.process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    self.process.kill()
 
 
 if __name__ == '__main__':
@@ -99,9 +237,19 @@ if __name__ == '__main__':
             servicemanager.Initialize()
             servicemanager.PrepareToHostSingle(BorgBackupAgentService)
             servicemanager.StartServiceCtrlDispatcher()
-        except Exception:
-            # If SCM dispatch fails, run directly (e.g., double-clicked)
-            run_agent_directly()
+        except Exception as e:
+            # SCM dispatch failed (e.g., double-clicked)
+            log.info("SCM dispatch failed (%s), running in foreground", e)
+            python_exe = find_python()
+            if python_exe:
+                proc = run_agent_subprocess(python_exe)
+                if proc:
+                    proc.wait()
+            else:
+                print("ERROR: No Python interpreter found", file=sys.stderr)
+                print("Install Python 3.9+ or place python embeddable in: {}".format(
+                    os.path.join(_BASE_DIR, "python")), file=sys.stderr)
+                sys.exit(1)
     else:
-        # No win32 or running as script — just run the agent directly
+        # Not frozen — just run the agent script directly
         run_agent_directly()
