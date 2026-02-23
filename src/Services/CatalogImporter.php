@@ -64,7 +64,9 @@ class CatalogImporter
                 $entry = json_decode($line, true);
                 if (!$entry || empty($entry['path'])) continue;
 
-                $rawPath = $entry['path'];
+                // Normalize Windows backslash paths to forward slashes so
+                // dirname()/basename() work correctly on the Linux server
+                $rawPath = str_replace('\\', '/', $entry['path']);
                 $path = $escape($rawPath);
                 $name = $escape(basename($rawPath));
                 $rawParent = dirname($rawPath);
