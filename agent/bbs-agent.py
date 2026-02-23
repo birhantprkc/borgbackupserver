@@ -937,10 +937,10 @@ def execute_update_agent(config, task):
             error_output = "Downloaded script failed validation"
             logger.error(error_output)
         else:
-            # On Windows (launcher pattern): update bbs-agent-run.py next to the exe
+            # On Windows (launcher pattern): update bbs-agent-run.py in the agent dir
             # On Unix: replace the running script in-place
             if IS_WINDOWS:
-                script_path = os.path.join(os.path.dirname(sys.executable), "bbs-agent-run.py")
+                script_path = os.path.join(_AGENT_DIR, "bbs-agent-run.py")
             else:
                 script_path = os.path.abspath(__file__)
             logger.info("Replacing agent at: {}".format(script_path))
