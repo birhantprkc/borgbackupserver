@@ -84,65 +84,58 @@ if ($existingSvc) {
 }
 
 # -----------------------------------------------------------------------------
-# Install Borg
+# Install / Update Borg
 # -----------------------------------------------------------------------------
-Write-Step "Checking for Borg..."
-
 $borgExe = "$BorgDir\borg\borg.exe"
+$borgZip = "$env:TEMP\borg-windows.zip"
+
+Write-Step "Finding latest Borg for Windows release..."
+try {
+    $releaseInfo = Invoke-WebRequest -Uri "https://api.github.com/repos/marcpope/borg-windows/releases/latest" `
+        -UseBasicParsing -TimeoutSec 15 | ConvertFrom-Json
+    $borgZipUrl = ($releaseInfo.assets | Where-Object { $_.name -eq "borg-windows.zip" }).browser_download_url
+    if (-not $borgZipUrl) {
+        Write-Fail "Could not find borg-windows.zip in latest release"
+        exit 1
+    }
+    Write-Ok "Latest release: $($releaseInfo.tag_name)"
+} catch {
+    Write-Fail "Failed to query GitHub releases: $_"
+    exit 1
+}
+
+Write-Step "Downloading $($releaseInfo.tag_name)..."
+try {
+    Invoke-WebRequest -Uri $borgZipUrl -OutFile $borgZip -UseBasicParsing
+    Write-Ok "Downloaded borg-windows.zip"
+} catch {
+    Write-Fail "Failed to download Borg: $_"
+    exit 1
+}
+
+Write-Step "Installing Borg to $BorgDir..."
+New-Item -ItemType Directory -Path $BorgDir -Force | Out-Null
+Expand-Archive -Path $borgZip -DestinationPath $BorgDir -Force
+Remove-Item $borgZip -Force -ErrorAction SilentlyContinue
+
 if (Test-Path $borgExe) {
     $borgVer = & $borgExe --version 2>&1 | Select-Object -First 1
-    Write-Ok "Already installed: $borgVer"
+    Write-Ok "Installed: $borgVer"
 } else {
-    Write-Step "Finding latest Borg for Windows release..."
-    $borgZip = "$env:TEMP\borg-windows.zip"
+    Write-Fail "Borg installation failed - borg.exe not found at $borgExe"
+    exit 1
+}
 
-    try {
-        $releaseInfo = Invoke-WebRequest -Uri "https://api.github.com/repos/marcpope/borg-windows/releases/latest" `
-            -UseBasicParsing -TimeoutSec 15 | ConvertFrom-Json
-        $borgZipUrl = ($releaseInfo.assets | Where-Object { $_.name -eq "borg-windows.zip" }).browser_download_url
-        if (-not $borgZipUrl) {
-            Write-Fail "Could not find borg-windows.zip in latest release"
-            exit 1
-        }
-        Write-Ok "Latest release: $($releaseInfo.tag_name)"
-    } catch {
-        Write-Fail "Failed to query GitHub releases: $_"
-        exit 1
-    }
-
-    Write-Step "Downloading $($releaseInfo.tag_name)..."
-    try {
-        Invoke-WebRequest -Uri $borgZipUrl -OutFile $borgZip -UseBasicParsing
-        Write-Ok "Downloaded borg-windows.zip"
-    } catch {
-        Write-Fail "Failed to download Borg: $_"
-        exit 1
-    }
-
-    Write-Step "Installing Borg to $BorgDir..."
-    New-Item -ItemType Directory -Path $BorgDir -Force | Out-Null
-    Expand-Archive -Path $borgZip -DestinationPath $BorgDir -Force
-    Remove-Item $borgZip -Force -ErrorAction SilentlyContinue
-
-    if (Test-Path $borgExe) {
-        $borgVer = & $borgExe --version 2>&1 | Select-Object -First 1
-        Write-Ok "Installed: $borgVer"
-    } else {
-        Write-Fail "Borg installation failed - borg.exe not found at $borgExe"
-        exit 1
-    }
-
-    # Add borg to system PATH
-    Write-Step "Adding Borg to system PATH..."
-    $borgBinDir = "$BorgDir\borg"
-    $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
-    if ($machinePath -notlike "*$borgBinDir*") {
-        [Environment]::SetEnvironmentVariable("Path", "$machinePath;$borgBinDir", "Machine")
-        $env:Path = "$env:Path;$borgBinDir"
-        Write-Ok "Added $borgBinDir to system PATH"
-    } else {
-        Write-Ok "Already in PATH"
-    }
+# Add borg to system PATH
+Write-Step "Adding Borg to system PATH..."
+$borgBinDir = "$BorgDir\borg"
+$machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+if ($machinePath -notlike "*$borgBinDir*") {
+    [Environment]::SetEnvironmentVariable("Path", "$machinePath;$borgBinDir", "Machine")
+    $env:Path = "$env:Path;$borgBinDir"
+    Write-Ok "Added $borgBinDir to system PATH"
+} else {
+    Write-Ok "Already in PATH"
 }
 
 # -----------------------------------------------------------------------------
