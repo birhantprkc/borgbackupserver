@@ -4,7 +4,7 @@ BBS Agent Launcher for Windows.
 
 This is a tiny launcher compiled to bbs-agent.exe via PyInstaller.
 It implements the Windows Service API so sc.exe can manage it,
-then loads and executes bbs-agent-run.py from the same directory.
+then loads and executes bbs-agent-run.py in-process.
 Self-update replaces only the .py file — the exe never changes.
 
 Build (requires pywin32):
@@ -14,7 +14,6 @@ Build (requires pywin32):
 
 import os
 import sys
-import subprocess
 import threading
 
 # Determine the directory where the exe (or script) lives
@@ -55,17 +54,13 @@ if HAS_WIN32:
         def __init__(self, args):
             win32serviceutil.ServiceFramework.__init__(self, args)
             self.stop_event = win32event.CreateEvent(None, 0, 0, None)
-            self.process = None
 
         def SvcStop(self):
             self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
             win32event.SetEvent(self.stop_event)
-            if self.process:
-                self.process.terminate()
-                try:
-                    self.process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    self.process.kill()
+            # Send SIGBREAK to our own process to trigger the agent's shutdown
+            import signal
+            os.kill(os.getpid(), signal.CTRL_BREAK_EVENT)
 
         def SvcDoRun(self):
             servicemanager.LogMsg(
@@ -82,63 +77,24 @@ if HAS_WIN32:
                 )
                 return
 
-            # Determine the Python executable to use
-            if getattr(sys, 'frozen', False):
-                python_exe = os.path.join(
-                    os.path.dirname(sys.executable),
-                    "python.exe"
-                )
-                # If there's no separate python.exe, use the system Python
-                if not os.path.isfile(python_exe):
-                    python_exe = sys.executable
-            else:
-                python_exe = sys.executable
+            # Run the agent script in a thread so the service framework
+            # can handle stop requests on the main thread
+            agent_thread = threading.Thread(target=run_agent_directly, daemon=True)
+            agent_thread.start()
 
-            # Run the agent as a subprocess so we can manage its lifecycle
-            self.process = subprocess.Popen(
-                [python_exe, AGENT_SCRIPT],
-                cwd=_BASE_DIR,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
+            # Wait for the stop event
+            win32event.WaitForSingleObject(self.stop_event, win32event.INFINITE)
 
-            # Wait for either the stop event or the process to exit
-            while True:
-                result = win32event.WaitForSingleObject(self.stop_event, 5000)
-                if result == win32event.WAIT_OBJECT_0:
-                    # Stop requested
-                    break
-                if self.process.poll() is not None:
-                    # Process exited on its own — restart it (unless stop was requested)
-                    result2 = win32event.WaitForSingleObject(self.stop_event, 0)
-                    if result2 == win32event.WAIT_OBJECT_0:
-                        break
-                    # Restart the agent
-                    self.process = subprocess.Popen(
-                        [python_exe, AGENT_SCRIPT],
-                        cwd=_BASE_DIR,
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                    )
-
-            # Cleanup
-            if self.process and self.process.poll() is None:
-                self.process.terminate()
-                try:
-                    self.process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    self.process.kill()
+            # Give the agent thread a moment to clean up
+            agent_thread.join(timeout=15)
 
 
 if __name__ == '__main__':
     if HAS_WIN32 and len(sys.argv) > 1:
         # Service install/start/stop/remove commands
         win32serviceutil.HandleCommandLine(BorgBackupAgentService)
-    elif HAS_WIN32 and not getattr(sys, 'frozen', False):
-        # Running as script with win32 — just run directly
-        run_agent_directly()
-    elif HAS_WIN32:
-        # Frozen exe launched without arguments — assume started by SCM
+    elif HAS_WIN32 and getattr(sys, 'frozen', False):
+        # Frozen exe launched without arguments — started by SCM
         try:
             servicemanager.Initialize()
             servicemanager.PrepareToHostSingle(BorgBackupAgentService)
@@ -147,5 +103,5 @@ if __name__ == '__main__':
             # If SCM dispatch fails, run directly (e.g., double-clicked)
             run_agent_directly()
     else:
-        # No win32 — just run the agent script directly
+        # No win32 or running as script — just run the agent directly
         run_agent_directly()
