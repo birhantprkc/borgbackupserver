@@ -2238,7 +2238,7 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
 <div id="wizardRsyncnet" style="display:none">
     <div class="card border-0 shadow-sm">
         <div class="card-header fw-semibold" style="background:rgba(60,80,120,0.10)">
-            <img src="/images/rsyncnet-logo.png" alt="" style="height:18px;border-radius:4px;vertical-align:text-bottom" class="me-1"> rsync.net Setup
+            <i class="bi bi-hdd-rack me-1"></i> rsync.net Setup
         </div>
         <div class="card-body">
             <p class="text-muted small mb-3">Enter the connection details from your <a href="https://www.rsync.net/products/borg.html" target="_blank">rsync.net</a> account.</p>
