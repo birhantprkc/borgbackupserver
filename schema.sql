@@ -286,7 +286,10 @@ INSERT INTO settings (`key`, `value`) VALUES
     ('apprise_on_backup_failed', '1'),
     ('apprise_on_agent_offline', '1'),
     ('apprise_on_storage_low', '1'),
-    ('apprise_on_missed_schedule', '0');
+    ('apprise_on_missed_schedule', '0'),
+    ('self_backup_enabled', '1'),
+    ('self_backup_retention', '7'),
+    ('self_backup_catalogs', '0');
 
 -- --------------------------------------------------------
 -- Notifications

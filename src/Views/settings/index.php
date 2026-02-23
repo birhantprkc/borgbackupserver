@@ -166,6 +166,53 @@ $updateAvailable = $updateService->isUpdateAvailable();
                     </div>
                 </div>
             </div>
+
+            <div class="card border-0 shadow-sm mt-4">
+                <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+                    <i class="bi bi-shield-check me-1"></i> Server Backups
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="self_backup_enabled" value="1"
+                                   id="selfBackupEnabled" <?= ($settings['self_backup_enabled'] ?? '1') === '1' ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-semibold" for="selfBackupEnabled">
+                                Enable Daily Server Backups
+                            </label>
+                        </div>
+                        <div class="form-text">
+                            Automatically backs up the database, configuration, and SSH keys to <code>/var/bbs/backups</code> once per day.
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Keep Last</label>
+                        <div class="input-group" style="max-width: 200px;">
+                            <input type="number" class="form-control" name="self_backup_retention"
+                                   value="<?= htmlspecialchars($settings['self_backup_retention'] ?? '7') ?>"
+                                   min="1" max="90">
+                            <span class="input-group-text">backups</span>
+                        </div>
+                        <div class="form-text">Older backups are automatically deleted.</div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="self_backup_catalogs" value="1"
+                                   id="selfBackupCatalogs" <?= ($settings['self_backup_catalogs'] ?? '0') === '1' ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-semibold" for="selfBackupCatalogs">
+                                Include File Catalog Data
+                            </label>
+                        </div>
+                        <div class="form-text">
+                            Catalogs can be large but save time on restore. If excluded, they will be rebuilt automatically from your repositories.
+                        </div>
+                    </div>
+                    <div class="alert alert-info mb-0 small">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Server backups include the database, configuration, and SSH host keys &mdash; <strong>not repository data</strong>.
+                        To protect your backup repositories, configure <a href="/settings?tab=offsite" class="alert-link">S3 Offsite Sync</a>.
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 

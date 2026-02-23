@@ -15,24 +15,26 @@
 #
 # Options:
 #   --with-catalogs     Also export ClickHouse catalog data (can be large)
+#   --keep N            Keep the N most recent backups (default: 7)
 #
-# Keeps the 7 most recent backups, deletes older ones.
+# Keeps the 7 most recent backups by default, deletes older ones.
 #
 set -euo pipefail
 
 # Parse options
 WITH_CATALOGS=0
+KEEP=7
 POSITIONAL=()
-for arg in "$@"; do
-    case "$arg" in
-        --with-catalogs) WITH_CATALOGS=1 ;;
-        *) POSITIONAL+=("$arg") ;;
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --with-catalogs) WITH_CATALOGS=1; shift ;;
+        --keep) KEEP="${2:-7}"; shift 2 ;;
+        *) POSITIONAL+=("$1"); shift ;;
     esac
 done
 
 BBS_DIR="${BBS_DIR:-/var/www/bbs}"
 BACKUP_DIR="${POSITIONAL[0]:-/var/bbs/backups}"
-KEEP=7
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "Error: must run as root (use sudo)"

@@ -1505,51 +1505,65 @@ if (!empty($subscribers)) {
 }
 
 // Step 11: Daily BBS self-backup
-$lastSelfBackup = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'last_self_backup'");
-$lastSelfBackupTime = $lastSelfBackup['value'] ?? null;
-if (!$lastSelfBackupTime || strtotime($lastSelfBackupTime) < time() - 86400) {
-    $helper = '/usr/local/bin/bbs-ssh-helper';
-    if (is_file($helper)) {
-        $output = shell_exec("sudo $helper server-backup 2>&1");
-        if (str_contains($output ?? '', 'OK')) {
-            echo date('Y-m-d H:i:s') . " Self-backup completed\n";
-        } else {
-            echo date('Y-m-d H:i:s') . " Self-backup failed: " . trim($output ?? '') . "\n";
-        }
-    }
+$selfBackupEnabled = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'self_backup_enabled'");
+if (($selfBackupEnabled['value'] ?? '1') === '1') {
+    $lastSelfBackup = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'last_self_backup'");
+    $lastSelfBackupTime = $lastSelfBackup['value'] ?? null;
+    if (!$lastSelfBackupTime || strtotime($lastSelfBackupTime) < time() - 86400) {
+        $helper = '/usr/local/bin/bbs-ssh-helper';
+        if (is_file($helper)) {
+            // Build backup command with user-configured options
+            $backupArgs = '';
+            $selfBackupCatalogs = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'self_backup_catalogs'");
+            if (($selfBackupCatalogs['value'] ?? '0') === '1') {
+                $backupArgs .= ' --with-catalogs';
+            }
+            $selfBackupRetention = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'self_backup_retention'");
+            $keepCount = (int)($selfBackupRetention['value'] ?? '7');
+            if ($keepCount < 1) $keepCount = 1;
+            $backupArgs .= ' --keep ' . $keepCount;
 
-    $db->query(
-        "INSERT INTO settings (`key`, `value`) VALUES ('last_self_backup', ?)
-         ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)",
-        [date('Y-m-d H:i:s')]
-    );
-
-    // Sync server backups to S3 if enabled
-    $syncEnabled = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 's3_sync_server_backups'");
-    if (($syncEnabled['value'] ?? '0') === '1') {
-        $s3Service = new \BBS\Services\S3SyncService();
-        $creds = $s3Service->resolveCredentials(['credential_source' => 'global']);
-
-        if (!empty($creds['bucket']) && $s3Service->isRcloneInstalled()) {
-            $backupDir = '/var/bbs/backups';
-            $prefix = trim($creds['path_prefix'], '/');
-            $remotePath = $prefix ? "{$prefix}/_server-backups" : '_server-backups';
-            $remote = "S3:{$creds['bucket']}/{$remotePath}/";
-
-            // Use bbs-ssh-helper for S3 sync (runs as root with proper env)
-            $cmd = "sudo $helper rclone-server-sync "
-                 . escapeshellarg($backupDir) . " "
-                 . escapeshellarg($remote) . " "
-                 . escapeshellarg($creds['endpoint']) . " "
-                 . escapeshellarg($creds['region']) . " "
-                 . escapeshellarg($creds['access_key']) . " "
-                 . escapeshellarg($creds['secret_key']) . " 2>&1";
-            $syncOutput = shell_exec($cmd);
-
-            if (str_contains($syncOutput ?? '', 'ERROR') && !str_contains($syncOutput ?? '', 'OK')) {
-                echo date('Y-m-d H:i:s') . " Server backup S3 sync failed: " . trim($syncOutput) . "\n";
+            $output = shell_exec("sudo $helper server-backup$backupArgs 2>&1");
+            if (str_contains($output ?? '', 'OK')) {
+                echo date('Y-m-d H:i:s') . " Self-backup completed\n";
             } else {
-                echo date('Y-m-d H:i:s') . " Server backups synced to S3\n";
+                echo date('Y-m-d H:i:s') . " Self-backup failed: " . trim($output ?? '') . "\n";
+            }
+        }
+
+        $db->query(
+            "INSERT INTO settings (`key`, `value`) VALUES ('last_self_backup', ?)
+             ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)",
+            [date('Y-m-d H:i:s')]
+        );
+
+        // Sync server backups to S3 if enabled
+        $syncEnabled = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 's3_sync_server_backups'");
+        if (($syncEnabled['value'] ?? '0') === '1') {
+            $s3Service = new \BBS\Services\S3SyncService();
+            $creds = $s3Service->resolveCredentials(['credential_source' => 'global']);
+
+            if (!empty($creds['bucket']) && $s3Service->isRcloneInstalled()) {
+                $backupDir = '/var/bbs/backups';
+                $prefix = trim($creds['path_prefix'], '/');
+                $remotePath = $prefix ? "{$prefix}/_server-backups" : '_server-backups';
+                $remote = "S3:{$creds['bucket']}/{$remotePath}/";
+
+                // Use bbs-ssh-helper for S3 sync (runs as root with proper env)
+                $cmd = "sudo $helper rclone-server-sync "
+                     . escapeshellarg($backupDir) . " "
+                     . escapeshellarg($remote) . " "
+                     . escapeshellarg($creds['endpoint']) . " "
+                     . escapeshellarg($creds['region']) . " "
+                     . escapeshellarg($creds['access_key']) . " "
+                     . escapeshellarg($creds['secret_key']) . " 2>&1";
+                $syncOutput = shell_exec($cmd);
+
+                if (str_contains($syncOutput ?? '', 'ERROR') && !str_contains($syncOutput ?? '', 'OK')) {
+                    echo date('Y-m-d H:i:s') . " Server backup S3 sync failed: " . trim($syncOutput) . "\n";
+                } else {
+                    echo date('Y-m-d H:i:s') . " Server backups synced to S3\n";
+                }
             }
         }
     }

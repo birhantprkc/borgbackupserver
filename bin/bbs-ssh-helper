@@ -621,7 +621,7 @@ case "$ACTION" in
 
     server-backup)
         # Run the BBS server backup script
-        # Usage: bbs-ssh-helper server-backup
+        # Usage: bbs-ssh-helper server-backup [--with-catalogs] [--keep N]
         # Creates a backup of the BBS database and config to /var/bbs/backups/
         BACKUP_SCRIPT="/var/www/bbs/bin/bbs-backup"
 
@@ -630,8 +630,8 @@ case "$ACTION" in
             exit 1
         fi
 
-        # Run the backup script as root
-        "$BACKUP_SCRIPT" 2>&1
+        # Run the backup script as root, forwarding any extra args
+        "$BACKUP_SCRIPT" "${@:2}" 2>&1
         exit $?
         ;;
 
