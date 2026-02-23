@@ -196,27 +196,20 @@ $agentExe = "$AgentDir\bbs-agent.exe"
 
 # Remove old service if it exists
 if ($existingSvc) {
-    sc.exe delete $ServiceName 2>$null | Out-Null
+    & $agentExe remove 2>$null | Out-Null
     Start-Sleep -Seconds 2
 }
 
-# Create service using sc.exe
-# The agent exe runs as a long-lived process (not a native Windows service).
-# We use sc.exe with "type= own" and the agent handles graceful shutdown via SIGBREAK.
-sc.exe create $ServiceName `
-    binPath= "`"$agentExe`"" `
-    start= auto `
-    DisplayName= "$ServiceDisplay" | Out-Null
+# Install service using the exe's built-in win32service support
+& $agentExe install 2>&1 | Out-Null
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Fail "Failed to create service"
+    Write-Fail "Failed to install service"
     exit 1
 }
 
-# Set description
-sc.exe description $ServiceName "Borg Backup Server agent - manages backup jobs for this machine" | Out-Null
-
-# Configure auto-restart on failure (restart after 30s, 60s, 120s)
+# Set to auto-start and configure recovery
+sc.exe config $ServiceName start= auto | Out-Null
 sc.exe failure $ServiceName reset= 86400 actions= restart/30000/restart/60000/restart/120000 | Out-Null
 
 Write-Ok "Service '$ServiceName' installed"
