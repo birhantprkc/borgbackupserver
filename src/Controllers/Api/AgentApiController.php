@@ -863,6 +863,9 @@ class AgentApiController extends Controller
             'install.sh' => 'agent/install.sh',
             'bbs-agent.py' => 'agent/bbs-agent.py',
             'com.borgbackupserver.agent.plist' => 'agent/com.borgbackupserver.agent.plist',
+            'install-windows.ps1' => 'agent/install-windows.ps1',
+            'uninstall-windows.ps1' => 'agent/uninstall-windows.ps1',
+            'bbs-agent.exe' => 'agent/bbs-agent.exe',
             'bbs-mac-agent' => 'agent/bbs-mac-agent',
             'uninstall.sh' => 'agent/uninstall.sh',
         ];
@@ -881,7 +884,7 @@ class AgentApiController extends Controller
             exit;
         }
 
-        $contentType = str_ends_with($filename, '.sh') || str_ends_with($filename, '.py') || str_ends_with($filename, '.plist')
+        $contentType = str_ends_with($filename, '.sh') || str_ends_with($filename, '.py') || str_ends_with($filename, '.plist') || str_ends_with($filename, '.ps1')
             ? 'text/plain; charset=utf-8'
             : 'application/octet-stream';
         header('Content-Type: ' . $contentType);
@@ -896,6 +899,15 @@ class AgentApiController extends Controller
     public function getAgent(): void
     {
         $_GET['file'] = $_GET['file'] ?? 'install.sh';
+        $this->downloadFile();
+    }
+
+    /**
+     * Shorthand route: /get-agent-windows → serves install-windows.ps1 by default.
+     */
+    public function getAgentWindows(): void
+    {
+        $_GET['file'] = $_GET['file'] ?? 'install-windows.ps1';
         $this->downloadFile();
     }
 

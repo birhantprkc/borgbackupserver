@@ -2635,19 +2635,61 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
 <?php elseif ($tab === 'install'): ?>
     <h5 class="mb-3">Install Agent</h5>
 
-    <div class="card border-0 shadow-sm">
-        <div class="card-body">
-            <?php $appUrl = rtrim(\BBS\Core\Config::get('APP_URL', 'https://' . $serverHost), '/'); ?>
-            <?php $installCmd = 'curl -s ' . $appUrl . '/get-agent | sudo bash -s -- --server ' . $appUrl . ' --key ' . $agent['api_key']; ?>
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <p class="mb-0">Run this command on the endpoint to install the BBS agent:</p>
-                <button class="btn btn-sm btn-outline-secondary" type="button"
-                        onclick="navigator.clipboard.writeText(document.getElementById('installCmd').textContent.trim()); this.innerHTML='<i class=\'bi bi-check\'></i> Copied'; setTimeout(() => this.innerHTML='<i class=\'bi bi-clipboard\'></i> Copy', 2000)">
-                    <i class="bi bi-clipboard"></i> Copy
-                </button>
+    <?php $appUrl = rtrim(\BBS\Core\Config::get('APP_URL', 'https://' . $serverHost), '/'); ?>
+
+    <ul class="nav nav-tabs mb-3" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="install-linux-tab" data-bs-toggle="tab" data-bs-target="#install-linux" type="button" role="tab">
+                <i class="bi bi-ubuntu"></i> Linux / macOS
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="install-windows-tab" data-bs-toggle="tab" data-bs-target="#install-windows" type="button" role="tab">
+                <i class="bi bi-windows"></i> Windows
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+        <div class="tab-pane fade show active" id="install-linux" role="tabpanel">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <?php $installCmd = 'curl -s ' . $appUrl . '/get-agent | sudo bash -s -- --server ' . $appUrl . ' --key ' . $agent['api_key']; ?>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <p class="mb-0">Run this command on the endpoint to install the BBS agent:</p>
+                        <button class="btn btn-sm btn-outline-secondary" type="button"
+                                onclick="navigator.clipboard.writeText(document.getElementById('installCmdLinux').textContent.trim()); this.innerHTML='<i class=\'bi bi-check\'></i> Copied'; setTimeout(() => this.innerHTML='<i class=\'bi bi-clipboard\'></i> Copy', 2000)">
+                            <i class="bi bi-clipboard"></i> Copy
+                        </button>
+                    </div>
+                    <div class="bg-dark text-white p-3 rounded" style="font-family: monospace; font-size: 0.9rem; word-break: break-all;" id="installCmdLinux">
+                        <?= htmlspecialchars($installCmd) ?>
+                    </div>
+                </div>
             </div>
-            <div class="bg-dark text-white p-3 rounded mb-3" style="font-family: monospace; font-size: 0.9rem; word-break: break-all;" id="installCmd">
-                <?= htmlspecialchars($installCmd) ?>
+        </div>
+
+        <div class="tab-pane fade" id="install-windows" role="tabpanel">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <?php $winCmd = "powershell -ExecutionPolicy Bypass -Command \"& {iwr -UseBasicParsing '{$appUrl}/api/agent/download?file=install-windows.ps1' -OutFile \$env:TEMP\\bbs-install.ps1; & \$env:TEMP\\bbs-install.ps1 -Server '{$appUrl}' -Key '{$agent['api_key']}'}\""; ?>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <p class="mb-0">Run this command in an <strong>Administrator</strong> Command Prompt or PowerShell:</p>
+                        <button class="btn btn-sm btn-outline-secondary" type="button"
+                                onclick="navigator.clipboard.writeText(document.getElementById('installCmdWindows').textContent.trim()); this.innerHTML='<i class=\'bi bi-check\'></i> Copied'; setTimeout(() => this.innerHTML='<i class=\'bi bi-clipboard\'></i> Copy', 2000)">
+                            <i class="bi bi-clipboard"></i> Copy
+                        </button>
+                    </div>
+                    <div class="bg-dark text-white p-3 rounded mb-3" style="font-family: monospace; font-size: 0.85rem; word-break: break-all;" id="installCmdWindows">
+                        <?= htmlspecialchars($winCmd) ?>
+                    </div>
+                    <div class="alert alert-info mb-0 d-flex align-items-start">
+                        <i class="bi bi-info-circle-fill me-2 mt-1"></i>
+                        <div>
+                            Requires Windows 10/11 64-bit. Installs Borg and runs as a Windows Service. No Python or WSL needed.
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

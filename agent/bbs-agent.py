@@ -46,12 +46,13 @@ if not hasattr(subprocess, "run"):
 
 AGENT_VERSION = "2.9.0"
 BORG_PATH = None  # Resolved in get_system_info()
+IS_WINDOWS = sys.platform == "win32"
 
 # Ensure UTF-8 filesystem encoding for handling filenames with non-ASCII characters.
 # CentOS 7 and older systems may default to ASCII, causing encoding errors.
 # Setting env vars after Python starts does NOT change sys.getfilesystemencoding(),
 # so we must re-exec with the correct locale if needed.
-if sys.getfilesystemencoding().lower() in ("ascii", "ansi_x3.4-1968") and \
+if not IS_WINDOWS and sys.getfilesystemencoding().lower() in ("ascii", "ansi_x3.4-1968") and \
    not os.environ.get("_BBS_LOCALE_RETRY"):
     os.environ["_BBS_LOCALE_RETRY"] = "1"
     import locale
@@ -64,11 +65,23 @@ if sys.getfilesystemencoding().lower() in ("ascii", "ansi_x3.4-1968") and \
         except locale.Error:
             continue
 
-CONFIG_PATH = "/etc/bbs-agent/config.ini"
-LOG_PATH = "/var/log/bbs-agent.log"
-SSH_KEY_PATH = "/etc/bbs-agent/ssh_key"
-BORG_SOURCE_PATH = "/etc/bbs-agent/borg_source"
-SSH_INFO_PATH = "/etc/bbs-agent/ssh_info.json"
+# Platform-specific paths
+if IS_WINDOWS:
+    _APPDATA = os.environ.get("ProgramData", r"C:\ProgramData")
+    _AGENT_DIR = os.path.join(_APPDATA, "bbs-agent")
+    CONFIG_PATH      = os.path.join(_AGENT_DIR, "config.ini")
+    LOG_PATH         = os.path.join(_AGENT_DIR, "bbs-agent.log")
+    SSH_KEY_PATH     = os.path.join(_AGENT_DIR, "ssh_key")
+    BORG_SOURCE_PATH = os.path.join(_AGENT_DIR, "borg_source")
+    SSH_INFO_PATH    = os.path.join(_AGENT_DIR, "ssh_info.json")
+    REMOTE_KEY_PATH  = os.path.join(os.environ.get("TEMP", "."), "bbs-remote-ssh-key")
+else:
+    CONFIG_PATH      = "/etc/bbs-agent/config.ini"
+    LOG_PATH         = "/var/log/bbs-agent.log"
+    SSH_KEY_PATH     = "/etc/bbs-agent/ssh_key"
+    BORG_SOURCE_PATH = "/etc/bbs-agent/borg_source"
+    SSH_INFO_PATH    = "/etc/bbs-agent/ssh_info.json"
+    REMOTE_KEY_PATH  = "/tmp/bbs-remote-ssh-key"
 
 # Allow overrides for development
 if os.environ.get("BBS_AGENT_CONFIG"):
@@ -89,7 +102,11 @@ def setup_logging():
     handlers = [logging.FileHandler(LOG_PATH, encoding="utf-8")]
     # Only add stdout handler if stdout is a real terminal (not redirected to the
     # same log file by launchd/systemd, which would cause duplicate lines)
-    if os.isatty(sys.stdout.fileno()):
+    try:
+        is_tty = os.isatty(sys.stdout.fileno())
+    except Exception:
+        is_tty = False
+    if is_tty:
         handlers.append(logging.StreamHandler(sys.stdout))
     logging.basicConfig(
         level=logging.INFO,
@@ -184,21 +201,24 @@ def get_system_info():
         "agent_version": AGENT_VERSION,
     }
 
-    # Try to get more detailed OS info from /etc/os-release
-    try:
-        with open("/etc/os-release") as f:
-            os_release = {}
-            for line in f:
-                if "=" in line:
-                    key, val = line.strip().split("=", 1)
-                    os_release[key] = val.strip('"')
-            if "PRETTY_NAME" in os_release:
-                info["os_info"] = "{} {}".format(os_release['PRETTY_NAME'], platform.machine())
-    except FileNotFoundError:
-        pass
+    # Try to get more detailed OS info
+    if IS_WINDOWS:
+        info["os_info"] = "{} {} {}".format(platform.system(), platform.version(), platform.machine())
+    else:
+        try:
+            with open("/etc/os-release") as f:
+                os_release = {}
+                for line in f:
+                    if "=" in line:
+                        key, val = line.strip().split("=", 1)
+                        os_release[key] = val.strip('"')
+                if "PRETTY_NAME" in os_release:
+                    info["os_info"] = "{} {}".format(os_release['PRETTY_NAME'], platform.machine())
+        except FileNotFoundError:
+            pass
 
     # Platform and architecture info (for borg binary matching)
-    info["platform"] = platform.system().lower()  # linux, darwin, freebsd
+    info["platform"] = platform.system().lower()  # linux, darwin, freebsd, windows
     arch = platform.machine()
     if arch in ("aarch64", "arm64"):
         info["architecture"] = "arm64"
@@ -223,14 +243,19 @@ def get_system_info():
     # Get borg version and detect installation method
     global BORG_PATH
     borg_path = None
-    for candidate in ["/usr/local/bin/borg", "/usr/bin/borg", "/opt/homebrew/bin/borg"]:
+    if IS_WINDOWS:
+        candidates = [r"C:\Program Files\BorgBackup\borg.exe", r"C:\Program Files (x86)\BorgBackup\borg.exe"]
+    else:
+        candidates = ["/usr/local/bin/borg", "/usr/bin/borg", "/opt/homebrew/bin/borg"]
+    for candidate in candidates:
         if os.path.exists(candidate):
             borg_path = candidate
             break
     if not borg_path:
         try:
+            which_cmd = "where" if IS_WINDOWS else "which"
             which_result = subprocess.run(
-                ["which", "borg"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5
+                [which_cmd, "borg"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5
             )
             if which_result.returncode == 0:
                 borg_path = which_result.stdout.decode("utf-8", errors="replace").strip()
@@ -343,7 +368,8 @@ def download_ssh_key(config):
         os.makedirs(key_dir, exist_ok=True)
         with open(SSH_KEY_PATH, "w") as f:
             f.write(private_key)
-        os.chmod(SSH_KEY_PATH, 0o600)
+        if not IS_WINDOWS:
+            os.chmod(SSH_KEY_PATH, 0o600)
         logger.info("SSH key saved to {}".format(SSH_KEY_PATH))
         _save_ssh_info(result)
         return True
@@ -568,7 +594,8 @@ def _install_borg_binary(download_url, binary_path, target_version):
         os.makedirs(os.path.dirname(binary_path), exist_ok=True)
         with open(tmp_path, "wb") as f:
             f.write(binary_data)
-        os.chmod(tmp_path, 0o755)
+        if not IS_WINDOWS:
+            os.chmod(tmp_path, 0o755)
     except Exception as e:
         return "failed", "", "Failed to write binary: {}".format(e)
 
@@ -616,10 +643,10 @@ def _install_borg_binary(download_url, binary_path, target_version):
             os.rename(backup_path, binary_path)
         return "failed", "", "Failed to install binary: {}".format(e)
 
-    # Remove package manager borg to avoid having two versions
+    # Remove package manager borg to avoid having two versions (Unix only)
     # /usr/local/bin takes precedence in PATH, but it's cleaner to have just one
     pkg_borg = "/usr/bin/borg"
-    if os.path.exists(pkg_borg) and binary_path != pkg_borg:
+    if not IS_WINDOWS and os.path.exists(pkg_borg) and binary_path != pkg_borg:
         try:
             # Try to uninstall via package manager
             if os.path.exists("/usr/bin/apt-get"):
@@ -645,6 +672,8 @@ def _install_borg_binary(download_url, binary_path, target_version):
 
 def _install_borg_pip(target_version):
     """Install borg via pip. Removes any existing non-pip binary first."""
+    if IS_WINDOWS:
+        return "failed", "", "pip install not supported on Windows"
     # Check if there's an existing binary at /usr/local/bin/borg that's not from pip
     # (pip-installed borg is a script, not a large ELF binary)
     existing_binary = "/usr/local/bin/borg"
@@ -709,6 +738,8 @@ def _install_borg_pip(target_version):
 
 def _install_borg_package_manager():
     """Install/update borg via OS package manager. Removes any existing /usr/local/bin/borg first."""
+    if IS_WINDOWS:
+        return "failed", "", "Package manager install not supported on Windows"
     # Remove any existing binary at /usr/local/bin/borg so package manager version is used
     existing_binary = "/usr/local/bin/borg"
     if os.path.exists(existing_binary):
@@ -816,15 +847,20 @@ def execute_update_agent(config, task):
             error_output = "Downloaded script failed validation"
             logger.error(error_output)
         else:
-            # Determine current script path
-            script_path = os.path.abspath(__file__)
+            # On Windows (launcher pattern): update bbs-agent-run.py next to the exe
+            # On Unix: replace the running script in-place
+            if IS_WINDOWS:
+                script_path = os.path.join(os.path.dirname(sys.executable), "bbs-agent-run.py")
+            else:
+                script_path = os.path.abspath(__file__)
             logger.info("Replacing agent at: {}".format(script_path))
 
             # Write new script to temp file first, then move
             tmp_path = script_path + ".tmp"
             with open(tmp_path, "w", encoding="utf-8") as f:
                 f.write(new_script)
-            os.chmod(tmp_path, os.stat(script_path).st_mode)
+            if not IS_WINDOWS:
+                os.chmod(tmp_path, os.stat(script_path).st_mode)
             os.replace(tmp_path, script_path)
 
             # Extract new version from downloaded script
@@ -859,7 +895,16 @@ def execute_update_agent(config, task):
         info = get_system_info()
         api_request(config, "/api/agent/info", method="POST", data=info)
         logger.info("Restarting agent with new script...")
-        os.execv(sys.executable, [sys.executable] + sys.argv)
+        if IS_WINDOWS:
+            # Windows launcher pattern: restart the Windows Service
+            # The service manager will re-launch the exe, which loads the updated .py
+            subprocess.Popen(
+                'cmd /c "timeout /t 2 /nobreak >nul & sc stop BorgBackupAgent & timeout /t 2 /nobreak >nul & sc start BorgBackupAgent"',
+                creationflags=0x00000008,  # DETACHED_PROCESS
+            )
+            sys.exit(0)
+        else:
+            os.execv(sys.executable, [sys.executable] + sys.argv)
 
 
 def log_to_server(config, job_id, message, level="info"):
@@ -1035,11 +1080,21 @@ def execute_plugin_mysql_dump(config):
             cmd = base_cmd + [db]
             if compress:
                 dump_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                with open(dump_path, "wb") as f:
-                    gzip_proc = subprocess.Popen(["gzip"], stdin=dump_proc.stdout, stdout=f, stderr=subprocess.PIPE)
-                dump_proc.stdout.close()
-                gzip_proc.wait()
-                dump_proc.wait()
+                if IS_WINDOWS:
+                    import gzip as gzip_mod
+                    with gzip_mod.open(dump_path, "wb") as f:
+                        while True:
+                            chunk = dump_proc.stdout.read(65536)
+                            if not chunk:
+                                break
+                            f.write(chunk)
+                    dump_proc.wait()
+                else:
+                    with open(dump_path, "wb") as f:
+                        gzip_proc = subprocess.Popen(["gzip"], stdin=dump_proc.stdout, stdout=f, stderr=subprocess.PIPE)
+                    dump_proc.stdout.close()
+                    gzip_proc.wait()
+                    dump_proc.wait()
                 if dump_proc.returncode != 0:
                     stderr = dump_proc.stderr.read().decode() if dump_proc.stderr else ""
                     raise Exception("mysqldump failed for {}: {}".format(db, stderr))
@@ -1058,11 +1113,21 @@ def execute_plugin_mysql_dump(config):
         cmd = base_cmd + ["--all-databases"]
         if compress:
             dump_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            with open(dump_path, "wb") as f:
-                gzip_proc = subprocess.Popen(["gzip"], stdin=dump_proc.stdout, stdout=f, stderr=subprocess.PIPE)
-            dump_proc.stdout.close()
-            gzip_proc.wait()
-            dump_proc.wait()
+            if IS_WINDOWS:
+                import gzip as gzip_mod
+                with gzip_mod.open(dump_path, "wb") as f:
+                    while True:
+                        chunk = dump_proc.stdout.read(65536)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                dump_proc.wait()
+            else:
+                with open(dump_path, "wb") as f:
+                    gzip_proc = subprocess.Popen(["gzip"], stdin=dump_proc.stdout, stdout=f, stderr=subprocess.PIPE)
+                dump_proc.stdout.close()
+                gzip_proc.wait()
+                dump_proc.wait()
             if dump_proc.returncode != 0:
                 stderr = dump_proc.stderr.read().decode() if dump_proc.stderr else ""
                 raise Exception("mysqldump failed: {}".format(stderr))
@@ -1175,11 +1240,21 @@ def execute_plugin_pg_dump(config):
 
         if compress:
             dump_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=pg_env)
-            with open(dump_path, "wb") as f:
-                gzip_proc = subprocess.Popen(["gzip"], stdin=dump_proc.stdout, stdout=f, stderr=subprocess.PIPE)
-            dump_proc.stdout.close()
-            gzip_proc.wait()
-            dump_proc.wait()
+            if IS_WINDOWS:
+                import gzip as gzip_mod
+                with gzip_mod.open(dump_path, "wb") as f:
+                    while True:
+                        chunk = dump_proc.stdout.read(65536)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                dump_proc.wait()
+            else:
+                with open(dump_path, "wb") as f:
+                    gzip_proc = subprocess.Popen(["gzip"], stdin=dump_proc.stdout, stdout=f, stderr=subprocess.PIPE)
+                dump_proc.stdout.close()
+                gzip_proc.wait()
+                dump_proc.wait()
             if dump_proc.returncode != 0:
                 stderr = dump_proc.stderr.read().decode() if dump_proc.stderr else ""
                 raise Exception("pg_dump failed for {}: {}".format(db, stderr))
@@ -1391,13 +1466,14 @@ def execute_restore_pg(config, task):
 
     # Write temporary SSH key for remote SSH repos
     remote_ssh_key = task.get("remote_ssh_key")
-    remote_key_path = "/tmp/bbs-remote-ssh-key"
+    remote_key_path = REMOTE_KEY_PATH
     if remote_ssh_key:
         try:
             normalized_key = remote_ssh_key.replace("\r\n", "\n").replace("\r", "\n").rstrip() + "\n"
             with open(remote_key_path, "w") as kf:
                 kf.write(normalized_key)
-            os.chmod(remote_key_path, 0o600)
+            if not IS_WINDOWS:
+                os.chmod(remote_key_path, 0o600)
             logger.info("Wrote temporary SSH key for remote repo")
         except Exception as e:
             logger.error("Failed to write remote SSH key: {}".format(e))
@@ -1490,11 +1566,23 @@ def execute_restore_pg(config, task):
             import_cmd = psql_base + ["-d", target_db]
 
             if compress:
-                gunzip = subprocess.Popen(["gunzip", "-c", dump_file], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                psql_proc = subprocess.Popen(import_cmd, stdin=gunzip.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=pg_env)
-                gunzip.stdout.close()
-                psql_proc.wait()
-                gunzip.wait()
+                if IS_WINDOWS:
+                    import gzip as gzip_mod
+                    with gzip_mod.open(dump_file, "rb") as gz:
+                        psql_proc = subprocess.Popen(import_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=pg_env)
+                        while True:
+                            chunk = gz.read(65536)
+                            if not chunk:
+                                break
+                            psql_proc.stdin.write(chunk)
+                        psql_proc.stdin.close()
+                        psql_proc.wait()
+                else:
+                    gunzip = subprocess.Popen(["gunzip", "-c", dump_file], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    psql_proc = subprocess.Popen(import_cmd, stdin=gunzip.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=pg_env)
+                    gunzip.stdout.close()
+                    psql_proc.wait()
+                    gunzip.wait()
                 if psql_proc.returncode != 0:
                     stderr = psql_proc.stderr.read().decode("utf-8", errors="replace")
                     errors.append("{}: import failed: {}".format(db_name, stderr[:500]))
@@ -1561,13 +1649,14 @@ def execute_restore_mysql(config, task):
 
     # Write temporary SSH key for remote SSH repos
     remote_ssh_key = task.get("remote_ssh_key")
-    remote_key_path = "/tmp/bbs-remote-ssh-key"
+    remote_key_path = REMOTE_KEY_PATH
     if remote_ssh_key:
         try:
             normalized_key = remote_ssh_key.replace("\r\n", "\n").replace("\r", "\n").rstrip() + "\n"
             with open(remote_key_path, "w") as kf:
                 kf.write(normalized_key)
-            os.chmod(remote_key_path, 0o600)
+            if not IS_WINDOWS:
+                os.chmod(remote_key_path, 0o600)
             logger.info("Wrote temporary SSH key for remote repo")
         except Exception as e:
             logger.error("Failed to write remote SSH key: {}".format(e))
@@ -1660,11 +1749,17 @@ def execute_restore_mysql(config, task):
             if per_database:
                 if compress:
                     # gunzip | mysql
-                    gunzip = subprocess.Popen(["gunzip", "-c", dump_file], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                    mysql_proc = subprocess.Popen(import_cmd, stdin=gunzip.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                    gunzip.stdout.close()
+                    if IS_WINDOWS:
+                        import gzip as _gzip
+                        decomp = subprocess.Popen(["python", "-c",
+                            "import gzip,sys,shutil;shutil.copyfileobj(gzip.open(sys.argv[1],'rb'),sys.stdout.buffer)",
+                            dump_file], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    else:
+                        decomp = subprocess.Popen(["gunzip", "-c", dump_file], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    mysql_proc = subprocess.Popen(import_cmd, stdin=decomp.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    decomp.stdout.close()
                     mysql_proc.wait()
-                    gunzip.wait()
+                    decomp.wait()
                     if mysql_proc.returncode != 0:
                         stderr = mysql_proc.stderr.read().decode("utf-8", errors="replace")
                         errors.append("{}: import failed: {}".format(db_name, stderr[:500]))
@@ -1679,11 +1774,17 @@ def execute_restore_mysql(config, task):
                 # all_databases dump -- import without specifying target db (uses embedded USE statements)
                 import_cmd = mysql_base  # no db name
                 if compress:
-                    gunzip = subprocess.Popen(["gunzip", "-c", dump_file], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                    mysql_proc = subprocess.Popen(import_cmd, stdin=gunzip.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                    gunzip.stdout.close()
+                    if IS_WINDOWS:
+                        import gzip as _gzip
+                        decomp = subprocess.Popen(["python", "-c",
+                            "import gzip,sys,shutil;shutil.copyfileobj(gzip.open(sys.argv[1],'rb'),sys.stdout.buffer)",
+                            dump_file], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    else:
+                        decomp = subprocess.Popen(["gunzip", "-c", dump_file], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    mysql_proc = subprocess.Popen(import_cmd, stdin=decomp.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    decomp.stdout.close()
                     mysql_proc.wait()
-                    gunzip.wait()
+                    decomp.wait()
                     if mysql_proc.returncode != 0:
                         stderr = mysql_proc.stderr.read().decode("utf-8", errors="replace")
                         errors.append("all_databases: import failed: {}".format(stderr[:500]))
@@ -1817,13 +1918,21 @@ def execute_task(config, task):
     env = os.environ.copy()
     env.update(env_vars)
 
+    # On Windows, translate Unix SSH paths in BORG_RSH to local paths
+    if IS_WINDOWS and "BORG_RSH" in env:
+        env["BORG_RSH"] = env["BORG_RSH"].replace(
+            "/etc/bbs-agent/ssh_key", SSH_KEY_PATH
+        ).replace(
+            "/tmp/bbs-remote-ssh-key", REMOTE_KEY_PATH
+        )
+
     # Always allow relocated repos - common after S3 restore or copying repositories
     # This prevents "repository was previously located at X" interactive prompts
     env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
     env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
 
     # Ensure UTF-8 locale for borg (handles filenames with non-ASCII characters)
-    if "LC_ALL" not in env or not env["LC_ALL"].endswith("UTF-8"):
+    if not IS_WINDOWS and ("LC_ALL" not in env or not env["LC_ALL"].endswith("UTF-8")):
         env["LC_ALL"] = "C.UTF-8"
         env["LANG"] = "C.UTF-8"
 
@@ -1871,14 +1980,15 @@ def execute_task(config, task):
 
     # Write temporary SSH key for remote SSH repos (key provided by server in task payload)
     remote_ssh_key = task.get("remote_ssh_key")
-    remote_key_path = "/tmp/bbs-remote-ssh-key"
+    remote_key_path = REMOTE_KEY_PATH
     if remote_ssh_key:
         try:
             # Normalize line endings (Windows \r\n -> Unix \n) and ensure trailing newline
             normalized_key = remote_ssh_key.replace("\r\n", "\n").replace("\r", "\n").rstrip() + "\n"
             with open(remote_key_path, "w") as kf:
                 kf.write(normalized_key)
-            os.chmod(remote_key_path, 0o600)
+            if not IS_WINDOWS:
+                os.chmod(remote_key_path, 0o600)
             logger.info("Wrote temporary SSH key for remote repo")
         except Exception as e:
             logger.error("Failed to write remote SSH key: {}".format(e))
@@ -1937,7 +2047,11 @@ def execute_task(config, task):
                     fmtime = None
                     if fpath:
                         try:
-                            st = os.stat("/" + fpath if not fpath.startswith("/") else fpath)
+                            if IS_WINDOWS:
+                                stat_path = fpath
+                            else:
+                                stat_path = "/" + fpath if not fpath.startswith("/") else fpath
+                            st = os.stat(stat_path)
                             fsize = st.st_size
                             fmtime = datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
                         except (OSError, UnicodeEncodeError):
@@ -2096,7 +2210,10 @@ def execute_task(config, task):
 
 def clear_stale_cache_locks():
     """Remove stale borg cache locks that can block operations after a crash."""
-    cache_dir = os.path.expanduser("~/.cache/borg")
+    if IS_WINDOWS:
+        cache_dir = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "borg", "Cache")
+    else:
+        cache_dir = os.path.expanduser("~/.cache/borg")
     if not os.path.isdir(cache_dir):
         return
     import shutil
@@ -2150,8 +2267,14 @@ def main():
     setup_logging()
     logger.info("BBS Agent v{} starting".format(AGENT_VERSION))
 
-    signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
+    if IS_WINDOWS:
+        try:
+            signal.signal(signal.SIGBREAK, signal_handler)
+        except (AttributeError, OSError):
+            pass
+    else:
+        signal.signal(signal.SIGTERM, signal_handler)
 
     config = load_config()
 
