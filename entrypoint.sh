@@ -109,16 +109,29 @@ chown -R mysql:mysql "$MYSQL_DATADIR"
 # Extract hostname from APP_URL (strip protocol and trailing path)
 SERVER_HOST="$(echo "${APP_URL:-http://localhost}" | sed -E 's|https?://||' | sed 's|/.*||')"
 
+# Persist .env on the data volume so it survives container recreation.
+# The APP_KEY inside .env encrypts SSH keys and S3 credentials — if lost,
+# all encrypted data becomes unrecoverable.
+ENV_VOLUME="/var/bbs/config/.env"
+ENV_APP="/var/www/bbs/config/.env"
+mkdir -p /var/bbs/config /var/www/bbs/config
+
+# Migration: move existing .env from container filesystem to volume
+if [ -f "$ENV_APP" ] && [ ! -L "$ENV_APP" ] && [ ! -f "$ENV_VOLUME" ]; then
+    echo "Migrating .env to persistent volume..."
+    cp "$ENV_APP" "$ENV_VOLUME"
+    rm -f "$ENV_APP"
+fi
+
 # Generate APP_KEY if not provided via env
 if [ -z "$APP_KEY" ]; then
     APP_KEY="$(openssl rand -hex 32)"
 fi
 
-# Create .env if it doesn't exist
-if [ ! -f "/var/www/bbs/config/.env" ]; then
+# Create .env on volume if it doesn't exist (first run)
+if [ ! -f "$ENV_VOLUME" ]; then
     echo "Creating .env configuration..."
-    mkdir -p /var/www/bbs/config
-    cat > /var/www/bbs/config/.env << EOF
+    cat > "$ENV_VOLUME" << EOF
 DB_HOST=127.0.0.1
 DB_NAME=bbs
 DB_USER=bbs
@@ -126,22 +139,26 @@ DB_PASS=bbs
 APP_URL=${APP_URL:-http://localhost}
 APP_KEY=$APP_KEY
 EOF
-    chown www-data:www-data /var/www/bbs/config/.env
-    chmod 600 /var/www/bbs/config/.env
 fi
 
+chown www-data:www-data "$ENV_VOLUME"
+chmod 600 "$ENV_VOLUME"
+
+# Symlink so the app reads from the expected path
+ln -sf "$ENV_VOLUME" "$ENV_APP"
+
 # Ensure APP_KEY exists in .env (for containers upgraded from older versions)
-if ! grep -q '^APP_KEY=' /var/www/bbs/config/.env 2>/dev/null; then
+if ! grep -q '^APP_KEY=' "$ENV_VOLUME" 2>/dev/null; then
     echo "Adding APP_KEY to existing .env..."
-    echo "APP_KEY=$APP_KEY" >> /var/www/bbs/config/.env
+    echo "APP_KEY=$APP_KEY" >> "$ENV_VOLUME"
 fi
 
 # Add ClickHouse env vars if missing
-if ! grep -q 'CLICKHOUSE_HOST' /var/www/bbs/config/.env 2>/dev/null; then
-    echo "" >> /var/www/bbs/config/.env
-    echo "CLICKHOUSE_HOST=localhost" >> /var/www/bbs/config/.env
-    echo "CLICKHOUSE_PORT=8123" >> /var/www/bbs/config/.env
-    echo "CLICKHOUSE_DB=bbs" >> /var/www/bbs/config/.env
+if ! grep -q 'CLICKHOUSE_HOST' "$ENV_VOLUME" 2>/dev/null; then
+    echo "" >> "$ENV_VOLUME"
+    echo "CLICKHOUSE_HOST=localhost" >> "$ENV_VOLUME"
+    echo "CLICKHOUSE_PORT=8123" >> "$ENV_VOLUME"
+    echo "CLICKHOUSE_DB=bbs" >> "$ENV_VOLUME"
 fi
 
 # Create ClickHouse database and tables

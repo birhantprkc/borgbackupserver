@@ -327,7 +327,13 @@ class S3SyncService
             2 => ['pipe', 'w'],
         ];
 
-        $envStrings = [];
+        // Provide essential env vars so rclone doesn't fail looking for
+        // a home directory or config file (matches bbs-ssh-helper pattern)
+        $envStrings = [
+            'RCLONE_CONFIG' => '/dev/null',
+            'HOME' => '/tmp',
+            'PATH' => '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        ];
         foreach ($env as $k => $v) {
             $envStrings[$k] = $v;
         }
@@ -392,7 +398,11 @@ class S3SyncService
             2 => ['pipe', 'w'],
         ];
 
-        $envStrings = [];
+        $envStrings = [
+            'RCLONE_CONFIG' => '/dev/null',
+            'HOME' => '/tmp',
+            'PATH' => '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        ];
         foreach ($env as $k => $v) {
             $envStrings[$k] = $v;
         }
@@ -582,7 +592,11 @@ class S3SyncService
             2 => ['pipe', 'w'],
         ];
 
-        $envStrings = [];
+        $envStrings = [
+            'RCLONE_CONFIG' => '/dev/null',
+            'HOME' => '/tmp',
+            'PATH' => '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        ];
         foreach ($env as $k => $v) {
             $envStrings[$k] = $v;
         }
@@ -645,7 +659,11 @@ class S3SyncService
             2 => ['pipe', 'w'],
         ];
 
-        $envStrings = [];
+        $envStrings = [
+            'RCLONE_CONFIG' => '/dev/null',
+            'HOME' => '/tmp',
+            'PATH' => '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        ];
         foreach ($env as $k => $v) {
             $envStrings[$k] = $v;
         }
@@ -857,7 +875,11 @@ class S3SyncService
             2 => ['pipe', 'w'],
         ];
 
-        $envStrings = [];
+        $envStrings = [
+            'RCLONE_CONFIG' => '/dev/null',
+            'HOME' => '/tmp',
+            'PATH' => '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        ];
         foreach ($env as $k => $v) {
             $envStrings[$k] = $v;
         }
