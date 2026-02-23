@@ -80,6 +80,10 @@ if ($existingSvc) {
     Write-Step "Stopping existing service..."
     Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
+    # Kill any lingering borg processes that may hold locks on DLLs
+    Get-Process -Name "borg" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Get-Process -Name "bbs-agent" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 1
     Write-Ok "Existing service stopped"
 }
 
@@ -88,6 +92,26 @@ if ($existingSvc) {
 # -----------------------------------------------------------------------------
 $borgExe = "$BorgDir\borg\borg.exe"
 $borgZip = "$env:TEMP\borg-windows.zip"
+
+# Remove old borg installation to avoid locked-file errors during extraction
+if (Test-Path $BorgDir) {
+    Write-Step "Removing old Borg installation..."
+    for ($i = 1; $i -le 5; $i++) {
+        try {
+            Remove-Item -Path $BorgDir -Recurse -Force -ErrorAction Stop
+            Write-Ok "Old installation removed"
+            break
+        } catch {
+            if ($i -eq 5) {
+                Write-Fail "Cannot remove $BorgDir - files may be locked by another process"
+                Write-Fail "Close any open terminals or Explorer windows in that folder and try again"
+                exit 1
+            }
+            Write-Warn "Retrying removal ($i/5)..."
+            Start-Sleep -Seconds 2
+        }
+    }
+}
 
 Write-Step "Finding latest Borg for Windows release..."
 try {
