@@ -44,7 +44,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.9.0"
+AGENT_VERSION = "2.9.1"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
