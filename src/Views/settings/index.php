@@ -112,6 +112,19 @@ $updateAvailable = $updateService->isUpdateAvailable();
                     <?php endif; ?>
                 </div>
             </div>
+
+            <div class="card border-0 shadow-sm mt-4">
+                <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+                    <i class="bi bi-incognito me-1"></i> Agent
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Agent Poll Interval (seconds)</label>
+                        <input type="number" class="form-control" name="agent_poll_interval" value="<?= htmlspecialchars($settings['agent_poll_interval'] ?? '30') ?>" min="5" max="300">
+                        <div class="form-text">How often agents check for new tasks.</div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="col-lg-6">
@@ -151,19 +164,6 @@ $updateAvailable = $updateService->isUpdateAvailable();
                         </div>
                     </div>
                     <?php endif; ?>
-                </div>
-            </div>
-
-            <div class="card border-0 shadow-sm mt-4">
-                <div class="card-header bg-primary bg-opacity-10 fw-semibold">
-                    <i class="bi bi-incognito me-1"></i> Agent
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Agent Poll Interval (seconds)</label>
-                        <input type="number" class="form-control" name="agent_poll_interval" value="<?= htmlspecialchars($settings['agent_poll_interval'] ?? '30') ?>" min="5" max="300">
-                        <div class="form-text">How often agents check for new tasks.</div>
-                    </div>
                 </div>
             </div>
 
