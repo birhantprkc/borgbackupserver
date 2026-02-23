@@ -1190,7 +1190,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                         <div class="col-md-6">
                             <textarea class="form-control edit-directories" name="directories" rows="3" required><?= htmlspecialchars($plan['directories']) ?></textarea>
                         </div>
-                        <div class="col-md-3 form-text pt-2">One directory per line</div>
+                        <div class="col-md-3 form-text pt-2">One directory per line<?php if (stripos($agent['os_info'] ?? '', 'Windows') !== false): ?><br><small class="text-muted">e.g. C:\Users, C:\Projects</small><?php endif; ?></div>
                     </div>
 
                     <div class="row mb-3">
@@ -1473,9 +1473,20 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 </div>
                 <?php endif; ?>
 
+                <?php $isWindows = stripos($agent['os_info'] ?? '', 'Windows') !== false; ?>
                 <div class="row mb-3">
                     <label class="col-md-3 col-form-label fw-semibold">Backup Directories</label>
                     <div class="col-md-6">
+                        <?php if ($isWindows): ?>
+                        <textarea class="form-control" name="directories" id="directoriesInput" rows="3" required placeholder="C:\Users&#10;C:\Projects&#10;C:\inetpub\wwwroot"></textarea>
+                        <div class="mt-2">
+                            <span class="text-muted small me-1">Quick add:</span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary dir-btn" data-dir="C:\Users">C:\Users</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary dir-btn" data-dir="C:\Projects">C:\Projects</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary dir-btn" data-dir="C:\inetpub\wwwroot">C:\inetpub\wwwroot</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary dir-btn" data-dir="C:\ProgramData">C:\ProgramData</button>
+                        </div>
+                        <?php else: ?>
                         <textarea class="form-control" name="directories" id="directoriesInput" rows="3" required placeholder="/home&#10;/etc&#10;/var/www"></textarea>
                         <div class="mt-2">
                             <span class="text-muted small me-1">Quick add:</span>
@@ -1488,8 +1499,9 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                             <button type="button" class="btn btn-sm btn-outline-secondary dir-btn" data-dir="/var/www">/var/www</button>
                             <button type="button" class="btn btn-sm btn-outline-secondary dir-btn" data-dir="/var/lib/mysql">/var/lib/mysql</button>
                         </div>
+                        <?php endif; ?>
                     </div>
-                    <div class="col-md-3 form-text pt-2">One directory per line</div>
+                    <div class="col-md-3 form-text pt-2">One directory per line<?php if ($isWindows): ?><br><small class="text-muted">e.g. C:\Users, D:\Data</small><?php endif; ?></div>
                 </div>
 
                 <div class="row mb-3">
