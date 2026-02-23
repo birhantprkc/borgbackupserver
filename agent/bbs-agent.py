@@ -2019,11 +2019,13 @@ def execute_task(config, task):
     env.update(env_vars)
 
     # On Windows, translate Unix SSH paths in BORG_RSH to local paths
+    # Use forward slashes - Windows SSH accepts them and backslashes get
+    # stripped as escape characters when passed through subprocess/shell
     if IS_WINDOWS and "BORG_RSH" in env:
         env["BORG_RSH"] = env["BORG_RSH"].replace(
-            "/etc/bbs-agent/ssh_key", SSH_KEY_PATH
+            "/etc/bbs-agent/ssh_key", SSH_KEY_PATH.replace("\\", "/")
         ).replace(
-            "/tmp/bbs-remote-ssh-key", REMOTE_KEY_PATH
+            "/tmp/bbs-remote-ssh-key", REMOTE_KEY_PATH.replace("\\", "/")
         )
 
     # Always allow relocated repos - common after S3 restore or copying repositories
