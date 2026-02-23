@@ -93,10 +93,24 @@ if (Test-Path $borgExe) {
     $borgVer = & $borgExe --version 2>&1 | Select-Object -First 1
     Write-Ok "Already installed: $borgVer"
 } else {
-    Write-Step "Downloading Borg for Windows..."
-    $borgZipUrl = "https://github.com/marcpope/borg-windows/releases/download/v1.4.4-windows-preview/borg-windows.zip"
+    Write-Step "Finding latest Borg for Windows release..."
     $borgZip = "$env:TEMP\borg-windows.zip"
 
+    try {
+        $releaseInfo = Invoke-WebRequest -Uri "https://api.github.com/repos/marcpope/borg-windows/releases/latest" `
+            -UseBasicParsing -TimeoutSec 15 | ConvertFrom-Json
+        $borgZipUrl = ($releaseInfo.assets | Where-Object { $_.name -eq "borg-windows.zip" }).browser_download_url
+        if (-not $borgZipUrl) {
+            Write-Fail "Could not find borg-windows.zip in latest release"
+            exit 1
+        }
+        Write-Ok "Latest release: $($releaseInfo.tag_name)"
+    } catch {
+        Write-Fail "Failed to query GitHub releases: $_"
+        exit 1
+    }
+
+    Write-Step "Downloading $($releaseInfo.tag_name)..."
     try {
         Invoke-WebRequest -Uri $borgZipUrl -OutFile $borgZip -UseBasicParsing
         Write-Ok "Downloaded borg-windows.zip"

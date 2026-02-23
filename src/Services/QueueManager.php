@@ -678,6 +678,8 @@ class QueueManager
                 $agent['platform'] = 'linux';
                 if (stripos($osInfo, 'Darwin') !== false) {
                     $agent['platform'] = 'macos';
+                } elseif (stripos($osInfo, 'Windows') !== false) {
+                    $agent['platform'] = 'windows';
                 } elseif (stripos($osInfo, 'FreeBSD') !== false) {
                     $agent['platform'] = 'freebsd';
                 }

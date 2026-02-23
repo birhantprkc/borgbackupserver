@@ -528,7 +528,11 @@ def execute_update_borg(config, task):
     result = "failed"
 
     try:
-        if install_method == "binary" and download_url:
+        if IS_WINDOWS:
+            # Windows: always update from borg-windows GitHub releases
+            result, update_output, error_output = _install_borg_windows()
+
+        elif install_method == "binary" and download_url:
             result, update_output, error_output = _install_borg_binary(
                 download_url, binary_path, target_version
             )
@@ -672,6 +676,86 @@ def _install_borg_binary(download_url, binary_path, target_version):
             logger.warning("Could not remove package manager borg: {}".format(e))
 
     output = "Borg updated to v{} via binary install at {}".format(target_version, binary_path)
+    logger.info(output)
+    return "completed", output, ""
+
+
+def _install_borg_windows():
+    """Update borg on Windows from the borg-windows GitHub releases."""
+    import zipfile
+    import tempfile
+
+    borg_dir = os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "BorgBackup")
+    borg_exe = os.path.join(borg_dir, "borg", "borg.exe")
+    api_url = "https://api.github.com/repos/marcpope/borg-windows/releases/latest"
+
+    # Get current version for comparison
+    old_version = ""
+    if os.path.isfile(borg_exe):
+        try:
+            r = subprocess.run([borg_exe, "--version"], capture_output=True, timeout=10)
+            old_version = r.stdout.decode("utf-8", errors="replace").strip()
+        except Exception:
+            pass
+
+    # Query GitHub API for latest release
+    logger.info("Querying borg-windows latest release...")
+    try:
+        req = urllib.request.Request(api_url, headers={"User-Agent": "bbs-agent/{}".format(AGENT_VERSION)})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            release = json.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        return "failed", "", "Failed to query GitHub releases: {}".format(e)
+
+    tag = release.get("tag_name", "unknown")
+    assets = release.get("assets", [])
+    zip_url = None
+    for asset in assets:
+        if asset.get("name") == "borg-windows.zip":
+            zip_url = asset.get("browser_download_url")
+            break
+
+    if not zip_url:
+        return "failed", "", "No borg-windows.zip found in release {}".format(tag)
+
+    logger.info("Downloading borg-windows {} from {}".format(tag, zip_url))
+
+    # Download zip
+    try:
+        req = urllib.request.Request(zip_url, headers={"User-Agent": "bbs-agent/{}".format(AGENT_VERSION)})
+        with urllib.request.urlopen(req, timeout=300) as resp:
+            zip_data = resp.read()
+    except Exception as e:
+        return "failed", "", "Failed to download borg-windows.zip: {}".format(e)
+
+    if len(zip_data) < 1 * 1024 * 1024:
+        return "failed", "", "Downloaded zip too small ({} bytes)".format(len(zip_data))
+
+    # Extract to borg directory
+    zip_path = os.path.join(tempfile.gettempdir(), "borg-windows-update.zip")
+    try:
+        with open(zip_path, "wb") as f:
+            f.write(zip_data)
+        os.makedirs(borg_dir, exist_ok=True)
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            zf.extractall(borg_dir)
+        os.remove(zip_path)
+    except Exception as e:
+        return "failed", "", "Failed to extract borg-windows.zip: {}".format(e)
+
+    # Verify new binary works
+    if not os.path.isfile(borg_exe):
+        return "failed", "", "borg.exe not found after extraction at {}".format(borg_exe)
+
+    try:
+        r = subprocess.run([borg_exe, "--version"], capture_output=True, timeout=10)
+        new_version = r.stdout.decode("utf-8", errors="replace").strip()
+        if r.returncode != 0:
+            return "failed", "", "New borg binary failed version check"
+    except Exception as e:
+        return "failed", "", "Failed to test new borg binary: {}".format(e)
+
+    output = "Borg updated from '{}' to '{}' (release {})".format(old_version, new_version, tag)
     logger.info(output)
     return "completed", output, ""
 
