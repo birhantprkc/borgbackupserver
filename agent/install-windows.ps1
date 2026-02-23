@@ -63,7 +63,7 @@ Write-Host ""
 Write-Step "Checking server connectivity..."
 try {
     $resp = Invoke-WebRequest -Uri "$Server/api/agent/tasks" `
-        -Headers @{ "X-Agent-Key" = $Key } `
+        -Headers @{ "Authorization" = "Bearer $Key" } `
         -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
     Write-Ok "Server reachable"
 } catch {
@@ -175,7 +175,7 @@ Write-Step "Downloading SSH key..."
 try {
     $sshKeyPath = "$AgentDir\ssh_key"
     Invoke-WebRequest -Uri "$Server/api/agent/ssh-key" `
-        -Headers @{ "X-Agent-Key" = $Key } `
+        -Headers @{ "Authorization" = "Bearer $Key" } `
         -OutFile $sshKeyPath -UseBasicParsing
     if ((Get-Item $sshKeyPath).Length -gt 0) {
         Write-Ok "SSH key saved"
