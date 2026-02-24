@@ -11,8 +11,9 @@ class NotificationController extends Controller
     {
         $this->requireAuth();
 
+        $userId = $_SESSION['user_id'];
         $service = new NotificationService();
-        $notifications = $service->getAll();
+        $notifications = $service->getAll(50, 0, $userId);
 
         $this->view('notifications/index', [
             'pageTitle' => 'Notifications',
@@ -36,8 +37,9 @@ class NotificationController extends Controller
         $this->requireAuth();
         $this->verifyCsrf();
 
+        $userId = $_SESSION['user_id'];
         $service = new NotificationService();
-        $service->markAllRead();
+        $service->markAllRead($userId);
 
         $this->flash('success', 'All notifications marked as read.');
         $this->redirect('/notifications');

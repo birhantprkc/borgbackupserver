@@ -23,7 +23,7 @@
             <span class="navbar-text fw-semibold ms-2 d-sm-none small"><?= htmlspecialchars($pageTitle ?? '') ?></span>
             <div class="d-flex align-items-center ms-auto me-2 me-md-3">
                 <?php
-                $notifCount = $notifCount ?? (new \BBS\Services\NotificationService())->unreadCount();
+                $notifCount = $notifCount ?? (new \BBS\Services\NotificationService())->unreadCount($_SESSION['user_id'] ?? null);
                 ?>
                 <a href="/notifications" class="btn btn-link position-relative me-2 me-md-3 text-white p-1">
                     <i class="bi bi-bell fs-5"></i>

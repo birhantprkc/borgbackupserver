@@ -160,28 +160,48 @@ class NotificationService
         $this->db->update('notifications', ['read_at' => date('Y-m-d H:i:s')], 'id = ?', [$id]);
     }
 
-    public function markAllRead(): void
+    public function markAllRead(?int $userId = null): void
     {
-        $this->db->query("UPDATE notifications SET read_at = NOW() WHERE read_at IS NULL");
+        [$agentWhere, $agentParams] = $this->getAgentFilter($userId);
+        $this->db->query(
+            "UPDATE notifications n LEFT JOIN agents a ON a.id = n.agent_id SET n.read_at = NOW() WHERE n.read_at IS NULL AND (n.agent_id IS NULL OR {$agentWhere})",
+            $agentParams
+        );
     }
 
-    public function unreadCount(): int
+    public function unreadCount(?int $userId = null): int
     {
-        $row = $this->db->fetchOne("SELECT COUNT(*) as cnt FROM notifications WHERE read_at IS NULL AND resolved_at IS NULL");
+        [$agentWhere, $agentParams] = $this->getAgentFilter($userId);
+        $row = $this->db->fetchOne(
+            "SELECT COUNT(*) as cnt FROM notifications n LEFT JOIN agents a ON a.id = n.agent_id WHERE read_at IS NULL AND resolved_at IS NULL AND (n.agent_id IS NULL OR {$agentWhere})",
+            $agentParams
+        );
         return (int) $row['cnt'];
     }
 
-    public function getAll(int $limit = 50, int $offset = 0): array
+    public function getAll(int $limit = 50, int $offset = 0, ?int $userId = null): array
     {
+        [$agentWhere, $agentParams] = $this->getAgentFilter($userId);
+        $params = array_merge($agentParams, [$limit, $offset]);
         return $this->db->fetchAll("
             SELECT n.*, a.name as agent_name
             FROM notifications n
             LEFT JOIN agents a ON a.id = n.agent_id
+            WHERE (n.agent_id IS NULL OR {$agentWhere})
             ORDER BY
                 CASE WHEN n.resolved_at IS NULL THEN 0 ELSE 1 END,
                 n.last_occurred_at DESC
             LIMIT ? OFFSET ?
-        ", [$limit, $offset]);
+        ", $params);
+    }
+
+    private function getAgentFilter(?int $userId): array
+    {
+        if ($userId === null) {
+            return ['1=1', []];
+        }
+        $permService = new PermissionService();
+        return $permService->getAgentWhereClause($userId, 'a');
     }
 
     public function cleanup(): void
