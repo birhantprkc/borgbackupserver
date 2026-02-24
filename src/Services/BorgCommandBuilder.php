@@ -126,9 +126,13 @@ class BorgCommandBuilder
      * Note: borg 1.x has no --destination flag. Callers should set the working
      * directory (cwd) to the desired extraction target instead.
      */
-    public static function buildExtractCommand(array $repo, string $archiveName, array $paths = []): array
+    public static function buildExtractCommand(array $repo, string $archiveName, array $paths = [], int $stripComponents = 0): array
     {
         $cmd = ['borg', 'extract', '--log-json'];
+
+        if ($stripComponents > 0) {
+            $cmd[] = '--strip-components=' . $stripComponents;
+        }
 
         $cmd[] = $repo['path'] . '::' . $archiveName;
 

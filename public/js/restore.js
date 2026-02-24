@@ -494,6 +494,26 @@
     restoreBtn.addEventListener('click', function() {
         const count = (currentMode === 'search-all' && selectedVersions.size > 0) ? selectedVersions.size : selectedPaths.size;
         if (count === 0) return;
+
+        // Check for multi-drive Windows restores without a custom destination
+        const dest = document.getElementById('restore-destination').value.trim();
+        if (!dest) {
+            const paths = (currentMode === 'search-all' && selectedVersions.size > 0)
+                ? Array.from(selectedVersions.keys())
+                : Array.from(selectedPaths);
+            const drives = new Set();
+            paths.forEach(p => {
+                const m = p.match(/^([A-Za-z])\//);
+                if (m) drives.add(m[1].toUpperCase());
+            });
+            if (drives.size > 1) {
+                alert('Selected files span multiple drives (' + Array.from(drives).sort().join(':, ') + ':). ' +
+                    'In-place restore can only target one drive at a time.\n\n' +
+                    'Either select files from a single drive, or enter a destination path.');
+                return;
+            }
+        }
+
         confirmAction('Restore ' + count + ' path(s) to the client?\n\nThis may overwrite existing files.', function() {
             fillFormAndSubmit('restore-form', 'restore-archive-id', 'restore-files-container', 'restore-dest-field');
         }, { danger: true });

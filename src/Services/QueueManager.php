@@ -425,7 +425,25 @@ class QueueManager
         $destination = $job['restore_destination'] ?? null;
 
         $repo = ['path' => $archive['repo_path'], 'passphrase_encrypted' => $archive['passphrase_encrypted']];
-        $cmd = BorgCommandBuilder::buildExtractCommand($repo, $archive['archive_name'], $paths);
+
+        // Windows drive-letter restore: paths like C/Users/... need --strip-components 1
+        // to remove the drive prefix, with cwd set to the drive root (e.g. C:\)
+        $stripComponents = 0;
+        if (!$destination && !empty($paths)) {
+            $driveLetter = null;
+            foreach ($paths as $p) {
+                if (preg_match('/^([A-Za-z])\//', $p, $m)) {
+                    $driveLetter = strtoupper($m[1]);
+                    break;
+                }
+            }
+            if ($driveLetter) {
+                $stripComponents = 1;
+                $destination = "{$driveLetter}:\\";
+            }
+        }
+
+        $cmd = BorgCommandBuilder::buildExtractCommand($repo, $archive['archive_name'], $paths, $stripComponents);
 
         // Handle remote SSH repos
         $remoteSshConfig = null;

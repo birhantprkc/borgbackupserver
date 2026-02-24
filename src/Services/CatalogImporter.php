@@ -64,11 +64,12 @@ class CatalogImporter
                 $entry = json_decode($line, true);
                 if (!$entry || empty($entry['path'])) continue;
 
-                // Normalize Windows paths: backslashes to forward slashes, strip
-                // drive letter prefix (C:/) to match borg-windows archive format
+                // Normalize Windows paths: backslashes to forward slashes, convert
+                // drive letter to directory prefix (C:\Users\... → C/Users/...)
+                // to match borg-windows archive format
                 $rawPath = str_replace('\\', '/', $entry['path']);
-                if (preg_match('/^[A-Za-z]:\//', $rawPath)) {
-                    $rawPath = substr($rawPath, 3);
+                if (preg_match('/^([A-Za-z]):\//', $rawPath, $dm)) {
+                    $rawPath = $dm[1] . substr($rawPath, 2);
                 }
                 $path = $escape($rawPath);
                 $name = $escape(basename($rawPath));
