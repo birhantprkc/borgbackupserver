@@ -114,6 +114,4 @@ All documentation lives on the **[GitHub Wiki](https://github.com/marcpope/borgb
 
 ## License
 
-[MIT License](LICENSE) with Beer-Ware Addendum.
-
-If this software saved your backups (or your job), consider buying the maintainer a beer.
+[MIT License](LICENSE)  -  Please consider supporting the author in the sidebar. This was an internal tool of Falcon Internet, originally built in 2018. Since then, it's been completely re-written and re-organized into a feature rich platform. 
