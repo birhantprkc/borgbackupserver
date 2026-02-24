@@ -1242,8 +1242,13 @@ class ClientController extends Controller
             $borgArgs = [$localPath . '::' . $archive['archive_name']];
             foreach ($selectedFiles as $path) {
                 $path = ltrim($path, '/');
+                // Windows archives store paths with backslashes (C:\Users\...)
+                // but catalog normalizes to forward slashes — convert back
+                if (preg_match('/^[A-Za-z]:\//', $path)) {
+                    $path = str_replace('/', '\\', $path);
+                }
                 if ($path !== '') {
-                    $borgArgs[] = rtrim($path, '/');
+                    $borgArgs[] = rtrim($path, '/\\');
                 }
             }
 
