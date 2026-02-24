@@ -15,8 +15,11 @@ class LogController extends Controller
         $perPage = 50;
         $offset = ($page - 1) * $perPage;
 
-        $where = '1=1';
-        $params = [];
+        // Filter logs by accessible agents
+        [$agentWhere, $agentParams] = $this->getAgentWhereClause('a');
+
+        $where = "(sl.agent_id IS NULL OR {$agentWhere})";
+        $params = $agentParams;
 
         if ($level && in_array($level, ['info', 'warning', 'error'])) {
             $where .= ' AND sl.level = ?';
@@ -27,6 +30,7 @@ class LogController extends Controller
         $countRow = $this->db->fetchOne("
             SELECT COUNT(*) as cnt
             FROM server_log sl
+            LEFT JOIN agents a ON a.id = sl.agent_id
             WHERE {$where}
         ", $params);
         $total = (int) ($countRow['cnt'] ?? 0);
