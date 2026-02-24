@@ -64,9 +64,12 @@ class CatalogImporter
                 $entry = json_decode($line, true);
                 if (!$entry || empty($entry['path'])) continue;
 
-                // Normalize Windows backslash paths to forward slashes so
-                // dirname()/basename() work correctly on the Linux server
+                // Normalize Windows paths: backslashes to forward slashes, strip
+                // drive letter prefix (C:/) to match borg-windows archive format
                 $rawPath = str_replace('\\', '/', $entry['path']);
+                if (preg_match('/^[A-Za-z]:\//', $rawPath)) {
+                    $rawPath = substr($rawPath, 3);
+                }
                 $path = $escape($rawPath);
                 $name = $escape(basename($rawPath));
                 $rawParent = dirname($rawPath);
