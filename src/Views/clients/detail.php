@@ -2695,10 +2695,17 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
                     <div class="bg-dark text-white p-3 rounded mb-3" style="font-family: monospace; font-size: 0.85rem; word-break: break-all;" id="installCmdWindows">
                         <?= htmlspecialchars($winCmd) ?>
                     </div>
+                    <div class="alert alert-warning mb-3 d-flex align-items-start">
+                        <i class="bi bi-exclamation-triangle-fill me-2 mt-1"></i>
+                        <div>
+                            <strong>Pre-release:</strong> Windows support is in pre-release and should be used for non-production workloads only.
+                            Submit feedback (good or bad) at <a href="https://github.com/marcpope/borgbackupserver/issues" target="_blank" class="alert-link">github.com/marcpope/borgbackupserver/issues</a>.
+                        </div>
+                    </div>
                     <div class="alert alert-info mb-0 d-flex align-items-start">
                         <i class="bi bi-info-circle-fill me-2 mt-1"></i>
                         <div>
-                            Requires Windows 10/11 64-bit. Installs Borg and runs as a Windows Service. No Python or WSL needed.
+                            Requires Windows 10/11 64-bit. The installer will automatically download and install <a href="https://github.com/marcpope/borg-windows" target="_blank" class="alert-link">Borg for Windows</a> for you. Runs as a Windows Service. No Python or WSL needed.
                         </div>
                     </div>
                 </div>
