@@ -2,35 +2,37 @@
 
 ![Dashboard](https://www.borgbackupserver.com/borg-backup-server.png)
 
-A self-hosted web application for centrally managing [BorgBackup](https://borgbackup.readthedocs.io/) across multiple Linux and macOS endpoints. A lightweight agent polls the server for tasks over HTTPS, backs up over SSH to the server, and reports progress back. No inbound connections to endpoints required — works behind firewalls and NAT. Includes a setup wizard for zero-config installation.
+A self-hosted web application for centrally managing [BorgBackup](https://borgbackup.readthedocs.io/) across multiple endpoints (Linux, Mac and Windows). A lightweight agent polls the server for tasks over HTTPS, backs up over SSH to the server, and reports progress back. No inbound connections to endpoints from the server — this works behind firewalls and NAT from where the server is providing easy provisioning. Includes a setup wizard for simple installation or a Docker image to start up in 30 seconds.
 
-**View Live Demo **
-Visit the website to spin up a free, self contained demo to try: [Borg Backup Server](https://www.borgbackupserver.com/)
-
+**View Demo **
+The developer has made a system for provisioning Demos at no cost here: [Borg Backup Server](https://www.borgbackupserver.com/)
 
 ## Features
 
-- **Agent-based architecture** — endpoints initiate all connections; no inbound ports needed on clients
-- **SSH with append-only security** — agents back up over SSH but cannot delete existing archives
-- **Setup wizard** — browser-based installer configures database, admin account, and storage in minutes
-- **Real-time progress** — live progress bars during backups
-- **File-level restore** — browse archive contents in a collapsible tree, restore individual files or entire directories
+- **Agent-based architecture** — endpoints check-in with the server for tasks, the server doesn't need ssh access to the agent
+- **SSH with append-only security** — agents can only backup or restore, can't delete or prune
+- **FULL Encryption** - Software keeps everything encrypted at rest for enhanced security
+- **Setup wizard** — browser-based installer configures database, admin account, and storage quicky
+- **Real-time progress** — live progress bars during backups with detailed logging
+- **File-level restore** — catalog data is saved in ClickHouse DB for fast search and file-tree without having to lock the borg repo
 - **Download archives** — extract and download files as .tar.gz directly from the browser
-- **Plugin system** — extend backups with pre/post hooks for databases, applications, and custom scripts
-- **Database plugins** — MySQL, PostgreSQL, and control panel dumps (cPanel, Interworx) with point-in-time restore
+- **Database plugins** — MySQL and PostgreSQL pre-dumps with automatic restore back into the database as a copy or replacement
 - **Flexible scheduling** — hourly to monthly intervals, multiple plans per client, manual trigger
-- **Backup templates** — pre-configured directory sets for common server roles
+- **Backup templates** — pre-configured and customizeable directory sets for common server roles
 - **Retention policies** — per-plan prune settings (hourly/daily/weekly/monthly/yearly)
-- **S3 offsite sync** — mirror repositories to S3-compatible storage (AWS, Wasabi, Backblaze B2)
-- **Multi-user** — role-based access (admin sees all, users see own clients)
-- **Two-factor authentication** — TOTP-based 2FA with recovery codes
+- **S3 offsite sync** — mirror repositories to S3-compatible storage (AWS, Wasabi, Backblaze B2) for enahnced compliance
+- **Remote Storage Repos** — wizards to backup to BorgBase, Hetzen and rsync.net (or any SSH provider that provides borg)
+- **Repo Management** - Perform hard unlocks, repair, re-catalog, and other repo specific features
+- **Nightly Backup Reports** - get an email every day with backup stats
+- **Multi-user** — custom role-based access with various roles
+- **Two-factor authentication** — TOTP-based 2FA with recovery codes, hooks into your 2FA of choice
 - **Queue management** — concurrent job limits, cancel/retry, progress tracking
 - **Encrypted passphrases** — repository passwords encrypted at rest (AES-256-GCM)
-- **Email alerts** — SMTP notifications on backup failure, agent offline, storage low
-- **Dashboard** — backup charts, server stats, active jobs, auto-refresh
-- **Server self-backup** — daily automated backup of BBS itself with optional S3 sync
-
-
+- **Apprise alerts** — custom push notifications to over 100 different notification services (Slack, Pushover, etc)
+- **Extensive Dashboard** — backup charts, server stats, active jobs, see everything at a glance
+- **Server self-backup** — daily automated backup of BBS itself with optional S3 sync offsite with restore scripts
+- **Automatic Self-Upgrade** - one-click upgrade of the software plus all the agents. Also manage borg versions of client machines
+  
 ---
 
 ## Quick Start
