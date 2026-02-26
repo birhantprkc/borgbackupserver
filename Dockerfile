@@ -86,9 +86,10 @@ COPY . /var/www/bbs/
 RUN cd /var/www/bbs && composer install --no-dev --optimize-autoloader --no-interaction --quiet
 RUN chown -R www-data:www-data /var/www/bbs
 
-# Install SSH helper
+# Install SSH helper and gate
 RUN cp /var/www/bbs/bin/bbs-ssh-helper /usr/local/bin/bbs-ssh-helper \
-    && chmod 755 /usr/local/bin/bbs-ssh-helper
+    && cp /var/www/bbs/bin/bbs-ssh-gate /usr/local/bin/bbs-ssh-gate \
+    && chmod 755 /usr/local/bin/bbs-ssh-helper /usr/local/bin/bbs-ssh-gate
 
 # Configure scoped sudoers for www-data
 RUN echo "www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper, /var/www/bbs/bin/bbs-update" > /etc/sudoers.d/bbs-ssh-helper \

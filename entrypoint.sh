@@ -19,9 +19,7 @@ else
     cp /etc/ssh/ssh_host_* "$SSH_KEY_DIR/" 2>/dev/null || true
 fi
 
-# Start SSH server
-echo "Starting SSH server..."
-/usr/sbin/sshd
+# NOTE: sshd is started AFTER SSH users are recreated (see below)
 
 # --- MariaDB ---
 # Store database files on the persistent volume
@@ -102,7 +100,11 @@ mkdir -p /var/bbs/cache
 mkdir -p /var/bbs/backups
 
 # Set permissions on persistent volume directories
-chown -R www-data:www-data /var/bbs/home /var/bbs/cache /var/bbs/backups
+# Only chown the top-level /var/bbs/home (not -R) — per-user dirs have their own
+# ownership (user:www-data) set during SSH user recreation below. A recursive chown
+# here would clobber .ssh/authorized_keys ownership and break SSH authentication.
+chown www-data:www-data /var/bbs/home
+chown -R www-data:www-data /var/bbs/cache /var/bbs/backups
 chown -R mysql:mysql "$MYSQL_DATADIR"
 
 # --- Application configuration ---
@@ -240,15 +242,23 @@ if [ "$BORG_COUNT" -eq 0 ]; then
     " 2>/dev/null || echo "Warning: Could not sync borg versions"
 fi
 
-# --- Recreate SSH users from volume (needed after container restart) ---
-# User UIDs are stored in each home dir to ensure consistent ownership across restarts
-echo "Recreating SSH users from volume..."
-for USER_HOME in /var/bbs/home/bbs-*; do
-    [ -d "$USER_HOME" ] || continue
-    SSH_USER=$(basename "$USER_HOME")
+# --- Recreate SSH users from database (needed after container restart) ---
+# Home directories are named by agent ID (e.g., /var/bbs/home/1), not by username.
+# Query the database for the username-to-directory mapping.
+STORAGE_PATH=$(mysql -u bbs -pbbs bbs -N -e "SELECT value FROM settings WHERE \`key\` = 'storage_path'" 2>/dev/null)
+STORAGE_PATH="${STORAGE_PATH:-/var/bbs/home}"
+RESTORED_USERS=0
 
-    # Skip if user already exists in container
+echo "Recreating SSH users from database..."
+mysql -u bbs -pbbs bbs -N -e "SELECT ssh_unix_user, id FROM agents WHERE ssh_unix_user IS NOT NULL AND ssh_unix_user != ''" 2>/dev/null | while read SSH_USER AGENT_ID; do
+    USER_HOME="$STORAGE_PATH/$AGENT_ID"
+    [ -d "$USER_HOME" ] || continue
+
+    # If user already exists, just fix .ssh ownership (may have been clobbered)
     if id "$SSH_USER" &>/dev/null; then
+        if [ -d "$USER_HOME/.ssh" ]; then
+            chown -R "$SSH_USER:$SSH_USER" "$USER_HOME/.ssh"
+        fi
         continue
     fi
 
@@ -262,18 +272,47 @@ for USER_HOME in /var/bbs/home/bbs-*; do
             STORED_UID=$((STORED_UID + 1))
             [ "$STORED_UID" -lt 1000 ] && STORED_UID=1000
         fi
-        echo "$STORED_UID" > "$USER_HOME/.uid"
     fi
 
     # Create user with preserved UID
     groupadd -g "$STORED_UID" "$SSH_USER" 2>/dev/null || true
     useradd -u "$STORED_UID" -g "$STORED_UID" -d "$USER_HOME" -s /bin/bash "$SSH_USER" 2>/dev/null || true
 
-    # Fix ownership
-    chown -R "$SSH_USER:$SSH_USER" "$USER_HOME"
+    # Fix ownership — home dir user:www-data (750), .ssh dir user:user (700)
+    chown "$SSH_USER:www-data" "$USER_HOME"
+    chmod 750 "$USER_HOME"
+    if [ -d "$USER_HOME/.ssh" ]; then
+        chown -R "$SSH_USER:$SSH_USER" "$USER_HOME/.ssh"
+        chmod 700 "$USER_HOME/.ssh"
+        chmod 600 "$USER_HOME/.ssh/authorized_keys" 2>/dev/null || true
+    fi
+
+    # Save UID for future restarts
+    echo "$STORED_UID" > "$USER_HOME/.uid"
 
     echo "  Restored user: $SSH_USER (uid=$STORED_UID)"
 done
+
+# --- Legacy SSH compatibility ---
+# OpenSSH 10+ dropped ssh-rsa (SHA-1) from default accepted algorithms.
+# Re-enable it so agents on older OS (CentOS 6/7, Ubuntu 14/16) can connect.
+# This config lives inside the container filesystem and is lost on recreation,
+# so we must re-create it every startup (not just during bbs-update).
+SSHD_LEGACY="/etc/ssh/sshd_config.d/bbs-legacy-compat.conf"
+SSHD_CONF_DIR="/etc/ssh/sshd_config.d"
+if [ -d "$SSHD_CONF_DIR" ] && [ ! -f "$SSHD_LEGACY" ]; then
+    cat > "$SSHD_LEGACY" <<'SSHEOF'
+# Added by BBS to support agents on older OS with legacy SSH clients
+HostKeyAlgorithms +ssh-rsa
+PubkeyAcceptedAlgorithms +ssh-rsa
+SSHEOF
+    chmod 644 "$SSHD_LEGACY"
+    echo "  Enabled legacy SSH compatibility"
+fi
+
+# --- Start SSH server (after users are recreated and config is ready) ---
+echo "Starting SSH server..."
+/usr/sbin/sshd
 
 # --- Cron ---
 echo "Setting up scheduler cron..."
@@ -281,8 +320,8 @@ touch /var/log/bbs-scheduler.log
 chown www-data:www-data /var/log/bbs-scheduler.log
 cat > /etc/cron.d/bbs-scheduler << 'CRON'
 * * * * * www-data cd /var/www/bbs && /usr/local/bin/php scheduler.php >> /var/log/bbs-scheduler.log 2>&1
-# Save UIDs for any new bbs-* users (needed for Docker restarts)
-*/5 * * * * root for d in /var/bbs/home/bbs-*; do [ -d "$d" ] && [ ! -f "$d/.uid" ] && stat -c \%u "$d" > "$d/.uid" 2>/dev/null; done
+# Save UIDs for any user home dirs that have .ssh/ but no .uid file yet
+*/5 * * * * root for d in /var/bbs/home/*/; do [ -d "$d/.ssh" ] && [ ! -f "$d/.uid" ] && stat -c \%u "$d" > "$d/.uid" 2>/dev/null; done
 CRON
 chmod 644 /etc/cron.d/bbs-scheduler
 cron
