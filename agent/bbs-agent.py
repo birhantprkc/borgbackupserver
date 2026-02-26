@@ -44,7 +44,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.11.0"
+AGENT_VERSION = "2.11.1"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -2391,7 +2391,7 @@ def heartbeat_thread(config):
 
 
 def main():
-    global running, task_running
+    global running, task_running, current_job_id
 
     setup_logging()
     logger.info("BBS Agent v{} starting".format(AGENT_VERSION))
