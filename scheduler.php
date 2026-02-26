@@ -87,6 +87,48 @@ foreach ($staleJobs as $sj) {
     echo date('Y-m-d H:i:s') . " Failed: job #{$sj['id']} ({$sj['task_type']}) — agent \"{$sj['agent_name']}\" offline\n";
 }
 
+// Step 2b: Auto-fail zombie jobs — running >24h on online agents with no recent progress
+// Safety net for agents that don't support check_jobs or lost status reports that were never retried
+$zombieJobs = $db->fetchAll("
+    SELECT bj.id, bj.agent_id, bj.task_type, bj.backup_plan_id, a.name as agent_name
+    FROM backup_jobs bj
+    JOIN agents a ON a.id = bj.agent_id
+    WHERE bj.status IN ('running', 'sent')
+      AND a.status = 'online'
+      AND bj.queued_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)
+      AND (bj.last_progress_at IS NULL OR bj.last_progress_at < DATE_SUB(NOW(), INTERVAL 60 MINUTE))
+");
+
+foreach ($zombieJobs as $zj) {
+    $db->update('backup_jobs', [
+        'status' => 'failed',
+        'completed_at' => date('Y-m-d H:i:s'),
+        'error_log' => 'Job timed out — running for over 24 hours with no recent progress',
+    ], 'id = ?', [$zj['id']]);
+
+    $db->insert('server_log', [
+        'agent_id' => $zj['agent_id'],
+        'backup_job_id' => $zj['id'],
+        'level' => 'error',
+        'message' => "Job #{$zj['id']} ({$zj['task_type']}) auto-failed — running >24h with no progress on online agent \"{$zj['agent_name']}\"",
+    ]);
+
+    if ($zj['task_type'] === 'backup' && $zj['backup_plan_id']) {
+        $notificationService = $notificationService ?? new NotificationService();
+        $planRow = $db->fetchOne("SELECT name FROM backup_plans WHERE id = ?", [$zj['backup_plan_id']]);
+        $planName = $planRow['name'] ?? '';
+        $notificationService->notify(
+            'backup_failed',
+            $zj['agent_id'],
+            (int)$zj['backup_plan_id'],
+            "Backup failed for plan \"{$planName}\" on client \"{$zj['agent_name']}\" — job timed out (>24h)",
+            'critical'
+        );
+    }
+
+    echo date('Y-m-d H:i:s') . " Auto-failed: job #{$zj['id']} ({$zj['task_type']}) — running >24h on online agent \"{$zj['agent_name']}\"\n";
+}
+
 // Step 3: Check schedules and create queued jobs
 $scheduler = new SchedulerService();
 $created = $scheduler->run();

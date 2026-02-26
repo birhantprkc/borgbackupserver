@@ -137,11 +137,31 @@ class AgentApiController extends Controller
 
         $pollInterval = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'agent_poll_interval'");
 
-        $this->json([
+        // Detect stalled jobs: running/sent with no recent progress from this agent
+        $stalledJobs = $this->db->fetchAll("
+            SELECT id FROM backup_jobs
+            WHERE agent_id = ?
+              AND status IN ('running', 'sent')
+              AND (
+                  (last_progress_at IS NOT NULL AND last_progress_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE))
+                  OR
+                  (last_progress_at IS NULL AND started_at IS NOT NULL AND started_at < DATE_SUB(NOW(), INTERVAL 30 MINUTE))
+                  OR
+                  (last_progress_at IS NULL AND started_at IS NULL AND queued_at < DATE_SUB(NOW(), INTERVAL 30 MINUTE))
+              )
+        ", [$agent['id']]);
+
+        $response = [
             'status' => 'ok',
             'tasks' => $tasks,
             'poll_interval' => (int) ($pollInterval['value'] ?? 30),
-        ]);
+        ];
+
+        if (!empty($stalledJobs)) {
+            $response['check_jobs'] = array_map(fn($j) => (int) $j['id'], $stalledJobs);
+        }
+
+        $this->json($response);
     }
 
     /**
@@ -173,7 +193,7 @@ class AgentApiController extends Controller
             $this->json(['status' => 'ok']);
         }
 
-        $data = ['status' => 'running'];
+        $data = ['status' => 'running', 'last_progress_at' => date('Y-m-d H:i:s')];
         if (isset($input['files_total']))      $data['files_total'] = (int) $input['files_total'];
         if (isset($input['files_processed']))  $data['files_processed'] = (int) $input['files_processed'];
         if (isset($input['bytes_total']))      $data['bytes_total'] = (int) $input['bytes_total'];
@@ -224,8 +244,8 @@ class AgentApiController extends Controller
         $jobId = (int) ($input['job_id'] ?? 0);
         $result = $input['result'] ?? '';  // 'completed', 'failed', or 'cataloging'
 
-        if (!$jobId || !in_array($result, ['completed', 'failed', 'cataloging'])) {
-            $this->json(['error' => 'job_id and result (completed/failed/cataloging) required'], 400);
+        if (!$jobId || !in_array($result, ['completed', 'failed', 'cataloging', 'abandoned'])) {
+            $this->json(['error' => 'job_id and result (completed/failed/cataloging/abandoned) required'], 400);
         }
 
         $job = $this->db->fetchOne(
@@ -235,6 +255,53 @@ class AgentApiController extends Controller
 
         if (!$job) {
             $this->json(['error' => 'Job not found'], 404);
+        }
+
+        // Idempotency: if job is already in a terminal state, return OK without
+        // re-processing (prevents duplicate archives, notifications on retry)
+        if (in_array($job['status'], ['completed', 'failed', 'cancelled'])) {
+            $archiveId = null;
+            if ($job['task_type'] === 'backup') {
+                $archive = $this->db->fetchOne(
+                    "SELECT id FROM archives WHERE backup_job_id = ?",
+                    [$jobId]
+                );
+                $archiveId = $archive ? (int) $archive['id'] : null;
+            }
+            $this->json(['status' => 'ok', 'already_terminal' => true, 'archive_id' => $archiveId]);
+        }
+
+        // Handle "abandoned" — agent confirms it's no longer running this job
+        // (typically means the original completion report was lost due to server error)
+        if ($result === 'abandoned') {
+            $this->db->update('backup_jobs', [
+                'status' => 'failed',
+                'completed_at' => date('Y-m-d H:i:s'),
+                'error_log' => 'Job abandoned — agent confirmed it is no longer running this task (status report likely lost)',
+            ], 'id = ?', [$jobId]);
+
+            $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
+            $this->db->insert('server_log', [
+                'agent_id' => $agent['id'],
+                'backup_job_id' => $jobId,
+                'level' => 'error',
+                'message' => "{$taskLabel} job #{$jobId} abandoned — agent confirmed not running (stall detected)",
+            ]);
+
+            if ($job['task_type'] === 'backup' && $job['backup_plan_id']) {
+                $notificationService = new NotificationService();
+                $plan = $this->db->fetchOne("SELECT name FROM backup_plans WHERE id = ?", [$job['backup_plan_id']]);
+                $planName = $plan['name'] ?? '';
+                $notificationService->notify(
+                    'backup_failed',
+                    $agent['id'],
+                    (int)$job['backup_plan_id'],
+                    "Backup failed for plan \"{$planName}\" on client \"{$agent['name']}\" — job stalled (status report lost)",
+                    'critical'
+                );
+            }
+
+            $this->json(['status' => 'ok']);
         }
 
         $now = date('Y-m-d H:i:s');
@@ -259,6 +326,7 @@ class AgentApiController extends Controller
 
         $data = [
             'status' => ($isCataloging || $hasPendingCatalog) ? 'running' : $result,
+            'last_progress_at' => $now,
         ];
 
         if ($hasPendingCatalog) {

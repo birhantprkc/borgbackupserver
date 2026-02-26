@@ -44,7 +44,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.10.0"
+AGENT_VERSION = "2.11.0"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -92,6 +92,7 @@ if os.environ.get("BBS_AGENT_LOG"):
 logger = logging.getLogger("bbs-agent")
 running = True
 task_running = False  # Set True while executing a task, enables heartbeat thread
+current_job_id = None  # Job ID of currently executing task (for stall check response)
 
 
 def setup_logging():
@@ -168,6 +169,27 @@ def api_request(config, endpoint, method="GET", data=None, timeout=30):
     except Exception as e:
         logger.error("Request error on {}: {}".format(endpoint, e))
         return None
+
+
+def report_status(config, data, timeout=600):
+    """Report task status to server with retry on failure.
+
+    Status reports are critical — a lost report leaves the job stuck in
+    'running' on the server forever. Retries with exponential backoff.
+    """
+    max_retries = 5
+    for attempt in range(max_retries + 1):
+        result = api_request(config, "/api/agent/status", method="POST", data=data, timeout=timeout)
+        if result is not None:
+            return result
+        if attempt < max_retries:
+            wait = min(5 * (2 ** attempt), 120)  # 5, 10, 20, 40, 80s
+            logger.warning("Status report failed (attempt {}/{}), retrying in {}s...".format(
+                attempt + 1, max_retries + 1, wait))
+            time.sleep(wait)
+    logger.error("Status report failed after {} attempts for job #{}".format(
+        max_retries + 1, data.get("job_id", "?")))
+    return None
 
 
 def get_borg_source():
@@ -511,7 +533,7 @@ def execute_update_borg(config, task):
     # Handle skip - agent is incompatible with selected server version
     if install_method == "skip":
         logger.info("Skipping borg update - no compatible binary for this agent")
-        api_request(config, "/api/agent/status", method="POST", data={
+        report_status(config, {
             "job_id": job_id,
             "result": "completed",
             "output_log": "Skipped - no compatible binary available for this platform",
@@ -566,7 +588,7 @@ def execute_update_borg(config, task):
         status_data["error_log"] = error_output[:10000]
     elif result == "completed":
         status_data["output_log"] = update_output[:10000]
-    api_request(config, "/api/agent/status", method="POST", data=status_data)
+    report_status(config, status_data)
 
     # Re-report system info so borg_version gets updated
     if result == "completed":
@@ -978,7 +1000,7 @@ def execute_update_agent(config, task):
         status_data["error_log"] = error_output[:10000]
     elif result == "completed":
         status_data["output_log"] = update_output[:10000]
-    api_request(config, "/api/agent/status", method="POST", data=status_data)
+    report_status(config, status_data)
 
     # Re-report system info so agent_version gets updated, then restart
     if result == "completed":
@@ -1548,7 +1570,7 @@ def execute_restore_pg(config, task):
     dump_dir = pg_config.get("dump_dir", "/home/bbs/pgdump")
 
     if not user or not password:
-        api_request(config, "/api/agent/status", method="POST", data={
+        report_status(config, {
             "job_id": job_id, "result": "failed",
             "error_log": "PostgreSQL restore requires user and password in plugin config",
         })
@@ -1572,7 +1594,7 @@ def execute_restore_pg(config, task):
             logger.info("Wrote temporary SSH key for remote repo")
         except Exception as e:
             logger.error("Failed to write remote SSH key: {}".format(e))
-            api_request(config, "/api/agent/status", method="POST", data={
+            report_status(config, {
                 "job_id": job_id, "result": "failed",
                 "error_log": "Failed to write remote SSH key: {}".format(e),
             })
@@ -1596,13 +1618,13 @@ def execute_restore_pg(config, task):
             timeout=3600,
         )
         if proc.returncode > 1:
-            api_request(config, "/api/agent/status", method="POST", data={
+            report_status(config, {
                 "job_id": job_id, "result": "failed",
                 "error_log": "borg extract failed: {}".format(proc.stderr.decode('utf-8', errors='replace')[:5000]),
             })
             return
     except Exception as e:
-        api_request(config, "/api/agent/status", method="POST", data={
+        report_status(config, {
             "job_id": job_id, "result": "failed",
             "error_log": "borg extract error: {}".format(e),
         })
@@ -1713,7 +1735,7 @@ def execute_restore_pg(config, task):
     if imported:
         status_data["output_log"] = "Imported: {}".format(', '.join(imported))
 
-    api_request(config, "/api/agent/status", method="POST", data=status_data)
+    report_status(config, status_data)
 
 
 def execute_restore_mysql(config, task):
@@ -1736,7 +1758,7 @@ def execute_restore_mysql(config, task):
     dump_dir = mysql_config.get("dump_dir", "/home/bbs/mysql")
 
     if not user or not password:
-        api_request(config, "/api/agent/status", method="POST", data={
+        report_status(config, {
             "job_id": job_id, "result": "failed",
             "error_log": "MySQL restore requires user and password in plugin config",
         })
@@ -1760,7 +1782,7 @@ def execute_restore_mysql(config, task):
             logger.info("Wrote temporary SSH key for remote repo")
         except Exception as e:
             logger.error("Failed to write remote SSH key: {}".format(e))
-            api_request(config, "/api/agent/status", method="POST", data={
+            report_status(config, {
                 "job_id": job_id, "result": "failed",
                 "error_log": "Failed to write remote SSH key: {}".format(e),
             })
@@ -1781,13 +1803,13 @@ def execute_restore_mysql(config, task):
             timeout=3600,
         )
         if proc.returncode > 1:
-            api_request(config, "/api/agent/status", method="POST", data={
+            report_status(config, {
                 "job_id": job_id, "result": "failed",
                 "error_log": "borg extract failed: {}".format(proc.stderr.decode('utf-8', errors='replace')[:5000]),
             })
             return
     except Exception as e:
-        api_request(config, "/api/agent/status", method="POST", data={
+        report_status(config, {
             "job_id": job_id, "result": "failed",
             "error_log": "borg extract error: {}".format(e),
         })
@@ -1921,7 +1943,7 @@ def execute_restore_mysql(config, task):
     if imported:
         status_data["output_log"] = "Imported: {}".format(', '.join(imported))
 
-    api_request(config, "/api/agent/status", method="POST", data=status_data)
+    report_status(config, status_data)
 
 
 def execute_task(config, task):
@@ -1951,15 +1973,15 @@ def execute_task(config, task):
         if test_func:
             try:
                 result_msg = test_func(cfg)
-                api_request(config, "/api/agent/status", method="POST", data={
+                report_status(config, {
                     "job_id": job_id, "result": "completed", "output_log": result_msg,
                 })
             except Exception as e:
-                api_request(config, "/api/agent/status", method="POST", data={
+                report_status(config, {
                     "job_id": job_id, "result": "failed", "error_log": str(e),
                 })
         else:
-            api_request(config, "/api/agent/status", method="POST", data={
+            report_status(config, {
                 "job_id": job_id, "result": "failed",
                 "error_log": "No test handler for plugin: {}".format(slug),
             })
@@ -1989,7 +2011,7 @@ def execute_task(config, task):
             plugin_results = execute_plugins(plugins, config, job_id)
         except Exception as e:
             logger.error("Pre-backup plugin failed: {}".format(e))
-            api_request(config, "/api/agent/status", method="POST", data={
+            report_status(config, {
                 "job_id": job_id,
                 "result": "failed",
                 "error_log": "Pre-backup plugin failed: {}".format(e),
@@ -2099,7 +2121,7 @@ def execute_task(config, task):
             logger.info("Wrote temporary SSH key for remote repo")
         except Exception as e:
             logger.error("Failed to write remote SSH key: {}".format(e))
-            api_request(config, "/api/agent/status", method="POST", data={
+            report_status(config, {
                 "job_id": job_id, "result": "failed",
                 "error_log": "Failed to write remote SSH key: {}".format(e),
             })
@@ -2300,7 +2322,7 @@ def execute_task(config, task):
     # Report final status to server. For completed backups with catalog,
     # the server will detect and import the catalog file from disk.
     status_data["result"] = result
-    api_request(config, "/api/agent/status", method="POST", data=status_data, timeout=600)
+    report_status(config, status_data)
 
     # Run post-backup plugin cleanup
     if result == "completed" and task_type == "backup" and plugins and plugin_results:
@@ -2410,12 +2432,24 @@ def main():
             if result and "poll_interval" in result:
                 config["poll_interval"] = int(result["poll_interval"])
 
+            # Handle stall checks — server asks about jobs it thinks may be stalled.
+            # Process BEFORE new tasks so stale jobs get resolved first.
+            if result and result.get("check_jobs"):
+                for cj_id in result["check_jobs"]:
+                    if cj_id == current_job_id:
+                        # We're actively running this one — server will see progress
+                        logger.debug("Server asked about job #{} — currently running".format(cj_id))
+                        continue
+                    logger.warning("Server asked about job #{} — not running, reporting abandoned".format(cj_id))
+                    report_status(config, {"job_id": cj_id, "result": "abandoned"})
+
             if result and result.get("tasks"):
                 for task in result["tasks"]:
                     if not running:
                         break
 
                     task_running = True
+                    current_job_id = task.get("job_id")
                     try:
                         if task.get("task") == "update_borg":
                             execute_update_borg(config, task)
@@ -2425,6 +2459,7 @@ def main():
                             execute_task(config, task)
                     finally:
                         task_running = False
+                        current_job_id = None
             elif result is None:
                 # Connection error -- server might be down
                 logger.warning("Failed to poll server, will retry")

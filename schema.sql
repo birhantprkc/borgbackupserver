@@ -209,6 +209,7 @@ CREATE TABLE backup_jobs (
     queued_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     started_at DATETIME DEFAULT NULL,
     completed_at DATETIME DEFAULT NULL,
+    last_progress_at DATETIME DEFAULT NULL,
     FOREIGN KEY (backup_plan_id) REFERENCES backup_plans(id) ON DELETE SET NULL,
     FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
 );
