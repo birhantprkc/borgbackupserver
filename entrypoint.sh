@@ -100,11 +100,11 @@ mkdir -p /var/bbs/cache
 mkdir -p /var/bbs/backups
 
 # Set permissions on persistent volume directories
-# Only chown the top-level /var/bbs/home (not -R) — per-user dirs have their own
-# ownership (user:www-data) set during SSH user recreation below. A recursive chown
-# here would clobber .ssh/authorized_keys ownership and break SSH authentication.
-chown www-data:www-data /var/bbs/home
-chown -R www-data:www-data /var/bbs/cache /var/bbs/backups
+# Only chown the top-level dirs (not -R) — per-user subdirs under home/ and cache/
+# have their own ownership (user:www-data) set by bbs-ssh-helper. A recursive chown
+# would clobber .ssh/authorized_keys and per-user borg cache directories.
+chown www-data:www-data /var/bbs/home /var/bbs/cache
+chown -R www-data:www-data /var/bbs/backups
 chown -R mysql:mysql "$MYSQL_DATADIR"
 
 # --- Application configuration ---
@@ -254,12 +254,17 @@ mysql -u bbs -pbbs bbs -N -e "SELECT ssh_unix_user, id FROM agents WHERE ssh_uni
     USER_HOME="$STORAGE_PATH/$AGENT_ID"
     [ -d "$USER_HOME" ] || continue
 
-    # If user already exists, just fix .ssh ownership using numeric IDs
+    # If user already exists, just fix ownership (may have been clobbered by old entrypoint)
     if id "$SSH_USER" &>/dev/null; then
+        SSH_UID=$(id -u "$SSH_USER")
+        SSH_GID=$(id -g "$SSH_USER")
         if [ -d "$USER_HOME/.ssh" ]; then
-            SSH_UID=$(id -u "$SSH_USER")
-            SSH_GID=$(id -g "$SSH_USER")
             chown -R "$SSH_UID:$SSH_GID" "$USER_HOME/.ssh"
+        fi
+        # Fix per-user borg cache dir (old entrypoint's chown -R on /var/bbs/cache clobbered it)
+        CACHE_DIR="/var/bbs/cache/$SSH_USER"
+        if [ -d "$CACHE_DIR" ]; then
+            chown -R "$SSH_UID:$SSH_GID" "$CACHE_DIR"
         fi
         continue
     fi
@@ -296,6 +301,12 @@ mysql -u bbs -pbbs bbs -N -e "SELECT ssh_unix_user, id FROM agents WHERE ssh_uni
         chown -R "$STORED_UID:$STORED_UID" "$USER_HOME/.ssh"
         chmod 700 "$USER_HOME/.ssh"
         chmod 600 "$USER_HOME/.ssh/authorized_keys" 2>/dev/null || true
+    fi
+
+    # Fix per-user borg cache dir if it exists
+    CACHE_DIR="/var/bbs/cache/$SSH_USER"
+    if [ -d "$CACHE_DIR" ]; then
+        chown -R "$STORED_UID:$STORED_UID" "$CACHE_DIR"
     fi
 
     # Save UID for future restarts
