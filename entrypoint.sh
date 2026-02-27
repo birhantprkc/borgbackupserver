@@ -254,35 +254,46 @@ mysql -u bbs -pbbs bbs -N -e "SELECT ssh_unix_user, id FROM agents WHERE ssh_uni
     USER_HOME="$STORAGE_PATH/$AGENT_ID"
     [ -d "$USER_HOME" ] || continue
 
-    # If user already exists, just fix .ssh ownership (may have been clobbered)
+    # If user already exists, just fix .ssh ownership using numeric IDs
     if id "$SSH_USER" &>/dev/null; then
         if [ -d "$USER_HOME/.ssh" ]; then
-            chown -R "$SSH_USER:$SSH_USER" "$USER_HOME/.ssh"
+            SSH_UID=$(id -u "$SSH_USER")
+            SSH_GID=$(id -g "$SSH_USER")
+            chown -R "$SSH_UID:$SSH_GID" "$USER_HOME/.ssh"
         fi
         continue
     fi
 
-    # Get UID from stored file, or from directory ownership
+    # Get UID from stored file, or allocate a fresh one
     if [ -f "$USER_HOME/.uid" ]; then
         STORED_UID=$(cat "$USER_HOME/.uid")
     else
-        STORED_UID=$(stat -c %u "$USER_HOME" 2>/dev/null || stat -f %u "$USER_HOME" 2>/dev/null)
-        if [ "$STORED_UID" = "0" ] || [ -z "$STORED_UID" ]; then
+        # Try directory ownership, but skip if it belongs to an existing user
+        # (e.g., www-data uid 33 from old chown -R that clobbered ownership)
+        STORED_UID=$(stat -c %u "$USER_HOME" 2>/dev/null || echo "0")
+        if [ -z "$STORED_UID" ] || [ "$STORED_UID" = "0" ] || getent passwd "$STORED_UID" >/dev/null 2>&1; then
+            # UID is root, empty, or already belongs to another user — allocate fresh
             STORED_UID=$(awk -F: '($3>=1000)&&($3<60000){print $3}' /etc/passwd | sort -n | tail -1)
             STORED_UID=$((STORED_UID + 1))
             [ "$STORED_UID" -lt 1000 ] && STORED_UID=1000
         fi
     fi
 
-    # Create user with preserved UID
+    # Create group and user with the chosen UID
     groupadd -g "$STORED_UID" "$SSH_USER" 2>/dev/null || true
     useradd -u "$STORED_UID" -g "$STORED_UID" -d "$USER_HOME" -s /bin/bash "$SSH_USER" 2>/dev/null || true
+
+    # Verify the user was actually created before fixing ownership
+    if ! id "$SSH_USER" &>/dev/null; then
+        echo "  Warning: could not create user $SSH_USER (uid=$STORED_UID) — skipping"
+        continue
+    fi
 
     # Fix ownership — home dir user:www-data (750), .ssh dir user:user (700)
     chown "$SSH_USER:www-data" "$USER_HOME"
     chmod 750 "$USER_HOME"
     if [ -d "$USER_HOME/.ssh" ]; then
-        chown -R "$SSH_USER:$SSH_USER" "$USER_HOME/.ssh"
+        chown -R "$STORED_UID:$STORED_UID" "$USER_HOME/.ssh"
         chmod 700 "$USER_HOME/.ssh"
         chmod 600 "$USER_HOME/.ssh/authorized_keys" 2>/dev/null || true
     fi
