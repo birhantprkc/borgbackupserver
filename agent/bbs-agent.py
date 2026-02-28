@@ -44,7 +44,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.11.1"
+AGENT_VERSION = "2.11.2"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -2195,7 +2195,12 @@ def execute_task(config, task):
                         catalog_ssh.stdin.write(line.encode("utf-8"))
                         catalog_ssh.stdin.flush()
                     except (BrokenPipeError, OSError):
-                        logger.error("Catalog SSH pipe broken, catalog streaming stopped")
+                        try:
+                            broken_stderr = catalog_ssh.stderr.read().decode("utf-8", errors="replace").strip()
+                        except Exception:
+                            broken_stderr = ""
+                        logger.error("Catalog SSH pipe broken, catalog streaming stopped{}".format(
+                            " — " + broken_stderr if broken_stderr else ""))
                         catalog_ssh = None
                         catalog_pipe_failed = True
                     catalog_count += 1
@@ -2262,12 +2267,15 @@ def execute_task(config, task):
         logger.error("Job #{} error: {}".format(job_id, e))
     finally:
         # Close the catalog SSH pipe
+        catalog_ssh_error = ""
         if catalog_ssh:
             try:
                 catalog_ssh.stdin.close()
                 catalog_ssh.wait(timeout=30)
                 if catalog_ssh.returncode != 0:
-                    logger.error("Catalog SSH pipe exited with code {}".format(catalog_ssh.returncode))
+                    catalog_ssh_error = catalog_ssh.stderr.read().decode("utf-8", errors="replace").strip()
+                    logger.error("Catalog SSH pipe exited with code {} — {}".format(
+                        catalog_ssh.returncode, catalog_ssh_error or "no stderr"))
                     catalog_pipe_failed = True
                 else:
                     logger.info("Catalog SSH pipe closed, {} entries streamed".format(catalog_count))
@@ -2275,15 +2283,23 @@ def execute_task(config, task):
                 logger.error("Error closing catalog SSH pipe: {}".format(e))
                 catalog_pipe_failed = True
                 try:
+                    catalog_ssh_error = catalog_ssh.stderr.read().decode("utf-8", errors="replace").strip()
+                except Exception:
+                    pass
+                try:
                     catalog_ssh.kill()
                 except Exception:
                     pass
 
-    # If catalog pipe failed during an otherwise successful backup, mark as failed
+    # Catalog pipe failure is non-critical — the backup data is safely stored.
+    # Log a warning but don't override a successful backup result.
     if result == "completed" and catalog_pipe_failed:
-        result = "failed"
-        error_output = "Backup completed but catalog streaming failed"
-        logger.error("Job #{}: {}".format(job_id, error_output))
+        warning = "Backup completed but catalog streaming failed"
+        if catalog_ssh_error:
+            warning += " — {}".format(catalog_ssh_error)
+        if not error_output:
+            error_output = warning
+        logger.warning("Job #{}: {}".format(job_id, warning))
 
     # Build status data
     status_data = {
