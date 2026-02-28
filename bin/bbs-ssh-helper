@@ -42,7 +42,7 @@ case "$ACTION" in
         if id "$USERNAME" &>/dev/null; then
             echo "User $USERNAME already exists"
         else
-            useradd --system --shell /bin/sh --home-dir "$HOME_DIR" --no-create-home "$USERNAME"
+            useradd --shell /bin/sh --home-dir "$HOME_DIR" --no-create-home "$USERNAME"
             echo "Created user: $USERNAME"
         fi
 

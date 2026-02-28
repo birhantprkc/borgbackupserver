@@ -284,6 +284,17 @@ mysql -u bbs -pbbs bbs -N -e "SELECT ssh_unix_user, id FROM agents WHERE ssh_uni
         fi
     fi
 
+    # Validate chosen UID/GID doesn't collide with existing system users or groups
+    EXISTING_GROUP=$(getent group "$STORED_UID" 2>/dev/null | cut -d: -f1)
+    EXISTING_USER=$(getent passwd "$STORED_UID" 2>/dev/null | cut -d: -f1)
+    if { [ -n "$EXISTING_GROUP" ] && [ "$EXISTING_GROUP" != "$SSH_USER" ]; } || \
+       { [ -n "$EXISTING_USER" ] && [ "$EXISTING_USER" != "$SSH_USER" ]; }; then
+        echo "  UID/GID $STORED_UID collides with existing user/group '$EXISTING_GROUP$EXISTING_USER' — reallocating"
+        STORED_UID=$(awk -F: '($3>=1000)&&($3<60000){print $3}' /etc/passwd | sort -n | tail -1)
+        STORED_UID=$((STORED_UID + 1))
+        [ "$STORED_UID" -lt 1000 ] && STORED_UID=1000
+    fi
+
     # Create group and user with the chosen UID
     groupadd -g "$STORED_UID" "$SSH_USER" 2>/dev/null || true
     useradd -u "$STORED_UID" -g "$STORED_UID" -d "$USER_HOME" -s /bin/bash "$SSH_USER" 2>/dev/null || true
