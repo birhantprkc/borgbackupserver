@@ -361,7 +361,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                             <form method="POST" action="/repositories/<?= $repo['id'] ?>/maintenance" class="d-inline">
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                 <input type="hidden" name="action" value="check">
-                                <button type="submit" class="btn btn-sm btn-outline-primary" <?= $activeJob ? 'disabled' : '' ?>>
+                                <button type="submit" class="btn btn-sm btn-outline-primary">
                                     <i class="bi bi-play-fill me-1"></i>Run Check
                                 </button>
                             </form>
@@ -379,7 +379,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                             <form method="POST" action="/repositories/<?= $repo['id'] ?>/maintenance" class="d-inline">
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                 <input type="hidden" name="action" value="compact">
-                                <button type="submit" class="btn btn-sm btn-outline-success" <?= $activeJob ? 'disabled' : '' ?>>
+                                <button type="submit" class="btn btn-sm btn-outline-success">
                                     <i class="bi bi-play-fill me-1"></i>Run Compact
                                 </button>
                             </form>
@@ -397,14 +397,14 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                             <form method="POST" action="/repositories/<?= $repo['id'] ?>/maintenance" class="d-inline" data-confirm="Rebuild missing catalog entries for this repository?&#10;&#10;This will scan for recovery points not yet indexed and add them to the catalog. Already-indexed data is preserved.">
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                 <input type="hidden" name="action" value="catalog_rebuild">
-                                <button type="submit" class="btn btn-sm btn-outline-info" <?= $activeJob ? 'disabled' : '' ?>>
+                                <button type="submit" class="btn btn-sm btn-outline-info">
                                     <i class="bi bi-play-fill me-1"></i>Rebuild Missing
                                 </button>
                             </form>
                             <form method="POST" action="/repositories/<?= $repo['id'] ?>/maintenance" class="d-inline ms-2" data-confirm="FULL catalog rebuild for this repository?&#10;&#10;This will DROP all existing catalog data for this client and re-scan every recovery point from scratch.&#10;&#10;This may take a long time for large repositories.">
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                 <input type="hidden" name="action" value="catalog_rebuild_full">
-                                <button type="submit" class="btn btn-sm btn-outline-warning" <?= $activeJob ? 'disabled' : '' ?>>
+                                <button type="submit" class="btn btn-sm btn-outline-warning">
                                     <i class="bi bi-arrow-clockwise me-1"></i>Rebuild Full
                                 </button>
                             </form>
@@ -424,7 +424,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                             <form method="POST" action="/repositories/<?= $repo['id'] ?>/maintenance" class="d-inline" data-confirm="Run REPAIR on this repository?&#10;&#10;This may delete damaged data to restore consistency. Only proceed if Check reported errors." data-confirm-danger>
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                 <input type="hidden" name="action" value="repair">
-                                <button type="submit" class="btn btn-sm btn-outline-warning" <?= $activeJob ? 'disabled' : '' ?>>
+                                <button type="submit" class="btn btn-sm btn-outline-warning">
                                     <i class="bi bi-play-fill me-1"></i>Run Repair
                                 </button>
                             </form>
@@ -442,7 +442,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                             <form method="POST" action="/repositories/<?= $repo['id'] ?>/maintenance" class="d-inline" data-confirm="BREAK LOCK on this repository?&#10;&#10;Only proceed if you're CERTAIN no backup operations are running." data-confirm-danger>
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                 <input type="hidden" name="action" value="break_lock">
-                                <button type="submit" class="btn btn-sm btn-outline-danger" <?= $activeJob ? 'disabled' : '' ?>>
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
                                     <i class="bi bi-play-fill me-1"></i>Break Lock
                                 </button>
                             </form>
