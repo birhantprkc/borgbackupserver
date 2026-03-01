@@ -962,6 +962,12 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                             </li>
                             <?php endif; ?>
                             <li><button class="dropdown-item" type="button" data-bs-toggle="collapse" data-bs-target="#edit-plan-<?= $plan['id'] ?>"><i class="bi bi-pencil text-primary me-2"></i>Edit</button></li>
+                            <li>
+                                <form method="POST" action="/plans/<?= $plan['id'] ?>/duplicate">
+                                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                    <button type="submit" class="dropdown-item"><i class="bi bi-copy text-muted me-2"></i>Duplicate</button>
+                                </form>
+                            </li>
                             <li><hr class="dropdown-divider"></li>
                             <li>
                                 <form method="POST" action="/plans/<?= $plan['id'] ?>/delete" data-confirm="Delete this backup plan and its schedule?" data-confirm-danger>

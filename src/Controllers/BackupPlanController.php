@@ -210,6 +210,67 @@ class BackupPlanController extends Controller
         $this->redirect("/queue/{$jobId}");
     }
 
+    public function duplicate(int $id): void
+    {
+        $this->requireAuth();
+        $this->verifyCsrf();
+
+        $plan = $this->getPlan($id);
+        if (!$plan) {
+            $this->flash('danger', 'Backup plan not found.');
+            $this->redirect('/clients');
+        }
+
+        $this->requirePermission(PermissionService::MANAGE_PLANS, $plan['agent_id']);
+
+        // Duplicate the plan
+        $newPlanId = $this->db->insert('backup_plans', [
+            'agent_id' => $plan['agent_id'],
+            'repository_id' => $plan['repository_id'],
+            'name' => $plan['name'] . ' (Copy)',
+            'directories' => $plan['directories'],
+            'excludes' => $plan['excludes'],
+            'advanced_options' => $plan['advanced_options'],
+            'prune_minutes' => $plan['prune_minutes'],
+            'prune_hours' => $plan['prune_hours'],
+            'prune_days' => $plan['prune_days'],
+            'prune_weeks' => $plan['prune_weeks'],
+            'prune_months' => $plan['prune_months'],
+            'prune_years' => $plan['prune_years'],
+        ]);
+
+        // Duplicate the schedule (paused)
+        $schedule = $this->db->fetchOne("SELECT * FROM schedules WHERE backup_plan_id = ?", [$id]);
+        if ($schedule) {
+            $this->db->insert('schedules', [
+                'backup_plan_id' => $newPlanId,
+                'frequency' => $schedule['frequency'],
+                'times' => $schedule['times'],
+                'day_of_week' => $schedule['day_of_week'],
+                'day_of_month' => $schedule['day_of_month'],
+                'timezone' => $schedule['timezone'],
+                'enabled' => 0,
+                'next_run' => null,
+            ]);
+        }
+
+        // Duplicate plugin configs
+        $plugins = $this->db->fetchAll("SELECT * FROM backup_plan_plugins WHERE backup_plan_id = ?", [$id]);
+        foreach ($plugins as $plugin) {
+            $this->db->insert('backup_plan_plugins', [
+                'backup_plan_id' => $newPlanId,
+                'plugin_id' => $plugin['plugin_id'],
+                'plugin_config_id' => $plugin['plugin_config_id'],
+                'config' => $plugin['config'],
+                'execution_order' => $plugin['execution_order'],
+                'enabled' => $plugin['enabled'],
+            ]);
+        }
+
+        $this->flash('success', "Backup plan duplicated as \"{$plan['name']} (Copy)\" (paused).");
+        $this->redirect("/clients/{$plan['agent_id']}?tab=schedules");
+    }
+
     private function getPlan(int $id): ?array
     {
         $plan = $this->db->fetchOne("
