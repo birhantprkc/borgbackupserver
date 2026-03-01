@@ -259,6 +259,20 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                         <td class="text-muted"><i class="bi bi-calendar-plus me-1"></i>Created</td>
                         <td><?= \BBS\Core\TimeHelper::format($repo['created_at'], 'M j, Y g:i A') ?></td>
                     </tr>
+                    <?php if ($repo['encryption'] !== 'none' && !empty($repoPassphrase)): ?>
+                    <tr>
+                        <td class="text-muted"><i class="bi bi-key me-1"></i>Passphrase</td>
+                        <td>
+                            <code id="repoPassphrase" data-passphrase="<?= htmlspecialchars($repoPassphrase) ?>">*****</code>
+                            <button type="button" class="btn btn-sm btn-link p-0 ms-2" id="togglePassphrase" title="Show/Hide passphrase">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-link p-0 ms-1" id="copyPassphrase" title="Copy passphrase">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    <?php endif; ?>
                     <tr>
                         <td class="text-muted"><i class="bi bi-journal-text me-1"></i>Backup Plans</td>
                         <td>
@@ -496,4 +510,32 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
         </div>
     </div>
 </div>
+<?php endif; ?>
+
+<?php if (!empty($repoPassphrase)): ?>
+<script>
+(function() {
+    var el = document.getElementById('repoPassphrase');
+    var toggleBtn = document.getElementById('togglePassphrase');
+    var copyBtn = document.getElementById('copyPassphrase');
+    if (!el || !toggleBtn) return;
+    var visible = false;
+
+    toggleBtn.addEventListener('click', function() {
+        visible = !visible;
+        el.textContent = visible ? el.dataset.passphrase : '*****';
+        toggleBtn.querySelector('i').className = visible ? 'bi bi-eye-slash' : 'bi bi-eye';
+    });
+
+    if (copyBtn) {
+        copyBtn.addEventListener('click', function() {
+            navigator.clipboard.writeText(el.dataset.passphrase).then(function() {
+                var icon = copyBtn.querySelector('i');
+                icon.className = 'bi bi-check';
+                setTimeout(function() { icon.className = 'bi bi-clipboard'; }, 1500);
+            });
+        });
+    }
+})();
+</script>
 <?php endif; ?>

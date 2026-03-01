@@ -514,9 +514,12 @@ class RepositoryController extends Controller
         // Get agent's borg_version for display (repo columns may not be populated yet)
         $agentInfo = $this->db->fetchOne("SELECT borg_version FROM agents WHERE id = ?", [$agentId]);
 
+        $repoPassphrase = $repo['passphrase_encrypted'] ? Encryption::decrypt($repo['passphrase_encrypted']) : null;
+
         $this->view('repositories/detail', [
             'pageTitle' => $repo['name'],
             'repo' => $repo,
+            'repoPassphrase' => $repoPassphrase,
             'agentId' => $agentId,
             'localPath' => $localPath,
             'archives' => $archives,
