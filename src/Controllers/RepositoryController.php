@@ -377,16 +377,6 @@ class RepositoryController extends Controller
         // Require repo_maintenance permission
         $this->requirePermission(PermissionService::REPO_MAINTENANCE, $repo['agent_id']);
 
-        // Check for active jobs on this repo
-        $activeJob = $this->db->fetchOne(
-            "SELECT id, task_type FROM backup_jobs WHERE repository_id = ? AND status IN ('queued', 'sent', 'running')",
-            [$id]
-        );
-        if ($activeJob) {
-            $this->flash('warning', "Cannot run maintenance — repository has an active {$activeJob['task_type']} job (#" . $activeJob['id'] . ').');
-            $this->redirect("/clients/{$repo['agent_id']}?tab=repos");
-        }
-
         // Map action to task_type
         $taskType = match($action) {
             'check' => 'repo_check',
@@ -407,6 +397,16 @@ class RepositoryController extends Controller
             'catalog_rebuild_full' => 'Rebuild Catalog (Full)',
             default => $action,
         };
+
+        // Prevent queuing duplicate maintenance of the same type (different types can queue)
+        $duplicateJob = $this->db->fetchOne(
+            "SELECT id FROM backup_jobs WHERE repository_id = ? AND task_type = ? AND status IN ('queued', 'sent', 'running')",
+            [$id, $taskType]
+        );
+        if ($duplicateJob) {
+            $this->flash('warning', "A {$actionLabel} job is already queued or running for this repository (#" . $duplicateJob['id'] . ').');
+            $this->redirect("/clients/{$repo['agent_id']}?tab=repos");
+        }
 
         // Queue the job
         $jobId = $this->db->insert('backup_jobs', [
