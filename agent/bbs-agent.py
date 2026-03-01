@@ -44,7 +44,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.13.0"
+AGENT_VERSION = "2.13.1"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -93,6 +93,22 @@ logger = logging.getLogger("bbs-agent")
 running = True
 task_running = False  # Set True while executing a task, enables heartbeat thread
 current_job_id = None  # Job ID of currently executing task (for stall check response)
+
+
+def _lockdown_key_windows(path):
+    """Remove all ACLs from a file, then grant read-only to SYSTEM and Administrators only."""
+    subprocess.run(
+        ["icacls", path, "/inheritance:r"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
+    subprocess.run(
+        ["icacls", path, "/remove", "Users", "Authenticated Users", "Everyone", "BUILTIN\\Users"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
+    subprocess.run(
+        ["icacls", path, "/grant:r", "SYSTEM:(R)", "Administrators:(R)"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
 
 
 def setup_logging():
@@ -392,11 +408,7 @@ def download_ssh_key(config):
         with open(SSH_KEY_PATH, "w") as f:
             f.write(private_key)
         if IS_WINDOWS:
-            # Lock down SSH key so OpenSSH doesn't reject it for "too open" permissions
-            subprocess.run(
-                ["icacls", SSH_KEY_PATH, "/inheritance:r", "/grant:r", "SYSTEM:(R)", "Administrators:(R)"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-            )
+            _lockdown_key_windows(SSH_KEY_PATH)
         else:
             os.chmod(SSH_KEY_PATH, 0o600)
         logger.info("SSH key saved to {}".format(SSH_KEY_PATH))
@@ -1586,10 +1598,7 @@ def execute_restore_pg(config, task):
             with open(remote_key_path, "w") as kf:
                 kf.write(normalized_key)
             if IS_WINDOWS:
-                subprocess.run(
-                    ["icacls", remote_key_path, "/inheritance:r", "/grant:r", "SYSTEM:(R)", "Administrators:(R)"],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-                )
+                _lockdown_key_windows(remote_key_path)
             else:
                 os.chmod(remote_key_path, 0o600)
             logger.info("Wrote temporary SSH key for remote repo")
@@ -1774,10 +1783,7 @@ def execute_restore_mysql(config, task):
             with open(remote_key_path, "w") as kf:
                 kf.write(normalized_key)
             if IS_WINDOWS:
-                subprocess.run(
-                    ["icacls", remote_key_path, "/inheritance:r", "/grant:r", "SYSTEM:(R)", "Administrators:(R)"],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-                )
+                _lockdown_key_windows(remote_key_path)
             else:
                 os.chmod(remote_key_path, 0o600)
             logger.info("Wrote temporary SSH key for remote repo")
@@ -2113,10 +2119,7 @@ def execute_task(config, task):
             with open(remote_key_path, "w") as kf:
                 kf.write(normalized_key)
             if IS_WINDOWS:
-                subprocess.run(
-                    ["icacls", remote_key_path, "/inheritance:r", "/grant:r", "SYSTEM:(R)", "Administrators:(R)"],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-                )
+                _lockdown_key_windows(remote_key_path)
             else:
                 os.chmod(remote_key_path, 0o600)
             logger.info("Wrote temporary SSH key for remote repo")
