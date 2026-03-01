@@ -89,12 +89,14 @@ foreach ($staleJobs as $sj) {
 
 // Step 2b: Auto-fail zombie jobs — running >24h on online agents with no recent progress
 // Safety net for agents that don't support check_jobs or lost status reports that were never retried
+// Excludes server-side tasks (prune, compact, catalog, etc.) — those are managed by the scheduler
 $zombieJobs = $db->fetchAll("
     SELECT bj.id, bj.agent_id, bj.task_type, bj.backup_plan_id, a.name as agent_name
     FROM backup_jobs bj
     JOIN agents a ON a.id = bj.agent_id
     WHERE bj.status IN ('running', 'sent')
       AND a.status = 'online'
+      AND bj.task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full')
       AND bj.queued_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)
       AND (bj.last_progress_at IS NULL OR bj.last_progress_at < DATE_SUB(NOW(), INTERVAL 60 MINUTE))
 ");
@@ -669,6 +671,7 @@ foreach ($serverJobs as $sj) {
                 // Update progress
                 $db->update('backup_jobs', [
                     'files_processed' => $archiveCount,
+                    'last_progress_at' => date('Y-m-d H:i:s'),
                 ], 'id = ?', [$sj['id']]);
 
                 echo date('Y-m-d H:i:s') . "   Catalog sync {$archiveCount}/{$totalArchiveCount}: {$archiveName}\n";
@@ -1039,6 +1042,7 @@ foreach ($serverJobs as $sj) {
             // Update progress for UI progress bar (files_processed = archives processed)
             $db->update('backup_jobs', [
                 'files_processed' => $processedArchives,
+                'last_progress_at' => date('Y-m-d H:i:s'),
             ], 'id = ?', [$sj['id']]);
 
             // Log progress to server_log for UI visibility

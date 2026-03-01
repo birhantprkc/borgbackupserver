@@ -138,10 +138,12 @@ class AgentApiController extends Controller
         $pollInterval = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'agent_poll_interval'");
 
         // Detect stalled jobs: running/sent with no recent progress from this agent
+        // Exclude server-side task types — those run in the scheduler, not on the agent
         $stalledJobs = $this->db->fetchAll("
             SELECT id FROM backup_jobs
             WHERE agent_id = ?
               AND status IN ('running', 'sent')
+              AND task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full')
               AND (
                   (last_progress_at IS NOT NULL AND last_progress_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE))
                   OR
