@@ -268,7 +268,8 @@ def get_system_info():
     if IS_WINDOWS:
         candidates = [r"C:\Program Files\BorgBackup\borg.exe", r"C:\Program Files (x86)\BorgBackup\borg.exe"]
     else:
-        candidates = ["/usr/local/bin/borg", "/usr/bin/borg", "/opt/homebrew/bin/borg"]
+        candidates = ["/usr/local/bin/borg", "/usr/bin/borg", "/opt/homebrew/bin/borg",
+                      os.path.expanduser("~/.local/bin/borg"), "/root/.local/bin/borg"]
     for candidate in candidates:
         if os.path.exists(candidate):
             borg_path = candidate
