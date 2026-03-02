@@ -1875,3 +1875,29 @@ foreach ($patterns as $pattern) {
 if ($cleaned > 0) {
     echo date('Y-m-d H:i:s') . " Cleaned up {$cleaned} orphaned temp file(s)\n";
 }
+
+// Step 16b: Clean up imported catalog log files from .catalog-logs directories
+// These are written by the agent via SSH and should be deleted after import,
+// but the unlink may fail if directory permissions haven't been updated yet.
+$storageSetting = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
+$catalogStoragePath = $storageSetting['value'] ?? null;
+if ($catalogStoragePath) {
+    $catalogCleaned = 0;
+    foreach (glob(rtrim($catalogStoragePath, '/') . '/*/.catalog-logs/catalog-*.jsonl') as $catFile) {
+        // Extract job ID from filename (catalog-{jobId}.jsonl)
+        if (preg_match('/catalog-(\d+)\.jsonl$/', $catFile, $m)) {
+            $catJobId = (int) $m[1];
+            $catJob = $db->fetchOne(
+                "SELECT status FROM backup_jobs WHERE id = ? AND status IN ('completed', 'failed')",
+                [$catJobId]
+            );
+            if ($catJob) {
+                @unlink($catFile);
+                $catalogCleaned++;
+            }
+        }
+    }
+    if ($catalogCleaned > 0) {
+        echo date('Y-m-d H:i:s') . " Cleaned up {$catalogCleaned} imported catalog log file(s)\n";
+    }
+}
