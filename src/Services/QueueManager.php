@@ -383,7 +383,7 @@ class QueueManager
                    bp.prune_weeks, bp.prune_months, bp.prune_years,
                    r.path as repo_path, r.encryption, r.passphrase_encrypted,
                    r.name as repo_name, r.agent_id as repo_agent_id,
-                   r.storage_type, r.remote_ssh_config_id,
+                   r.storage_type, r.storage_location_id, r.remote_ssh_config_id,
                    a.ssh_unix_user,
                    rsc.id as rsc_id, rsc.name as rsc_name, rsc.remote_host, rsc.remote_port,
                    rsc.remote_user, rsc.remote_base_path,

@@ -206,6 +206,7 @@ foreach ($serverJobs as $sj) {
         'agent_id' => $sj['repo_agent_id'] ?? $sj['agent_id'],
         'name' => $sj['repo_name'],
         'storage_type' => $sj['storage_type'] ?? 'local',
+        'storage_location_id' => $sj['storage_location_id'] ?? null,
     ];
 
     $isRemoteSsh = ($repo['storage_type'] === 'remote_ssh');
@@ -1399,7 +1400,7 @@ foreach ($serverJobs as $sj) {
 // Step 5: Update repository sizes from actual disk usage (every 5 minutes)
 // Skips remote SSH repos — no local disk to measure; size comes from agent backup reports
 if ((int) date('i') % 5 === 0) {
-    $repos = $db->fetchAll("SELECT id, path, agent_id, name, storage_type FROM repositories");
+    $repos = $db->fetchAll("SELECT id, path, agent_id, name, storage_type, storage_location_id FROM repositories");
     foreach ($repos as $repo) {
         if (($repo['storage_type'] ?? 'local') === 'remote_ssh') continue;
         $localPath = \BBS\Services\BorgCommandBuilder::getLocalRepoPath($repo);
