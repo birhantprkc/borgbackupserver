@@ -804,29 +804,37 @@ foreach ($serverJobs as $sj) {
 
         $ch = \BBS\Core\ClickHouse::getInstance();
 
+        // Get all archive IDs for this repo (used to scope ClickHouse operations)
+        $repoArchiveIds = array_column($crArchives, 'id');
+        $repoArchiveList = implode(',', array_map('intval', $repoArchiveIds));
+
         if ($isFullRebuild) {
-            // Full rebuild: drop all existing data for this agent, then re-populate
-            try {
-                $ch->exec("ALTER TABLE file_catalog DROP PARTITION {$agentId}");
-                $ch->exec("ALTER TABLE catalog_dirs DROP PARTITION {$agentId}");
-            } catch (\Exception $e) { /* partitions may not exist yet */ }
+            // Full rebuild: drop existing data for THIS REPO's archives only (not the whole agent)
+            if (!empty($repoArchiveList)) {
+                try {
+                    $ch->exec("ALTER TABLE file_catalog DELETE WHERE agent_id = {$agentId} AND archive_id IN ({$repoArchiveList})");
+                    $ch->exec("ALTER TABLE catalog_dirs DELETE WHERE agent_id = {$agentId} AND archive_id IN ({$repoArchiveList})");
+                } catch (\Exception $e) { /* may not exist yet */ }
+            }
             $missingArchives = $crArchives;
-            echo date('Y-m-d H:i:s') . " Catalog rebuild job #{$sj['id']}: FULL rebuild — dropped existing data, re-indexing all {$totalArchives} archives\n";
+            echo date('Y-m-d H:i:s') . " Catalog rebuild job #{$sj['id']}: FULL rebuild — dropped repo data, re-indexing all {$totalArchives} archives\n";
         } else {
             // Incremental rebuild: only process archives not already in ClickHouse
+            // Scope to this repo's archive IDs only (don't touch other repos on same agent)
             $existingArchiveIds = [];
-            try {
-                $existing = $ch->fetchAll("SELECT DISTINCT archive_id FROM file_catalog WHERE agent_id = {$agentId}");
-                $existingArchiveIds = array_flip(array_column($existing, 'archive_id'));
-            } catch (\Exception $e) { /* table may be empty */ }
+            if (!empty($repoArchiveList)) {
+                try {
+                    $existing = $ch->fetchAll("SELECT DISTINCT archive_id FROM file_catalog WHERE agent_id = {$agentId} AND archive_id IN ({$repoArchiveList})");
+                    $existingArchiveIds = array_flip(array_column($existing, 'archive_id'));
+                } catch (\Exception $e) { /* table may be empty */ }
+            }
 
             // Filter to only missing archives
             $missingArchives = array_filter($crArchives, fn($a) => !isset($existingArchiveIds[$a['id']]));
             $missingArchives = array_values($missingArchives);
 
-            // Also clean up ClickHouse data for archives that were pruned from MySQL
-            $mysqlArchiveIds = array_column($crArchives, 'id');
-            $orphanedInCh = array_diff(array_keys($existingArchiveIds), $mysqlArchiveIds);
+            // Clean up ClickHouse data for archives that were pruned from MySQL (this repo only)
+            $orphanedInCh = array_diff(array_keys($existingArchiveIds), $repoArchiveIds);
             if (!empty($orphanedInCh)) {
                 $orphanList = implode(',', array_map('intval', $orphanedInCh));
                 try {
