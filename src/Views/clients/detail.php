@@ -605,7 +605,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 : "Wait for {$repoActiveJobs} active job(s) to finish first";
         ?>
         <div class="col-md-6 col-lg-4">
-            <div class="card border-0 shadow-sm h-100 repo-card position-relative" style="cursor: pointer;" onclick="window.location='/clients/<?= $agent['id'] ?>/repo/<?= $repo['id'] ?>'">
+            <div class="card border-0 shadow-sm h-100 repo-card position-relative" style="cursor: pointer; overflow: visible;" onclick="window.location='/clients/<?= $agent['id'] ?>/repo/<?= $repo['id'] ?>'">
                 <!-- Maintenance menu in upper right -->
                 <div class="position-absolute dropdown" style="top: 6px; right: 6px; z-index: 10;" onclick="event.stopPropagation()">
                     <button class="btn btn-sm btn-link text-muted p-1" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Actions">
