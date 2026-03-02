@@ -180,7 +180,8 @@ case "$ACTION" in
 
         # Make extracted files readable by www-data for tar/streaming
         chown -R "$USERNAME":www-data "$TMPDIR"
-        chmod -R g+rX "$TMPDIR"
+        find "$TMPDIR" -type d -exec chmod 770 {} +
+        find "$TMPDIR" -type f -exec chmod 660 {} +
 
         exit $EXIT_CODE
         ;;
