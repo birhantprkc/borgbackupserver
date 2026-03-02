@@ -1342,7 +1342,10 @@ class ClientController extends Controller
             // Generate filename
             $safeName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $agent['name'] . '-' . $archive['archive_name']);
 
-            // Stream as tar.gz
+            // Stream as tar.gz — clear any buffered output (e.g. debug notices)
+            if (ob_get_level()) {
+                ob_end_clean();
+            }
             header('Content-Type: application/gzip');
             header('Content-Disposition: attachment; filename="' . $safeName . '.tar.gz"');
             header('Cache-Control: no-cache');
