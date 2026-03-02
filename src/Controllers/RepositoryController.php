@@ -427,9 +427,9 @@ class RepositoryController extends Controller
             $paths[] = rtrim($loc['path'], '/') . '/' . $agentId;
         }
 
-        // Get agent's home directory
+        // Get agent's home directory (storage_path already includes /home, e.g. /var/bbs/home)
         $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
-        $homeDir = rtrim($storageSetting['value'] ?? '/var/bbs', '/') . '/home/' . $agentId;
+        $homeDir = rtrim($storageSetting['value'] ?? '/var/bbs/home', '/') . '/' . $agentId;
 
         // Call bbs-ssh-helper to write the paths file
         $cmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'update-storage-paths', $homeDir];

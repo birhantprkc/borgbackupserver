@@ -328,9 +328,17 @@ case "$ACTION" in
             exit 1
         fi
 
-        # Safety checks
-        if [[ ! "$REPO_DIR" =~ ^/var/bbs/ ]]; then
-            echo "Error: repo dir must be under /var/bbs/"
+        # Safety: only allow paths under /var/bbs or registered storage locations
+        ALLOWED=0
+        if [[ "$REPO_DIR" =~ ^/var/bbs/ ]]; then
+            ALLOWED=1
+        elif [ -f /etc/bbs/allowed-storage-paths ]; then
+            while IFS= read -r allowed_path; do
+                [[ -n "$allowed_path" ]] && [[ "$REPO_DIR" =~ ^"$allowed_path"/ ]] && ALLOWED=1 && break
+            done < /etc/bbs/allowed-storage-paths
+        fi
+        if [ "$ALLOWED" -ne 1 ]; then
+            echo "Error: repo dir must be under /var/bbs/ or a registered storage location"
             exit 1
         fi
         if [[ ! "$USERNAME" =~ ^bbs-[a-z0-9_-]+$ ]]; then
@@ -567,9 +575,17 @@ case "$ACTION" in
             exit 1
         fi
 
-        # Safety: only allow paths under /var/bbs/
-        if [[ ! "$DIR" =~ ^/var/bbs/ ]]; then
-            echo "Error: path must be under /var/bbs/"
+        # Safety: only allow paths under /var/bbs or registered storage locations
+        ALLOWED=0
+        if [[ "$DIR" =~ ^/var/bbs/ ]]; then
+            ALLOWED=1
+        elif [ -f /etc/bbs/allowed-storage-paths ]; then
+            while IFS= read -r allowed_path; do
+                [[ -n "$allowed_path" ]] && [[ "$DIR" =~ ^"$allowed_path"/ ]] && ALLOWED=1 && break
+            done < /etc/bbs/allowed-storage-paths
+        fi
+        if [ "$ALLOWED" -ne 1 ]; then
+            echo "Error: path must be under /var/bbs/ or a registered storage location"
             exit 1
         fi
 
