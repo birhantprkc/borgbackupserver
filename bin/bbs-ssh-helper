@@ -860,8 +860,32 @@ SSHEOF
         echo "OK"
         ;;
 
+    fix-download-perms)
+        # Fix permissions on a download temp directory so www-data can read it
+        # Usage: bbs-ssh-helper fix-download-perms <tmpdir>
+        TMPDIR="${2:-}"
+
+        if [ -z "$TMPDIR" ]; then
+            echo "Usage: bbs-ssh-helper fix-download-perms <tmpdir>"
+            exit 1
+        fi
+
+        # Safety: tmpdir must be under /tmp
+        if [[ ! "$TMPDIR" =~ ^/tmp/bbs-download- ]]; then
+            echo "Error: tmpdir must be under /tmp/bbs-download-*"
+            exit 1
+        fi
+
+        if [ -d "$TMPDIR" ]; then
+            chgrp -R www-data "$TMPDIR"
+            find "$TMPDIR" -type d -exec chmod 770 {} +
+            find "$TMPDIR" -type f -exec chmod 660 {} +
+        fi
+        echo "OK"
+        ;;
+
     *)
-        echo "Usage: bbs-ssh-helper {create-user|create-repo-dir|borg-extract|fix-repo-perms|delete-user|install-gate|update-all-keys|rclone-sync|rclone-restore|get-size|delete-storage|clear-borg-cache|update-storage-paths|update-allowed-paths} [args...]"
+        echo "Usage: bbs-ssh-helper {create-user|create-repo-dir|borg-extract|fix-repo-perms|fix-download-perms|delete-user|install-gate|update-all-keys|rclone-sync|rclone-restore|get-size|delete-storage|clear-borg-cache|update-storage-paths|update-allowed-paths} [args...]"
         exit 1
         ;;
 esac

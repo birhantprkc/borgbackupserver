@@ -1326,6 +1326,10 @@ class ClientController extends Controller
                 throw new \RuntimeException('borg extract failed: ' . trim($stdout . "\n" . $stderr));
             }
 
+            // Fix permissions so www-data can read extracted files
+            // (the helper's post-extract chmod may not complete due to pipe closure)
+            exec('sudo /usr/local/bin/bbs-ssh-helper fix-download-perms ' . escapeshellarg($tmpDir) . ' 2>&1');
+
             // Check if anything was extracted
             $extractedFiles = [];
             $rii = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($tmpDir, \RecursiveDirectoryIterator::SKIP_DOTS));
