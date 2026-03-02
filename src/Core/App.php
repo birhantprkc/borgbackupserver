@@ -147,6 +147,12 @@ class App
         $this->router->map('POST', '/settings/test-smtp', 'SettingsController@testSmtp');
         $this->router->map('POST', '/settings/check-update', 'SettingsController@checkUpdate');
 
+        // Storage Locations
+        $this->router->map('GET', '/storage-locations', 'StorageLocationController@index');
+        $this->router->map('POST', '/storage-locations', 'StorageLocationController@store');
+        $this->router->map('POST', '/storage-locations/[i:id]', 'StorageLocationController@update');
+        $this->router->map('POST', '/storage-locations/[i:id]/delete', 'StorageLocationController@destroy');
+
         // Remote SSH Configs
         $this->router->map('POST', '/remote-ssh-configs/create', 'RemoteSshConfigController@store');
         $this->router->map('POST', '/remote-ssh-configs/[i:id]/update', 'RemoteSshConfigController@update');

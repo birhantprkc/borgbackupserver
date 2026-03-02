@@ -115,6 +115,14 @@ CREATE TABLE agents (
 -- Repositories & Backup Plans
 -- --------------------------------------------------------
 
+CREATE TABLE storage_locations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    label VARCHAR(100) NOT NULL,
+    path VARCHAR(500) NOT NULL,
+    is_default TINYINT(1) NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
 CREATE TABLE remote_ssh_configs (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -134,6 +142,7 @@ CREATE TABLE repositories (
     id INT AUTO_INCREMENT PRIMARY KEY,
     agent_id INT NOT NULL,
     storage_type VARCHAR(20) NOT NULL DEFAULT 'local',
+    storage_location_id INT DEFAULT NULL,
     remote_ssh_config_id INT DEFAULT NULL,
     name VARCHAR(100) NOT NULL,
     path VARCHAR(500) NOT NULL,
@@ -144,7 +153,8 @@ CREATE TABLE repositories (
     borg_version_created VARCHAR(20) DEFAULT NULL,
     borg_version_last VARCHAR(20) DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
+    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
+    FOREIGN KEY (storage_location_id) REFERENCES storage_locations(id)
 );
 
 CREATE TABLE backup_plans (

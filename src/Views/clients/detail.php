@@ -567,7 +567,10 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     function toggleRemoteSshConfig() {
         var sel = document.getElementById('storageTypeSelect');
         var row = document.getElementById('remoteSshConfigRow');
-        if (row) row.style.display = sel && sel.value === 'remote_ssh' ? '' : 'none';
+        var locRow = document.getElementById('storageLocationRow');
+        var isLocal = sel && sel.value !== 'remote_ssh';
+        if (row) row.style.display = isLocal ? 'none' : '';
+        if (locRow) locRow.style.display = isLocal ? '' : 'none';
     }
     function showCreateRepo() {
         var grid = document.getElementById('repo-cards-grid');
@@ -767,6 +770,24 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     </div>
                     <div class="col-md-3 form-text pt-2">Where to store backup data.</div>
                 </div>
+
+                <?php if (!empty($storageLocations) && count($storageLocations) > 1): ?>
+                <div class="row mb-3" id="storageLocationRow">
+                    <label class="col-md-3 col-form-label fw-semibold">Location</label>
+                    <div class="col-md-6">
+                        <select class="form-select" name="storage_location_id" id="storageLocationSelect">
+                            <?php foreach ($storageLocations as $sl): ?>
+                            <option value="<?= $sl['id'] ?>" <?= $sl['is_default'] ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($sl['label']) ?> (<?= htmlspecialchars($sl['path']) ?>)
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-3 form-text pt-2">
+                        <a href="/storage-locations">Manage locations</a>
+                    </div>
+                </div>
+                <?php endif; ?>
 
                 <div class="row mb-3" id="remoteSshConfigRow" style="display:none;">
                     <label class="col-md-3 col-form-label fw-semibold">Remote Host</label>

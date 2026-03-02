@@ -24,7 +24,15 @@ fi
 case "${SSH_ORIGINAL_COMMAND:-}" in
     "borg serve"*)
         # Normal borg operations -- pass through to borg serve with append-only
-        exec borg serve --append-only --restrict-to-path "$HOME_DIR"
+        # Build restrict-to-path args: always include home dir, plus any extra
+        # storage locations listed in .storage-paths (one path per line)
+        RESTRICT_ARGS=(--restrict-to-path "$HOME_DIR")
+        if [[ -f "$HOME_DIR/.storage-paths" ]]; then
+            while IFS= read -r extra_path; do
+                [[ -n "$extra_path" ]] && RESTRICT_ARGS+=(--restrict-to-path "$extra_path")
+            done < "$HOME_DIR/.storage-paths"
+        fi
+        exec borg serve --append-only "${RESTRICT_ARGS[@]}"
         ;;
 
     "catalog-write "*)

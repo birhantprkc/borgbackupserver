@@ -87,9 +87,14 @@ $updateAvailable = $updateService->isUpdateAvailable();
                     <div class="mb-3">
                         <div class="row g-3">
                             <div class="col-7">
-                                <label class="form-label fw-semibold">Storage Path</label>
-                                <input type="text" class="form-control" name="storage_path" value="<?= htmlspecialchars($settings['storage_path'] ?? '') ?>" readonly>
-                                <div class="form-text">Base directory for borg repositories. Currently <?= $storageUsagePercent ?? 0 ?>% used.</div>
+                                <label class="form-label fw-semibold">Storage</label>
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="text" class="form-control" value="<?= htmlspecialchars($settings['storage_path'] ?? '') ?>" readonly>
+                                    <a href="/storage-locations" class="btn btn-sm btn-outline-primary text-nowrap">
+                                        <i class="bi bi-hdd-stack me-1"></i>Manage
+                                    </a>
+                                </div>
+                                <div class="form-text">Default storage path. <a href="/storage-locations">Manage all storage locations</a>.</div>
                             </div>
                             <div class="col-5">
                                 <label class="form-label fw-semibold">Alert at</label>

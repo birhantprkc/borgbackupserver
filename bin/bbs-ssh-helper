@@ -79,9 +79,17 @@ case "$ACTION" in
             exit 1
         fi
 
-        # Safety: only create under /var/bbs
-        if [[ ! "$REPO_DIR" =~ ^/var/bbs/ ]]; then
-            echo "Error: repo dir must be under /var/bbs/"
+        # Safety: only create under allowed storage paths
+        ALLOWED=0
+        if [[ "$REPO_DIR" =~ ^/var/bbs/ ]]; then
+            ALLOWED=1
+        elif [ -f /etc/bbs/allowed-storage-paths ]; then
+            while IFS= read -r allowed_path; do
+                [[ -n "$allowed_path" ]] && [[ "$REPO_DIR" =~ ^"$allowed_path"/ ]] && ALLOWED=1 && break
+            done < /etc/bbs/allowed-storage-paths
+        fi
+        if [ "$ALLOWED" -ne 1 ]; then
+            echo "Error: repo dir must be under /var/bbs/ or a registered storage location"
             exit 1
         fi
 
@@ -99,14 +107,21 @@ case "$ACTION" in
         # Find the bbs-* user who owns the parent directory
         PARENT_OWNER=$(stat -c '%U' "$PARENT_DIR")
 
-        # If parent is still owned by root but looks like a user home dir (/var/bbs/home/N/),
-        # try to find the correct bbs-* user from /etc/passwd
-        if [ "$PARENT_OWNER" = "root" ] && [[ "$PARENT_DIR" =~ ^/var/bbs/home/[0-9]+$ ]]; then
-            # Look for a bbs-* user whose home is this directory
+        # If parent is still owned by root, try to find the correct bbs-* user.
+        # Works for default home dirs (/var/bbs/home/N/) and non-default storage
+        # locations where the parent dir basename is the agent_id (e.g., /mnt/storage/3/)
+        if [ "$PARENT_OWNER" = "root" ]; then
+            # First try: look for bbs-* user whose home matches this directory
             ACTUAL_USER=$(awk -F: -v home="$PARENT_DIR" '$6 == home && $1 ~ /^bbs-/ {print $1}' /etc/passwd)
+            # Second try: if parent basename is numeric, look for bbs-* user with that agent_id in their home
+            if [ -z "$ACTUAL_USER" ]; then
+                BASENAME=$(basename "$PARENT_DIR")
+                if [[ "$BASENAME" =~ ^[0-9]+$ ]]; then
+                    ACTUAL_USER=$(awk -F: -v aid="/$BASENAME" '$6 ~ aid"$" && $1 ~ /^bbs-/ {print $1}' /etc/passwd)
+                fi
+            fi
             if [ -n "$ACTUAL_USER" ]; then
                 PARENT_OWNER="$ACTUAL_USER"
-                # Fix the parent directory ownership
                 chown "$ACTUAL_USER":www-data "$PARENT_DIR"
                 chmod 750 "$PARENT_DIR"
             fi
@@ -770,8 +785,65 @@ SSHEOF
         echo "OK"
         ;;
 
+    update-storage-paths)
+        # Write extra --restrict-to-path entries for a user's non-default storage locations.
+        # Usage: bbs-ssh-helper update-storage-paths <home_dir> [path1] [path2] ...
+        # If no paths given, removes the .storage-paths file.
+        HOME_DIR="${2:-}"
+
+        if [ -z "$HOME_DIR" ]; then
+            echo "Usage: bbs-ssh-helper update-storage-paths <home_dir> [path1] [path2] ..."
+            exit 1
+        fi
+
+        PATHS_FILE="$HOME_DIR/.storage-paths"
+
+        if [ $# -le 2 ]; then
+            # No extra paths — remove the file if it exists
+            rm -f "$PATHS_FILE"
+        else
+            # Write each extra path (arguments 3+)
+            > "$PATHS_FILE"
+            shift 2
+            for P in "$@"; do
+                echo "$P" >> "$PATHS_FILE"
+            done
+        fi
+
+        # Ensure correct ownership (user can read, www-data can write)
+        if [ -f "$PATHS_FILE" ]; then
+            OWNER=$(stat -c '%U' "$HOME_DIR")
+            chown "$OWNER":www-data "$PATHS_FILE"
+            chmod 640 "$PATHS_FILE"
+        fi
+
+        echo "OK"
+        ;;
+
+    update-allowed-paths)
+        # Write allowed storage location paths to /etc/bbs/allowed-storage-paths.
+        # Usage: bbs-ssh-helper update-allowed-paths [path1] [path2] ...
+        CONFIG_DIR="/etc/bbs"
+        CONFIG_FILE="$CONFIG_DIR/allowed-storage-paths"
+
+        mkdir -p "$CONFIG_DIR"
+
+        if [ $# -le 1 ]; then
+            rm -f "$CONFIG_FILE"
+        else
+            > "$CONFIG_FILE"
+            shift 1
+            for P in "$@"; do
+                echo "$P" >> "$CONFIG_FILE"
+            done
+        fi
+
+        [ -f "$CONFIG_FILE" ] && chmod 644 "$CONFIG_FILE"
+        echo "OK"
+        ;;
+
     *)
-        echo "Usage: bbs-ssh-helper {create-user|create-repo-dir|borg-extract|fix-repo-perms|delete-user|install-gate|update-all-keys|rclone-sync|rclone-restore|get-size|delete-storage|clear-borg-cache} [args...]"
+        echo "Usage: bbs-ssh-helper {create-user|create-repo-dir|borg-extract|fix-repo-perms|delete-user|install-gate|update-all-keys|rclone-sync|rclone-restore|get-size|delete-storage|clear-borg-cache|update-storage-paths|update-allowed-paths} [args...]"
         exit 1
         ;;
 esac

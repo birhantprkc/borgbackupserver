@@ -1415,24 +1415,37 @@ if ((int) date('i') % 5 === 0) {
     }
 }
 
-// Step 6: Check storage for low disk space
+// Step 6: Check storage for low disk space (all storage locations)
 $notificationService = $notificationService ?? new NotificationService();
 $thresholdSetting = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_alert_threshold'");
 $storageThreshold = (int) ($thresholdSetting['value'] ?? 90);
 
-$storagePathSetting = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
-$storagePath = $storagePathSetting['value'] ?? '';
-if (!empty($storagePath) && is_dir($storagePath)) {
-    $total = @disk_total_space($storagePath);
-    $free = @disk_free_space($storagePath);
+$storageLocations = $db->fetchAll("SELECT * FROM storage_locations ORDER BY id");
+// Fallback if no storage_locations table yet (pre-migration)
+if (empty($storageLocations)) {
+    $storagePathSetting = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
+    if (!empty($storagePathSetting['value'])) {
+        $storageLocations = [['path' => $storagePathSetting['value'], 'label' => 'Default']];
+    }
+}
+
+$anyLow = false;
+foreach ($storageLocations as $sl) {
+    $slPath = $sl['path'] ?? '';
+    if (empty($slPath) || !is_dir($slPath)) continue;
+    $total = @disk_total_space($slPath);
+    $free = @disk_free_space($slPath);
     if ($total !== false && $free !== false && $total > 0) {
         $usagePercent = round((($total - $free) / $total) * 100, 1);
         if ($usagePercent >= $storageThreshold) {
-            $notificationService->notify('storage_low', null, null, "Storage is at {$usagePercent}% capacity ({$storagePath})", 'warning');
-        } else {
-            $notificationService->resolve('storage_low', null, null);
+            $label = $sl['label'] ?? $slPath;
+            $notificationService->notify('storage_low', null, null, "Storage \"{$label}\" is at {$usagePercent}% capacity ({$slPath})", 'warning');
+            $anyLow = true;
         }
     }
+}
+if (!$anyLow) {
+    $notificationService->resolve('storage_low', null, null);
 }
 
 // Step 6: Cleanup old resolved notifications and server logs

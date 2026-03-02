@@ -227,14 +227,21 @@ class BorgCommandBuilder
             return $repo['path'];
         }
 
-        // For SSH repos, the local path is stored separately or derived from storage location
-        // Derive from storage_path setting + agent_id + repo name
         if (!empty($repo['local_path'])) {
             return $repo['local_path'];
         }
 
-        // Derive from storage_path setting + agent_id + repo name
         $db = \BBS\Core\Database::getInstance();
+
+        // If repo has a storage_location_id, use that location's path
+        if (!empty($repo['storage_location_id'])) {
+            $loc = $db->fetchOne("SELECT path FROM storage_locations WHERE id = ?", [$repo['storage_location_id']]);
+            if ($loc) {
+                return rtrim($loc['path'], '/') . '/' . $repo['agent_id'] . '/' . $repo['name'];
+            }
+        }
+
+        // Fallback: derive from global storage_path setting (default location)
         $setting = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
         if ($setting) {
             return rtrim($setting['value'], '/') . '/' . $repo['agent_id'] . '/' . $repo['name'];

@@ -456,6 +456,7 @@ class ClientController extends Controller
             's3PluginConfigId' => $s3PluginConfigId,
             'globalS3Configured' => $globalS3Configured,
             'remoteSshConfigs' => (new \BBS\Services\RemoteSshService())->getAll(),
+            'storageLocations' => $this->db->fetchAll("SELECT * FROM storage_locations ORDER BY is_default DESC, label"),
         ]);
     }
 

@@ -198,7 +198,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                     <?php else: ?>
                     <div class="text-primary" style="font-size: 1.5rem;"><i class="bi bi-hdd"></i></div>
                     <div>
-                        <h6 class="mb-1">Local Storage</h6>
+                        <h6 class="mb-1">Local Storage<?php if (!empty($storageLocationLabel)): ?> <span class="text-muted fw-normal">&mdash; <?= htmlspecialchars($storageLocationLabel) ?></span><?php endif; ?></h6>
                         <div class="small"><code class="text-muted"><?= htmlspecialchars($localPath ?? $repo['path']) ?></code></div>
                     </div>
                     <?php endif; ?>

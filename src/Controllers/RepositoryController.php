@@ -42,34 +42,64 @@ class RepositoryController extends Controller
             $passphrase = $this->generatePassphrase();
         }
 
+        $storageLocationId = !empty($_POST['storage_location_id']) ? (int) $_POST['storage_location_id'] : null;
+
         // Branch based on storage type
         if ($storageType === 'remote_ssh') {
             $this->storeRemoteSsh($agentId, $name, $encryption, $passphrase, $remoteSshConfigId);
         } else {
-            $this->storeLocal($agentId, $agent, $name, $encryption, $passphrase);
+            $this->storeLocal($agentId, $agent, $name, $encryption, $passphrase, $storageLocationId);
         }
     }
 
     /**
      * Create a local repository on the BBS server.
      */
-    private function storeLocal(int $agentId, array $agent, string $name, string $encryption, string $passphrase): void
+    private function storeLocal(int $agentId, array $agent, string $name, string $encryption, string $passphrase, ?int $storageLocationId = null): void
     {
-        // Build repo path using single storage_path setting
-        $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
-        $storagePath = $storageSetting['value'] ?? '';
+        // Resolve storage location
+        $location = null;
+        if ($storageLocationId) {
+            $location = $this->db->fetchOne("SELECT * FROM storage_locations WHERE id = ?", [$storageLocationId]);
+        }
+        if (!$location) {
+            $location = $this->db->fetchOne("SELECT * FROM storage_locations WHERE is_default = 1");
+        }
+        if (!$location) {
+            // Fallback for pre-migration installs
+            $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
+            $location = ['id' => null, 'path' => $storageSetting['value'] ?? '/var/bbs', 'is_default' => 1];
+        }
+
         $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
         $host = $serverHost['value'] ?? '';
 
-        if (!empty($agent['ssh_unix_user']) && !empty($host)) {
-            $path = SshKeyManager::buildSshRepoPath($agent['ssh_unix_user'], $host, $name);
+        // Determine the default storage path (from settings) to check if this is a non-default location
+        $defaultLocation = $this->db->fetchOne("SELECT * FROM storage_locations WHERE is_default = 1");
+        $isNonDefault = $defaultLocation && $location['id'] && (int) $location['id'] !== (int) $defaultLocation['id'];
+
+        if ($isNonDefault) {
+            // Non-default storage location: use absolute path
+            $localPath = rtrim($location['path'], '/') . '/' . $agentId . '/' . $name;
+            if (!empty($agent['ssh_unix_user']) && !empty($host)) {
+                // Absolute SSH path (double slash after host)
+                $path = "ssh://{$agent['ssh_unix_user']}@{$host}//{$localPath}";
+            } else {
+                $path = $localPath;
+            }
         } else {
-            $path = rtrim($storagePath, '/') . '/' . $agentId . '/' . $name;
+            // Default location: use relative path (unchanged behavior)
+            if (!empty($agent['ssh_unix_user']) && !empty($host)) {
+                $path = SshKeyManager::buildSshRepoPath($agent['ssh_unix_user'], $host, $name);
+            } else {
+                $path = rtrim($location['path'], '/') . '/' . $agentId . '/' . $name;
+            }
         }
 
         $repoId = $this->db->insert('repositories', [
             'agent_id' => $agentId,
             'storage_type' => 'local',
+            'storage_location_id' => $location['id'] ?? null,
             'name' => $name,
             'path' => $path,
             'encryption' => $encryption,
@@ -156,6 +186,11 @@ class RepositoryController extends Controller
             'level' => 'info',
             'message' => "Repository \"{$name}\" initialized ({$encryption}) at {$localPath}",
         ]);
+
+        // Update .storage-paths for non-default storage locations
+        if ($isNonDefault && !empty($agent['ssh_unix_user'])) {
+            $this->updateAgentStoragePaths($agentId, $agent);
+        }
 
         $this->flash('success', "Repository \"{$name}\" created and initialized.");
         $this->redirect("/clients/{$agentId}?tab=repos");
@@ -259,11 +294,26 @@ class RepositoryController extends Controller
         $localPath = BorgCommandBuilder::getLocalRepoPath($repo);
         $diskDeleted = false;
         if (!empty($localPath) && is_dir($localPath)) {
-            // Safety: only delete paths within the configured storage path
+            // Safety: only delete paths within a known storage location
+            $allowedPaths = array_column(
+                $this->db->fetchAll("SELECT path FROM storage_locations"),
+                'path'
+            );
+            // Also include legacy storage_path setting
             $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
-            $storagePath = $storageSetting['value'] ?? '';
+            if (!empty($storageSetting['value'])) {
+                $allowedPaths[] = $storageSetting['value'];
+            }
+            $pathAllowed = false;
+            $realLocal = realpath($localPath);
+            foreach ($allowedPaths as $ap) {
+                if (!empty($ap) && $realLocal && str_starts_with($realLocal, realpath($ap) ?: '')) {
+                    $pathAllowed = true;
+                    break;
+                }
+            }
 
-            if (!empty($storagePath) && str_starts_with(realpath($localPath), realpath($storagePath))) {
+            if ($pathAllowed) {
                 $output = [];
                 $retval = 0;
                 exec('sudo /usr/local/bin/bbs-ssh-helper delete-storage ' . escapeshellarg($localPath) . ' 2>&1', $output, $retval);
@@ -314,6 +364,12 @@ class RepositoryController extends Controller
 
         $this->db->delete('repositories', 'id = ?', [$id]);
 
+        // Refresh .storage-paths after deletion (may remove a path if last repo on that location)
+        $agent = $this->db->fetchOne("SELECT * FROM agents WHERE id = ?", [$agentId]);
+        if ($agent && !empty($agent['ssh_unix_user'])) {
+            $this->updateAgentStoragePaths($agentId, $agent);
+        }
+
         $msg = "Repository \"{$repo['name']}\" deleted.";
         if ($diskDeleted) {
             $msg .= " Data removed from disk.";
@@ -345,6 +401,49 @@ class RepositoryController extends Controller
             $segments[] = strtoupper(substr(bin2hex(random_bytes(3)), 0, 4));
         }
         return implode('-', $segments);
+    }
+
+    /**
+     * Update .storage-paths file for an agent (used by bbs-ssh-gate to allow borg access
+     * to non-default storage locations). Gathers all unique non-default storage location
+     * agent directories and writes them via bbs-ssh-helper.
+     */
+    private function updateAgentStoragePaths(int $agentId, array $agent): void
+    {
+        $defaultLoc = $this->db->fetchOne("SELECT id FROM storage_locations WHERE is_default = 1");
+        $defaultId = $defaultLoc['id'] ?? 0;
+
+        // Find all non-default storage locations that have repos for this agent
+        $locations = $this->db->fetchAll(
+            "SELECT DISTINCT sl.path FROM repositories r
+             JOIN storage_locations sl ON sl.id = r.storage_location_id
+             WHERE r.agent_id = ? AND r.storage_type = 'local' AND r.storage_location_id != ?",
+            [$agentId, $defaultId]
+        );
+
+        // Build the agent-specific paths (e.g., /mnt/storage2/3/)
+        $paths = [];
+        foreach ($locations as $loc) {
+            $paths[] = rtrim($loc['path'], '/') . '/' . $agentId;
+        }
+
+        // Get agent's home directory
+        $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
+        $homeDir = rtrim($storageSetting['value'] ?? '/var/bbs', '/') . '/home/' . $agentId;
+
+        // Call bbs-ssh-helper to write the paths file
+        $cmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'update-storage-paths', $homeDir];
+        foreach ($paths as $p) {
+            $cmd[] = $p;
+        }
+        exec(implode(' ', array_map('escapeshellarg', $cmd)) . ' 2>&1', $output, $ret);
+        if ($ret !== 0) {
+            $this->db->insert('server_log', [
+                'agent_id' => $agentId,
+                'level' => 'warning',
+                'message' => "update-storage-paths failed: " . implode(' ', $output),
+            ]);
+        }
     }
 
     /**
@@ -516,10 +615,18 @@ class RepositoryController extends Controller
 
         $repoPassphrase = $repo['passphrase_encrypted'] ? Encryption::decrypt($repo['passphrase_encrypted']) : null;
 
+        // Get storage location label for display
+        $storageLocationLabel = null;
+        if (!empty($repo['storage_location_id'])) {
+            $sloc = $this->db->fetchOne("SELECT label FROM storage_locations WHERE id = ?", [$repo['storage_location_id']]);
+            $storageLocationLabel = $sloc['label'] ?? null;
+        }
+
         $this->view('repositories/detail', [
             'pageTitle' => $repo['name'],
             'repo' => $repo,
             'repoPassphrase' => $repoPassphrase,
+            'storageLocationLabel' => $storageLocationLabel,
             'agentId' => $agentId,
             'localPath' => $localPath,
             'archives' => $archives,
@@ -593,21 +700,42 @@ class RepositoryController extends Controller
                 $this->redirect("/clients/{$agentId}/repo/{$id}");
             }
 
-            // Build path for the copy
-            $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
-            $storagePath = $storageSetting['value'] ?? '';
+            // Build path for the copy (use same storage location as source repo)
+            $copyLocId = $repo['storage_location_id'] ?? null;
+            $copyLoc = $copyLocId ? $this->db->fetchOne("SELECT * FROM storage_locations WHERE id = ?", [$copyLocId]) : null;
+            if (!$copyLoc) {
+                $copyLoc = $this->db->fetchOne("SELECT * FROM storage_locations WHERE is_default = 1");
+            }
+            $copyStoragePath = $copyLoc['path'] ?? '';
+            if (empty($copyStoragePath)) {
+                $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
+                $copyStoragePath = $storageSetting['value'] ?? '';
+            }
             $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
             $host = $serverHost['value'] ?? '';
 
-            if (!empty($repo['ssh_unix_user']) && !empty($host)) {
-                $copyPath = SshKeyManager::buildSshRepoPath($repo['ssh_unix_user'], $host, $copyName);
+            $defaultLoc = $this->db->fetchOne("SELECT id FROM storage_locations WHERE is_default = 1");
+            $copyIsNonDefault = $copyLoc && $defaultLoc && (int)($copyLoc['id'] ?? 0) !== (int)($defaultLoc['id'] ?? 0);
+
+            if ($copyIsNonDefault) {
+                $localCopyPath = rtrim($copyStoragePath, '/') . '/' . $agentId . '/' . $copyName;
+                if (!empty($repo['ssh_unix_user']) && !empty($host)) {
+                    $copyPath = "ssh://{$repo['ssh_unix_user']}@{$host}//{$localCopyPath}";
+                } else {
+                    $copyPath = $localCopyPath;
+                }
             } else {
-                $copyPath = rtrim($storagePath, '/') . '/' . $agentId . '/' . $copyName;
+                if (!empty($repo['ssh_unix_user']) && !empty($host)) {
+                    $copyPath = SshKeyManager::buildSshRepoPath($repo['ssh_unix_user'], $host, $copyName);
+                } else {
+                    $copyPath = rtrim($copyStoragePath, '/') . '/' . $agentId . '/' . $copyName;
+                }
             }
 
             // Create the new repository record
             $targetRepoId = $this->db->insert('repositories', [
                 'agent_id' => $agentId,
+                'storage_location_id' => $copyLoc['id'] ?? null,
                 'name' => $copyName,
                 'path' => $copyPath,
                 'encryption' => $repo['encryption'],
@@ -713,9 +841,13 @@ class RepositoryController extends Controller
             $this->redirect("/clients/{$id}?tab=repos");
         }
 
-        // Build repo path using same logic as store()
-        $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
-        $storagePath = $storageSetting['value'] ?? '';
+        // Build repo path using default storage location
+        $defaultLoc = $this->db->fetchOne("SELECT * FROM storage_locations WHERE is_default = 1");
+        $storagePath = $defaultLoc['path'] ?? '';
+        if (empty($storagePath)) {
+            $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
+            $storagePath = $storageSetting['value'] ?? '';
+        }
         $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
         $host = $serverHost['value'] ?? '';
 
@@ -728,6 +860,7 @@ class RepositoryController extends Controller
         // Create the repository record (encryption unknown, will be detected after restore)
         $repoId = $this->db->insert('repositories', [
             'agent_id' => $id,
+            'storage_location_id' => $defaultLoc['id'] ?? null,
             'name' => $repoName,
             'path' => $path,
             'encryption' => 'unknown',  // Will be detected by borg after restore
