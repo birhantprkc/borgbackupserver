@@ -1310,6 +1310,13 @@ class ClientController extends Controller
                 2 => ['pipe', 'w'],
             ];
 
+            // Debug: log the command being run
+            $this->db->insert('server_log', [
+                'agent_id' => $id,
+                'level' => 'info',
+                'message' => 'Download extract cmd: ' . implode(' ', array_map(function($a) { return strlen($a) > 20 ? substr($a, 0, 20) . '...' : $a; }, $cmd)),
+            ]);
+
             $proc = proc_open($cmd, $desc, $pipes, $tmpDir, $envStrings);
             if (!is_resource($proc)) {
                 throw new \RuntimeException('Failed to run borg extract');
@@ -1321,6 +1328,15 @@ class ClientController extends Controller
             fclose($pipes[1]);
             fclose($pipes[2]);
             $exitCode = proc_close($proc);
+
+            // Debug: log exit code and tmpdir contents
+            $debugPerms = [];
+            exec('ls -la ' . escapeshellarg($tmpDir) . ' 2>&1', $debugPerms);
+            $this->db->insert('server_log', [
+                'agent_id' => $id,
+                'level' => 'info',
+                'message' => "Download extract exit=$exitCode, tmpdir: " . implode(' | ', array_slice($debugPerms, 0, 5)),
+            ]);
 
             if ($exitCode > 1) {
                 throw new \RuntimeException('borg extract failed: ' . trim($stdout . "\n" . $stderr));
