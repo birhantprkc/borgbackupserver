@@ -179,9 +179,10 @@ case "$ACTION" in
         EXIT_CODE=$?
 
         # Make extracted files readable by www-data for tar/streaming
-        chown -R "$USERNAME":www-data "$TMPDIR"
-        find "$TMPDIR" -type d -exec chmod 770 {} +
-        find "$TMPDIR" -type f -exec chmod 660 {} +
+        # Redirect to /dev/null to avoid SIGPIPE if caller closed the pipe
+        chown -R "$USERNAME":www-data "$TMPDIR" >/dev/null 2>&1
+        find "$TMPDIR" -type d -exec chmod 770 {} + >/dev/null 2>&1
+        find "$TMPDIR" -type f -exec chmod 660 {} + >/dev/null 2>&1
 
         exit $EXIT_CODE
         ;;
