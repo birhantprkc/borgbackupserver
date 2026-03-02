@@ -33,9 +33,33 @@ class StorageLocationController extends Controller
         }
         unset($loc);
 
+        // Remote SSH configs
+        $remoteSshService = new \BBS\Services\RemoteSshService();
+        $remoteSshConfigs = $remoteSshService->getAll();
+        $remoteRepoCount = (int) ($this->db->fetchOne("SELECT COUNT(*) as cnt FROM repositories WHERE storage_type = 'remote_ssh'")['cnt'] ?? 0);
+
+        // Attach repo counts to each remote SSH config
+        foreach ($remoteSshConfigs as &$rsc) {
+            $rsc['repo_count'] = (int) ($this->db->fetchOne(
+                "SELECT COUNT(*) as cnt FROM repositories WHERE remote_ssh_config_id = ?",
+                [$rsc['id']]
+            )['cnt'] ?? 0);
+        }
+        unset($rsc);
+
+        // S3 settings
+        $settingsRows = $this->db->fetchAll("SELECT `key`, `value` FROM settings WHERE `key` IN ('s3_endpoint', 's3_bucket', 's3_region', 's3_path_prefix', 's3_sync_server_backups')");
+        $settings = [];
+        foreach ($settingsRows as $row) {
+            $settings[$row['key']] = $row['value'];
+        }
+
         $this->view('storage-locations/index', [
             'pageTitle' => 'Storage Locations',
             'locations' => $locations,
+            'remoteSshConfigs' => $remoteSshConfigs,
+            'remoteRepoCount' => $remoteRepoCount,
+            'settings' => $settings,
         ]);
     }
 

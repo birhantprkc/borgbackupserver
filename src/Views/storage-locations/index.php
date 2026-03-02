@@ -155,3 +155,95 @@ function formatStorageBytes(int $bytes): string {
     <?php endforeach; ?>
 </div>
 <?php endif; ?>
+
+<!-- Remote Storage (SSH) -->
+<div class="d-flex justify-content-between align-items-center mb-3 mt-5">
+    <h5 class="mb-0"><i class="bi bi-hdd-network me-2"></i>Remote Storage (SSH)</h5>
+    <a href="/settings?tab=storage&section=wizard" class="btn btn-sm btn-success">
+        <i class="bi bi-plus-circle me-1"></i> Add SSH Host
+    </a>
+</div>
+
+<?php if (empty($remoteSshConfigs)): ?>
+<div class="alert alert-info">No remote SSH hosts configured. <a href="/settings?tab=storage&section=wizard">Add one</a> to get started.</div>
+<?php else: ?>
+<div class="row g-3">
+    <?php foreach ($remoteSshConfigs as $rsc): ?>
+    <div class="col-xl-4 col-lg-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-start gap-2 mb-2">
+                    <div class="flex-shrink-0 mt-1" style="font-size: 1.4rem;">
+                        <?php if (($rsc['provider'] ?? '') === 'borgbase'): ?>
+                        <img src="/images/borgbase.svg" alt="" style="width:24px;height:24px;border-radius:50%">
+                        <?php elseif (($rsc['provider'] ?? '') === 'hetzner'): ?>
+                        <img src="/images/hetzner-h.png" alt="" style="width:24px;height:24px;border-radius:50%">
+                        <?php elseif (($rsc['provider'] ?? '') === 'rsyncnet'): ?>
+                        <img src="/images/rsyncnet-logo.png" alt="" style="width:24px;height:24px;border-radius:50%">
+                        <?php else: ?>
+                        <i class="bi bi-server text-primary opacity-75"></i>
+                        <?php endif; ?>
+                    </div>
+                    <div class="flex-grow-1" style="min-width: 0;">
+                        <h6 class="mb-0"><?= htmlspecialchars($rsc['name']) ?></h6>
+                        <code class="small text-muted text-truncate d-block" style="max-width: 100%;"><?= htmlspecialchars($rsc['remote_user']) ?>@<?= htmlspecialchars($rsc['remote_host']) ?><?= (int)$rsc['remote_port'] !== 22 ? ':' . (int)$rsc['remote_port'] : '' ?></code>
+                    </div>
+                    <a href="/settings?tab=storage&section=remote" class="btn btn-sm btn-outline-secondary" title="Manage">
+                        <i class="bi bi-gear"></i>
+                    </a>
+                </div>
+                <div class="d-flex gap-3 small text-muted">
+                    <span><i class="bi bi-archive me-1"></i><?= $rsc['repo_count'] ?> repo<?= $rsc['repo_count'] !== 1 ? 's' : '' ?></span>
+                    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Active</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php endforeach; ?>
+</div>
+<?php endif; ?>
+
+<!-- S3 Offsite Sync -->
+<?php
+$s3Configured = !empty($settings['s3_endpoint']) && !empty($settings['s3_bucket']);
+$s3SyncServerBackups = ($settings['s3_sync_server_backups'] ?? '0') === '1';
+?>
+<div class="d-flex justify-content-between align-items-center mb-3 mt-5">
+    <h5 class="mb-0"><i class="bi bi-bucket me-2"></i>S3 Offsite Sync</h5>
+    <a href="/settings?tab=storage&section=s3" class="btn btn-sm <?= $s3Configured ? 'btn-outline-primary' : 'btn-success' ?>">
+        <i class="bi bi-gear me-1"></i> <?= $s3Configured ? 'Manage' : 'Configure' ?>
+    </a>
+</div>
+
+<?php if (!$s3Configured): ?>
+<div class="alert alert-info">S3 offsite sync is not configured. <a href="/settings?tab=storage&section=s3">Configure it</a> to replicate local repos to S3-compatible storage.</div>
+<?php else: ?>
+<div class="row g-3">
+    <div class="col-xl-4 col-lg-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <h6 class="mb-2"><i class="bi bi-cloud-arrow-up me-1 text-primary"></i> Global S3</h6>
+                <div class="row g-1 small mb-2">
+                    <div class="col-5 text-muted">Endpoint</div>
+                    <div class="col-7 text-truncate"><?= htmlspecialchars($settings['s3_endpoint'] ?? '') ?></div>
+                    <div class="col-5 text-muted">Bucket</div>
+                    <div class="col-7"><?= htmlspecialchars($settings['s3_bucket'] ?? '') ?></div>
+                    <?php if (!empty($settings['s3_region'])): ?>
+                    <div class="col-5 text-muted">Region</div>
+                    <div class="col-7"><?= htmlspecialchars($settings['s3_region']) ?></div>
+                    <?php endif; ?>
+                    <div class="col-5 text-muted">Server Sync</div>
+                    <div class="col-7">
+                        <?php if ($s3SyncServerBackups): ?>
+                        <span class="badge bg-success">Enabled</span>
+                        <?php else: ?>
+                        <span class="badge bg-secondary">Disabled</span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Configured</span>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
