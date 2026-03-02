@@ -1204,7 +1204,7 @@ class ClientController extends Controller
         $archive = $this->db->fetchOne("
             SELECT ar.*, r.path as repo_path, r.passphrase_encrypted, r.encryption,
                    r.agent_id as repo_agent_id, r.name as repo_name,
-                   r.storage_type, r.remote_ssh_config_id,
+                   r.storage_type, r.storage_location_id, r.remote_ssh_config_id,
                    rsc.remote_host, rsc.remote_port, rsc.remote_user,
                    rsc.ssh_private_key_encrypted as remote_ssh_key_encrypted,
                    rsc.borg_remote_path
@@ -1227,6 +1227,7 @@ class ClientController extends Controller
             'agent_id' => $archive['repo_agent_id'] ?? $id,
             'name' => $archive['repo_name'] ?? '',
             'storage_type' => $archive['storage_type'] ?? 'local',
+            'storage_location_id' => $archive['storage_location_id'] ?? null,
         ];
         $isRemoteSsh = ($repo['storage_type'] === 'remote_ssh');
         $localPath = $isRemoteSsh ? $archive['repo_path'] : \BBS\Services\BorgCommandBuilder::getLocalRepoPath($repo);
