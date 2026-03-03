@@ -1437,12 +1437,9 @@ class ClientController extends Controller
         }
 
         // Remove storage directory (runs as root via SSH helper)
-        $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
-        if ($storageSetting) {
-            $clientDir = rtrim($storageSetting['value'], '/') . '/' . $id;
-            if (is_dir($clientDir)) {
-                SshKeyManager::deleteStorage($clientDir);
-            }
+        $clientDir = $agent['ssh_home_dir'] ?? null;
+        if ($clientDir && is_dir($clientDir)) {
+            SshKeyManager::deleteStorage($clientDir);
         }
 
         // Drop catalog data from ClickHouse (instant partition drop)

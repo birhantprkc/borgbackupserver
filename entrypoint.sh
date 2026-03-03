@@ -250,8 +250,9 @@ STORAGE_PATH="${STORAGE_PATH:-/var/bbs/home}"
 RESTORED_USERS=0
 
 echo "Recreating SSH users from database..."
-mysql -u bbs -pbbs bbs -N -e "SELECT ssh_unix_user, id FROM agents WHERE ssh_unix_user IS NOT NULL AND ssh_unix_user != ''" 2>/dev/null | while read SSH_USER AGENT_ID; do
-    USER_HOME="$STORAGE_PATH/$AGENT_ID"
+mysql -u bbs -pbbs bbs -N -e "SELECT ssh_unix_user, id, IFNULL(ssh_home_dir, '') FROM agents WHERE ssh_unix_user IS NOT NULL AND ssh_unix_user != ''" 2>/dev/null | while read SSH_USER AGENT_ID SSH_HOME_DIR; do
+    # Use stored ssh_home_dir if available, fall back to STORAGE_PATH/AGENT_ID for pre-migration agents
+    USER_HOME="${SSH_HOME_DIR:-$STORAGE_PATH/$AGENT_ID}"
     [ -d "$USER_HOME" ] || continue
 
     # If user already exists, just fix ownership (may have been clobbered by old entrypoint)

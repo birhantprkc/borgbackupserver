@@ -95,11 +95,12 @@ class SshKeyManager
             return null;
         }
 
-        // Store keys in database
+        // Store keys and home directory in database
         $db->update('agents', [
             'ssh_unix_user' => $unixUser,
             'ssh_public_key' => $keys['public_key'],
             'ssh_private_key_encrypted' => Encryption::encrypt($keys['private_key']),
+            'ssh_home_dir' => $homeDir,
         ], 'id = ?', [$agentId]);
 
         return [

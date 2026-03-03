@@ -318,10 +318,8 @@ class AgentApiController extends Controller
         // marking the job as completed until after the import finishes
         $hasPendingCatalog = false;
         if ($result === 'completed' && $job['task_type'] === 'backup') {
-            $sp = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
-            if ($sp && !empty($sp['value'])) {
-                $cp = rtrim($sp['value'], '/') . '/' . $agent['id']
-                    . '/.catalog-logs/catalog-' . $jobId . '.jsonl';
+            if (!empty($agent['ssh_home_dir'])) {
+                $cp = $agent['ssh_home_dir'] . '/.catalog-logs/catalog-' . $jobId . '.jsonl';
                 $hasPendingCatalog = file_exists($cp) && filesize($cp) > 0;
             }
         }
@@ -588,12 +586,8 @@ class AgentApiController extends Controller
         // Build catalog import info for after response is sent
         $catalogImport = null;
         if ($result === 'completed' && $job['task_type'] === 'backup') {
-            $storagePath = $this->db->fetchOne(
-                "SELECT `value` FROM settings WHERE `key` = 'storage_path'"
-            );
-            if ($storagePath && !empty($storagePath['value'])) {
-                $catalogPath = rtrim($storagePath['value'], '/') . '/' . $agent['id']
-                             . '/.catalog-logs/catalog-' . $jobId . '.jsonl';
+            if (!empty($agent['ssh_home_dir'])) {
+                $catalogPath = $agent['ssh_home_dir'] . '/.catalog-logs/catalog-' . $jobId . '.jsonl';
                 if (file_exists($catalogPath)) {
                     $archive = $this->db->fetchOne(
                         "SELECT id FROM archives WHERE backup_job_id = ?",

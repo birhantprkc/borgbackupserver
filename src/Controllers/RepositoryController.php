@@ -75,12 +75,12 @@ class RepositoryController extends Controller
         $host = $serverHost['value'] ?? '';
 
         // Determine if this storage location differs from the SSH user's home directory.
-        // SSH home dir is always based on settings.storage_path, so compare actual paths
-        // rather than location IDs (the user may have changed which location is "default").
-        $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
-        $sshHomePath = rtrim($storageSetting['value'] ?? '/var/bbs/home', '/');
+        // Compare the location path against the parent of the agent's actual ssh_home_dir
+        // (stored at provisioning time) rather than settings.storage_path which can change.
         $locationPath = rtrim($location['path'], '/');
-        $isNonDefault = $locationPath !== $sshHomePath;
+        $sshHomeDir = $agent['ssh_home_dir'] ?? null;
+        $sshHomePath = $sshHomeDir ? rtrim(dirname($sshHomeDir), '/') : null;
+        $isNonDefault = !$sshHomePath || $locationPath !== $sshHomePath;
 
         if ($isNonDefault) {
             // Non-default storage location: use absolute path so borg finds the repo
@@ -433,9 +433,11 @@ class RepositoryController extends Controller
             $paths[] = rtrim($loc['path'], '/') . '/' . $agentId;
         }
 
-        // Get agent's home directory (storage_path already includes /home, e.g. /var/bbs/home)
-        $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
-        $homeDir = rtrim($storageSetting['value'] ?? '/var/bbs/home', '/') . '/' . $agentId;
+        // Get agent's home directory from stored ssh_home_dir
+        $homeDir = $agent['ssh_home_dir'] ?? null;
+        if (!$homeDir) {
+            return; // No SSH provisioned — can't update storage paths
+        }
 
         // Call bbs-ssh-helper to write the paths file
         $cmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'update-storage-paths', $homeDir];
@@ -1202,10 +1204,10 @@ class RepositoryController extends Controller
         $host = $serverHost['value'] ?? '';
 
         // Determine if this is a non-default storage location (same logic as storeLocal)
-        $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
-        $sshHomePath = rtrim($storageSetting['value'] ?? '/var/bbs/home', '/');
         $locationPath = rtrim($location['path'], '/');
-        $isNonDefault = $locationPath !== $sshHomePath;
+        $sshHomeDir = $agent['ssh_home_dir'] ?? null;
+        $sshHomePath = $sshHomeDir ? rtrim(dirname($sshHomeDir), '/') : null;
+        $isNonDefault = !$sshHomePath || $locationPath !== $sshHomePath;
 
         if ($isNonDefault) {
             $localPath = $locationPath . '/' . $agentId . '/' . $name;

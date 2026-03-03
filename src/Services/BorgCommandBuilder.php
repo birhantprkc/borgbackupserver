@@ -241,7 +241,15 @@ class BorgCommandBuilder
             }
         }
 
-        // Fallback: derive from global storage_path setting (default location)
+        // Use agent's stored ssh_home_dir (set at provisioning time)
+        if (!empty($repo['agent_id'])) {
+            $agent = $db->fetchOne("SELECT ssh_home_dir FROM agents WHERE id = ?", [$repo['agent_id']]);
+            if ($agent && !empty($agent['ssh_home_dir'])) {
+                return $agent['ssh_home_dir'] . '/' . $repo['name'];
+            }
+        }
+
+        // Final fallback: derive from global storage_path (pre-migration compatibility)
         $setting = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
         if ($setting) {
             return rtrim($setting['value'], '/') . '/' . $repo['agent_id'] . '/' . $repo['name'];

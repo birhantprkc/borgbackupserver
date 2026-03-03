@@ -204,9 +204,9 @@ class QueueController extends Controller
         // For running backup jobs, tail the catalog log file to get the current file being backed up
         $currentFile = null;
         if ($job['status'] === 'running' && $job['task_type'] === 'backup') {
-            $storagePath = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
-            if ($storagePath && !empty($storagePath['value'])) {
-                $catalogPath = rtrim($storagePath['value'], '/') . '/' . $job['agent_id']
+            $jobAgent = $this->db->fetchOne("SELECT ssh_home_dir FROM agents WHERE id = ?", [$job['agent_id']]);
+            if ($jobAgent && !empty($jobAgent['ssh_home_dir'])) {
+                $catalogPath = $jobAgent['ssh_home_dir']
                              . '/.catalog-logs/catalog-' . $id . '.jsonl';
                 if (file_exists($catalogPath)) {
                     $lastLine = trim(shell_exec('tail -n 1 ' . escapeshellarg($catalogPath)) ?? '');

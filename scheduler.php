@@ -1893,11 +1893,10 @@ if ($cleaned > 0) {
 // Step 16b: Clean up imported catalog log files from .catalog-logs directories
 // These are written by the agent via SSH and should be deleted after import,
 // but the unlink may fail if directory permissions haven't been updated yet.
-$storageSetting = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
-$catalogStoragePath = $storageSetting['value'] ?? null;
-if ($catalogStoragePath) {
-    $catalogCleaned = 0;
-    foreach (glob(rtrim($catalogStoragePath, '/') . '/*/.catalog-logs/catalog-*.jsonl') as $catFile) {
+$agentHomeDirs = $db->fetchAll("SELECT DISTINCT ssh_home_dir FROM agents WHERE ssh_home_dir IS NOT NULL AND ssh_home_dir != ''");
+$catalogCleaned = 0;
+foreach ($agentHomeDirs as $ahd) {
+    foreach (glob($ahd['ssh_home_dir'] . '/.catalog-logs/catalog-*.jsonl') as $catFile) {
         // Extract job ID from filename (catalog-{jobId}.jsonl)
         if (preg_match('/catalog-(\d+)\.jsonl$/', $catFile, $m)) {
             $catJobId = (int) $m[1];
@@ -1911,7 +1910,7 @@ if ($catalogStoragePath) {
             }
         }
     }
-    if ($catalogCleaned > 0) {
-        echo date('Y-m-d H:i:s') . " Cleaned up {$catalogCleaned} imported catalog log file(s)\n";
-    }
+}
+if ($catalogCleaned > 0) {
+    echo date('Y-m-d H:i:s') . " Cleaned up {$catalogCleaned} imported catalog log file(s)\n";
 }
