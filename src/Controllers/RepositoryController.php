@@ -1058,7 +1058,7 @@ class RepositoryController extends Controller
                 $env['BORG_PASSPHRASE'] = $passphrase;
             }
 
-            $result = $remoteSshService->runBorgCommand($config, $repoPath, ['info', '--json', $repoPath], $passphrase);
+            $result = $remoteSshService->runBorgCommand($config, $repoPath, ['list', '--json', $repoPath], $passphrase);
 
             if (!$result['success']) {
                 $errorMsg = trim($result['stderr'] ?? $result['output'] ?? 'Unknown error');

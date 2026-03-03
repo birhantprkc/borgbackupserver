@@ -188,7 +188,7 @@ case "$ACTION" in
         ;;
 
     verify-repo)
-        # Verify a borg repo exists and return JSON info (encryption, archives).
+        # Verify a borg repo exists and return JSON (encryption mode, archive list).
         # Runs as root since repo may have arbitrary ownership before import.
         # Usage: bbs-ssh-helper verify-repo <passphrase> <repo_path>
         PASSPHRASE="${2:-}"
@@ -220,7 +220,7 @@ case "$ACTION" in
         BORG_RELOCATED_REPO_ACCESS_IS_OK=yes \
         BORG_BASE_DIR="/tmp/bbs-verify" \
         HOME="/tmp/bbs-verify" \
-            borg info --json "$REPO_PATH" 2>&1
+            borg list --json "$REPO_PATH" 2>&1
 
         exit $?
         ;;
