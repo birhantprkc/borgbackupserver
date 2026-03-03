@@ -316,6 +316,18 @@ class S3SyncService
             return ['success' => false, 'error' => 'rclone is not installed on this server. Install with: apt install rclone'];
         }
 
+        // Validate endpoint looks like a real URL before wasting time on rclone
+        $endpoint = $creds['endpoint'] ?? '';
+        if (!empty($endpoint)) {
+            if (!preg_match('#^https?://#i', $endpoint)) {
+                $endpoint = 'https://' . $endpoint;
+            }
+            $parsed = parse_url($endpoint);
+            if (empty($parsed['host']) || !preg_match('/\.[a-z]{2,}$/i', $parsed['host'])) {
+                return ['success' => false, 'error' => 'Invalid endpoint URL — must be a hostname like s3.us-east-1.amazonaws.com'];
+            }
+        }
+
         $remote = "S3:{$creds['bucket']}/";
         $cmd = ['rclone', 'lsd', $remote, '--max-depth', '1', '--contimeout', '5s', '--timeout', '8s'];
 

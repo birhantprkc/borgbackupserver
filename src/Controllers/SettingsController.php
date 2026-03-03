@@ -691,6 +691,21 @@ class SettingsController extends Controller
         $this->requireAdmin();
         $this->verifyCsrf();
 
+        // Validate endpoint URL if provided
+        $endpoint = trim($_POST['s3_endpoint'] ?? '');
+        if (!empty($endpoint)) {
+            // Must be a valid URL with scheme (https://...)
+            if (!preg_match('#^https?://#i', $endpoint)) {
+                $endpoint = 'https://' . $endpoint;
+                $_POST['s3_endpoint'] = $endpoint;
+            }
+            $parsed = parse_url($endpoint);
+            if (empty($parsed['host']) || !preg_match('/\.[a-z]{2,}$/i', $parsed['host'])) {
+                $this->flash('danger', 'S3 endpoint must be a valid URL (e.g. https://s3.us-east-1.amazonaws.com).');
+                $this->redirect('/settings?tab=storage&section=s3');
+            }
+        }
+
         $fields = ['s3_endpoint', 's3_region', 's3_bucket', 's3_path_prefix', 's3_sync_server_backups'];
         foreach ($fields as $key) {
             if (isset($_POST[$key])) {
