@@ -152,6 +152,8 @@ class App
         $this->router->map('POST', '/storage-locations', 'StorageLocationController@store');
         $this->router->map('POST', '/storage-locations/[i:id]', 'StorageLocationController@update');
         $this->router->map('POST', '/storage-locations/[i:id]/delete', 'StorageLocationController@destroy');
+        $this->router->map('POST', '/storage-locations/s3', 'StorageLocationController@saveS3');
+        $this->router->map('POST', '/storage-locations/s3/test', 'StorageLocationController@testS3');
 
         // Remote SSH Configs
         $this->router->map('POST', '/remote-ssh-configs/create', 'RemoteSshConfigController@store');
@@ -178,8 +180,8 @@ class App
         $this->router->map('GET', '/api/agent-updates', 'SettingsController@agentUpdatesJson');
         $this->router->map('GET', '/api/borg-status', 'SettingsController@borgStatusJson');
         $this->router->map('GET', '/api/templates/[i:id]', 'SettingsController@templateJson');
-        $this->router->map('POST', '/settings/offsite-storage', 'SettingsController@saveOffsiteStorage');
-        $this->router->map('POST', '/settings/offsite-storage/test', 'SettingsController@testOffsiteStorage');
+        $this->router->map('POST', '/settings/offsite-storage', 'StorageLocationController@saveS3');
+        $this->router->map('POST', '/settings/offsite-storage/test', 'StorageLocationController@testS3');
         $this->router->map('POST', '/settings/borg/sync', 'SettingsController@syncBorgVersions');
         $this->router->map('POST', '/settings/borg/save', 'SettingsController@saveBorgSettings');
         $this->router->map('POST', '/settings/borg/update-server', 'SettingsController@updateServerBorg');

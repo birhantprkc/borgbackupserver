@@ -4,10 +4,42 @@ use BBS\Services\ServerStats;
 function formatStorageBytes(int $bytes): string {
     return ServerStats::formatBytes($bytes);
 }
+
+$section = $_GET['section'] ?? 'overview';
+$_localRepoCount = $localRepoCount ?? 0;
+$_remoteRepoCount = $remoteRepoCount ?? 0;
+$_s3Configured = !empty($settings['s3_endpoint']) && !empty($settings['s3_bucket']);
+$_s3SyncServerBackups = ($settings['s3_sync_server_backups'] ?? '0') === '1';
 ?>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h5 class="mb-0"><i class="bi bi-hdd-stack me-2"></i>Storage Locations</h5>
+<!-- Storage Sub-Navigation -->
+<ul class="nav storage-subnav mb-4">
+    <li class="nav-item">
+        <a class="nav-link <?= $section === 'overview' ? 'active' : '' ?>" href="/storage-locations">
+            <i class="bi bi-grid me-1"></i> Overview
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link <?= $section === 's3' ? 'active' : '' ?>" href="/storage-locations?section=s3">
+            <i class="bi bi-bucket me-1"></i> S3 Sync
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link <?= ($section === 'remote' || $section === 'wizard') ? 'active' : '' ?>" href="/storage-locations?section=remote">
+            <i class="bi bi-hdd-network me-1"></i> Remote Storage
+        </a>
+    </li>
+</ul>
+
+<?php if ($section === 'overview'): ?>
+<!-- Storage Overview -->
+
+<!-- Local Storage Locations -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h5 class="mb-1"><i class="bi bi-hdd me-1"></i> Local Storage</h5>
+        <p class="text-muted small mb-0">Manage local storage locations for borg repositories. Each repository can be assigned to a specific location.</p>
+    </div>
     <button class="btn btn-sm btn-success" data-bs-toggle="collapse" data-bs-target="#addLocationForm">
         <i class="bi bi-plus-circle me-1"></i> Add Location
     </button>
@@ -44,11 +76,11 @@ function formatStorageBytes(int $bytes): string {
     </div>
 </div>
 
-<!-- Storage Locations -->
+<!-- Storage Location Cards -->
 <?php if (empty($locations)): ?>
 <div class="alert alert-info">No storage locations configured. Add one to get started.</div>
 <?php else: ?>
-<div class="row g-3">
+<div class="row g-3 mb-5">
     <?php foreach ($locations as $loc): ?>
     <div class="col-xl-4 col-lg-6">
         <div class="card border-0 shadow-sm h-100">
@@ -156,46 +188,258 @@ function formatStorageBytes(int $bytes): string {
 </div>
 <?php endif; ?>
 
-<!-- Remote Storage (SSH) -->
-<div class="d-flex justify-content-between align-items-center mb-3 mt-5">
-    <h5 class="mb-0"><i class="bi bi-hdd-network me-2"></i>Remote Storage (SSH)</h5>
-    <a href="/settings?tab=storage&section=wizard" class="btn btn-sm btn-success">
-        <i class="bi bi-plus-circle me-1"></i> Add SSH Host
+<!-- Remote Storage (SSH) Summary -->
+<div class="col-12 mb-4">
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+            <i class="bi bi-hdd-network me-1"></i> Remote Storage (SSH)
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-7">
+                    <p class="small text-muted mb-2">Remote Storage via SSH offers an affordable and low-impact way of having backups that are offsite and secure. Requires less infrastructure and gives peace of mind knowing your backups are off-site. The borg client must be executable on the remote server. Setup wizards for BorgBase, Hetzner Storage Box, and rsync.net are available.</p>
+                    <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
+                        <a href="/storage-locations?section=remote" class="btn btn-sm <?= empty($remoteSshConfigs) ? 'btn-primary' : 'btn-outline-primary' ?> text-nowrap">
+                            <?php if (empty($remoteSshConfigs)): ?>
+                            <i class="bi bi-plus-lg me-1"></i> Add SSH Host
+                            <?php else: ?>
+                            <i class="bi bi-gear me-1"></i> Manage Hosts
+                            <?php endif; ?>
+                        </a>
+                        <?php if (!empty($remoteSshConfigs)): ?>
+                        <span class="small text-muted">
+                            <span class="fw-semibold text-body"><?= count($remoteSshConfigs) ?></span> host<?= count($remoteSshConfigs) !== 1 ? 's' : '' ?>,
+                            <span class="fw-semibold text-body"><?= $_remoteRepoCount ?></span> remote repo<?= $_remoteRepoCount !== 1 ? 's' : '' ?>
+                        </span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <div class="col-md-5">
+                    <?php if (empty($remoteSshConfigs)): ?>
+                    <div class="text-center text-muted py-3">
+                        <i class="bi bi-hdd-network d-block opacity-50" style="font-size: 2rem;"></i>
+                        <p class="small mb-0 mt-2">No remote hosts configured yet.</p>
+                    </div>
+                    <?php else: ?>
+                    <?php foreach ($remoteSshConfigs as $rsc): ?>
+                    <div class="card border mb-2">
+                        <div class="card-body py-2 px-3">
+                            <div class="d-flex align-items-center gap-2" style="min-width: 0;">
+                                <div class="flex-shrink-0" style="font-size: 1.4rem;">
+                                    <?php if (($rsc['provider'] ?? '') === 'borgbase'): ?>
+                                    <img src="/images/borgbase.svg" alt="" style="width:24px;height:24px;border-radius:50%">
+                                    <?php elseif (($rsc['provider'] ?? '') === 'hetzner'): ?>
+                                    <img src="/images/hetzner-h.png" alt="" style="width:24px;height:24px;border-radius:50%">
+                                    <?php else: ?>
+                                    <i class="bi bi-server text-primary opacity-75"></i>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="flex-grow-1" style="min-width: 0;">
+                                    <span class="fw-semibold small"><?= htmlspecialchars($rsc['name']) ?></span>
+                                    <br><span class="text-muted small d-none d-md-inline text-truncate d-md-block" style="max-width: 100%;"><?= htmlspecialchars($rsc['remote_user']) ?>@<?= htmlspecialchars($rsc['remote_host']) ?><?= (int)$rsc['remote_port'] !== 22 ? ':' . (int)$rsc['remote_port'] : '' ?></span>
+                                </div>
+                                <span class="badge bg-success flex-shrink-0"><i class="bi bi-check-circle me-1"></i>Active</span>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- S3 Offsite Sync (Global) Summary -->
+<div class="col-12">
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+            <i class="bi bi-bucket me-1"></i> S3 Offsite Sync (Global)
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-7">
+                    <p class="small text-muted mb-2">By combining the power and speed of local repositories, the S3 Sync feature keeps your repos and software database in a second, off-site location for maximum security and disaster recovery. Supports AWS S3, Backblaze B2, Wasabi, and any S3-compatible endpoint.</p>
+                    <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
+                        <a href="/storage-locations?section=s3" class="btn btn-sm <?= $_s3Configured ? 'btn-outline-primary' : 'btn-primary' ?> text-nowrap">
+                            <i class="bi bi-gear me-1"></i> Configure S3
+                        </a>
+                    </div>
+                </div>
+                <div class="col-md-5">
+                    <?php if ($_s3Configured): ?>
+                    <div class="card">
+                        <div class="card-body py-2 px-3">
+                            <div class="row g-2 small">
+                                <div class="col-5 text-muted">Status</div>
+                                <div class="col-7"><span class="badge bg-success">Configured</span></div>
+                                <div class="col-5 text-muted">Endpoint</div>
+                                <div class="col-7"><?= htmlspecialchars($settings['s3_endpoint'] ?? '') ?></div>
+                                <div class="col-5 text-muted">Bucket</div>
+                                <div class="col-7"><?= htmlspecialchars($settings['s3_bucket'] ?? '') ?></div>
+                                <?php if (!empty($settings['s3_region'])): ?>
+                                <div class="col-5 text-muted">Region</div>
+                                <div class="col-7"><?= htmlspecialchars($settings['s3_region']) ?></div>
+                                <?php endif; ?>
+                                <div class="col-5 text-muted">Server Sync</div>
+                                <div class="col-7">
+                                    <?php if ($_s3SyncServerBackups): ?>
+                                    <span class="badge bg-success">Enabled</span>
+                                    <?php else: ?>
+                                    <span class="badge bg-secondary">Disabled</span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <?php else: ?>
+                    <div class="text-center py-2">
+                        <p class="text-muted small mb-2">S3 offsite sync is not configured yet.</p>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if ($section === 'remote'): ?>
+<!-- Remote Storage (SSH) Section -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h5 class="mb-1">Remote Storage (SSH)</h5>
+        <p class="text-muted small mb-0">Configure remote SSH hosts for offsite borg repositories (rsync.net, BorgBase, Hetzner Storage Box, etc.)</p>
+    </div>
+    <a href="/storage-locations?section=wizard" class="btn btn-sm btn-primary">
+        <i class="bi bi-plus-lg me-1"></i> Add Host
     </a>
 </div>
 
 <?php if (empty($remoteSshConfigs)): ?>
-<div class="alert alert-info">No remote SSH hosts configured. <a href="/settings?tab=storage&section=wizard">Add one</a> to get started.</div>
+<div class="card border-0 shadow-sm">
+    <div class="card-body text-center py-5 text-muted">
+        <i class="bi bi-hdd-network display-4 mb-3 d-block opacity-50"></i>
+        <p>No remote SSH storage hosts configured yet.</p>
+        <p class="small">Add a remote host to create repositories on providers like rsync.net, BorgBase, or Hetzner Storage Box.</p>
+    </div>
+</div>
 <?php else: ?>
 <div class="row g-3">
     <?php foreach ($remoteSshConfigs as $rsc): ?>
-    <div class="col-xl-4 col-lg-6">
+    <div class="col-lg-6">
         <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><?php
+                    $provider = $rsc['provider'] ?? null;
+                    if ($provider === 'borgbase') {
+                        echo '<img src="/images/borgbase.svg" alt="" style="width:16px;height:16px;border-radius:50%;vertical-align:text-bottom" class="me-1"> ';
+                    } elseif ($provider === 'hetzner') {
+                        echo '<img src="/images/hetzner-h.png" alt="" style="width:16px;height:16px;border-radius:50%;vertical-align:text-bottom" class="me-1"> ';
+                    } else {
+                        echo '<i class="bi bi-hdd-network me-1"></i> ';
+                    }
+                ?><?= htmlspecialchars($rsc['name']) ?></span>
+                <div class="btn-group btn-group-sm">
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="testRemoteSsh(<?= $rsc['id'] ?>, this)"
+                            title="Test Connection"><i class="bi bi-plug"></i></button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm"
+                            data-bs-toggle="modal" data-bs-target="#editRemoteSshModal<?= $rsc['id'] ?>"
+                            title="Edit"><i class="bi bi-pencil"></i></button>
+                    <button type="button" class="btn btn-outline-danger btn-sm"
+                            onclick="deleteRemoteSsh(<?= $rsc['id'] ?>, '<?= htmlspecialchars(addslashes($rsc['name'])) ?>')"
+                            title="Delete"><i class="bi bi-trash"></i></button>
+                </div>
+            </div>
             <div class="card-body">
-                <div class="d-flex align-items-start gap-2 mb-2">
-                    <div class="flex-shrink-0 mt-1" style="font-size: 1.4rem;">
-                        <?php if (($rsc['provider'] ?? '') === 'borgbase'): ?>
-                        <img src="/images/borgbase.svg" alt="" style="width:24px;height:24px;border-radius:50%">
-                        <?php elseif (($rsc['provider'] ?? '') === 'hetzner'): ?>
-                        <img src="/images/hetzner-h.png" alt="" style="width:24px;height:24px;border-radius:50%">
-                        <?php elseif (($rsc['provider'] ?? '') === 'rsyncnet'): ?>
-                        <img src="/images/rsyncnet-logo.png" alt="" style="width:24px;height:24px;border-radius:50%">
-                        <?php else: ?>
-                        <i class="bi bi-server text-primary opacity-75"></i>
-                        <?php endif; ?>
-                    </div>
-                    <div class="flex-grow-1" style="min-width: 0;">
-                        <h6 class="mb-0"><?= htmlspecialchars($rsc['name']) ?></h6>
-                        <code class="small text-muted text-truncate d-block" style="max-width: 100%;"><?= htmlspecialchars($rsc['remote_user']) ?>@<?= htmlspecialchars($rsc['remote_host']) ?><?= (int)$rsc['remote_port'] !== 22 ? ':' . (int)$rsc['remote_port'] : '' ?></code>
-                    </div>
-                    <a href="/settings?tab=storage&section=remote" class="btn btn-sm btn-outline-secondary" title="Manage">
-                        <i class="bi bi-gear"></i>
-                    </a>
+                <div class="row g-2 small">
+                    <?php if (!empty($rsc['provider'])): ?>
+                    <div class="col-4 text-muted">Provider</div>
+                    <div class="col-8"><?php
+                        $providerNames = ['borgbase' => 'BorgBase', 'hetzner' => 'Hetzner Storage Box', 'rsync.net' => 'rsync.net'];
+                        echo htmlspecialchars($providerNames[$rsc['provider']] ?? ucfirst($rsc['provider']));
+                    ?></div>
+                    <?php endif; ?>
+                    <div class="col-4 text-muted">Host</div>
+                    <div class="col-8"><span class="text-info"><?= htmlspecialchars($rsc['remote_user']) ?>@<?= htmlspecialchars($rsc['remote_host']) ?><?= (int)$rsc['remote_port'] !== 22 ? ':' . (int)$rsc['remote_port'] : '' ?></span></div>
+                    <div class="col-4 text-muted">Base Path</div>
+                    <div class="col-8"><?= htmlspecialchars($rsc['remote_base_path']) ?></div>
+                    <?php if (!empty($rsc['borg_remote_path'])): ?>
+                    <div class="col-4 text-muted">Borg Binary</div>
+                    <div class="col-8"><?= htmlspecialchars($rsc['borg_remote_path']) ?></div>
+                    <?php endif; ?>
+                    <div class="col-4 text-muted">SSH Key</div>
+                    <div class="col-8"><span class="badge bg-success"><i class="bi bi-key me-1"></i>Configured</span></div>
                 </div>
-                <div class="d-flex gap-3 small text-muted">
-                    <span><i class="bi bi-archive me-1"></i><?= $rsc['repo_count'] ?> repo<?= $rsc['repo_count'] !== 1 ? 's' : '' ?></span>
-                    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Active</span>
-                </div>
+                <div id="remoteSshTestResult<?= $rsc['id'] ?>" class="mt-2"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Modal for this config -->
+    <div class="modal fade" id="editRemoteSshModal<?= $rsc['id'] ?>" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="/remote-ssh-configs/<?= $rsc['id'] ?>/update">
+                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Edit Remote SSH Host</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Name</label>
+                            <input type="text" class="form-control" name="name" value="<?= htmlspecialchars($rsc['name']) ?>" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Provider Preset</label>
+                            <select class="form-select" onchange="applyRemotePreset(this, this.closest('form'))">
+                                <option value="">Custom</option>
+                                <option value="rsync.net">rsync.net</option>
+                                <option value="borgbase">BorgBase</option>
+                                <option value="hetzner">Hetzner Storage Box</option>
+                            </select>
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-8">
+                                <label class="form-label fw-semibold">Host</label>
+                                <input type="text" class="form-control" name="remote_host" value="<?= htmlspecialchars($rsc['remote_host']) ?>" required>
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label fw-semibold">Port</label>
+                                <input type="number" class="form-control" name="remote_port" value="<?= (int)$rsc['remote_port'] ?>" min="1" max="65535">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Username</label>
+                            <input type="text" class="form-control" name="remote_user" value="<?= htmlspecialchars($rsc['remote_user']) ?>" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Base Path</label>
+                            <input type="text" class="form-control" name="remote_base_path" value="<?= htmlspecialchars($rsc['remote_base_path']) ?>">
+                            <div class="form-text">Base directory on the remote host. Use <code>./</code> for relative paths (rsync.net default).</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">SSH Private Key</label>
+                            <textarea class="form-control font-monospace" name="ssh_private_key" rows="4" placeholder="Leave blank to keep existing key"></textarea>
+                            <div class="form-text">Paste the private key (PEM format). Leave blank to keep the current key.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Remote Borg Path <span class="text-muted fw-normal">(optional)</span></label>
+                            <input type="text" class="form-control" name="borg_remote_path" value="<?= htmlspecialchars($rsc['borg_remote_path'] ?? '') ?>">
+                            <div class="form-text">Custom borg binary on the remote host (e.g., <code>borg1</code> for rsync.net). Leave blank for default <code>borg</code>.</div>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" name="append_repo_name" value="1" id="editAppendRepoName<?= $rsc['id'] ?>" <?= ($rsc['append_repo_name'] ?? 1) ? 'checked' : '' ?>>
+                            <label class="form-check-label" for="editAppendRepoName<?= $rsc['id'] ?>">Append repository name to base path</label>
+                            <div class="form-text">Uncheck for providers like BorgBase where each SSH user maps to a single fixed repo path.</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -203,47 +447,973 @@ function formatStorageBytes(int $bytes): string {
 </div>
 <?php endif; ?>
 
-<!-- S3 Offsite Sync -->
-<?php
-$s3Configured = !empty($settings['s3_endpoint']) && !empty($settings['s3_bucket']);
-$s3SyncServerBackups = ($settings['s3_sync_server_backups'] ?? '0') === '1';
-?>
-<div class="d-flex justify-content-between align-items-center mb-3 mt-5">
-    <h5 class="mb-0"><i class="bi bi-bucket me-2"></i>S3 Offsite Sync</h5>
-    <a href="/settings?tab=storage&section=s3" class="btn btn-sm <?= $s3Configured ? 'btn-outline-primary' : 'btn-success' ?>">
-        <i class="bi bi-gear me-1"></i> <?= $s3Configured ? 'Manage' : 'Configure' ?>
-    </a>
-</div>
+<script>
+function testRemoteSsh(id, btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    var resultDiv = document.getElementById('remoteSshTestResult' + id);
 
-<?php if (!$s3Configured): ?>
-<div class="alert alert-info">S3 offsite sync is not configured. <a href="/settings?tab=storage&section=s3">Configure it</a> to replicate local repos to S3-compatible storage.</div>
-<?php else: ?>
-<div class="row g-3">
-    <div class="col-xl-4 col-lg-6">
-        <div class="card border-0 shadow-sm">
-            <div class="card-body">
-                <h6 class="mb-2"><i class="bi bi-cloud-arrow-up me-1 text-primary"></i> Global S3</h6>
-                <div class="row g-1 small mb-2">
-                    <div class="col-5 text-muted">Endpoint</div>
-                    <div class="col-7 text-truncate"><?= htmlspecialchars($settings['s3_endpoint'] ?? '') ?></div>
-                    <div class="col-5 text-muted">Bucket</div>
-                    <div class="col-7"><?= htmlspecialchars($settings['s3_bucket'] ?? '') ?></div>
-                    <?php if (!empty($settings['s3_region'])): ?>
-                    <div class="col-5 text-muted">Region</div>
-                    <div class="col-7"><?= htmlspecialchars($settings['s3_region']) ?></div>
+    var csrfToken = document.querySelector('input[name=csrf_token]').value;
+    fetch('/remote-ssh-configs/' + id + '/test', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'csrf_token=' + encodeURIComponent(csrfToken)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.status === 'ok') {
+            resultDiv.innerHTML = '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Connected' + (data.version ? ' — ' + data.version.replace(/</g, '&lt;') : '') + '</span>';
+        } else {
+            resultDiv.innerHTML = '<span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>' + (data.error || 'Failed').replace(/</g, '&lt;') + '</span>';
+        }
+    })
+    .catch(function() {
+        resultDiv.innerHTML = '<span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Request failed</span>';
+    })
+    .finally(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-plug"></i>';
+    });
+}
+
+function deleteRemoteSsh(id, name) {
+    if (!confirm('Delete remote SSH host "' + name + '"?')) return;
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/remote-ssh-configs/' + id + '/delete';
+    var csrf = document.createElement('input');
+    csrf.type = 'hidden';
+    csrf.name = 'csrf_token';
+    csrf.value = document.querySelector('input[name=csrf_token]').value;
+    form.appendChild(csrf);
+    document.body.appendChild(form);
+    form.submit();
+}
+
+function applyRemotePreset(select, form) {
+    var preset = select.value;
+    var portField = form.querySelector('[name=remote_port]');
+    var basePathField = form.querySelector('[name=remote_base_path]');
+    var borgPathField = form.querySelector('[name=borg_remote_path]');
+    var appendField = form.querySelector('[name=append_repo_name]');
+
+    switch (preset) {
+        case 'rsync.net':
+            if (portField) portField.value = '22';
+            if (basePathField) basePathField.value = './';
+            if (borgPathField) borgPathField.value = 'borg1';
+            if (appendField) appendField.checked = true;
+            break;
+        case 'borgbase':
+            if (portField) portField.value = '22';
+            if (basePathField) basePathField.value = './repo';
+            if (borgPathField) borgPathField.value = '';
+            if (appendField) appendField.checked = false;
+            break;
+        case 'hetzner':
+            if (portField) portField.value = '23';
+            if (basePathField) basePathField.value = './';
+            if (borgPathField) borgPathField.value = 'borg-1.4';
+            if (appendField) appendField.checked = true;
+            break;
+    }
+}
+</script>
+<?php endif; ?>
+
+<?php if ($section === 's3'): ?>
+<!-- S3 Sync Section -->
+<form method="POST" action="/storage-locations/s3">
+    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+                    <i class="bi bi-cloud-arrow-up me-1"></i> Global S3 Settings
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">Configure S3-compatible storage for offsite repository sync. These credentials can be shared by all backup plans using the S3 Sync plugin with "Use Global S3 Settings".</p>
+
+                    <?php
+                    $s3Service = new \BBS\Services\S3SyncService();
+                    $rcloneInstalled = $s3Service->isRcloneInstalled();
+                    ?>
+                    <?php if (!$rcloneInstalled): ?>
+                    <div class="alert alert-warning py-2 px-3 small mb-3">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        <strong>rclone not installed.</strong> S3 sync requires rclone. Install with: <code>apt install rclone</code>
+                    </div>
                     <?php endif; ?>
-                    <div class="col-5 text-muted">Server Sync</div>
-                    <div class="col-7">
-                        <?php if ($s3SyncServerBackups): ?>
-                        <span class="badge bg-success">Enabled</span>
-                        <?php else: ?>
-                        <span class="badge bg-secondary">Disabled</span>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">S3 Endpoint URL</label>
+                        <input type="text" class="form-control" name="s3_endpoint" value="<?= htmlspecialchars($settings['s3_endpoint'] ?? '') ?>" placeholder="e.g. s3.amazonaws.com">
+                        <div class="form-text">The S3 API endpoint for your provider and region. Check your provider's documentation for the correct URL.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Region</label>
+                        <input type="text" class="form-control" name="s3_region" value="<?= htmlspecialchars($settings['s3_region'] ?? '') ?>" placeholder="us-east-1">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Bucket Name</label>
+                        <input type="text" class="form-control" name="s3_bucket" value="<?= htmlspecialchars($settings['s3_bucket'] ?? '') ?>" placeholder="my-backup-bucket">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Access Key ID</label>
+                        <input type="text" class="form-control" name="s3_access_key" id="s3_access_key" value="" autocomplete="new-password" placeholder="<?= !empty($settings['s3_access_key']) ? '(unchanged if empty)' : '' ?>">
+                        <?php if (!empty($settings['s3_access_key'])): ?>
+                            <div class="form-text">A value is saved. Leave empty to keep it unchanged.</div>
                         <?php endif; ?>
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Secret Access Key</label>
+                        <input type="text" class="form-control" name="s3_secret_key" id="s3_secret_key" value="" autocomplete="new-password" placeholder="<?= !empty($settings['s3_secret_key']) ? '(unchanged if empty)' : '' ?>">
+                        <?php if (!empty($settings['s3_secret_key'])): ?>
+                            <div class="form-text">A value is saved. Leave empty to keep it unchanged.</div>
+                        <?php endif; ?>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Path Prefix</label>
+                        <input type="text" class="form-control" name="s3_path_prefix" value="<?= htmlspecialchars($settings['s3_path_prefix'] ?? '') ?>" placeholder="Optional subfolder in bucket">
+                        <div class="form-text">Repos sync to: <code>bucket/prefix/agent-name/repo-name/</code></div>
+                    </div>
+
+                    <hr>
+                    <div class="form-check mb-3">
+                        <input type="hidden" name="s3_sync_server_backups" value="0">
+                        <input class="form-check-input" type="checkbox" name="s3_sync_server_backups" id="s3_sync_server_backups" value="1" <?= ($settings['s3_sync_server_backups'] ?? '0') === '1' ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="s3_sync_server_backups">
+                            Sync server backups to off-site storage daily
+                        </label>
+                        <div class="form-text">Uploads the 7 most recent server backups from <code>/var/bbs/backups/</code> and removes older ones from S3.</div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-sm btn-warning">
+                            <i class="bi bi-check-lg me-1"></i> Save S3 Settings
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnTestS3">
+                            <i class="bi bi-plug me-1"></i> Test Connection
+                        </button>
+                        <span id="s3TestResult" class="d-flex align-items-center ms-2 small"></span>
+                    </div>
                 </div>
-                <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Configured</span>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+                    <i class="bi bi-info-circle me-1"></i> How It Works
+                </div>
+                <div class="card-body">
+                    <ol class="small mb-0">
+                        <li class="mb-2">Configure your S3 credentials here (or use custom credentials per-config on the Plugins tab).</li>
+                        <li class="mb-2">Enable the <strong>S3 Offsite Sync</strong> plugin on your client's Plugins tab.</li>
+                        <li class="mb-2">Create a named config (e.g. "Production S3") and choose "Use Global S3 Settings" or enter custom credentials.</li>
+                        <li class="mb-2">Attach the config to a backup plan.</li>
+                        <li class="mb-2">After each prune/compact cycle, the server automatically syncs the borg repository to S3 using <code>rclone sync</code>.</li>
+                        <li class="mb-2">Only changed segments are uploaded — borg's append-only data format makes this naturally efficient.</li>
+                    </ol>
+                    <hr>
+                    <div class="small text-muted">
+                        <strong>Supported providers:</strong> AWS S3, Backblaze B2, Wasabi, MinIO, DigitalOcean Spaces, and any S3-compatible endpoint.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<script>
+document.getElementById('btnTestS3')?.addEventListener('click', function() {
+    var btn = this;
+    var result = document.getElementById('s3TestResult');
+    btn.disabled = true;
+    result.textContent = 'Testing...';
+    result.className = 'd-flex align-items-center ms-2 small text-muted';
+    fetch('/storage-locations/s3/test', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'csrf_token=' + encodeURIComponent(document.querySelector('input[name=csrf_token]').value)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        btn.disabled = false;
+        if (data.success) {
+            result.textContent = 'Success';
+            result.className = 'd-flex align-items-center ms-2 small text-success fw-semibold';
+        } else {
+            result.textContent = 'Failed: ' + data.error;
+            result.className = 'd-flex align-items-center ms-2 small text-danger fw-semibold';
+        }
+    })
+    .catch(function() {
+        btn.disabled = false;
+        result.textContent = 'Request failed.';
+        result.className = 'd-flex align-items-center ms-2 small text-danger fw-semibold';
+    });
+});
+</script>
+<?php endif; ?>
+
+<?php if ($section === 'wizard'): ?>
+<!-- Add Remote Storage Host Wizard -->
+<a href="/storage-locations?section=remote" class="text-decoration-none small">
+    <i class="bi bi-arrow-left me-1"></i> Back to Remote Storage
+</a>
+
+<h5 class="mt-3 mb-1">Add Remote Storage Host</h5>
+<p class="text-muted small mb-4">Choose your provider to get started, or use Custom for any SSH-accessible server with borg client.</p>
+
+<div id="wizardProviders" class="row g-3 mb-4">
+    <!-- BorgBase -->
+    <div class="col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100 text-center" style="cursor:pointer;background:rgba(200,170,50,0.10)" onclick="showWizardForm('borgbase')">
+            <div class="card-body py-4">
+                <img src="/images/borgbase.svg" alt="BorgBase" class="mb-3" style="width:48px;height:48px;border-radius:50%">
+                <h6 class="mb-1">BorgBase</h6>
+                <p class="text-muted small mb-2">Simple and Secure</p>
+                <span class="btn btn-sm btn-dark">Setup</span>
+            </div>
+        </div>
+    </div>
+    <!-- Hetzner -->
+    <div class="col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100 text-center" style="cursor:pointer;background:rgba(220,50,50,0.08)" onclick="showWizardForm('hetzner')">
+            <div class="card-body py-4">
+                <img src="/images/hetzner-h.png" alt="Hetzner" class="mb-3" style="width:48px;height:48px;border-radius:50%">
+                <h6 class="mb-1">Hetzner</h6>
+                <p class="text-muted small mb-2">Affordable Storage Boxes</p>
+                <span class="btn btn-sm btn-danger">Setup</span>
+            </div>
+        </div>
+    </div>
+    <!-- rsync.net -->
+    <div class="col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100 text-center" style="cursor:pointer;background:rgba(60,80,120,0.08)" onclick="showWizardForm('rsyncnet')">
+            <div class="card-body py-4">
+                <img src="/images/rsyncnet-logo.png" alt="rsync.net" class="mb-3" style="height:48px;border-radius:8px">
+                <h6 class="mb-1">rsync.net</h6>
+                <p class="text-muted small mb-2">Cloud Storage for Borg</p>
+                <span class="btn btn-sm" style="background:#3c5078;color:#fff">Setup</span>
+            </div>
+        </div>
+    </div>
+    <!-- Custom -->
+    <div class="col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100 text-center" style="cursor:pointer" data-bs-toggle="modal" data-bs-target="#addRemoteSshModal">
+            <div class="card-body py-4">
+                <div class="rounded-circle bg-secondary bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width:48px;height:48px">
+                    <i class="bi bi-gear fs-4 text-secondary"></i>
+                </div>
+                <h6 class="mb-1">Custom</h6>
+                <p class="text-muted small mb-2">Any SSH server with borg</p>
+                <span class="btn btn-sm btn-outline-secondary">Setup</span>
             </div>
         </div>
     </div>
 </div>
+
+<!-- BorgBase Wizard Form -->
+<div id="wizardBorgbase" style="display:none">
+    <div class="card border-0 shadow-sm">
+        <div class="card-header fw-semibold" style="background:rgba(200,170,50,0.12)">
+            <img src="/images/borgbase.svg" alt="" style="width:18px;height:18px;border-radius:50%;vertical-align:text-bottom" class="me-1"> BorgBase Setup
+        </div>
+        <div class="card-body">
+            <p class="text-muted small mb-3">Paste the SSH connection string from your <a href="https://www.borgbase.com" target="_blank">BorgBase</a> repository page, then paste your SSH private key below.</p>
+
+            <form method="POST" action="/remote-ssh-configs/create" id="borgbaseWizardForm">
+                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                <input type="hidden" name="provider" value="borgbase">
+                <input type="hidden" name="borg_remote_path" value="">
+                <!-- append_repo_name intentionally omitted = 0 for BorgBase -->
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Connection String</label>
+                    <input type="text" class="form-control" id="bbConnString" placeholder="ssh://username@username.repo.borgbase.com/./repo">
+                    <div class="form-text">Find this on your BorgBase repo page under "Repository".</div>
+                </div>
+
+                <!-- Parsed details -->
+                <div id="bbParsedDetails" class="alert alert-light border small py-2 px-3 mb-3" style="display:none">
+                    <div class="row g-2">
+                        <div class="col-sm-6"><strong>Host:</strong> <span id="bbParsedHost"></span></div>
+                        <div class="col-sm-6"><strong>User:</strong> <span id="bbParsedUser"></span></div>
+                        <div class="col-sm-6"><strong>Port:</strong> <span id="bbParsedPort"></span></div>
+                        <div class="col-sm-6"><strong>Path:</strong> <span id="bbParsedPath"></span></div>
+                    </div>
+                </div>
+
+                <div id="bbParseError" class="alert alert-danger small py-2 px-3 mb-3" style="display:none">
+                    <i class="bi bi-exclamation-triangle me-1"></i> Could not parse connection string. Expected format: <code>ssh://user@host/path</code>
+                </div>
+
+                <!-- Hidden fields populated by JS -->
+                <input type="hidden" name="remote_host" id="bbFieldHost">
+                <input type="hidden" name="remote_port" id="bbFieldPort" value="22">
+                <input type="hidden" name="remote_user" id="bbFieldUser">
+                <input type="hidden" name="remote_base_path" id="bbFieldPath" value="./repo">
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">SSH Private Key</label>
+                    <textarea class="form-control font-monospace" name="ssh_private_key" id="bbSshKey" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;..." required></textarea>
+                    <div class="form-text">Paste the private key that matches the public key you added to BorgBase.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Name</label>
+                    <input type="text" class="form-control" name="name" id="bbName" placeholder="e.g., BorgBase - my-repo" required>
+                    <div class="form-text">A friendly name to identify this host in BBS.</div>
+                </div>
+
+                <div id="bbTestResult" style="display:none" class="mb-3"></div>
+
+                <div class="d-flex gap-2 align-items-center">
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="bbTestBtn" disabled onclick="testBorgbaseConnection()">
+                        <i class="bi bi-plug me-1"></i> Test Connection
+                    </button>
+                    <button type="submit" class="btn btn-sm btn-primary" id="bbSubmitBtn" style="display:none">
+                        <i class="bi bi-plus-lg me-1"></i> Add Host
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="hideWizardForm()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Hetzner Storage Box Wizard Form -->
+<div id="wizardHetzner" style="display:none">
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-danger bg-opacity-10 fw-semibold">
+            <img src="/images/hetzner-h.png" alt="" style="width:18px;height:18px;border-radius:50%;vertical-align:text-bottom" class="me-1"> Hetzner Storage Box Setup
+        </div>
+        <div class="card-body">
+            <p class="text-muted small mb-3">Enter the connection details from your <a href="https://www.hetzner.com/storage/storage-box" target="_blank">Hetzner Storage Box</a> control panel.</p>
+
+            <form method="POST" action="/remote-ssh-configs/create" id="hetznerWizardForm">
+                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                <input type="hidden" name="provider" value="hetzner">
+                <input type="hidden" name="remote_port" value="23">
+                <input type="hidden" name="remote_base_path" value="./">
+                <input type="hidden" name="append_repo_name" value="1">
+
+                <div class="row g-3 mb-3">
+                    <div class="col-sm-6">
+                        <label class="form-label fw-semibold">Hostname</label>
+                        <input type="text" class="form-control" id="hzHostname" name="remote_host" placeholder="uXXXXXX.your-storagebox.de" required>
+                        <div class="form-text">Found in your Hetzner Robot panel.</div>
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="form-label fw-semibold">Username</label>
+                        <input type="text" class="form-control" id="hzUsername" name="remote_user" placeholder="uXXXXXX" required>
+                        <div class="form-text">Your Storage Box username.</div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">SSH Private Key</label>
+                    <textarea class="form-control font-monospace" name="ssh_private_key" id="hzSshKey" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;..." required></textarea>
+                    <div class="form-text">Paste the private key that matches the public key you added to your Storage Box.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Borg Version</label>
+                    <select class="form-select" id="hzBorgVersion" name="borg_remote_path">
+                        <option value="borg-1.4">borg 1.4 (Recommended)</option>
+                        <option value="borg-1.2">borg 1.2</option>
+                        <option value="borg-1.1">borg 1.1</option>
+                    </select>
+                    <div class="form-text">Hetzner provides multiple borg versions. This is passed as <code>--remote-path</code> in all borg commands.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Name</label>
+                    <input type="text" class="form-control" name="name" id="hzName" placeholder="e.g., Hetzner - uXXXXXX" required>
+                    <div class="form-text">A friendly name to identify this host in BBS.</div>
+                </div>
+
+                <!-- Parsed summary -->
+                <div id="hzParsedDetails" class="alert alert-light border small py-2 px-3 mb-3" style="display:none">
+                    <div class="row g-2">
+                        <div class="col-sm-6"><strong>Host:</strong> <span id="hzParsedHost"></span></div>
+                        <div class="col-sm-6"><strong>User:</strong> <span id="hzParsedUser"></span></div>
+                        <div class="col-sm-6"><strong>Port:</strong> 23</div>
+                        <div class="col-sm-6"><strong>Path:</strong> ./<em>&lt;repo-name&gt;</em></div>
+                        <div class="col-sm-6"><strong>Borg:</strong> <span id="hzParsedBorg"></span></div>
+                    </div>
+                </div>
+
+                <div id="hzTestResult" style="display:none" class="mb-3"></div>
+
+                <div class="d-flex gap-2 align-items-center">
+                    <button type="button" class="btn btn-sm btn-outline-danger" id="hzTestBtn" disabled onclick="testHetznerConnection()">
+                        <i class="bi bi-plug me-1"></i> Test Connection
+                    </button>
+                    <button type="submit" class="btn btn-sm btn-danger" id="hzSubmitBtn" style="display:none">
+                        <i class="bi bi-plus-lg me-1"></i> Add Host
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="hideWizardForm()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- rsync.net Wizard Form -->
+<div id="wizardRsyncnet" style="display:none">
+    <div class="card border-0 shadow-sm">
+        <div class="card-header fw-semibold" style="background:rgba(60,80,120,0.10)">
+            <i class="bi bi-hdd-rack me-1"></i> rsync.net Setup
+        </div>
+        <div class="card-body">
+            <p class="text-muted small mb-3">Enter the connection details from your <a href="https://www.rsync.net/products/borg.html" target="_blank">rsync.net</a> account.</p>
+
+            <form method="POST" action="/remote-ssh-configs/create" id="rsyncnetWizardForm">
+                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                <input type="hidden" name="provider" value="rsync.net">
+                <input type="hidden" name="remote_port" value="22">
+                <input type="hidden" name="remote_base_path" value="./">
+                <input type="hidden" name="append_repo_name" value="1">
+
+                <div class="row g-3 mb-3">
+                    <div class="col-sm-6">
+                        <label class="form-label fw-semibold">Username</label>
+                        <input type="text" class="form-control" id="rsnUsername" name="remote_user" placeholder="deXXXX" required>
+                        <div class="form-text">Your rsync.net account ID.</div>
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="form-label fw-semibold">Hostname</label>
+                        <input type="text" class="form-control" id="rsnHostname" name="remote_host" placeholder="deXXXX.rsync.net" required>
+                        <div class="form-text">Your rsync.net SSH hostname.</div>
+                    </div>
+                </div>
+
+                <div class="alert alert-warning small py-2 px-3 mb-3">
+                    <i class="bi bi-key me-1"></i> <strong>SSH Key Setup</strong> &mdash; <code>ssh-copy-id</code> does not work with rsync.net. Create and copy your key manually:
+                    <pre class="mt-2 mb-0 bg-dark text-light p-2 rounded small" style="white-space:pre-wrap"><code># Generate a new key pair
+ssh-keygen -t ed25519 -C "rsync.net" -f ~/.ssh/rsyncnet
+
+# Copy the public key to rsync.net
+scp ~/.ssh/rsyncnet.pub <span class="text-warning" id="rsnScpUser">USERNAME</span>@<span class="text-warning" id="rsnScpHost">USERNAME.rsync.net</span>:.ssh/authorized_keys</code></pre>
+                    <div class="mt-2">Then paste your <strong>private</strong> key (<code>cat ~/.ssh/rsyncnet</code>) into the box below.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">SSH Private Key</label>
+                    <textarea class="form-control font-monospace" name="ssh_private_key" id="rsnSshKey" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;..." required></textarea>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Remote Borg Version</label>
+                    <select class="form-select" id="rsnBorgVersion" name="borg_remote_path">
+                        <option value="borg12">Borg 1.2.x &mdash; remote command: borg12</option>
+                        <option value="borg14">Borg 1.4.x &mdash; remote command: borg14</option>
+                    </select>
+                    <div class="form-text">rsync.net provides multiple borg versions. This is passed as <code>--remote-path</code> in all borg commands.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Name</label>
+                    <input type="text" class="form-control" name="name" id="rsnName" placeholder="e.g., rsync.net - deXXXX" required>
+                    <div class="form-text">A friendly name to identify this host in BBS.</div>
+                </div>
+
+                <!-- Parsed summary -->
+                <div id="rsnParsedDetails" class="alert alert-light border small py-2 px-3 mb-3" style="display:none">
+                    <div class="row g-2">
+                        <div class="col-sm-6"><strong>Host:</strong> <span id="rsnParsedHost"></span></div>
+                        <div class="col-sm-6"><strong>User:</strong> <span id="rsnParsedUser"></span></div>
+                        <div class="col-sm-6"><strong>Port:</strong> 22</div>
+                        <div class="col-sm-6"><strong>Path:</strong> ./<em>&lt;repo-name&gt;</em></div>
+                        <div class="col-sm-6"><strong>Borg:</strong> <span id="rsnParsedBorg"></span></div>
+                    </div>
+                </div>
+
+                <div id="rsnTestResult" style="display:none" class="mb-3"></div>
+
+                <div class="d-flex gap-2 align-items-center">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="rsnTestBtn" disabled onclick="testRsyncnetConnection()" style="border-color:#3c5078;color:#3c5078">
+                        <i class="bi bi-plug me-1"></i> Test Connection
+                    </button>
+                    <button type="submit" class="btn btn-sm" id="rsnSubmitBtn" style="display:none;background:#3c5078;color:#fff">
+                        <i class="bi bi-plus-lg me-1"></i> Add Host
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="hideWizardForm()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function showWizardForm(provider) {
+    document.getElementById('wizardProviders').style.display = 'none';
+    document.getElementById('wizard' + provider.charAt(0).toUpperCase() + provider.slice(1)).style.display = 'block';
+}
+function hideWizardForm() {
+    document.querySelectorAll('[id^="wizard"]').forEach(function(el) {
+        if (el.id === 'wizardProviders') { el.style.display = ''; }
+        else if (el.id.startsWith('wizard') && el.id !== 'wizardProviders') { el.style.display = 'none'; }
+    });
+    // Reset BorgBase form
+    document.getElementById('borgbaseWizardForm').reset();
+    bbTestPassed = false;
+    document.getElementById('bbParsedDetails').style.display = 'none';
+    document.getElementById('bbParseError').style.display = 'none';
+    document.getElementById('bbTestBtn').disabled = true;
+    document.getElementById('bbSubmitBtn').style.display = 'none';
+    document.getElementById('bbTestResult').style.display = 'none';
+    // Reset Hetzner form
+    document.getElementById('hetznerWizardForm').reset();
+    hzTestPassed = false;
+    document.getElementById('hzParsedDetails').style.display = 'none';
+    document.getElementById('hzTestBtn').disabled = true;
+    document.getElementById('hzSubmitBtn').style.display = 'none';
+    document.getElementById('hzTestResult').style.display = 'none';
+    hzNameUserEdited = false;
+    // Reset rsync.net form
+    document.getElementById('rsyncnetWizardForm').reset();
+    rsnTestPassed = false;
+    document.getElementById('rsnParsedDetails').style.display = 'none';
+    document.getElementById('rsnTestBtn').disabled = true;
+    document.getElementById('rsnSubmitBtn').style.display = 'none';
+    document.getElementById('rsnTestResult').style.display = 'none';
+    document.getElementById('rsnScpUser').textContent = 'USERNAME';
+    document.getElementById('rsnScpHost').textContent = 'USERNAME.rsync.net';
+    rsnNameUserEdited = false;
+}
+
+// BorgBase connection string parser
+document.getElementById('bbConnString').addEventListener('input', function() {
+    bbTestPassed = false;
+    var value = this.value.trim();
+    var match = value.match(/^ssh:\/\/([^@]+)@([^:\/]+)(?::(\d+))?(\/.*)?$/);
+    var detailsEl = document.getElementById('bbParsedDetails');
+    var errorEl = document.getElementById('bbParseError');
+
+    if (match) {
+        var user = match[1];
+        var host = match[2];
+        var port = match[3] || '22';
+        var path = match[4] || '/./repo';
+        if (path.startsWith('/./')) path = '.' + path.slice(2);
+        else if (path.startsWith('/')) path = '.' + path;
+
+        document.getElementById('bbParsedHost').textContent = host;
+        document.getElementById('bbParsedUser').textContent = user;
+        document.getElementById('bbParsedPort').textContent = port;
+        document.getElementById('bbParsedPath').textContent = path;
+
+        document.getElementById('bbFieldHost').value = host;
+        document.getElementById('bbFieldPort').value = port;
+        document.getElementById('bbFieldUser').value = user;
+        document.getElementById('bbFieldPath').value = path;
+
+        var nameField = document.getElementById('bbName');
+        if (!nameField.dataset.userEdited) {
+            nameField.value = 'BorgBase - ' + user;
+        }
+
+        detailsEl.style.display = 'block';
+        errorEl.style.display = 'none';
+        updateBbSubmit();
+    } else if (value.length > 5) {
+        detailsEl.style.display = 'none';
+        errorEl.style.display = 'block';
+        document.getElementById('bbFieldHost').value = '';
+        document.getElementById('bbSubmitBtn').disabled = true;
+    } else {
+        detailsEl.style.display = 'none';
+        errorEl.style.display = 'none';
+        document.getElementById('bbSubmitBtn').disabled = true;
+    }
+});
+
+document.getElementById('bbName').addEventListener('input', function() {
+    this.dataset.userEdited = '1';
+});
+
+var bbTestPassed = false;
+
+function updateBbSubmit() {
+    var host = document.getElementById('bbFieldHost').value;
+    var key = document.getElementById('bbSshKey').value.trim();
+    var name = document.getElementById('bbName').value.trim();
+    var canTest = !!(host && key);
+    document.getElementById('bbTestBtn').disabled = !canTest;
+    if (!bbTestPassed) {
+        document.getElementById('bbSubmitBtn').style.display = 'none';
+        document.getElementById('bbTestResult').style.display = 'none';
+    } else {
+        document.getElementById('bbSubmitBtn').style.display = name ? '' : 'none';
+    }
+}
+document.getElementById('bbSshKey').addEventListener('input', function() { bbTestPassed = false; updateBbSubmit(); });
+document.getElementById('bbName').addEventListener('input', updateBbSubmit);
+
+function testBorgbaseConnection() {
+    var btn = document.getElementById('bbTestBtn');
+    var resultDiv = document.getElementById('bbTestResult');
+    var submitBtn = document.getElementById('bbSubmitBtn');
+    var nameField = document.getElementById('bbName');
+
+    bbTestPassed = false;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Testing...';
+    resultDiv.style.display = 'none';
+    submitBtn.style.display = 'none';
+
+    var formData = new URLSearchParams();
+    formData.append('csrf_token', document.querySelector('#borgbaseWizardForm [name=csrf_token]').value);
+    formData.append('remote_host', document.getElementById('bbFieldHost').value);
+    formData.append('remote_port', document.getElementById('bbFieldPort').value);
+    formData.append('remote_user', document.getElementById('bbFieldUser').value);
+    formData.append('ssh_private_key', document.getElementById('bbSshKey').value);
+    formData.append('borg_remote_path', '');
+
+    fetch('/remote-ssh-configs/test-new', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: formData.toString()
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        resultDiv.style.display = 'block';
+        if (data.status === 'ok') {
+            bbTestPassed = true;
+            resultDiv.innerHTML = '<div class="alert alert-success small py-2 px-3 mb-0"><i class="bi bi-check-circle me-1"></i> Connected — ' + (data.version || 'borg detected').replace(/</g, '&lt;') + '</div>';
+            if (nameField.value.trim()) {
+                submitBtn.style.display = '';
+            }
+        } else {
+            resultDiv.innerHTML = '<div class="alert alert-danger small py-2 px-3 mb-0"><i class="bi bi-x-circle me-1"></i> ' + (data.error || 'Connection failed').replace(/</g, '&lt;') + '</div>';
+        }
+    })
+    .catch(function() {
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = '<div class="alert alert-danger small py-2 px-3 mb-0"><i class="bi bi-x-circle me-1"></i> Request failed</div>';
+    })
+    .finally(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-plug me-1"></i> Test Connection';
+    });
+}
+
+// ---- Hetzner Storage Box wizard ----
+var hzTestPassed = false;
+var hzNameUserEdited = false;
+
+function updateHzParsedDetails() {
+    var host = document.getElementById('hzHostname').value.trim();
+    var user = document.getElementById('hzUsername').value.trim();
+    var borg = document.getElementById('hzBorgVersion').value;
+    var detailsEl = document.getElementById('hzParsedDetails');
+
+    if (host && user) {
+        document.getElementById('hzParsedHost').textContent = host;
+        document.getElementById('hzParsedUser').textContent = user;
+        document.getElementById('hzParsedBorg').textContent = borg;
+        detailsEl.style.display = 'block';
+    } else {
+        detailsEl.style.display = 'none';
+    }
+}
+
+function updateHzSubmit() {
+    var host = document.getElementById('hzHostname').value.trim();
+    var user = document.getElementById('hzUsername').value.trim();
+    var key = document.getElementById('hzSshKey').value.trim();
+    var name = document.getElementById('hzName').value.trim();
+    var canTest = !!(host && user && key);
+    document.getElementById('hzTestBtn').disabled = !canTest;
+    if (!hzTestPassed) {
+        document.getElementById('hzSubmitBtn').style.display = 'none';
+        document.getElementById('hzTestResult').style.display = 'none';
+    } else {
+        document.getElementById('hzSubmitBtn').style.display = name ? '' : 'none';
+    }
+}
+
+function updateHzName() {
+    if (!hzNameUserEdited) {
+        var user = document.getElementById('hzUsername').value.trim();
+        if (user) {
+            document.getElementById('hzName').value = 'Hetzner - ' + user;
+        }
+    }
+}
+
+document.getElementById('hzHostname').addEventListener('input', function() {
+    hzTestPassed = false;
+    updateHzParsedDetails();
+    updateHzName();
+    updateHzSubmit();
+});
+document.getElementById('hzUsername').addEventListener('input', function() {
+    hzTestPassed = false;
+    updateHzParsedDetails();
+    updateHzName();
+    updateHzSubmit();
+});
+document.getElementById('hzSshKey').addEventListener('input', function() {
+    hzTestPassed = false;
+    updateHzSubmit();
+});
+document.getElementById('hzBorgVersion').addEventListener('change', function() {
+    hzTestPassed = false;
+    updateHzParsedDetails();
+    updateHzSubmit();
+});
+document.getElementById('hzName').addEventListener('input', function() {
+    hzNameUserEdited = true;
+    updateHzSubmit();
+});
+
+function testHetznerConnection() {
+    var btn = document.getElementById('hzTestBtn');
+    var resultDiv = document.getElementById('hzTestResult');
+    var submitBtn = document.getElementById('hzSubmitBtn');
+    var nameField = document.getElementById('hzName');
+
+    hzTestPassed = false;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Testing...';
+    resultDiv.style.display = 'none';
+    submitBtn.style.display = 'none';
+
+    var formData = new URLSearchParams();
+    formData.append('csrf_token', document.querySelector('#hetznerWizardForm [name=csrf_token]').value);
+    formData.append('remote_host', document.getElementById('hzHostname').value.trim());
+    formData.append('remote_port', '23');
+    formData.append('remote_user', document.getElementById('hzUsername').value.trim());
+    formData.append('ssh_private_key', document.getElementById('hzSshKey').value);
+    formData.append('borg_remote_path', document.getElementById('hzBorgVersion').value);
+
+    fetch('/remote-ssh-configs/test-new', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: formData.toString()
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        resultDiv.style.display = 'block';
+        if (data.status === 'ok') {
+            hzTestPassed = true;
+            resultDiv.innerHTML = '<div class="alert alert-success small py-2 px-3 mb-0"><i class="bi bi-check-circle me-1"></i> Connected — ' + (data.version || 'borg detected').replace(/</g, '&lt;') + '</div>';
+            if (nameField.value.trim()) {
+                submitBtn.style.display = '';
+            }
+        } else {
+            resultDiv.innerHTML = '<div class="alert alert-danger small py-2 px-3 mb-0"><i class="bi bi-x-circle me-1"></i> ' + (data.error || 'Connection failed').replace(/</g, '&lt;') + '</div>';
+        }
+    })
+    .catch(function() {
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = '<div class="alert alert-danger small py-2 px-3 mb-0"><i class="bi bi-x-circle me-1"></i> Request failed</div>';
+    })
+    .finally(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-plug me-1"></i> Test Connection';
+    });
+}
+
+// ---- rsync.net wizard ----
+var rsnTestPassed = false;
+var rsnNameUserEdited = false;
+
+function updateRsnParsedDetails() {
+    var host = document.getElementById('rsnHostname').value.trim();
+    var user = document.getElementById('rsnUsername').value.trim();
+    var borg = document.getElementById('rsnBorgVersion').value;
+    var detailsEl = document.getElementById('rsnParsedDetails');
+
+    if (host && user) {
+        document.getElementById('rsnParsedHost').textContent = host;
+        document.getElementById('rsnParsedUser').textContent = user;
+        document.getElementById('rsnParsedBorg').textContent = borg;
+        detailsEl.style.display = 'block';
+    } else {
+        detailsEl.style.display = 'none';
+    }
+}
+
+function updateRsnScpExample() {
+    var user = document.getElementById('rsnUsername').value.trim();
+    var host = document.getElementById('rsnHostname').value.trim();
+    document.getElementById('rsnScpUser').textContent = user || 'USERNAME';
+    document.getElementById('rsnScpHost').textContent = host || 'USERNAME.rsync.net';
+}
+
+function updateRsnSubmit() {
+    var host = document.getElementById('rsnHostname').value.trim();
+    var user = document.getElementById('rsnUsername').value.trim();
+    var key = document.getElementById('rsnSshKey').value.trim();
+    var name = document.getElementById('rsnName').value.trim();
+    var canTest = !!(host && user && key);
+    document.getElementById('rsnTestBtn').disabled = !canTest;
+    if (!rsnTestPassed) {
+        document.getElementById('rsnSubmitBtn').style.display = 'none';
+        document.getElementById('rsnTestResult').style.display = 'none';
+    } else {
+        document.getElementById('rsnSubmitBtn').style.display = name ? '' : 'none';
+    }
+}
+
+function updateRsnName() {
+    if (!rsnNameUserEdited) {
+        var user = document.getElementById('rsnUsername').value.trim();
+        if (user) {
+            document.getElementById('rsnName').value = 'rsync.net - ' + user;
+        }
+    }
+}
+
+document.getElementById('rsnUsername').addEventListener('input', function() {
+    rsnTestPassed = false;
+    updateRsnParsedDetails();
+    updateRsnScpExample();
+    updateRsnName();
+    updateRsnSubmit();
+});
+document.getElementById('rsnHostname').addEventListener('input', function() {
+    rsnTestPassed = false;
+    updateRsnParsedDetails();
+    updateRsnScpExample();
+    updateRsnSubmit();
+});
+document.getElementById('rsnSshKey').addEventListener('input', function() {
+    rsnTestPassed = false;
+    updateRsnSubmit();
+});
+document.getElementById('rsnBorgVersion').addEventListener('change', function() {
+    rsnTestPassed = false;
+    updateRsnParsedDetails();
+    updateRsnSubmit();
+});
+document.getElementById('rsnName').addEventListener('input', function() {
+    rsnNameUserEdited = true;
+    updateRsnSubmit();
+});
+
+function testRsyncnetConnection() {
+    var btn = document.getElementById('rsnTestBtn');
+    var resultDiv = document.getElementById('rsnTestResult');
+    var submitBtn = document.getElementById('rsnSubmitBtn');
+    var nameField = document.getElementById('rsnName');
+
+    rsnTestPassed = false;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Testing...';
+    resultDiv.style.display = 'none';
+    submitBtn.style.display = 'none';
+
+    var formData = new URLSearchParams();
+    formData.append('csrf_token', document.querySelector('#rsyncnetWizardForm [name=csrf_token]').value);
+    formData.append('remote_host', document.getElementById('rsnHostname').value.trim());
+    formData.append('remote_port', '22');
+    formData.append('remote_user', document.getElementById('rsnUsername').value.trim());
+    formData.append('ssh_private_key', document.getElementById('rsnSshKey').value);
+    formData.append('borg_remote_path', document.getElementById('rsnBorgVersion').value);
+
+    fetch('/remote-ssh-configs/test-new', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: formData.toString()
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        resultDiv.style.display = 'block';
+        if (data.status === 'ok') {
+            rsnTestPassed = true;
+            resultDiv.innerHTML = '<div class="alert alert-success small py-2 px-3 mb-0"><i class="bi bi-check-circle me-1"></i> Connected — ' + (data.version || 'borg detected').replace(/</g, '&lt;') + '</div>';
+            if (nameField.value.trim()) {
+                submitBtn.style.display = '';
+            }
+        } else {
+            resultDiv.innerHTML = '<div class="alert alert-danger small py-2 px-3 mb-0"><i class="bi bi-x-circle me-1"></i> ' + (data.error || 'Connection failed').replace(/</g, '&lt;') + '</div>';
+        }
+    })
+    .catch(function() {
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = '<div class="alert alert-danger small py-2 px-3 mb-0"><i class="bi bi-x-circle me-1"></i> Request failed</div>';
+    })
+    .finally(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-plug me-1"></i> Test Connection';
+    });
+}
+</script>
+
+<!-- Add Remote SSH Host Modal (Custom) -->
+<div class="modal fade" id="addRemoteSshModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="/remote-ssh-configs/create">
+                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Remote SSH Host</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Name</label>
+                        <input type="text" class="form-control" name="name" placeholder="e.g., rsync.net Production" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Provider Preset</label>
+                        <select class="form-select" onchange="applyRemotePreset(this, this.closest('form'))">
+                            <option value="">Custom</option>
+                            <option value="rsync.net">rsync.net</option>
+                            <option value="borgbase">BorgBase</option>
+                            <option value="hetzner">Hetzner Storage Box</option>
+                        </select>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-8">
+                            <label class="form-label fw-semibold">Host</label>
+                            <input type="text" class="form-control" name="remote_host" placeholder="ch-s010.rsync.net" required>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label fw-semibold">Port</label>
+                            <input type="number" class="form-control" name="remote_port" value="22" min="1" max="65535">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Username</label>
+                        <input type="text" class="form-control" name="remote_user" placeholder="12345" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Base Path</label>
+                        <input type="text" class="form-control" name="remote_base_path" value="./">
+                        <div class="form-text">Base directory on the remote host. Use <code>./</code> for relative paths (rsync.net default).</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">SSH Private Key</label>
+                        <textarea class="form-control font-monospace" name="ssh_private_key" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;..." required></textarea>
+                        <div class="form-text">Paste the private key (PEM format). The corresponding public key must be authorized on the remote host.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Remote Borg Path <span class="text-muted fw-normal">(optional)</span></label>
+                        <input type="text" class="form-control" name="borg_remote_path" placeholder="">
+                        <div class="form-text">Custom borg binary on the remote host (e.g., <code>borg1</code> for rsync.net). Leave blank for default <code>borg</code>.</div>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="append_repo_name" value="1" id="addAppendRepoName" checked>
+                        <label class="form-check-label" for="addAppendRepoName">Append repository name to base path</label>
+                        <div class="form-text">Uncheck for providers like BorgBase where each SSH user maps to a single fixed repo path.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Host</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <?php endif; ?>

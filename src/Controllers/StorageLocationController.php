@@ -47,18 +47,22 @@ class StorageLocationController extends Controller
         }
         unset($rsc);
 
-        // S3 settings
-        $settingsRows = $this->db->fetchAll("SELECT `key`, `value` FROM settings WHERE `key` IN ('s3_endpoint', 's3_bucket', 's3_region', 's3_path_prefix', 's3_sync_server_backups')");
+        // All settings (for S3 config form, storage_path, etc.)
+        $settingsRows = $this->db->fetchAll("SELECT `key`, `value` FROM settings");
         $settings = [];
         foreach ($settingsRows as $row) {
             $settings[$row['key']] = $row['value'];
         }
 
+        // Local repo count
+        $localRepoCount = (int) ($this->db->fetchOne("SELECT COUNT(*) as cnt FROM repositories WHERE storage_type = 'local' OR storage_type IS NULL")['cnt'] ?? 0);
+
         $this->view('storage-locations/index', [
-            'pageTitle' => 'Storage Locations',
+            'pageTitle' => 'Storage',
             'locations' => $locations,
             'remoteSshConfigs' => $remoteSshConfigs,
             'remoteRepoCount' => $remoteRepoCount,
+            'localRepoCount' => $localRepoCount,
             'settings' => $settings,
         ]);
     }
@@ -178,6 +182,74 @@ class StorageLocationController extends Controller
 
         $this->flash('success', "Storage location \"{$location['label']}\" deleted.");
         $this->redirect('/storage-locations');
+    }
+
+    /**
+     * POST /storage-locations/s3 — save global S3 settings.
+     */
+    public function saveS3(): void
+    {
+        $this->requireAdmin();
+        $this->verifyCsrf();
+
+        // Validate endpoint URL if provided
+        $endpoint = trim($_POST['s3_endpoint'] ?? '');
+        if (!empty($endpoint)) {
+            if (!preg_match('#^https?://#i', $endpoint)) {
+                $endpoint = 'https://' . $endpoint;
+                $_POST['s3_endpoint'] = $endpoint;
+            }
+            $parsed = parse_url($endpoint);
+            if (empty($parsed['host']) || !preg_match('/\.[a-z]{2,}$/i', $parsed['host'])) {
+                $this->flash('danger', 'S3 endpoint must be a valid URL (e.g. https://s3.us-east-1.amazonaws.com).');
+                $this->redirect('/storage-locations?section=s3');
+            }
+        }
+
+        $fields = ['s3_endpoint', 's3_region', 's3_bucket', 's3_path_prefix', 's3_sync_server_backups'];
+        foreach ($fields as $key) {
+            if (isset($_POST[$key])) {
+                $existing = $this->db->fetchOne("SELECT `key` FROM settings WHERE `key` = ?", [$key]);
+                if ($existing) {
+                    $this->db->update('settings', ['value' => $_POST[$key]], "`key` = ?", [$key]);
+                } else {
+                    $this->db->insert('settings', ['key' => $key, 'value' => $_POST[$key]]);
+                }
+            }
+        }
+
+        // Encrypt and save sensitive fields only if non-empty (preserve existing otherwise)
+        $sensitiveFields = ['s3_access_key', 's3_secret_key'];
+        foreach ($sensitiveFields as $key) {
+            $value = $_POST[$key] ?? '';
+            if (!empty($value)) {
+                $encrypted = \BBS\Services\Encryption::encrypt($value);
+                $existing = $this->db->fetchOne("SELECT `key` FROM settings WHERE `key` = ?", [$key]);
+                if ($existing) {
+                    $this->db->update('settings', ['value' => $encrypted], "`key` = ?", [$key]);
+                } else {
+                    $this->db->insert('settings', ['key' => $key, 'value' => $encrypted]);
+                }
+            }
+        }
+
+        $this->flash('success', 'S3 settings saved.');
+        $this->redirect('/storage-locations?section=s3');
+    }
+
+    /**
+     * POST /storage-locations/s3/test — test S3 connection with saved credentials.
+     */
+    public function testS3(): void
+    {
+        $this->requireAdmin();
+        $this->verifyCsrf();
+
+        $s3Service = new \BBS\Services\S3SyncService();
+        $creds = $s3Service->resolveCredentials(['credential_source' => 'global']);
+        $result = $s3Service->testConnection($creds);
+
+        $this->json($result);
     }
 
     /**

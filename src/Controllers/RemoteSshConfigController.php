@@ -29,7 +29,7 @@ class RemoteSshConfigController extends Controller
 
         if (empty($name) || empty($remoteHost) || empty($remoteUser) || empty($sshPrivateKey)) {
             $this->flash('danger', 'Name, host, user, and SSH private key are required.');
-            $this->redirect('/settings?tab=storage&section=remote');
+            $this->redirect('/storage-locations?section=remote');
         }
 
         if ($remotePort < 1 || $remotePort > 65535) {
@@ -58,7 +58,7 @@ class RemoteSshConfigController extends Controller
         ]);
 
         $this->flash('success', "Remote SSH host \"{$name}\" created.");
-        $this->redirect('/settings?tab=storage&section=remote');
+        $this->redirect('/storage-locations?section=remote');
     }
 
     /**
@@ -73,7 +73,7 @@ class RemoteSshConfigController extends Controller
         $existing = $this->db->fetchOne("SELECT * FROM remote_ssh_configs WHERE id = ?", [$id]);
         if (!$existing) {
             $this->flash('danger', 'Remote SSH config not found.');
-            $this->redirect('/settings?tab=storage&section=remote');
+            $this->redirect('/storage-locations?section=remote');
         }
 
         $name = trim($_POST['name'] ?? '');
@@ -87,7 +87,7 @@ class RemoteSshConfigController extends Controller
 
         if (empty($name) || empty($remoteHost) || empty($remoteUser)) {
             $this->flash('danger', 'Name, host, and user are required.');
-            $this->redirect('/settings?tab=storage&section=remote');
+            $this->redirect('/storage-locations?section=remote');
         }
 
         if ($remotePort < 1 || $remotePort > 65535) {
@@ -121,7 +121,7 @@ class RemoteSshConfigController extends Controller
         ]);
 
         $this->flash('success', "Remote SSH host \"{$name}\" updated.");
-        $this->redirect('/settings?tab=storage&section=remote');
+        $this->redirect('/storage-locations?section=remote');
     }
 
     /**
@@ -136,14 +136,14 @@ class RemoteSshConfigController extends Controller
         $config = $this->db->fetchOne("SELECT * FROM remote_ssh_configs WHERE id = ?", [$id]);
         if (!$config) {
             $this->flash('danger', 'Remote SSH config not found.');
-            $this->redirect('/settings?tab=storage&section=remote');
+            $this->redirect('/storage-locations?section=remote');
         }
 
         $remoteSshService = new RemoteSshService();
         $repoCount = $remoteSshService->getRepoCount($id);
         if ($repoCount > 0) {
             $this->flash('danger', "Cannot delete \"{$config['name']}\" — {$repoCount} repository/ies still use this host. Delete or migrate them first.");
-            $this->redirect('/settings?tab=storage&section=remote');
+            $this->redirect('/storage-locations?section=remote');
         }
 
         $this->db->delete('remote_ssh_configs', 'id = ?', [$id]);
@@ -154,7 +154,7 @@ class RemoteSshConfigController extends Controller
         ]);
 
         $this->flash('success', "Remote SSH host \"{$config['name']}\" deleted.");
-        $this->redirect('/settings?tab=storage&section=remote');
+        $this->redirect('/storage-locations?section=remote');
     }
 
     /**

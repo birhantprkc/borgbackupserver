@@ -18,39 +18,10 @@ class SettingsController extends Controller
 
         $templates = $this->db->fetchAll("SELECT * FROM backup_templates ORDER BY name");
 
-        // Get current storage usage for the storage path (using df for accurate values)
-        $storagePath = $settings['storage_path'] ?? '/var/bbs';
-        $storageUsagePercent = 0;
-        $storageTotalBytes = 0;
-        $storageFreeBytes = 0;
-        $storageUsedBytes = 0;
-        $diskUsage = \BBS\Services\ServerStats::getDiskUsage($storagePath);
-        if ($diskUsage) {
-            $storageUsagePercent = $diskUsage['percent'];
-            $storageTotalBytes = $diskUsage['total'];
-            $storageFreeBytes = $diskUsage['free'];
-            $storageUsedBytes = $diskUsage['used'];
-        }
-
-        // Load remote SSH configs for the Remote Storage tab
-        $remoteSshService = new \BBS\Services\RemoteSshService();
-        $remoteSshConfigs = $remoteSshService->getAll();
-
-        // Repo counts by storage type
-        $localRepoCount = (int) ($this->db->fetchOne("SELECT COUNT(*) as cnt FROM repositories WHERE storage_type = 'local' OR storage_type IS NULL")['cnt'] ?? 0);
-        $remoteRepoCount = (int) ($this->db->fetchOne("SELECT COUNT(*) as cnt FROM repositories WHERE storage_type = 'remote_ssh'")['cnt'] ?? 0);
-
         $this->view('settings/index', [
             'pageTitle' => 'Settings',
             'settings' => $settings,
             'templates' => $templates,
-            'storageUsagePercent' => $storageUsagePercent,
-            'storageTotalBytes' => $storageTotalBytes,
-            'storageFreeBytes' => $storageFreeBytes,
-            'storageUsedBytes' => $storageUsedBytes,
-            'localRepoCount' => $localRepoCount,
-            'remoteRepoCount' => $remoteRepoCount,
-            'remoteSshConfigs' => $remoteSshConfigs,
         ]);
     }
 
@@ -683,72 +654,4 @@ class SettingsController extends Controller
         $this->json($template);
     }
 
-    /**
-     * POST /settings/offsite-storage — save global S3 settings.
-     */
-    public function saveOffsiteStorage(): void
-    {
-        $this->requireAdmin();
-        $this->verifyCsrf();
-
-        // Validate endpoint URL if provided
-        $endpoint = trim($_POST['s3_endpoint'] ?? '');
-        if (!empty($endpoint)) {
-            // Must be a valid URL with scheme (https://...)
-            if (!preg_match('#^https?://#i', $endpoint)) {
-                $endpoint = 'https://' . $endpoint;
-                $_POST['s3_endpoint'] = $endpoint;
-            }
-            $parsed = parse_url($endpoint);
-            if (empty($parsed['host']) || !preg_match('/\.[a-z]{2,}$/i', $parsed['host'])) {
-                $this->flash('danger', 'S3 endpoint must be a valid URL (e.g. https://s3.us-east-1.amazonaws.com).');
-                $this->redirect('/settings?tab=storage&section=s3');
-            }
-        }
-
-        $fields = ['s3_endpoint', 's3_region', 's3_bucket', 's3_path_prefix', 's3_sync_server_backups'];
-        foreach ($fields as $key) {
-            if (isset($_POST[$key])) {
-                $existing = $this->db->fetchOne("SELECT `key` FROM settings WHERE `key` = ?", [$key]);
-                if ($existing) {
-                    $this->db->update('settings', ['value' => $_POST[$key]], "`key` = ?", [$key]);
-                } else {
-                    $this->db->insert('settings', ['key' => $key, 'value' => $_POST[$key]]);
-                }
-            }
-        }
-
-        // Encrypt and save sensitive fields only if non-empty (preserve existing otherwise)
-        $sensitiveFields = ['s3_access_key', 's3_secret_key'];
-        foreach ($sensitiveFields as $key) {
-            $value = $_POST[$key] ?? '';
-            if (!empty($value)) {
-                $encrypted = \BBS\Services\Encryption::encrypt($value);
-                $existing = $this->db->fetchOne("SELECT `key` FROM settings WHERE `key` = ?", [$key]);
-                if ($existing) {
-                    $this->db->update('settings', ['value' => $encrypted], "`key` = ?", [$key]);
-                } else {
-                    $this->db->insert('settings', ['key' => $key, 'value' => $encrypted]);
-                }
-            }
-        }
-
-        $this->flash('success', 'S3 settings saved.');
-        $this->redirect('/settings?tab=storage&section=s3');
-    }
-
-    /**
-     * POST /settings/offsite-storage/test — test S3 connection with saved credentials.
-     */
-    public function testOffsiteStorage(): void
-    {
-        $this->requireAdmin();
-        $this->verifyCsrf();
-
-        $s3Service = new \BBS\Services\S3SyncService();
-        $creds = $s3Service->resolveCredentials(['credential_source' => 'global']);
-        $result = $s3Service->testConnection($creds);
-
-        $this->json($result);
-    }
 }

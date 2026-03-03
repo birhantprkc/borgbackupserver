@@ -126,7 +126,7 @@
                 </li>
                 <?php if (($_SESSION['user_role'] ?? '') === 'admin'): ?>
                 <li class="nav-item">
-                    <a href="/storage-locations" class="nav-link sidebar-link <?= ($pageTitle ?? '') === 'Storage Locations' ? 'active' : '' ?>">
+                    <a href="/storage-locations" class="nav-link sidebar-link <?= ($pageTitle ?? '') === 'Storage' ? 'active' : '' ?>">
                         <i class="bi bi-hdd-stack d-block mb-1 fs-4"></i>
                         <span class="small">Storage</span>
                     </a>
