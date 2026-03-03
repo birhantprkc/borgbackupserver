@@ -262,6 +262,7 @@ class SettingsController extends Controller
         $this->verifyCsrf();
 
         $service = new \BBS\Services\UpdateService();
+        $service->setIncludePrereleases(!empty($_POST['include_prereleases']));
         $result = $service->checkForUpdate();
 
         if (isset($result['error'])) {

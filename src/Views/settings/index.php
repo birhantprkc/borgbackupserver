@@ -1560,6 +1560,7 @@ function updateBuiltUrl(containerId, schema, prefix) {
     $currentVersion = $updateSvc->getCurrentVersion();
     $latest = $updateSvc->getLatestRelease();
     $hasUpdate = $updateSvc->isUpdateAvailable();
+    $includePrereleases = $updateSvc->getIncludePrereleases();
     $isDocker = \BBS\Services\UpdateService::isRunningInDocker();
     $upgradeResult = $_SESSION['upgrade_result'] ?? null;
     unset($_SESSION['upgrade_result']);
@@ -1625,9 +1626,15 @@ $outdatedCount = count($outdatedAgents);
                 <div class="d-flex gap-2 flex-wrap align-items-start">
                     <form method="POST" action="/settings/check-update">
                         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                        <button type="submit" class="btn btn-sm btn-outline-secondary">
-                            <i class="bi bi-arrow-clockwise me-1"></i> Check for Updates
-                        </button>
+                        <div class="d-flex align-items-center gap-2">
+                            <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-arrow-clockwise me-1"></i> Check for Updates
+                            </button>
+                            <div class="form-check form-check-inline mb-0 ms-1">
+                                <input class="form-check-input" type="checkbox" name="include_prereleases" id="include-prereleases" value="1" <?= $includePrereleases ? 'checked' : '' ?>>
+                                <label class="form-check-label small text-muted" for="include-prereleases">Include beta versions</label>
+                            </div>
+                        </div>
                     </form>
                     <?php if ($hasUpdate && !$isDocker): ?>
                     <form method="POST" action="/settings/upgrade" data-confirm="This will start a background upgrade to v<?= htmlspecialchars($latest['version']) ?>. You'll be redirected to a progress page.&#10;&#10;Active backups must complete first. New backups will be paused during the upgrade.&#10;&#10;Proceed?">

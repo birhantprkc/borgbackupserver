@@ -31,6 +31,16 @@ class UpdateService
         return file_exists('/.dockerenv');
     }
 
+    public function getIncludePrereleases(): bool
+    {
+        return $this->getSetting('include_prereleases', '0') === '1';
+    }
+
+    public function setIncludePrereleases(bool $value): void
+    {
+        $this->setSetting('include_prereleases', $value ? '1' : '0');
+    }
+
     public function getLatestRelease(): array
     {
         return [
@@ -94,13 +104,14 @@ class UpdateService
             ];
         }
 
-        // Only consider stable releases (skip pre-releases/betas/RCs)
+        // Filter by prerelease preference
+        $includePrereleases = $this->getSetting('include_prereleases', '0') === '1';
         $release = null;
         foreach ($releases as $r) {
-            if (empty($r['prerelease']) && empty($r['draft'])) {
-                $release = $r;
-                break;
-            }
+            if (!empty($r['draft'])) continue;
+            if (!$includePrereleases && !empty($r['prerelease'])) continue;
+            $release = $r;
+            break;
         }
 
         if (!$release) {
