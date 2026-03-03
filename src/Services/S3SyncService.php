@@ -317,41 +317,15 @@ class S3SyncService
         }
 
         $remote = "S3:{$creds['bucket']}/";
-        $cmd = ['rclone', 'lsd', $remote, '--max-depth', '1'];
+        $cmd = ['rclone', 'lsd', $remote, '--max-depth', '1', '--contimeout', '5s', '--timeout', '8s'];
 
-        $env = $this->buildRcloneEnv($creds);
+        $result = $this->runRcloneWithTimeout($cmd, $creds, 10);
 
-        $desc = [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ];
-
-        // Provide essential env vars so rclone doesn't fail looking for
-        // a home directory or config file (matches bbs-ssh-helper pattern)
-        $envStrings = [
-            'RCLONE_CONFIG' => '/dev/null',
-            'HOME' => '/tmp',
-            'PATH' => '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
-        ];
-        foreach ($env as $k => $v) {
-            $envStrings[$k] = $v;
-        }
-
-        $proc = proc_open($cmd, $desc, $pipes, null, $envStrings);
-        if (!is_resource($proc)) {
-            return ['success' => false, 'error' => 'Failed to start rclone process'];
-        }
-
-        fclose($pipes[0]);
-        $stdout = stream_get_contents($pipes[1]);
-        fclose($pipes[1]);
-        $stderr = stream_get_contents($pipes[2]);
-        fclose($pipes[2]);
-        $exitCode = proc_close($proc);
-
-        if ($exitCode !== 0) {
-            $error = trim($stderr) ?: trim($stdout) ?: "rclone exited with code {$exitCode}";
+        if ($result['exitCode'] !== 0) {
+            $error = trim($result['stderr']) ?: trim($result['stdout']) ?: "rclone exited with code {$result['exitCode']}";
+            if ($result['timedOut']) {
+                $error = 'Connection timed out — check endpoint URL and credentials';
+            }
             return ['success' => false, 'error' => $error];
         }
 
@@ -365,6 +339,76 @@ class S3SyncService
     {
         $output = @shell_exec('which rclone 2>/dev/null');
         return !empty(trim($output ?? ''));
+    }
+
+    /**
+     * Run an rclone command with a PHP-level timeout to prevent hangs.
+     * Returns ['stdout' => ..., 'stderr' => ..., 'exitCode' => int, 'timedOut' => bool]
+     */
+    private function runRcloneWithTimeout(array $cmd, array $creds, int $timeoutSeconds = 10): array
+    {
+        $env = $this->buildRcloneEnv($creds);
+
+        $desc = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+
+        $envStrings = [
+            'RCLONE_CONFIG' => '/dev/null',
+            'HOME' => '/tmp',
+            'PATH' => '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        ];
+        foreach ($env as $k => $v) {
+            $envStrings[$k] = $v;
+        }
+
+        $proc = proc_open($cmd, $desc, $pipes, null, $envStrings);
+        if (!is_resource($proc)) {
+            return ['stdout' => '', 'stderr' => 'Failed to start rclone process', 'exitCode' => -1, 'timedOut' => false];
+        }
+
+        fclose($pipes[0]);
+
+        // Set pipes to non-blocking so we can enforce a timeout
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
+
+        $stdout = '';
+        $stderr = '';
+        $timedOut = false;
+        $deadline = time() + $timeoutSeconds;
+
+        while (true) {
+            $status = proc_get_status($proc);
+            if (!$status['running']) {
+                // Process finished — drain remaining output
+                $stdout .= stream_get_contents($pipes[1]);
+                $stderr .= stream_get_contents($pipes[2]);
+                break;
+            }
+
+            if (time() >= $deadline) {
+                $timedOut = true;
+                proc_terminate($proc, 9);
+                break;
+            }
+
+            $stdout .= fread($pipes[1], 8192);
+            $stderr .= fread($pipes[2], 8192);
+            usleep(50000); // 50ms
+        }
+
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($proc);
+
+        if ($timedOut) {
+            $exitCode = -1;
+        }
+
+        return ['stdout' => $stdout, 'stderr' => $stderr, 'exitCode' => $exitCode, 'timedOut' => $timedOut];
     }
 
     /**
@@ -388,46 +432,24 @@ class S3SyncService
         $remote = "S3:{$creds['bucket']}/{$remotePath}";
 
         // List directories (repos) under the agent folder
-        $cmd = ['rclone', 'lsd', $remote];
+        $cmd = ['rclone', 'lsd', $remote, '--contimeout', '5s', '--timeout', '8s'];
 
-        $env = $this->buildRcloneEnv($creds);
-
-        $desc = [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ];
-
-        $envStrings = [
-            'RCLONE_CONFIG' => '/dev/null',
-            'HOME' => '/tmp',
-            'PATH' => '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
-        ];
-        foreach ($env as $k => $v) {
-            $envStrings[$k] = $v;
-        }
-
-        $proc = proc_open($cmd, $desc, $pipes, null, $envStrings);
-        if (!is_resource($proc)) {
-            return ['success' => false, 'repos' => [], 'error' => 'Failed to start rclone process'];
-        }
-
-        fclose($pipes[0]);
-        $stdout = stream_get_contents($pipes[1]);
-        fclose($pipes[1]);
-        $stderr = stream_get_contents($pipes[2]);
-        fclose($pipes[2]);
-        $exitCode = proc_close($proc);
+        $result = $this->runRcloneWithTimeout($cmd, $creds, 10);
 
         // Exit code 3 means directory not found (no repos for this agent yet)
-        if ($exitCode === 3) {
+        if ($result['exitCode'] === 3) {
             return ['success' => true, 'repos' => []];
         }
 
-        if ($exitCode !== 0) {
-            $error = trim($stderr) ?: trim($stdout) ?: "rclone exited with code {$exitCode}";
+        if ($result['exitCode'] !== 0) {
+            $error = trim($result['stderr']) ?: trim($result['stdout']) ?: "rclone exited with code {$result['exitCode']}";
+            if ($result['timedOut']) {
+                $error = 'Connection timed out — check endpoint URL and credentials';
+            }
             return ['success' => false, 'repos' => [], 'error' => $error];
         }
+
+        $stdout = $result['stdout'];
 
         // Parse rclone lsd output - format: "          -1 2024-01-15 10:30:00        -1 repo-name"
         $repos = [];
