@@ -146,6 +146,15 @@ if HAS_WIN32:
             self.stop_event = win32event.CreateEvent(None, 0, 0, None)
             self.process = None
             self.python_exe = None
+            self.is_suspended = False
+
+        def GetAcceptedControls(self):
+            rc = win32service.SERVICE_ACCEPT_STOP | win32service.SERVICE_ACCEPT_SHUTDOWN
+            try:
+                rc |= win32service.SERVICE_ACCEPT_POWEREVENT
+            except AttributeError:
+                pass
+            return rc
 
         def SvcStop(self):
             log.info("Service stop requested")
@@ -158,6 +167,27 @@ if HAS_WIN32:
                     self.process.wait(timeout=10)
                 except subprocess.TimeoutExpired:
                     self.process.kill()
+
+        def SvcOtherEx(self, control, event_type, data):
+            """Handle power events (sleep/wake)."""
+            # SERVICE_CONTROL_POWEREVENT = 13
+            if control == 13:
+                PBT_APMSUSPEND = 4
+                PBT_APMRESUMEAUTOMATIC = 18
+                if event_type == PBT_APMSUSPEND:
+                    log.info("System suspending (sleep/hibernate)")
+                    self.is_suspended = True
+                elif event_type == PBT_APMRESUMEAUTOMATIC:
+                    log.info("System resumed from sleep/hibernate")
+                    self.is_suspended = False
+                    # Restart agent subprocess if it died during sleep
+                    if self.process and self.process.poll() is not None and self.python_exe:
+                        log.info("Agent subprocess not running after wake, restarting")
+                        try:
+                            self.process = run_agent_subprocess(self.python_exe)
+                            log.info("Agent restarted after wake (pid=%d)", self.process.pid)
+                        except Exception as e:
+                            log.error("Failed to restart agent after wake: %s", e)
 
         def SvcDoRun(self):
             servicemanager.LogMsg(
@@ -209,7 +239,11 @@ if HAS_WIN32:
                         break
                     rc = self.process.returncode
                     log.info("Agent exited (code=%s), restarting in 5s...", rc)
-                    time.sleep(5)
+                    # Wait 5s but honor stop requests during the delay
+                    wait = win32event.WaitForSingleObject(self.stop_event, 5000)
+                    if wait == win32event.WAIT_OBJECT_0:
+                        log.info("Stop event received during restart delay")
+                        break
                     try:
                         self.process = run_agent_subprocess(self.python_exe)
                         log.info("Agent restarted (pid=%d)", self.process.pid)
