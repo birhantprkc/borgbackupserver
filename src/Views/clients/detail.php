@@ -2700,7 +2700,7 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
             </div>
             <?php endif; ?>
             <!-- Files mode: Archive + Search -->
-            <div class="restore-files-controls <?= $dbPluginEnabled ? 'col-md-4' : 'col-md-5' ?>" id="files-archive-col">
+            <div class="restore-files-controls <?= $dbPluginEnabled ? 'col-md-4' : ($clickhouseAvailable ? 'col-md-5' : 'col-md-9') ?>" id="files-archive-col">
                 <label class="form-label fw-semibold mb-1 small">Archive</label>
                 <div class="input-group input-group-sm">
                 <span class="input-group-text"><i class="bi bi-calendar-event"></i></span>
@@ -2723,6 +2723,7 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
                 </select>
                 </div>
             </div>
+            <?php if ($clickhouseAvailable): ?>
             <div class="restore-files-controls col-md-5" id="files-search-col">
                 <label class="form-label fw-semibold mb-1 small">Search</label>
                 <div class="input-group input-group-sm">
@@ -2744,6 +2745,7 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
                     <i class="bi bi-arrow-left me-1"></i> Back to Browse
                 </button>
             </div>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -2752,6 +2754,7 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
     <div class="row gx-3">
         <!-- LEFT: Browse / Search / History -->
         <div class="col-lg-7">
+            <?php if ($clickhouseAvailable): ?>
             <!-- Browse Panel -->
             <div id="browse-panel">
                 <div class="restore-panel-header">
@@ -2785,6 +2788,41 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
                 </div>
                 <div class="restore-panel-body" id="history-results-body"></div>
             </div>
+            <?php else: ?>
+            <!-- Manual Path Entry (ClickHouse unavailable) -->
+            <div id="manual-path-panel">
+                <div class="restore-panel-header">
+                    <i class="bi bi-pencil-square me-1"></i> Enter Paths Manually
+                </div>
+                <div class="restore-panel-body" style="min-height: 200px;">
+                    <div class="alert alert-info small mb-3 py-2 px-3" id="manual-path-info" style="display:none;">
+                        <i class="bi bi-info-circle me-1"></i>
+                        File catalog browsing is unavailable. You can type file or directory paths to restore.
+                    </div>
+                    <div class="p-3 text-muted text-center" id="manual-path-placeholder">
+                        Select an archive to enter paths for restore
+                    </div>
+                    <div id="manual-path-form" style="display:none;">
+                        <div class="input-group input-group-sm mb-2">
+                            <input type="text" class="form-control font-monospace" id="manual-path-input" placeholder="e.g. etc/nginx/nginx.conf">
+                            <button class="btn btn-outline-primary" type="button" id="manual-path-add-btn">
+                                <i class="bi bi-plus-lg me-1"></i>Add Path
+                            </button>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="manual-path-entire-archive">
+                            <label class="form-check-label small" for="manual-path-entire-archive">
+                                Restore entire archive
+                            </label>
+                        </div>
+                        <div class="text-muted small">
+                            <i class="bi bi-lightbulb me-1"></i>
+                            Enter paths without a leading slash, e.g. <code>etc/nginx/</code> for a directory or <code>etc/hostname</code> for a file.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
         </div>
 
         <!-- RIGHT: Selection + Actions -->
@@ -2879,6 +2917,7 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
     <?php endif; ?>
 
     <script>window.RESTORE_AGENT_ID = <?= $agent['id'] ?>;</script>
+    <script>window.CLICKHOUSE_AVAILABLE = <?= $clickhouseAvailable ? 'true' : 'false' ?>;</script>
     <script>window.DB_PLUGIN_ENABLED = <?= $dbPluginEnabled ? 'true' : 'false' ?>;</script>
     <script>window.DB_CONFIG_AVAILABLE = <?= !empty($allDbConfigs) ? 'true' : 'false' ?>;</script>
     <script>window.DB_CONFIG_USERS = <?= json_encode(array_merge(

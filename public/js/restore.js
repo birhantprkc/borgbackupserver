@@ -2,6 +2,8 @@
     const agentId = window.RESTORE_AGENT_ID;
     if (!agentId) return;
 
+    const clickhouseAvailable = !!window.CLICKHOUSE_AVAILABLE;
+
     // DOM refs
     const archiveSelect = document.getElementById('archive-select');
     const searchInput = document.getElementById('restore-search');
@@ -20,6 +22,16 @@
     const noSelection = document.getElementById('no-selection');
     const restoreBtn = document.getElementById('restore-btn');
     const downloadBtn = document.getElementById('download-btn');
+
+    // Manual path mode refs (when ClickHouse unavailable)
+    const manualPathPanel = document.getElementById('manual-path-panel');
+    const manualPathInput = document.getElementById('manual-path-input');
+    const manualPathAddBtn = document.getElementById('manual-path-add-btn');
+    const manualPathForm = document.getElementById('manual-path-form');
+    const manualPathInfo = document.getElementById('manual-path-info');
+    const manualPathPlaceholder = document.getElementById('manual-path-placeholder');
+    const manualEntireArchive = document.getElementById('manual-path-entire-archive');
+    let entireArchiveSelected = false;
 
     // State
     let selectedPaths = new Set();           // Set of path strings (single-archive mode)
@@ -90,13 +102,23 @@
     function updateSelectionUI() {
         const isCrossArchive = (currentMode === 'search-all' && selectedVersions.size > 0);
         const count = isCrossArchive ? selectedVersions.size : selectedPaths.size;
+        const hasSelection = count > 0 || entireArchiveSelected;
 
-        selectedCountEl.textContent = count;
-        restoreBtn.disabled = count === 0;
-        downloadBtn.disabled = count === 0;
-        noSelection.style.display = count === 0 ? 'block' : 'none';
+        selectedCountEl.textContent = entireArchiveSelected ? 'all' : count;
+        restoreBtn.disabled = !hasSelection;
+        downloadBtn.disabled = !hasSelection;
+        noSelection.style.display = hasSelection ? 'none' : 'block';
 
         selectedList.innerHTML = '';
+
+        if (entireArchiveSelected) {
+            const div = document.createElement('div');
+            div.className = 'restore-selection-item';
+            div.innerHTML =
+                '<div class="small font-monospace text-truncate"><i class="bi bi-archive-fill text-primary me-1"></i>Entire archive</div>' +
+                '<button class="btn btn-sm p-0 btn-remove" data-remove-entire><i class="bi bi-x-lg text-danger"></i></button>';
+            selectedList.appendChild(div);
+        }
 
         if (isCrossArchive) {
             selectedVersions.forEach((archiveId, path) => {
@@ -124,11 +146,20 @@
 
     // Remove from selection
     selectedList.addEventListener('click', function(e) {
+        const entireBtn = e.target.closest('[data-remove-entire]');
+        if (entireBtn) {
+            entireArchiveSelected = false;
+            if (manualEntireArchive) manualEntireArchive.checked = false;
+            updateSelectionUI();
+            return;
+        }
         const btn = e.target.closest('[data-remove]');
         if (btn) {
             selectedPaths.delete(btn.dataset.remove);
-            const cb = treeRoot.querySelector('input[data-path="' + CSS.escape(btn.dataset.remove) + '"]');
-            if (cb) cb.checked = false;
+            if (treeRoot) {
+                const cb = treeRoot.querySelector('input[data-path="' + CSS.escape(btn.dataset.remove) + '"]');
+                if (cb) cb.checked = false;
+            }
             updateSelectionUI();
         }
         const vBtn = e.target.closest('[data-remove-version]');
@@ -245,63 +276,80 @@
     // Show/hide panels
     function showBrowse() {
         currentMode = 'browse';
-        browsePanel.style.display = '';
-        searchPanel.style.display = 'none';
-        historyPanel.style.display = 'none';
-        backBtn.style.display = 'none';
+        if (browsePanel) browsePanel.style.display = '';
+        if (searchPanel) searchPanel.style.display = 'none';
+        if (historyPanel) historyPanel.style.display = 'none';
+        if (backBtn) backBtn.style.display = 'none';
     }
 
     function showSearchCurrent() {
         currentMode = 'search-current';
-        browsePanel.style.display = 'none';
-        searchPanel.style.display = '';
-        historyPanel.style.display = 'none';
-        backBtn.style.display = '';
+        if (browsePanel) browsePanel.style.display = 'none';
+        if (searchPanel) searchPanel.style.display = '';
+        if (historyPanel) historyPanel.style.display = 'none';
+        if (backBtn) backBtn.style.display = '';
     }
 
     function showHistory() {
         currentMode = 'search-all';
-        browsePanel.style.display = 'none';
-        searchPanel.style.display = 'none';
-        historyPanel.style.display = '';
-        backBtn.style.display = '';
+        if (browsePanel) browsePanel.style.display = 'none';
+        if (searchPanel) searchPanel.style.display = 'none';
+        if (historyPanel) historyPanel.style.display = '';
+        if (backBtn) backBtn.style.display = '';
     }
 
     // Search mode switching
-    searchModeMenu.addEventListener('click', function(e) {
-        const item = e.target.closest('[data-mode]');
-        if (item) {
-            searchMode = item.dataset.mode;
-            searchModeBtn.innerHTML = '<i class="bi bi-funnel' + (searchMode === 'all' ? '-fill' : '') + '"></i>';
-            // Enable search even without archive selected in "all" mode
-            if (searchMode === 'all') {
-                searchInput.disabled = false;
-                searchBtn.disabled = false;
-            } else {
-                searchInput.disabled = !archiveSelect.value;
-                searchBtn.disabled = !archiveSelect.value;
+    if (searchModeMenu) {
+        searchModeMenu.addEventListener('click', function(e) {
+            const item = e.target.closest('[data-mode]');
+            if (item) {
+                searchMode = item.dataset.mode;
+                searchModeBtn.innerHTML = '<i class="bi bi-funnel' + (searchMode === 'all' ? '-fill' : '') + '"></i>';
+                // Enable search even without archive selected in "all" mode
+                if (searchMode === 'all') {
+                    searchInput.disabled = false;
+                    searchBtn.disabled = false;
+                } else {
+                    searchInput.disabled = !archiveSelect.value;
+                    searchBtn.disabled = !archiveSelect.value;
+                }
             }
-        }
-    });
+        });
+    }
 
     // Archive selection
     archiveSelect.addEventListener('change', function() {
         selectedPaths.clear();
         selectedVersions.clear();
+        entireArchiveSelected = false;
+        if (manualEntireArchive) manualEntireArchive.checked = false;
         updateSelectionUI();
 
-        if (searchMode !== 'all') {
-            searchInput.disabled = !this.value;
-            searchBtn.disabled = !this.value;
-        }
+        if (clickhouseAvailable) {
+            if (searchMode !== 'all') {
+                searchInput.disabled = !this.value;
+                searchBtn.disabled = !this.value;
+            }
 
-        showBrowse();
+            showBrowse();
 
-        if (this.value) {
-            treeRoot.innerHTML = '';
-            loadTreeNode(treeRoot, '/');
+            if (this.value) {
+                treeRoot.innerHTML = '';
+                loadTreeNode(treeRoot, '/');
+            } else {
+                treeRoot.innerHTML = '<div class="p-3 text-muted text-center">Select an archive to browse files</div>';
+            }
         } else {
-            treeRoot.innerHTML = '<div class="p-3 text-muted text-center">Select an archive to browse files</div>';
+            // Manual path mode
+            if (this.value) {
+                if (manualPathPlaceholder) manualPathPlaceholder.style.display = 'none';
+                if (manualPathForm) manualPathForm.style.display = '';
+                if (manualPathInfo) manualPathInfo.style.display = '';
+            } else {
+                if (manualPathPlaceholder) manualPathPlaceholder.style.display = '';
+                if (manualPathForm) manualPathForm.style.display = 'none';
+                if (manualPathInfo) manualPathInfo.style.display = 'none';
+            }
         }
     });
 
@@ -405,31 +453,71 @@
         }
     }
 
-    searchBtn.addEventListener('click', () => performSearch(1));
-    searchInput.addEventListener('keypress', e => { if (e.key === 'Enter') { e.preventDefault(); performSearch(1); } });
-    backBtn.addEventListener('click', showBrowse);
+    if (searchBtn) searchBtn.addEventListener('click', () => performSearch(1));
+    if (searchInput) searchInput.addEventListener('keypress', e => { if (e.key === 'Enter') { e.preventDefault(); performSearch(1); } });
+    if (backBtn) backBtn.addEventListener('click', showBrowse);
 
     // Delegate: search result checkboxes
-    document.getElementById('search-results-body').addEventListener('change', function(e) {
-        if (e.target.classList.contains('search-cb')) {
-            togglePath(e.target.dataset.path, e.target.checked);
-        }
-    });
+    const searchResultsBody = document.getElementById('search-results-body');
+    if (searchResultsBody) {
+        searchResultsBody.addEventListener('change', function(e) {
+            if (e.target.classList.contains('search-cb')) {
+                togglePath(e.target.dataset.path, e.target.checked);
+            }
+        });
+    }
 
     // Delegate: search pagination
-    document.getElementById('search-prev').addEventListener('click', () => doSearchCurrent(searchPage - 1));
-    document.getElementById('search-next').addEventListener('click', () => doSearchCurrent(searchPage + 1));
+    const searchPrev = document.getElementById('search-prev');
+    const searchNext = document.getElementById('search-next');
+    if (searchPrev) searchPrev.addEventListener('click', () => doSearchCurrent(searchPage - 1));
+    if (searchNext) searchNext.addEventListener('click', () => doSearchCurrent(searchPage + 1));
 
     // Delegate: history result radios
-    document.getElementById('history-results-body').addEventListener('change', function(e) {
-        if (e.target.classList.contains('version-radio')) {
-            toggleVersion(e.target.dataset.path, parseInt(e.target.dataset.archive), e.target.checked);
-        }
-    });
+    const historyResultsBody = document.getElementById('history-results-body');
+    if (historyResultsBody) {
+        historyResultsBody.addEventListener('change', function(e) {
+            if (e.target.classList.contains('version-radio')) {
+                toggleVersion(e.target.dataset.path, parseInt(e.target.dataset.archive), e.target.checked);
+            }
+        });
+    }
 
     // Delegate: history pagination
-    document.getElementById('history-prev').addEventListener('click', () => doSearchAll(searchPage - 1));
-    document.getElementById('history-next').addEventListener('click', () => doSearchAll(searchPage + 1));
+    const historyPrev = document.getElementById('history-prev');
+    const historyNext = document.getElementById('history-next');
+    if (historyPrev) historyPrev.addEventListener('click', () => doSearchAll(searchPage - 1));
+    if (historyNext) historyNext.addEventListener('click', () => doSearchAll(searchPage + 1));
+
+    // Manual path mode handlers (when ClickHouse unavailable)
+    if (manualPathAddBtn) {
+        manualPathAddBtn.addEventListener('click', function() {
+            const raw = manualPathInput.value.trim();
+            if (!raw) return;
+            // Strip leading slash — borg paths don't use leading slashes
+            const path = raw.replace(/^\/+/, '');
+            if (path) {
+                selectedPaths.add(path);
+                updateSelectionUI();
+            }
+            manualPathInput.value = '';
+            manualPathInput.focus();
+        });
+    }
+    if (manualPathInput) {
+        manualPathInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                manualPathAddBtn.click();
+            }
+        });
+    }
+    if (manualEntireArchive) {
+        manualEntireArchive.addEventListener('change', function() {
+            entireArchiveSelected = this.checked;
+            updateSelectionUI();
+        });
+    }
 
     // Form submission helpers
     function fillFormAndSubmit(formId, archiveFieldId, filesContainerId, destFieldId) {
@@ -493,7 +581,7 @@
 
     restoreBtn.addEventListener('click', function() {
         const count = (currentMode === 'search-all' && selectedVersions.size > 0) ? selectedVersions.size : selectedPaths.size;
-        if (count === 0) return;
+        if (count === 0 && !entireArchiveSelected) return;
 
         // Check for multi-drive Windows restores without a custom destination
         const dest = document.getElementById('restore-destination').value.trim();
@@ -514,21 +602,27 @@
             }
         }
 
-        confirmAction('Restore ' + count + ' path(s) to the client?\n\nThis may overwrite existing files.', function() {
+        const msg = entireArchiveSelected
+            ? 'Restore the entire archive to the client?\n\nThis may overwrite existing files.'
+            : 'Restore ' + count + ' path(s) to the client?\n\nThis may overwrite existing files.';
+        confirmAction(msg, function() {
             fillFormAndSubmit('restore-form', 'restore-archive-id', 'restore-files-container', 'restore-dest-field');
         }, { danger: true });
     });
 
     downloadBtn.addEventListener('click', function() {
         const count = (currentMode === 'search-all' && selectedVersions.size > 0) ? selectedVersions.size : selectedPaths.size;
-        if (count === 0) return;
-        confirmAction('Download ' + count + ' path(s) as a .tar.gz archive?', function() {
+        if (count === 0 && !entireArchiveSelected) return;
+        const msg = entireArchiveSelected
+            ? 'Download the entire archive as a .tar.gz?'
+            : 'Download ' + count + ' path(s) as a .tar.gz archive?';
+        confirmAction(msg, function() {
             fillFormAndSubmit('download-form', 'download-archive-id', 'download-files-container', null);
         });
     });
 
     // Initialize
-    treeRoot.innerHTML = '<div class="p-3 text-muted text-center">Select an archive to browse files</div>';
+    if (treeRoot) treeRoot.innerHTML = '<div class="p-3 text-muted text-center">Select an archive to browse files</div>';
 
     // ================================================================
     // Database Restore Mode

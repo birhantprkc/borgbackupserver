@@ -320,6 +320,13 @@ class ClientController extends Controller
             ORDER BY r.name ASC, ar.created_at DESC
         ", [$id]);
 
+        // Check if ClickHouse is available (needed for file catalog browsing)
+        $clickhouseAvailable = false;
+        try {
+            $ch = \BBS\Core\ClickHouse::getInstance();
+            $clickhouseAvailable = $ch->isAvailable();
+        } catch (\Exception $e) {}
+
         // Summary stats for header
         $totalSize = array_sum(array_column($repositories, 'size_bytes'));
         $totalArchives = array_sum(array_column($repositories, 'archive_count'));
@@ -457,6 +464,7 @@ class ClientController extends Controller
             'globalS3Configured' => $globalS3Configured,
             'remoteSshConfigs' => (new \BBS\Services\RemoteSshService())->getAll(),
             'storageLocations' => $this->db->fetchAll("SELECT * FROM storage_locations ORDER BY is_default DESC, label"),
+            'clickhouseAvailable' => $clickhouseAvailable,
         ]);
     }
 
@@ -843,8 +851,8 @@ class ClientController extends Controller
         $selectedFiles = $_POST['files'] ?? [];
         $destination = trim($_POST['destination'] ?? '');
 
-        if (!$archive_id || empty($selectedFiles)) {
-            $this->flash('danger', 'Select an archive and at least one file to restore.');
+        if (!$archive_id) {
+            $this->flash('danger', 'Select an archive to restore.');
             $this->redirect("/clients/{$id}?tab=restore");
         }
 
@@ -879,7 +887,9 @@ class ClientController extends Controller
             'agent_id' => $id,
             'backup_job_id' => $jobId,
             'level' => 'info',
-            'message' => "Restore queued: " . count($selectedFiles) . " paths from archive {$archive['archive_name']}",
+            'message' => empty($selectedFiles)
+                ? "Restore queued: full archive {$archive['archive_name']}"
+                : "Restore queued: " . count($selectedFiles) . " paths from archive {$archive['archive_name']}",
         ]);
 
         $this->flash('success', 'Restore job queued. It will run when a slot is available.');
@@ -1196,8 +1206,8 @@ class ClientController extends Controller
         $archive_id = (int) ($_POST['archive_id'] ?? 0);
         $selectedFiles = $_POST['files'] ?? [];
 
-        if (!$archive_id || empty($selectedFiles)) {
-            $this->flash('danger', 'Select an archive and at least one file to download.');
+        if (!$archive_id) {
+            $this->flash('danger', 'Select an archive to download.');
             $this->redirect("/clients/{$id}?tab=restore");
         }
 
