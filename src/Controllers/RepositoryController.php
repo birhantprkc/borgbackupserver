@@ -193,8 +193,8 @@ class RepositoryController extends Controller
             'message' => "Repository \"{$name}\" initialized ({$encryption}) at {$localPath}",
         ]);
 
-        // Update .storage-paths for non-default storage locations
-        if ($isNonDefault && !empty($agent['ssh_unix_user'])) {
+        // Update .storage-paths so bbs-ssh-gate allows borg access to this location
+        if (!empty($agent['ssh_unix_user'])) {
             $this->updateAgentStoragePaths($agentId, $agent);
         }
 
@@ -411,32 +411,37 @@ class RepositoryController extends Controller
 
     /**
      * Update .storage-paths file for an agent (used by bbs-ssh-gate to allow borg access
-     * to non-default storage locations). Gathers all unique non-default storage location
-     * agent directories and writes them via bbs-ssh-helper.
+     * to storage locations outside the agent's SSH home directory). Gathers all unique
+     * storage location agent directories and writes them via bbs-ssh-helper.
      */
     private function updateAgentStoragePaths(int $agentId, array $agent): void
     {
-        $defaultLoc = $this->db->fetchOne("SELECT id FROM storage_locations WHERE is_default = 1");
-        $defaultId = $defaultLoc['id'] ?? 0;
-
-        // Find all non-default storage locations that have repos for this agent
-        $locations = $this->db->fetchAll(
-            "SELECT DISTINCT sl.path FROM repositories r
-             JOIN storage_locations sl ON sl.id = r.storage_location_id
-             WHERE r.agent_id = ? AND r.storage_type = 'local' AND r.storage_location_id != ?",
-            [$agentId, $defaultId]
-        );
-
-        // Build the agent-specific paths (e.g., /mnt/storage2/3/)
-        $paths = [];
-        foreach ($locations as $loc) {
-            $paths[] = rtrim($loc['path'], '/') . '/' . $agentId;
-        }
-
         // Get agent's home directory from stored ssh_home_dir
         $homeDir = $agent['ssh_home_dir'] ?? null;
         if (!$homeDir) {
             return; // No SSH provisioned — can't update storage paths
+        }
+
+        // The parent of the home dir (e.g., /var/bbs/home from /var/bbs/home/3)
+        // bbs-ssh-gate already allows access to $homeDir, so any storage location
+        // under the same parent is already accessible. We only need to add paths
+        // for locations on different base paths.
+        $homeParent = rtrim(dirname($homeDir), '/');
+
+        // Find all storage locations that have local repos for this agent
+        $locations = $this->db->fetchAll(
+            "SELECT DISTINCT sl.path FROM repositories r
+             JOIN storage_locations sl ON sl.id = r.storage_location_id
+             WHERE r.agent_id = ? AND r.storage_type = 'local'",
+            [$agentId]
+        );
+
+        // Build agent-specific paths for locations outside the home dir's parent
+        $paths = [];
+        foreach ($locations as $loc) {
+            $locPath = rtrim($loc['path'], '/');
+            if ($locPath === $homeParent) continue; // Already allowed via home dir
+            $paths[] = $locPath . '/' . $agentId;
         }
 
         // Call bbs-ssh-helper to write the paths file
@@ -1249,8 +1254,8 @@ class RepositoryController extends Controller
             }
         }
 
-        // Update .storage-paths for non-default storage locations
-        if ($isNonDefault && !empty($agent['ssh_unix_user'])) {
+        // Update .storage-paths so bbs-ssh-gate allows borg access to this location
+        if (!empty($agent['ssh_unix_user'])) {
             $this->updateAgentStoragePaths($agentId, $agent);
         }
 
