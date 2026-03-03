@@ -1000,4 +1000,324 @@ class RepositoryController extends Controller
         $this->flash('success', "S3 sync disabled for repository \"{$repo['name']}\". Data remains in S3.");
         $this->redirect("/clients/{$agentId}/repo/{$id}");
     }
+
+    /**
+     * AJAX: Verify an existing repository can be imported.
+     * POST /repositories/import/verify
+     */
+    public function verifyImport(): void
+    {
+        $this->requireAuth();
+        // Skip CSRF for AJAX — session auth is sufficient for same-origin POST
+
+        $agentId = (int) ($_POST['agent_id'] ?? 0);
+        $storageType = $_POST['storage_type'] ?? 'local';
+        $name = trim($_POST['name'] ?? '');
+        $passphrase = $_POST['passphrase'] ?? '';
+        $storageLocationId = !empty($_POST['storage_location_id']) ? (int) $_POST['storage_location_id'] : null;
+        $remoteSshConfigId = !empty($_POST['remote_ssh_config_id']) ? (int) $_POST['remote_ssh_config_id'] : null;
+
+        if (empty($name) || empty($agentId)) {
+            $this->json(['status' => 'error', 'error' => 'Repository name and client are required.']);
+            return;
+        }
+
+        $agent = $this->db->fetchOne("SELECT * FROM agents WHERE id = ?", [$agentId]);
+        if (!$agent || !$this->canAccessAgent($agentId)) {
+            $this->json(['status' => 'error', 'error' => 'Access denied.']);
+            return;
+        }
+
+        // Check for duplicate name
+        $existing = $this->db->fetchOne(
+            "SELECT id FROM repositories WHERE agent_id = ? AND name = ?",
+            [$agentId, $name]
+        );
+        if ($existing) {
+            $this->json(['status' => 'error', 'error' => "A repository named \"{$name}\" already exists for this client."]);
+            return;
+        }
+
+        if ($storageType === 'remote_ssh') {
+            if (!$remoteSshConfigId) {
+                $this->json(['status' => 'error', 'error' => 'Please select a remote SSH host.']);
+                return;
+            }
+
+            $remoteSshService = new RemoteSshService();
+            $config = $remoteSshService->getDecrypted($remoteSshConfigId);
+            if (!$config) {
+                $this->json(['status' => 'error', 'error' => 'Remote SSH host not found.']);
+                return;
+            }
+
+            $repoPath = $remoteSshService->buildRepoPath($config, $name);
+
+            $env = [];
+            if (!empty($passphrase)) {
+                $env['BORG_PASSPHRASE'] = $passphrase;
+            }
+
+            $result = $remoteSshService->runBorgCommand($config, $repoPath, ['info', '--json', $repoPath], $passphrase);
+
+            if (!$result['success']) {
+                $errorMsg = trim($result['stderr'] ?? $result['output'] ?? 'Unknown error');
+                $this->json(['status' => 'error', 'error' => "Cannot access repository: {$errorMsg}"]);
+                return;
+            }
+
+            $infoData = json_decode($result['output'], true);
+        } else {
+            // Resolve local path
+            $location = null;
+            if ($storageLocationId) {
+                $location = $this->db->fetchOne("SELECT * FROM storage_locations WHERE id = ?", [$storageLocationId]);
+            }
+            if (!$location) {
+                $location = $this->db->fetchOne("SELECT * FROM storage_locations WHERE is_default = 1");
+            }
+            if (!$location) {
+                $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
+                $location = ['id' => null, 'path' => $storageSetting['value'] ?? '/var/bbs', 'is_default' => 1];
+            }
+
+            $localPath = rtrim($location['path'], '/') . '/' . $agentId . '/' . $name;
+
+            $helperCmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'verify-repo', $passphrase, $localPath];
+            $proc = proc_open($helperCmd, [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ], $pipes);
+
+            $output = '';
+            $stderr = '';
+            $exitCode = -1;
+            if (is_resource($proc)) {
+                fclose($pipes[0]);
+                $output = stream_get_contents($pipes[1]);
+                $stderr = stream_get_contents($pipes[2]);
+                fclose($pipes[1]);
+                fclose($pipes[2]);
+                $exitCode = proc_close($proc);
+            }
+
+            if ($exitCode !== 0) {
+                $errorMsg = trim($output ?: $stderr);
+                if (str_contains($errorMsg, 'passphrase') || str_contains($errorMsg, 'Passphrase')) {
+                    $errorMsg = 'Incorrect passphrase for this repository.';
+                } elseif (str_contains($errorMsg, 'not a valid repository') || str_contains($errorMsg, 'does not exist') || str_contains($errorMsg, 'Failed to create/acquire')) {
+                    $errorMsg = "No valid borg repository found at: {$localPath}";
+                }
+                $this->json(['status' => 'error', 'error' => $errorMsg ?: 'Failed to verify repository.']);
+                return;
+            }
+
+            $infoData = json_decode($output, true);
+        }
+
+        if (!$infoData) {
+            $this->json(['status' => 'error', 'error' => 'Failed to parse repository info. Is this a valid borg repository?']);
+            return;
+        }
+
+        $encryption = $infoData['encryption']['mode'] ?? 'unknown';
+        $archiveCount = count($infoData['archives'] ?? []);
+
+        $this->json([
+            'status' => 'ok',
+            'encryption' => $encryption,
+            'archive_count' => $archiveCount,
+        ]);
+    }
+
+    /**
+     * Import an existing repository.
+     * POST /repositories/import
+     */
+    public function import(): void
+    {
+        $this->requireAuth();
+        $this->verifyCsrf();
+
+        $agentId = (int) ($_POST['agent_id'] ?? 0);
+        $name = trim($_POST['name'] ?? '');
+        $encryption = $_POST['encryption'] ?? 'unknown';
+        $passphrase = $_POST['passphrase'] ?? '';
+        $storageType = $_POST['storage_type'] ?? 'local';
+        $storageLocationId = !empty($_POST['storage_location_id']) ? (int) $_POST['storage_location_id'] : null;
+        $remoteSshConfigId = !empty($_POST['remote_ssh_config_id']) ? (int) $_POST['remote_ssh_config_id'] : null;
+
+        if (empty($name) || empty($agentId)) {
+            $this->flash('danger', 'Repository name and client are required.');
+            $this->redirect("/clients/{$agentId}");
+            return;
+        }
+
+        $agent = $this->db->fetchOne("SELECT * FROM agents WHERE id = ?", [$agentId]);
+        if (!$agent || !$this->canAccessAgent($agentId)) {
+            $this->flash('danger', 'Access denied.');
+            $this->redirect('/clients');
+            return;
+        }
+        $this->requirePermission(PermissionService::MANAGE_REPOS, $agentId);
+
+        // Check for duplicate name
+        $existing = $this->db->fetchOne(
+            "SELECT id FROM repositories WHERE agent_id = ? AND name = ?",
+            [$agentId, $name]
+        );
+        if ($existing) {
+            $this->flash('warning', "Repository \"{$name}\" already exists.");
+            $this->redirect("/clients/{$agentId}?tab=repos");
+            return;
+        }
+
+        if ($storageType === 'remote_ssh') {
+            $this->importRemoteSsh($agentId, $name, $encryption, $passphrase, $remoteSshConfigId);
+        } else {
+            $this->importLocal($agentId, $agent, $name, $encryption, $passphrase, $storageLocationId);
+        }
+    }
+
+    /**
+     * Import a local repository that already exists on disk.
+     */
+    private function importLocal(int $agentId, array $agent, string $name, string $encryption, string $passphrase, ?int $storageLocationId): void
+    {
+        // Resolve storage location (same logic as storeLocal)
+        $location = null;
+        if ($storageLocationId) {
+            $location = $this->db->fetchOne("SELECT * FROM storage_locations WHERE id = ?", [$storageLocationId]);
+        }
+        if (!$location) {
+            $location = $this->db->fetchOne("SELECT * FROM storage_locations WHERE is_default = 1");
+        }
+        if (!$location) {
+            $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
+            $location = ['id' => null, 'path' => $storageSetting['value'] ?? '/var/bbs', 'is_default' => 1];
+        }
+
+        $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
+        $host = $serverHost['value'] ?? '';
+
+        // Determine if this is a non-default storage location (same logic as storeLocal)
+        $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
+        $sshHomePath = rtrim($storageSetting['value'] ?? '/var/bbs/home', '/');
+        $locationPath = rtrim($location['path'], '/');
+        $isNonDefault = $locationPath !== $sshHomePath;
+
+        if ($isNonDefault) {
+            $localPath = $locationPath . '/' . $agentId . '/' . $name;
+            if (!empty($agent['ssh_unix_user']) && !empty($host)) {
+                $sshHost = SshKeyManager::stripHostPort($host);
+                $path = "ssh://{$agent['ssh_unix_user']}@{$sshHost}//{$localPath}";
+            } else {
+                $path = $localPath;
+            }
+        } else {
+            if (!empty($agent['ssh_unix_user']) && !empty($host)) {
+                $path = SshKeyManager::buildSshRepoPath($agent['ssh_unix_user'], $host, $name);
+            } else {
+                $path = rtrim($location['path'], '/') . '/' . $agentId . '/' . $name;
+            }
+            $localPath = rtrim($location['path'], '/') . '/' . $agentId . '/' . $name;
+        }
+
+        $repoId = $this->db->insert('repositories', [
+            'agent_id' => $agentId,
+            'storage_type' => 'local',
+            'storage_location_id' => $location['id'] ?? null,
+            'name' => $name,
+            'path' => $path,
+            'encryption' => $encryption,
+            'passphrase_encrypted' => ($encryption !== 'none' && !empty($passphrase)) ? Encryption::encrypt($passphrase) : null,
+        ]);
+
+        // Fix ownership so the SSH user can access the repo
+        if (!empty($agent['ssh_unix_user'])) {
+            $fixCmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'fix-repo-perms', $localPath, $agent['ssh_unix_user']];
+            exec(implode(' ', array_map('escapeshellarg', $fixCmd)) . ' 2>&1', $fixOutput, $fixRet);
+            if ($fixRet !== 0) {
+                $this->db->insert('server_log', [
+                    'agent_id' => $agentId,
+                    'level' => 'warning',
+                    'message' => "fix-repo-perms failed during import: " . implode(' ', $fixOutput),
+                ]);
+            }
+        }
+
+        // Update .storage-paths for non-default storage locations
+        if ($isNonDefault && !empty($agent['ssh_unix_user'])) {
+            $this->updateAgentStoragePaths($agentId, $agent);
+        }
+
+        // Queue catalog_sync to discover archives and populate file catalog
+        $this->db->insert('backup_jobs', [
+            'agent_id' => $agentId,
+            'repository_id' => $repoId,
+            'backup_plan_id' => null,
+            'task_type' => 'catalog_sync',
+            'status' => 'queued',
+        ]);
+
+        $this->db->insert('server_log', [
+            'agent_id' => $agentId,
+            'level' => 'info',
+            'message' => "Repository \"{$name}\" imported ({$encryption}) from {$localPath}",
+        ]);
+
+        $this->flash('success', "Repository \"{$name}\" imported successfully. A catalog sync has been queued.");
+        $this->redirect("/clients/{$agentId}?tab=repos");
+    }
+
+    /**
+     * Import a repository from a remote SSH host.
+     */
+    private function importRemoteSsh(int $agentId, string $name, string $encryption, string $passphrase, ?int $remoteSshConfigId): void
+    {
+        if (!$remoteSshConfigId) {
+            $this->flash('danger', 'Please select a remote SSH host.');
+            $this->redirect("/clients/{$agentId}?tab=repos");
+            return;
+        }
+
+        $remoteSshService = new RemoteSshService();
+        $config = $remoteSshService->getById($remoteSshConfigId);
+        if (!$config) {
+            $this->flash('danger', 'Remote SSH host not found.');
+            $this->redirect("/clients/{$agentId}?tab=repos");
+            return;
+        }
+
+        $repoPath = $remoteSshService->buildRepoPath($config, $name);
+
+        $repoId = $this->db->insert('repositories', [
+            'agent_id' => $agentId,
+            'storage_type' => 'remote_ssh',
+            'remote_ssh_config_id' => $remoteSshConfigId,
+            'name' => $name,
+            'path' => $repoPath,
+            'encryption' => $encryption,
+            'passphrase_encrypted' => ($encryption !== 'none' && !empty($passphrase)) ? Encryption::encrypt($passphrase) : null,
+        ]);
+
+        // Queue catalog_sync to discover archives
+        $this->db->insert('backup_jobs', [
+            'agent_id' => $agentId,
+            'repository_id' => $repoId,
+            'backup_plan_id' => null,
+            'task_type' => 'catalog_sync',
+            'status' => 'queued',
+        ]);
+
+        $this->db->insert('server_log', [
+            'agent_id' => $agentId,
+            'level' => 'info',
+            'message' => "Remote repository \"{$name}\" imported ({$encryption}) from {$config['remote_user']}@{$config['remote_host']}",
+        ]);
+
+        $this->flash('success', "Repository \"{$name}\" imported from {$config['remote_host']}. A catalog sync has been queued.");
+        $this->redirect("/clients/{$agentId}?tab=repos");
+    }
 }

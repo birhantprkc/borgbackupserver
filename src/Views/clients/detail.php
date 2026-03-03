@@ -588,6 +588,96 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         if (solo) solo.style.display = '';
         if (create) create.style.display = 'none';
     }
+    function showImportRepo() {
+        var grid = document.getElementById('repo-cards-grid');
+        var solo = document.getElementById('add-repo-card-solo');
+        var create = document.getElementById('create-repo-section');
+        var imp = document.getElementById('import-repo-section');
+        if (grid) grid.style.display = 'none';
+        if (solo) solo.style.display = 'none';
+        if (create) create.style.display = 'none';
+        if (imp) imp.style.display = '';
+        // Reset import state
+        var verifyForm = document.getElementById('import-verify-form');
+        var confirmSec = document.getElementById('import-confirm-section');
+        var errDiv = document.getElementById('import-verify-error');
+        if (verifyForm) verifyForm.style.display = '';
+        if (confirmSec) confirmSec.style.display = 'none';
+        if (errDiv) errDiv.classList.add('d-none');
+    }
+    function hideImportRepo() {
+        var grid = document.getElementById('repo-cards-grid');
+        var solo = document.getElementById('add-repo-card-solo');
+        var imp = document.getElementById('import-repo-section');
+        if (grid) grid.style.display = '';
+        if (solo) solo.style.display = '';
+        if (imp) imp.style.display = 'none';
+    }
+    function toggleImportRemoteSshConfig() {
+        var sel = document.getElementById('importStorageType');
+        var locRow = document.getElementById('importStorageLocationRow');
+        var remoteRow = document.getElementById('importRemoteSshConfigRow');
+        var isLocal = sel && sel.value !== 'remote_ssh';
+        if (locRow) locRow.style.display = isLocal ? '' : 'none';
+        if (remoteRow) remoteRow.style.display = isLocal ? 'none' : '';
+    }
+    function verifyImportRepo() {
+        var btn = document.getElementById('importVerifyBtn');
+        var errDiv = document.getElementById('import-verify-error');
+        errDiv.classList.add('d-none');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Verifying...';
+
+        var formData = new URLSearchParams();
+        formData.append('agent_id', '<?= $agent['id'] ?>');
+        formData.append('name', document.getElementById('importName').value);
+        formData.append('passphrase', document.getElementById('importPassphrase').value);
+        formData.append('storage_type', document.getElementById('importStorageType').value);
+
+        var locSel = document.getElementById('importStorageLocation');
+        if (locSel) formData.append('storage_location_id', locSel.value);
+
+        var remoteSel = document.getElementById('importRemoteSshConfig');
+        if (remoteSel) formData.append('remote_ssh_config_id', remoteSel.value);
+
+        fetch('/repositories/import/verify', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: formData.toString(),
+            credentials: 'same-origin'
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-search me-1"></i> Verify Repository';
+
+            if (data.status === 'ok') {
+                document.getElementById('import-verify-form').style.display = 'none';
+                document.getElementById('import-confirm-section').style.display = '';
+
+                document.getElementById('import-confirm-name').textContent = document.getElementById('importName').value;
+                document.getElementById('import-confirm-encryption').textContent = data.encryption;
+                document.getElementById('import-confirm-archives').textContent = data.archive_count + ' archive' + (data.archive_count !== 1 ? 's' : '');
+
+                // Populate hidden form fields
+                document.getElementById('importConfirmName').value = document.getElementById('importName').value;
+                document.getElementById('importConfirmStorageType').value = document.getElementById('importStorageType').value;
+                document.getElementById('importConfirmPassphrase').value = document.getElementById('importPassphrase').value;
+                document.getElementById('importConfirmEncryption').value = data.encryption;
+                if (locSel) document.getElementById('importConfirmLocationId').value = locSel.value;
+                if (remoteSel) document.getElementById('importConfirmRemoteSshConfigId').value = remoteSel.value;
+            } else {
+                errDiv.textContent = data.error || 'Verification failed.';
+                errDiv.classList.remove('d-none');
+            }
+        })
+        .catch(function() {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-search me-1"></i> Verify Repository';
+            errDiv.textContent = 'Error contacting server. Please try again.';
+            errDiv.classList.remove('d-none');
+        });
+    }
     </script>
 
     <?php if (!empty($repositories)): ?>
@@ -687,6 +777,14 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 </div>
             </div>
         </div>
+        <div class="col-md-6 col-lg-4">
+            <div class="card border-0 shadow-sm h-100 card-dashed" onclick="showImportRepo()">
+                <div class="card-body d-flex flex-column align-items-center justify-content-center text-muted p-4">
+                    <i class="bi bi-box-arrow-in-down" style="font-size:2rem;"></i>
+                    <div class="mt-2 fw-semibold">Import Existing</div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Delete Repo Modals (for repos with S3 sync) -->
@@ -726,13 +824,16 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
 
     <?php endif; ?>
     <?php if (empty($repositories)): ?>
-    <div id="add-repo-card-solo" style="cursor:pointer;" onclick="showCreateRepo()">
+    <div id="add-repo-card-solo">
         <div class="card border-0 shadow-sm mb-4 card-dashed">
             <div class="card-body d-flex flex-column align-items-center justify-content-center text-muted py-5">
                 <i class="bi bi-archive" style="font-size:2rem;"></i>
                 <div class="mt-2 fw-semibold">Create a Repository to get started</div>
                 <small class="mt-1 text-center" style="max-width:400px;">A repository is a virtual disk where your backup data is stored on the backup server.</small>
-                <span class="btn btn-sm btn-outline-primary mt-3"><i class="bi bi-plus-circle me-1"></i>Add Repository</span>
+                <div class="mt-3 d-flex gap-2">
+                    <span class="btn btn-sm btn-outline-primary" style="cursor:pointer;" onclick="showCreateRepo()"><i class="bi bi-plus-circle me-1"></i>Add Repository</span>
+                    <span class="btn btn-sm btn-outline-secondary" style="cursor:pointer;" onclick="showImportRepo()"><i class="bi bi-box-arrow-in-down me-1"></i>Import Existing</span>
+                </div>
             </div>
         </div>
     </div>
@@ -845,6 +946,132 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     </div>
                 </div>
             </form>
+        </div>
+    </div>
+    </div>
+
+    <!-- Import existing repo -->
+    <div id="import-repo-section" style="display:none;">
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-body fw-semibold d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-box-arrow-in-down me-1"></i> Import Existing Repository</span>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="hideImportRepo()"><i class="bi bi-arrow-left me-1"></i>Back</button>
+        </div>
+        <div class="card-body">
+            <!-- Step 1: Verify form -->
+            <div id="import-verify-form">
+                <div class="row mb-3">
+                    <label class="col-md-3 col-form-label fw-semibold">Name</label>
+                    <div class="col-md-6">
+                        <input type="text" class="form-control" id="importName" maxlength="20" placeholder="RepoName">
+                    </div>
+                    <div class="col-md-3 form-text pt-2">Must match the directory name of the existing repo.</div>
+                </div>
+
+                <div class="row mb-3">
+                    <label class="col-md-3 col-form-label fw-semibold">Storage</label>
+                    <div class="col-md-6">
+                        <select class="form-select" id="importStorageType" onchange="toggleImportRemoteSshConfig()">
+                            <option value="local">Local (this server)</option>
+                            <?php if (!empty($remoteSshConfigs)): ?>
+                            <option value="remote_ssh">Remote SSH</option>
+                            <?php endif; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-3 form-text pt-2">Where the repository is located.</div>
+                </div>
+
+                <?php if (!empty($storageLocations) && count($storageLocations) > 1): ?>
+                <div class="row mb-3" id="importStorageLocationRow">
+                    <label class="col-md-3 col-form-label fw-semibold">Location</label>
+                    <div class="col-md-6">
+                        <select class="form-select" id="importStorageLocation">
+                            <?php foreach ($storageLocations as $sl): ?>
+                            <option value="<?= $sl['id'] ?>" <?= $sl['is_default'] ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($sl['label']) ?> (<?= htmlspecialchars($sl['path']) ?>)
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-3 form-text pt-2">
+                        <a href="/storage-locations">Manage locations</a>
+                    </div>
+                </div>
+                <?php endif; ?>
+
+                <div class="row mb-3" id="importRemoteSshConfigRow" style="display:none;">
+                    <label class="col-md-3 col-form-label fw-semibold">Remote Host</label>
+                    <div class="col-md-6">
+                        <select class="form-select" id="importRemoteSshConfig">
+                            <option value="">Select a remote host...</option>
+                            <?php foreach ($remoteSshConfigs ?? [] as $rsc): ?>
+                            <option value="<?= $rsc['id'] ?>"><?= htmlspecialchars($rsc['name']) ?> (<?= htmlspecialchars($rsc['remote_user']) ?>@<?= htmlspecialchars($rsc['remote_host']) ?>)</option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-3 form-text pt-2">
+                        <a href="/storage-locations">Manage hosts</a>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <label class="col-md-3 col-form-label fw-semibold">Passphrase</label>
+                    <div class="col-md-6">
+                        <input type="password" class="form-control" id="importPassphrase" placeholder="Enter repository passphrase (blank if unencrypted)">
+                    </div>
+                    <div class="col-md-3 form-text pt-2">The passphrase used when the repo was created.</div>
+                </div>
+
+                <div class="alert alert-info small mb-3">
+                    <i class="bi bi-info-circle me-1"></i>
+                    The repository must already exist on disk. For local storage, the expected path is
+                    <code>&lt;storage location&gt;/<?= $agent['id'] ?>/&lt;name&gt;</code>.
+                    The repo must be in a <a href="/storage-locations">configured storage location</a>.
+                </div>
+
+                <div id="import-verify-error" class="alert alert-danger d-none"></div>
+
+                <div class="row">
+                    <div class="col-md-6 offset-md-3">
+                        <button type="button" class="btn btn-primary" id="importVerifyBtn" onclick="verifyImportRepo()">
+                            <i class="bi bi-search me-1"></i> Verify Repository
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Confirmation -->
+            <div id="import-confirm-section" style="display:none;">
+                <h6 class="fw-semibold mb-3">Repository Verified</h6>
+                <table class="table table-sm mb-3" style="max-width:500px;">
+                    <tr><th style="width:150px;">Repository</th><td id="import-confirm-name"></td></tr>
+                    <tr><th>Password</th><td>******** <span class="text-muted small">(Hidden)</span></td></tr>
+                    <tr><th>Encryption</th><td id="import-confirm-encryption"></td></tr>
+                    <tr><th>Recovery Points</th><td id="import-confirm-archives"></td></tr>
+                </table>
+                <div class="alert alert-warning small mb-3">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    A catalog rebuild task will be queued after import. File permissions will be changed to what BBS requires for backup operations.
+                </div>
+                <form method="POST" action="/repositories/import">
+                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                    <input type="hidden" name="agent_id" value="<?= $agent['id'] ?>">
+                    <input type="hidden" name="name" id="importConfirmName">
+                    <input type="hidden" name="storage_type" id="importConfirmStorageType">
+                    <input type="hidden" name="storage_location_id" id="importConfirmLocationId">
+                    <input type="hidden" name="remote_ssh_config_id" id="importConfirmRemoteSshConfigId">
+                    <input type="hidden" name="passphrase" id="importConfirmPassphrase">
+                    <input type="hidden" name="encryption" id="importConfirmEncryption">
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-check-circle me-1"></i> Proceed with Import
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('import-confirm-section').style.display='none'; document.getElementById('import-verify-form').style.display='';">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
     </div>
