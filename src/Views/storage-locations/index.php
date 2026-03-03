@@ -1228,11 +1228,8 @@ function applyRemotePreset(select, form) {
 $s3Configured = !empty($settings['s3_endpoint']) && !empty($settings['s3_bucket']);
 $s3SyncServerBackups = ($settings['s3_sync_server_backups'] ?? '0') === '1';
 ?>
-<div class="d-flex justify-content-between align-items-center mb-3 mt-5">
+<div class="mb-3 mt-5">
     <h5 class="mb-0"><i class="bi bi-bucket me-2"></i>S3 Offsite Sync</h5>
-    <a href="/storage-locations?section=s3" class="btn btn-sm <?= $s3Configured ? 'btn-outline-primary' : 'btn-success' ?>">
-        <i class="bi bi-gear me-1"></i> <?= $s3Configured ? 'Manage' : 'Configure' ?>
-    </a>
 </div>
 
 <?php if (!$s3Configured): ?>
@@ -1242,7 +1239,21 @@ $s3SyncServerBackups = ($settings['s3_sync_server_backups'] ?? '0') === '1';
     <div class="col-xl-4 col-lg-6">
         <div class="card border-0 shadow-sm">
             <div class="card-body">
-                <h6 class="mb-2"><i class="bi bi-cloud-arrow-up me-1 text-primary"></i> Global S3</h6>
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h6 class="mb-0"><i class="bi bi-cloud-arrow-up me-1 text-primary"></i> Global S3</h6>
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown">
+                            <i class="bi bi-three-dots-vertical"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <a class="dropdown-item" href="/storage-locations?section=s3">
+                                    <i class="bi bi-gear me-1"></i> Settings
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
                 <div class="row g-1 small mb-2">
                     <div class="col-5 text-muted">Endpoint</div>
                     <div class="col-7 text-truncate"><?= htmlspecialchars($settings['s3_endpoint'] ?? '') ?></div>
