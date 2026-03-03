@@ -801,9 +801,9 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     </div>
                     <div class="col-md-3 form-text pt-2">
                         <?php if (empty($remoteSshConfigs)): ?>
-                        <a href="/storage-locations?section=remote">Configure remote hosts</a>
+                        <a href="/storage-locations">Configure remote hosts</a>
                         <?php else: ?>
-                        <a href="/storage-locations?section=remote">Manage hosts</a>
+                        <a href="/storage-locations">Manage hosts</a>
                         <?php endif; ?>
                     </div>
                 </div>

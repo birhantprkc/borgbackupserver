@@ -5,524 +5,18 @@ function formatStorageBytes(int $bytes): string {
     return ServerStats::formatBytes($bytes);
 }
 
-$section = $_GET['section'] ?? 'overview';
-$_localRepoCount = $localRepoCount ?? 0;
-$_remoteRepoCount = $remoteRepoCount ?? 0;
-$_s3Configured = !empty($settings['s3_endpoint']) && !empty($settings['s3_bucket']);
-$_s3SyncServerBackups = ($settings['s3_sync_server_backups'] ?? '0') === '1';
+$section = $_GET['section'] ?? '';
 ?>
 
-<!-- Storage Sub-Navigation -->
-<ul class="nav storage-subnav mb-4">
-    <li class="nav-item">
-        <a class="nav-link <?= $section === 'overview' ? 'active' : '' ?>" href="/storage-locations">
-            <i class="bi bi-grid me-1"></i> Overview
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link <?= $section === 's3' ? 'active' : '' ?>" href="/storage-locations?section=s3">
-            <i class="bi bi-bucket me-1"></i> S3 Sync
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link <?= ($section === 'remote' || $section === 'wizard') ? 'active' : '' ?>" href="/storage-locations?section=remote">
-            <i class="bi bi-hdd-network me-1"></i> Remote Storage
-        </a>
-    </li>
-</ul>
-
-<?php if ($section === 'overview'): ?>
-<!-- Storage Overview -->
-
-<!-- Local Storage Locations -->
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        <h5 class="mb-1"><i class="bi bi-hdd me-1"></i> Local Storage</h5>
-        <p class="text-muted small mb-0">Manage local storage locations for borg repositories. Each repository can be assigned to a specific location.</p>
-    </div>
-    <button class="btn btn-sm btn-success" data-bs-toggle="collapse" data-bs-target="#addLocationForm">
-        <i class="bi bi-plus-circle me-1"></i> Add Location
-    </button>
-</div>
-
-<!-- Add Location Form -->
-<div class="collapse mb-4" id="addLocationForm">
-    <div class="card border-0 shadow-sm">
-        <div class="card-body">
-            <form method="POST" action="/storage-locations">
-                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                <div class="row g-3">
-                    <div class="col-md-3">
-                        <label class="form-label fw-semibold">Label</label>
-                        <input type="text" class="form-control" name="label" placeholder="e.g. Secondary Disk" required>
-                    </div>
-                    <div class="col-md-5">
-                        <label class="form-label fw-semibold">Path</label>
-                        <input type="text" class="form-control" name="path" placeholder="/mnt/storage2" required>
-                        <div class="form-text">Absolute path to the storage directory. Must exist and be writable.</div>
-                    </div>
-                    <div class="col-md-2 d-flex align-items-center pt-4">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="is_default" id="newIsDefault">
-                            <label class="form-check-label" for="newIsDefault">Default</label>
-                        </div>
-                    </div>
-                    <div class="col-md-2 d-flex align-items-end">
-                        <button type="submit" class="btn btn-sm btn-success w-100">Create</button>
-                    </div>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- Storage Location Cards -->
-<?php if (empty($locations)): ?>
-<div class="alert alert-info">No storage locations configured. Add one to get started.</div>
-<?php else: ?>
-<div class="row g-3 mb-5">
-    <?php foreach ($locations as $loc): ?>
-    <div class="col-xl-4 col-lg-6">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                    <div>
-                        <h6 class="mb-1">
-                            <?= htmlspecialchars($loc['label']) ?>
-                            <?php if ($loc['is_default']): ?>
-                            <span class="badge bg-primary ms-1">Default</span>
-                            <?php endif; ?>
-                        </h6>
-                        <code class="small text-muted"><?= htmlspecialchars($loc['path']) ?></code>
-                    </div>
-                    <div class="dropdown">
-                        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown">
-                            <i class="bi bi-three-dots-vertical"></i>
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu-end">
-                            <li>
-                                <a class="dropdown-item" href="#" data-bs-toggle="collapse"
-                                   data-bs-target="#editLoc<?= $loc['id'] ?>"
-                                   onclick="event.preventDefault();">
-                                    <i class="bi bi-pencil me-1"></i> Edit
-                                </a>
-                            </li>
-                            <?php if (!$loc['is_default'] && $loc['repo_count'] === 0): ?>
-                            <li><hr class="dropdown-divider"></li>
-                            <li>
-                                <form method="POST" action="/storage-locations/<?= $loc['id'] ?>/delete"
-                                      onsubmit="return confirm('Delete storage location \'<?= htmlspecialchars($loc['label'], ENT_QUOTES) ?>\'?')">
-                                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                    <button type="submit" class="dropdown-item text-danger">
-                                        <i class="bi bi-trash me-1"></i> Delete
-                                    </button>
-                                </form>
-                            </li>
-                            <?php endif; ?>
-                        </ul>
-                    </div>
-                </div>
-
-                <!-- Disk Usage -->
-                <?php if ($loc['disk_total'] > 0): ?>
-                <div class="mb-2">
-                    <div class="d-flex justify-content-between small text-muted mb-1">
-                        <span><?= formatStorageBytes($loc['disk_used']) ?> used</span>
-                        <span><?= formatStorageBytes($loc['disk_free']) ?> free</span>
-                    </div>
-                    <div class="progress" style="height: 6px;">
-                        <?php
-                        $pct = $loc['disk_percent'];
-                        $barColor = $pct >= 90 ? 'danger' : ($pct >= 75 ? 'warning' : 'success');
-                        ?>
-                        <div class="progress-bar bg-<?= $barColor ?>" style="width: <?= $pct ?>%"></div>
-                    </div>
-                    <div class="text-muted small mt-1">
-                        <?= formatStorageBytes($loc['disk_total']) ?> total &middot; <?= $pct ?>% used
-                    </div>
-                </div>
-                <?php else: ?>
-                <div class="text-muted small mb-2"><i class="bi bi-exclamation-triangle me-1"></i>Path not accessible</div>
-                <?php endif; ?>
-
-                <!-- Stats -->
-                <div class="d-flex gap-3 small text-muted">
-                    <span><i class="bi bi-archive me-1"></i><?= $loc['repo_count'] ?> repo<?= $loc['repo_count'] !== 1 ? 's' : '' ?></span>
-                    <span><i class="bi bi-database me-1"></i><?= formatStorageBytes($loc['total_size']) ?></span>
-                </div>
-            </div>
-
-            <!-- Inline Edit Form (collapsed) -->
-            <div class="collapse" id="editLoc<?= $loc['id'] ?>">
-                <div class="card-footer bg-light">
-                    <form method="POST" action="/storage-locations/<?= $loc['id'] ?>">
-                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                        <div class="row g-2">
-                            <div class="col-md-4">
-                                <input type="text" class="form-control form-control-sm" name="label"
-                                       value="<?= htmlspecialchars($loc['label']) ?>" required>
-                            </div>
-                            <div class="col-md-4">
-                                <input type="text" class="form-control form-control-sm" name="path"
-                                       value="<?= htmlspecialchars($loc['path']) ?>" required
-                                       <?= $loc['repo_count'] > 0 ? 'readonly title="Cannot change path while repos exist"' : '' ?>>
-                            </div>
-                            <div class="col-md-2 d-flex align-items-center">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="is_default"
-                                           id="editDefault<?= $loc['id'] ?>"
-                                           <?= $loc['is_default'] ? 'checked' : '' ?>>
-                                    <label class="form-check-label small" for="editDefault<?= $loc['id'] ?>">Default</label>
-                                </div>
-                            </div>
-                            <div class="col-md-2 d-flex align-items-center">
-                                <button type="submit" class="btn btn-sm btn-primary w-100">Save</button>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
-    <?php endforeach; ?>
-</div>
-<?php endif; ?>
-
-<!-- Remote Storage (SSH) Summary -->
-<div class="col-12 mb-4">
-    <div class="card border-0 shadow-sm">
-        <div class="card-header bg-primary bg-opacity-10 fw-semibold">
-            <i class="bi bi-hdd-network me-1"></i> Remote Storage (SSH)
-        </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-7">
-                    <p class="small text-muted mb-2">Remote Storage via SSH offers an affordable and low-impact way of having backups that are offsite and secure. Requires less infrastructure and gives peace of mind knowing your backups are off-site. The borg client must be executable on the remote server. Setup wizards for BorgBase, Hetzner Storage Box, and rsync.net are available.</p>
-                    <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
-                        <a href="/storage-locations?section=remote" class="btn btn-sm <?= empty($remoteSshConfigs) ? 'btn-primary' : 'btn-outline-primary' ?> text-nowrap">
-                            <?php if (empty($remoteSshConfigs)): ?>
-                            <i class="bi bi-plus-lg me-1"></i> Add SSH Host
-                            <?php else: ?>
-                            <i class="bi bi-gear me-1"></i> Manage Hosts
-                            <?php endif; ?>
-                        </a>
-                        <?php if (!empty($remoteSshConfigs)): ?>
-                        <span class="small text-muted">
-                            <span class="fw-semibold text-body"><?= count($remoteSshConfigs) ?></span> host<?= count($remoteSshConfigs) !== 1 ? 's' : '' ?>,
-                            <span class="fw-semibold text-body"><?= $_remoteRepoCount ?></span> remote repo<?= $_remoteRepoCount !== 1 ? 's' : '' ?>
-                        </span>
-                        <?php endif; ?>
-                    </div>
-                </div>
-                <div class="col-md-5">
-                    <?php if (empty($remoteSshConfigs)): ?>
-                    <div class="text-center text-muted py-3">
-                        <i class="bi bi-hdd-network d-block opacity-50" style="font-size: 2rem;"></i>
-                        <p class="small mb-0 mt-2">No remote hosts configured yet.</p>
-                    </div>
-                    <?php else: ?>
-                    <?php foreach ($remoteSshConfigs as $rsc): ?>
-                    <div class="card border mb-2">
-                        <div class="card-body py-2 px-3">
-                            <div class="d-flex align-items-center gap-2" style="min-width: 0;">
-                                <div class="flex-shrink-0" style="font-size: 1.4rem;">
-                                    <?php if (($rsc['provider'] ?? '') === 'borgbase'): ?>
-                                    <img src="/images/borgbase.svg" alt="" style="width:24px;height:24px;border-radius:50%">
-                                    <?php elseif (($rsc['provider'] ?? '') === 'hetzner'): ?>
-                                    <img src="/images/hetzner-h.png" alt="" style="width:24px;height:24px;border-radius:50%">
-                                    <?php else: ?>
-                                    <i class="bi bi-server text-primary opacity-75"></i>
-                                    <?php endif; ?>
-                                </div>
-                                <div class="flex-grow-1" style="min-width: 0;">
-                                    <span class="fw-semibold small"><?= htmlspecialchars($rsc['name']) ?></span>
-                                    <br><span class="text-muted small d-none d-md-inline text-truncate d-md-block" style="max-width: 100%;"><?= htmlspecialchars($rsc['remote_user']) ?>@<?= htmlspecialchars($rsc['remote_host']) ?><?= (int)$rsc['remote_port'] !== 22 ? ':' . (int)$rsc['remote_port'] : '' ?></span>
-                                </div>
-                                <span class="badge bg-success flex-shrink-0"><i class="bi bi-check-circle me-1"></i>Active</span>
-                            </div>
-                        </div>
-                    </div>
-                    <?php endforeach; ?>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- S3 Offsite Sync (Global) Summary -->
-<div class="col-12">
-    <div class="card border-0 shadow-sm">
-        <div class="card-header bg-primary bg-opacity-10 fw-semibold">
-            <i class="bi bi-bucket me-1"></i> S3 Offsite Sync (Global)
-        </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-7">
-                    <p class="small text-muted mb-2">By combining the power and speed of local repositories, the S3 Sync feature keeps your repos and software database in a second, off-site location for maximum security and disaster recovery. Supports AWS S3, Backblaze B2, Wasabi, and any S3-compatible endpoint.</p>
-                    <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
-                        <a href="/storage-locations?section=s3" class="btn btn-sm <?= $_s3Configured ? 'btn-outline-primary' : 'btn-primary' ?> text-nowrap">
-                            <i class="bi bi-gear me-1"></i> Configure S3
-                        </a>
-                    </div>
-                </div>
-                <div class="col-md-5">
-                    <?php if ($_s3Configured): ?>
-                    <div class="card">
-                        <div class="card-body py-2 px-3">
-                            <div class="row g-2 small">
-                                <div class="col-5 text-muted">Status</div>
-                                <div class="col-7"><span class="badge bg-success">Configured</span></div>
-                                <div class="col-5 text-muted">Endpoint</div>
-                                <div class="col-7"><?= htmlspecialchars($settings['s3_endpoint'] ?? '') ?></div>
-                                <div class="col-5 text-muted">Bucket</div>
-                                <div class="col-7"><?= htmlspecialchars($settings['s3_bucket'] ?? '') ?></div>
-                                <?php if (!empty($settings['s3_region'])): ?>
-                                <div class="col-5 text-muted">Region</div>
-                                <div class="col-7"><?= htmlspecialchars($settings['s3_region']) ?></div>
-                                <?php endif; ?>
-                                <div class="col-5 text-muted">Server Sync</div>
-                                <div class="col-7">
-                                    <?php if ($_s3SyncServerBackups): ?>
-                                    <span class="badge bg-success">Enabled</span>
-                                    <?php else: ?>
-                                    <span class="badge bg-secondary">Disabled</span>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <?php else: ?>
-                    <div class="text-center py-2">
-                        <p class="text-muted small mb-2">S3 offsite sync is not configured yet.</p>
-                    </div>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-<?php endif; ?>
-
-<?php if ($section === 'remote'): ?>
-<!-- Remote Storage (SSH) Section -->
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        <h5 class="mb-1">Remote Storage (SSH)</h5>
-        <p class="text-muted small mb-0">Configure remote SSH hosts for offsite borg repositories (rsync.net, BorgBase, Hetzner Storage Box, etc.)</p>
-    </div>
-    <a href="/storage-locations?section=wizard" class="btn btn-sm btn-primary">
-        <i class="bi bi-plus-lg me-1"></i> Add Host
-    </a>
-</div>
-
-<?php if (empty($remoteSshConfigs)): ?>
-<div class="card border-0 shadow-sm">
-    <div class="card-body text-center py-5 text-muted">
-        <i class="bi bi-hdd-network display-4 mb-3 d-block opacity-50"></i>
-        <p>No remote SSH storage hosts configured yet.</p>
-        <p class="small">Add a remote host to create repositories on providers like rsync.net, BorgBase, or Hetzner Storage Box.</p>
-    </div>
-</div>
-<?php else: ?>
-<div class="row g-3">
-    <?php foreach ($remoteSshConfigs as $rsc): ?>
-    <div class="col-lg-6">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center">
-                <span class="fw-semibold"><?php
-                    $provider = $rsc['provider'] ?? null;
-                    if ($provider === 'borgbase') {
-                        echo '<img src="/images/borgbase.svg" alt="" style="width:16px;height:16px;border-radius:50%;vertical-align:text-bottom" class="me-1"> ';
-                    } elseif ($provider === 'hetzner') {
-                        echo '<img src="/images/hetzner-h.png" alt="" style="width:16px;height:16px;border-radius:50%;vertical-align:text-bottom" class="me-1"> ';
-                    } else {
-                        echo '<i class="bi bi-hdd-network me-1"></i> ';
-                    }
-                ?><?= htmlspecialchars($rsc['name']) ?></span>
-                <div class="btn-group btn-group-sm">
-                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="testRemoteSsh(<?= $rsc['id'] ?>, this)"
-                            title="Test Connection"><i class="bi bi-plug"></i></button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm"
-                            data-bs-toggle="modal" data-bs-target="#editRemoteSshModal<?= $rsc['id'] ?>"
-                            title="Edit"><i class="bi bi-pencil"></i></button>
-                    <button type="button" class="btn btn-outline-danger btn-sm"
-                            onclick="deleteRemoteSsh(<?= $rsc['id'] ?>, '<?= htmlspecialchars(addslashes($rsc['name'])) ?>')"
-                            title="Delete"><i class="bi bi-trash"></i></button>
-                </div>
-            </div>
-            <div class="card-body">
-                <div class="row g-2 small">
-                    <?php if (!empty($rsc['provider'])): ?>
-                    <div class="col-4 text-muted">Provider</div>
-                    <div class="col-8"><?php
-                        $providerNames = ['borgbase' => 'BorgBase', 'hetzner' => 'Hetzner Storage Box', 'rsync.net' => 'rsync.net'];
-                        echo htmlspecialchars($providerNames[$rsc['provider']] ?? ucfirst($rsc['provider']));
-                    ?></div>
-                    <?php endif; ?>
-                    <div class="col-4 text-muted">Host</div>
-                    <div class="col-8"><span class="text-info"><?= htmlspecialchars($rsc['remote_user']) ?>@<?= htmlspecialchars($rsc['remote_host']) ?><?= (int)$rsc['remote_port'] !== 22 ? ':' . (int)$rsc['remote_port'] : '' ?></span></div>
-                    <div class="col-4 text-muted">Base Path</div>
-                    <div class="col-8"><?= htmlspecialchars($rsc['remote_base_path']) ?></div>
-                    <?php if (!empty($rsc['borg_remote_path'])): ?>
-                    <div class="col-4 text-muted">Borg Binary</div>
-                    <div class="col-8"><?= htmlspecialchars($rsc['borg_remote_path']) ?></div>
-                    <?php endif; ?>
-                    <div class="col-4 text-muted">SSH Key</div>
-                    <div class="col-8"><span class="badge bg-success"><i class="bi bi-key me-1"></i>Configured</span></div>
-                </div>
-                <div id="remoteSshTestResult<?= $rsc['id'] ?>" class="mt-2"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Edit Modal for this config -->
-    <div class="modal fade" id="editRemoteSshModal<?= $rsc['id'] ?>" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <form method="POST" action="/remote-ssh-configs/<?= $rsc['id'] ?>/update">
-                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Edit Remote SSH Host</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Name</label>
-                            <input type="text" class="form-control" name="name" value="<?= htmlspecialchars($rsc['name']) ?>" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Provider Preset</label>
-                            <select class="form-select" onchange="applyRemotePreset(this, this.closest('form'))">
-                                <option value="">Custom</option>
-                                <option value="rsync.net">rsync.net</option>
-                                <option value="borgbase">BorgBase</option>
-                                <option value="hetzner">Hetzner Storage Box</option>
-                            </select>
-                        </div>
-                        <div class="row g-3 mb-3">
-                            <div class="col-8">
-                                <label class="form-label fw-semibold">Host</label>
-                                <input type="text" class="form-control" name="remote_host" value="<?= htmlspecialchars($rsc['remote_host']) ?>" required>
-                            </div>
-                            <div class="col-4">
-                                <label class="form-label fw-semibold">Port</label>
-                                <input type="number" class="form-control" name="remote_port" value="<?= (int)$rsc['remote_port'] ?>" min="1" max="65535">
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Username</label>
-                            <input type="text" class="form-control" name="remote_user" value="<?= htmlspecialchars($rsc['remote_user']) ?>" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Base Path</label>
-                            <input type="text" class="form-control" name="remote_base_path" value="<?= htmlspecialchars($rsc['remote_base_path']) ?>">
-                            <div class="form-text">Base directory on the remote host. Use <code>./</code> for relative paths (rsync.net default).</div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">SSH Private Key</label>
-                            <textarea class="form-control font-monospace" name="ssh_private_key" rows="4" placeholder="Leave blank to keep existing key"></textarea>
-                            <div class="form-text">Paste the private key (PEM format). Leave blank to keep the current key.</div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Remote Borg Path <span class="text-muted fw-normal">(optional)</span></label>
-                            <input type="text" class="form-control" name="borg_remote_path" value="<?= htmlspecialchars($rsc['borg_remote_path'] ?? '') ?>">
-                            <div class="form-text">Custom borg binary on the remote host (e.g., <code>borg1</code> for rsync.net). Leave blank for default <code>borg</code>.</div>
-                        </div>
-                        <div class="form-check mb-3">
-                            <input class="form-check-input" type="checkbox" name="append_repo_name" value="1" id="editAppendRepoName<?= $rsc['id'] ?>" <?= ($rsc['append_repo_name'] ?? 1) ? 'checked' : '' ?>>
-                            <label class="form-check-label" for="editAppendRepoName<?= $rsc['id'] ?>">Append repository name to base path</label>
-                            <div class="form-text">Uncheck for providers like BorgBase where each SSH user maps to a single fixed repo path.</div>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Save Changes</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-    <?php endforeach; ?>
-</div>
-<?php endif; ?>
-
-<script>
-function testRemoteSsh(id, btn) {
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-    var resultDiv = document.getElementById('remoteSshTestResult' + id);
-
-    var csrfToken = document.querySelector('input[name=csrf_token]').value;
-    fetch('/remote-ssh-configs/' + id + '/test', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: 'csrf_token=' + encodeURIComponent(csrfToken)
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.status === 'ok') {
-            resultDiv.innerHTML = '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Connected' + (data.version ? ' — ' + data.version.replace(/</g, '&lt;') : '') + '</span>';
-        } else {
-            resultDiv.innerHTML = '<span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>' + (data.error || 'Failed').replace(/</g, '&lt;') + '</span>';
-        }
-    })
-    .catch(function() {
-        resultDiv.innerHTML = '<span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Request failed</span>';
-    })
-    .finally(function() {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-plug"></i>';
-    });
-}
-
-function deleteRemoteSsh(id, name) {
-    if (!confirm('Delete remote SSH host "' + name + '"?')) return;
-    var form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '/remote-ssh-configs/' + id + '/delete';
-    var csrf = document.createElement('input');
-    csrf.type = 'hidden';
-    csrf.name = 'csrf_token';
-    csrf.value = document.querySelector('input[name=csrf_token]').value;
-    form.appendChild(csrf);
-    document.body.appendChild(form);
-    form.submit();
-}
-
-function applyRemotePreset(select, form) {
-    var preset = select.value;
-    var portField = form.querySelector('[name=remote_port]');
-    var basePathField = form.querySelector('[name=remote_base_path]');
-    var borgPathField = form.querySelector('[name=borg_remote_path]');
-    var appendField = form.querySelector('[name=append_repo_name]');
-
-    switch (preset) {
-        case 'rsync.net':
-            if (portField) portField.value = '22';
-            if (basePathField) basePathField.value = './';
-            if (borgPathField) borgPathField.value = 'borg1';
-            if (appendField) appendField.checked = true;
-            break;
-        case 'borgbase':
-            if (portField) portField.value = '22';
-            if (basePathField) basePathField.value = './repo';
-            if (borgPathField) borgPathField.value = '';
-            if (appendField) appendField.checked = false;
-            break;
-        case 'hetzner':
-            if (portField) portField.value = '23';
-            if (basePathField) basePathField.value = './';
-            if (borgPathField) borgPathField.value = 'borg-1.4';
-            if (appendField) appendField.checked = true;
-            break;
-    }
-}
-</script>
-<?php endif; ?>
-
 <?php if ($section === 's3'): ?>
-<!-- S3 Sync Section -->
+<!-- ==================== S3 Sync Settings ==================== -->
+<nav class="mb-4">
+    <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="/storage-locations">Storage</a></li>
+        <li class="breadcrumb-item active">S3 Sync Settings</li>
+    </ol>
+</nav>
+
 <form method="POST" action="/storage-locations/s3">
     <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
 
@@ -656,15 +150,17 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
     });
 });
 </script>
-<?php endif; ?>
 
-<?php if ($section === 'wizard'): ?>
-<!-- Add Remote Storage Host Wizard -->
-<a href="/storage-locations?section=remote" class="text-decoration-none small">
-    <i class="bi bi-arrow-left me-1"></i> Back to Remote Storage
-</a>
+<?php elseif ($section === 'wizard'): ?>
+<!-- ==================== Add Remote Storage Host Wizard ==================== -->
+<nav class="mb-4">
+    <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="/storage-locations">Storage</a></li>
+        <li class="breadcrumb-item active">Add SSH Host</li>
+    </ol>
+</nav>
 
-<h5 class="mt-3 mb-1">Add Remote Storage Host</h5>
+<h5 class="mb-1">Add Remote Storage Host</h5>
 <p class="text-muted small mb-4">Choose your provider to get started, or use Custom for any SSH-accessible server with borg client.</p>
 
 <div id="wizardProviders" class="row g-3 mb-4">
@@ -943,6 +439,74 @@ scp ~/.ssh/rsyncnet.pub <span class="text-warning" id="rsnScpUser">USERNAME</spa
                         <i class="bi bi-plus-lg me-1"></i> Add Host
                     </button>
                     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="hideWizardForm()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Add Remote SSH Host Modal (Custom) -->
+<div class="modal fade" id="addRemoteSshModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="/remote-ssh-configs/create">
+                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Remote SSH Host</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Name</label>
+                        <input type="text" class="form-control" name="name" placeholder="e.g., rsync.net Production" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Provider Preset</label>
+                        <select class="form-select" onchange="applyRemotePreset(this, this.closest('form'))">
+                            <option value="">Custom</option>
+                            <option value="rsync.net">rsync.net</option>
+                            <option value="borgbase">BorgBase</option>
+                            <option value="hetzner">Hetzner Storage Box</option>
+                        </select>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-8">
+                            <label class="form-label fw-semibold">Host</label>
+                            <input type="text" class="form-control" name="remote_host" placeholder="ch-s010.rsync.net" required>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label fw-semibold">Port</label>
+                            <input type="number" class="form-control" name="remote_port" value="22" min="1" max="65535">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Username</label>
+                        <input type="text" class="form-control" name="remote_user" placeholder="12345" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Base Path</label>
+                        <input type="text" class="form-control" name="remote_base_path" value="./">
+                        <div class="form-text">Base directory on the remote host. Use <code>./</code> for relative paths (rsync.net default).</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">SSH Private Key</label>
+                        <textarea class="form-control font-monospace" name="ssh_private_key" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;..." required></textarea>
+                        <div class="form-text">Paste the private key (PEM format). The corresponding public key must be authorized on the remote host.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Remote Borg Path <span class="text-muted fw-normal">(optional)</span></label>
+                        <input type="text" class="form-control" name="borg_remote_path" placeholder="">
+                        <div class="form-text">Custom borg binary on the remote host (e.g., <code>borg1</code> for rsync.net). Leave blank for default <code>borg</code>.</div>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="append_repo_name" value="1" id="addAppendRepoName" checked>
+                        <label class="form-check-label" for="addAppendRepoName">Append repository name to base path</label>
+                        <div class="form-text">Uncheck for providers like BorgBase where each SSH user maps to a single fixed repo path.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Host</button>
                 </div>
             </form>
         </div>
@@ -1346,74 +910,401 @@ function testRsyncnetConnection() {
         btn.innerHTML = '<i class="bi bi-plug me-1"></i> Test Connection';
     });
 }
+
+function applyRemotePreset(select, form) {
+    var preset = select.value;
+    var portField = form.querySelector('[name=remote_port]');
+    var basePathField = form.querySelector('[name=remote_base_path]');
+    var borgPathField = form.querySelector('[name=borg_remote_path]');
+    var appendField = form.querySelector('[name=append_repo_name]');
+
+    switch (preset) {
+        case 'rsync.net':
+            if (portField) portField.value = '22';
+            if (basePathField) basePathField.value = './';
+            if (borgPathField) borgPathField.value = 'borg1';
+            if (appendField) appendField.checked = true;
+            break;
+        case 'borgbase':
+            if (portField) portField.value = '22';
+            if (basePathField) basePathField.value = './repo';
+            if (borgPathField) borgPathField.value = '';
+            if (appendField) appendField.checked = false;
+            break;
+        case 'hetzner':
+            if (portField) portField.value = '23';
+            if (basePathField) basePathField.value = './';
+            if (borgPathField) borgPathField.value = 'borg-1.4';
+            if (appendField) appendField.checked = true;
+            break;
+    }
+}
 </script>
 
-<!-- Add Remote SSH Host Modal (Custom) -->
-<div class="modal fade" id="addRemoteSshModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST" action="/remote-ssh-configs/create">
+<?php else: ?>
+<!-- ==================== Storage Overview (main page) ==================== -->
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h5 class="mb-0"><i class="bi bi-hdd-stack me-2"></i>Storage Locations</h5>
+    <button class="btn btn-sm btn-success" data-bs-toggle="collapse" data-bs-target="#addLocationForm">
+        <i class="bi bi-plus-circle me-1"></i> Add Location
+    </button>
+</div>
+
+<!-- Add Location Form -->
+<div class="collapse mb-4" id="addLocationForm">
+    <div class="card border-0 shadow-sm">
+        <div class="card-body">
+            <form method="POST" action="/storage-locations">
                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                <div class="modal-header">
-                    <h5 class="modal-title">Add Remote SSH Host</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Name</label>
-                        <input type="text" class="form-control" name="name" placeholder="e.g., rsync.net Production" required>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Label</label>
+                        <input type="text" class="form-control" name="label" placeholder="e.g. Secondary Disk" required>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Provider Preset</label>
-                        <select class="form-select" onchange="applyRemotePreset(this, this.closest('form'))">
-                            <option value="">Custom</option>
-                            <option value="rsync.net">rsync.net</option>
-                            <option value="borgbase">BorgBase</option>
-                            <option value="hetzner">Hetzner Storage Box</option>
-                        </select>
+                    <div class="col-md-5">
+                        <label class="form-label fw-semibold">Path</label>
+                        <input type="text" class="form-control" name="path" placeholder="/mnt/storage2" required>
+                        <div class="form-text">Absolute path to the storage directory. Must exist and be writable.</div>
                     </div>
-                    <div class="row g-3 mb-3">
-                        <div class="col-8">
-                            <label class="form-label fw-semibold">Host</label>
-                            <input type="text" class="form-control" name="remote_host" placeholder="ch-s010.rsync.net" required>
-                        </div>
-                        <div class="col-4">
-                            <label class="form-label fw-semibold">Port</label>
-                            <input type="number" class="form-control" name="remote_port" value="22" min="1" max="65535">
+                    <div class="col-md-2 d-flex align-items-center pt-4">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="is_default" id="newIsDefault">
+                            <label class="form-check-label" for="newIsDefault">Default</label>
                         </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Username</label>
-                        <input type="text" class="form-control" name="remote_user" placeholder="12345" required>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-sm btn-success w-100">Create</button>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Base Path</label>
-                        <input type="text" class="form-control" name="remote_base_path" value="./">
-                        <div class="form-text">Base directory on the remote host. Use <code>./</code> for relative paths (rsync.net default).</div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">SSH Private Key</label>
-                        <textarea class="form-control font-monospace" name="ssh_private_key" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;..." required></textarea>
-                        <div class="form-text">Paste the private key (PEM format). The corresponding public key must be authorized on the remote host.</div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Remote Borg Path <span class="text-muted fw-normal">(optional)</span></label>
-                        <input type="text" class="form-control" name="borg_remote_path" placeholder="">
-                        <div class="form-text">Custom borg binary on the remote host (e.g., <code>borg1</code> for rsync.net). Leave blank for default <code>borg</code>.</div>
-                    </div>
-                    <div class="form-check mb-3">
-                        <input class="form-check-input" type="checkbox" name="append_repo_name" value="1" id="addAppendRepoName" checked>
-                        <label class="form-check-label" for="addAppendRepoName">Append repository name to base path</label>
-                        <div class="form-text">Uncheck for providers like BorgBase where each SSH user maps to a single fixed repo path.</div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Add Host</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+
+<!-- Storage Locations -->
+<?php if (empty($locations)): ?>
+<div class="alert alert-info">No storage locations configured. Add one to get started.</div>
+<?php else: ?>
+<div class="row g-3">
+    <?php foreach ($locations as $loc): ?>
+    <div class="col-xl-4 col-lg-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <h6 class="mb-1">
+                            <?= htmlspecialchars($loc['label']) ?>
+                            <?php if ($loc['is_default']): ?>
+                            <span class="badge bg-primary ms-1">Default</span>
+                            <?php endif; ?>
+                        </h6>
+                        <code class="small text-muted"><?= htmlspecialchars($loc['path']) ?></code>
+                    </div>
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown">
+                            <i class="bi bi-three-dots-vertical"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <a class="dropdown-item" href="#" data-bs-toggle="collapse"
+                                   data-bs-target="#editLoc<?= $loc['id'] ?>"
+                                   onclick="event.preventDefault();">
+                                    <i class="bi bi-pencil me-1"></i> Edit
+                                </a>
+                            </li>
+                            <?php if (!$loc['is_default'] && $loc['repo_count'] === 0): ?>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <form method="POST" action="/storage-locations/<?= $loc['id'] ?>/delete"
+                                      onsubmit="return confirm('Delete storage location \'<?= htmlspecialchars($loc['label'], ENT_QUOTES) ?>\'?')">
+                                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                    <button type="submit" class="dropdown-item text-danger">
+                                        <i class="bi bi-trash me-1"></i> Delete
+                                    </button>
+                                </form>
+                            </li>
+                            <?php endif; ?>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Disk Usage -->
+                <?php if ($loc['disk_total'] > 0): ?>
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between small text-muted mb-1">
+                        <span><?= formatStorageBytes($loc['disk_used']) ?> used</span>
+                        <span><?= formatStorageBytes($loc['disk_free']) ?> free</span>
+                    </div>
+                    <div class="progress" style="height: 6px;">
+                        <?php
+                        $pct = $loc['disk_percent'];
+                        $barColor = $pct >= 90 ? 'danger' : ($pct >= 75 ? 'warning' : 'success');
+                        ?>
+                        <div class="progress-bar bg-<?= $barColor ?>" style="width: <?= $pct ?>%"></div>
+                    </div>
+                    <div class="text-muted small mt-1">
+                        <?= formatStorageBytes($loc['disk_total']) ?> total &middot; <?= $pct ?>% used
+                    </div>
+                </div>
+                <?php else: ?>
+                <div class="text-muted small mb-2"><i class="bi bi-exclamation-triangle me-1"></i>Path not accessible</div>
+                <?php endif; ?>
+
+                <!-- Stats -->
+                <div class="d-flex gap-3 small text-muted">
+                    <span><i class="bi bi-archive me-1"></i><?= $loc['repo_count'] ?> repo<?= $loc['repo_count'] !== 1 ? 's' : '' ?></span>
+                    <span><i class="bi bi-database me-1"></i><?= formatStorageBytes($loc['total_size']) ?></span>
+                </div>
+            </div>
+
+            <!-- Inline Edit Form (collapsed) -->
+            <div class="collapse" id="editLoc<?= $loc['id'] ?>">
+                <div class="card-footer bg-light">
+                    <form method="POST" action="/storage-locations/<?= $loc['id'] ?>">
+                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                        <div class="row g-2">
+                            <div class="col-md-4">
+                                <input type="text" class="form-control form-control-sm" name="label"
+                                       value="<?= htmlspecialchars($loc['label']) ?>" required>
+                            </div>
+                            <div class="col-md-4">
+                                <input type="text" class="form-control form-control-sm" name="path"
+                                       value="<?= htmlspecialchars($loc['path']) ?>" required
+                                       <?= $loc['repo_count'] > 0 ? 'readonly title="Cannot change path while repos exist"' : '' ?>>
+                            </div>
+                            <div class="col-md-2 d-flex align-items-center">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="is_default"
+                                           id="editDefault<?= $loc['id'] ?>"
+                                           <?= $loc['is_default'] ? 'checked' : '' ?>>
+                                    <label class="form-check-label small" for="editDefault<?= $loc['id'] ?>">Default</label>
+                                </div>
+                            </div>
+                            <div class="col-md-2 d-flex align-items-center">
+                                <button type="submit" class="btn btn-sm btn-primary w-100">Save</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php endforeach; ?>
+</div>
+<?php endif; ?>
+
+<!-- Remote Storage (SSH) -->
+<div class="d-flex justify-content-between align-items-center mb-3 mt-5">
+    <h5 class="mb-0"><i class="bi bi-hdd-network me-2"></i>Remote Storage (SSH)</h5>
+    <a href="/storage-locations?section=wizard" class="btn btn-sm btn-success">
+        <i class="bi bi-plus-circle me-1"></i> Add SSH Host
+    </a>
+</div>
+
+<?php if (empty($remoteSshConfigs)): ?>
+<div class="alert alert-info">No remote SSH hosts configured. <a href="/storage-locations?section=wizard">Add one</a> to get started.</div>
+<?php else: ?>
+<div class="row g-3">
+    <?php foreach ($remoteSshConfigs as $rsc): ?>
+    <div class="col-xl-4 col-lg-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-start gap-2 mb-2">
+                    <div class="flex-shrink-0 mt-1" style="font-size: 1.4rem;">
+                        <?php if (($rsc['provider'] ?? '') === 'borgbase'): ?>
+                        <img src="/images/borgbase.svg" alt="" style="width:24px;height:24px;border-radius:50%">
+                        <?php elseif (($rsc['provider'] ?? '') === 'hetzner'): ?>
+                        <img src="/images/hetzner-h.png" alt="" style="width:24px;height:24px;border-radius:50%">
+                        <?php elseif (($rsc['provider'] ?? '') === 'rsyncnet'): ?>
+                        <img src="/images/rsyncnet-logo.png" alt="" style="width:24px;height:24px;border-radius:50%">
+                        <?php else: ?>
+                        <i class="bi bi-server text-primary opacity-75"></i>
+                        <?php endif; ?>
+                    </div>
+                    <div class="flex-grow-1" style="min-width: 0;">
+                        <h6 class="mb-0"><?= htmlspecialchars($rsc['name']) ?></h6>
+                        <code class="small text-muted text-truncate d-block" style="max-width: 100%;"><?= htmlspecialchars($rsc['remote_user']) ?>@<?= htmlspecialchars($rsc['remote_host']) ?><?= (int)$rsc['remote_port'] !== 22 ? ':' . (int)$rsc['remote_port'] : '' ?></code>
+                    </div>
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown">
+                            <i class="bi bi-three-dots-vertical"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#editRemoteSshModal<?= $rsc['id'] ?>" onclick="event.preventDefault();">
+                                    <i class="bi bi-pencil me-1"></i> Edit
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="#" onclick="event.preventDefault(); testRemoteSsh(<?= $rsc['id'] ?>, this);">
+                                    <i class="bi bi-plug me-1"></i> Test Connection
+                                </a>
+                            </li>
+                            <?php if (($rsc['repo_count'] ?? 0) === 0): ?>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item text-danger" href="#" onclick="event.preventDefault(); deleteRemoteSsh(<?= $rsc['id'] ?>, '<?= htmlspecialchars(addslashes($rsc['name'])) ?>');">
+                                    <i class="bi bi-trash me-1"></i> Delete
+                                </a>
+                            </li>
+                            <?php endif; ?>
+                        </ul>
+                    </div>
+                </div>
+                <div class="d-flex gap-3 small text-muted">
+                    <span><i class="bi bi-archive me-1"></i><?= $rsc['repo_count'] ?> repo<?= $rsc['repo_count'] !== 1 ? 's' : '' ?></span>
+                    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Active</span>
+                </div>
+                <div id="remoteSshTestResult<?= $rsc['id'] ?>" class="mt-2"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div class="modal fade" id="editRemoteSshModal<?= $rsc['id'] ?>" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="/remote-ssh-configs/<?= $rsc['id'] ?>/update">
+                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Edit Remote SSH Host</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Name</label>
+                            <input type="text" class="form-control" name="name" value="<?= htmlspecialchars($rsc['name']) ?>" required>
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-8">
+                                <label class="form-label fw-semibold">Host</label>
+                                <input type="text" class="form-control" name="remote_host" value="<?= htmlspecialchars($rsc['remote_host']) ?>" required>
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label fw-semibold">Port</label>
+                                <input type="number" class="form-control" name="remote_port" value="<?= (int)$rsc['remote_port'] ?>" min="1" max="65535">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Username</label>
+                            <input type="text" class="form-control" name="remote_user" value="<?= htmlspecialchars($rsc['remote_user']) ?>" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Base Path</label>
+                            <input type="text" class="form-control" name="remote_base_path" value="<?= htmlspecialchars($rsc['remote_base_path']) ?>">
+                            <div class="form-text">Base directory on the remote host. Use <code>./</code> for relative paths (rsync.net default).</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">SSH Private Key</label>
+                            <textarea class="form-control font-monospace" name="ssh_private_key" rows="4" placeholder="Leave blank to keep existing key"></textarea>
+                            <div class="form-text">Paste the private key (PEM format). Leave blank to keep the current key.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Remote Borg Path <span class="text-muted fw-normal">(optional)</span></label>
+                            <input type="text" class="form-control" name="borg_remote_path" value="<?= htmlspecialchars($rsc['borg_remote_path'] ?? '') ?>">
+                            <div class="form-text">Custom borg binary on the remote host (e.g., <code>borg1</code> for rsync.net). Leave blank for default <code>borg</code>.</div>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" name="append_repo_name" value="1" id="editAppendRepoName<?= $rsc['id'] ?>" <?= ($rsc['append_repo_name'] ?? 1) ? 'checked' : '' ?>>
+                            <label class="form-check-label" for="editAppendRepoName<?= $rsc['id'] ?>">Append repository name to base path</label>
+                            <div class="form-text">Uncheck for providers like BorgBase where each SSH user maps to a single fixed repo path.</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <?php endforeach; ?>
+</div>
+<?php endif; ?>
+
+<!-- S3 Offsite Sync -->
+<?php
+$s3Configured = !empty($settings['s3_endpoint']) && !empty($settings['s3_bucket']);
+$s3SyncServerBackups = ($settings['s3_sync_server_backups'] ?? '0') === '1';
+?>
+<div class="d-flex justify-content-between align-items-center mb-3 mt-5">
+    <h5 class="mb-0"><i class="bi bi-bucket me-2"></i>S3 Offsite Sync</h5>
+    <a href="/storage-locations?section=s3" class="btn btn-sm <?= $s3Configured ? 'btn-outline-primary' : 'btn-success' ?>">
+        <i class="bi bi-gear me-1"></i> <?= $s3Configured ? 'Manage' : 'Configure' ?>
+    </a>
+</div>
+
+<?php if (!$s3Configured): ?>
+<div class="alert alert-info">S3 offsite sync is not configured. <a href="/storage-locations?section=s3">Configure it</a> to replicate local repos to S3-compatible storage.</div>
+<?php else: ?>
+<div class="row g-3">
+    <div class="col-xl-4 col-lg-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <h6 class="mb-2"><i class="bi bi-cloud-arrow-up me-1 text-primary"></i> Global S3</h6>
+                <div class="row g-1 small mb-2">
+                    <div class="col-5 text-muted">Endpoint</div>
+                    <div class="col-7 text-truncate"><?= htmlspecialchars($settings['s3_endpoint'] ?? '') ?></div>
+                    <div class="col-5 text-muted">Bucket</div>
+                    <div class="col-7"><?= htmlspecialchars($settings['s3_bucket'] ?? '') ?></div>
+                    <?php if (!empty($settings['s3_region'])): ?>
+                    <div class="col-5 text-muted">Region</div>
+                    <div class="col-7"><?= htmlspecialchars($settings['s3_region']) ?></div>
+                    <?php endif; ?>
+                    <div class="col-5 text-muted">Server Sync</div>
+                    <div class="col-7">
+                        <?php if ($s3SyncServerBackups): ?>
+                        <span class="badge bg-success">Enabled</span>
+                        <?php else: ?>
+                        <span class="badge bg-secondary">Disabled</span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Configured</span>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<script>
+function testRemoteSsh(id, triggerEl) {
+    var resultDiv = document.getElementById('remoteSshTestResult' + id);
+    resultDiv.innerHTML = '<span class="badge bg-secondary"><span class="spinner-border spinner-border-sm me-1" style="width:.7rem;height:.7rem"></span>Testing...</span>';
+
+    var csrfToken = document.querySelector('input[name=csrf_token]').value;
+    fetch('/remote-ssh-configs/' + id + '/test', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'csrf_token=' + encodeURIComponent(csrfToken)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.status === 'ok') {
+            resultDiv.innerHTML = '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Connected' + (data.version ? ' — ' + data.version.replace(/</g, '&lt;') : '') + '</span>';
+        } else {
+            resultDiv.innerHTML = '<span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>' + (data.error || 'Failed').replace(/</g, '&lt;') + '</span>';
+        }
+    })
+    .catch(function() {
+        resultDiv.innerHTML = '<span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Request failed</span>';
+    });
+}
+
+function deleteRemoteSsh(id, name) {
+    if (!confirm('Delete remote SSH host "' + name + '"?')) return;
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/remote-ssh-configs/' + id + '/delete';
+    var csrf = document.createElement('input');
+    csrf.type = 'hidden';
+    csrf.name = 'csrf_token';
+    csrf.value = document.querySelector('input[name=csrf_token]').value;
+    form.appendChild(csrf);
+    document.body.appendChild(form);
+    form.submit();
+}
+</script>
 
 <?php endif; ?>

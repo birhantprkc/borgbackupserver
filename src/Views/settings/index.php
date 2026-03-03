@@ -4,9 +4,8 @@ $activeTab = $_GET['tab'] ?? 'general';
 if (in_array($activeTab, ['remote', 'offsite', 'storage'])) {
     // Storage moved to /storage-locations
     $section = $_GET['section'] ?? '';
-    if ($activeTab === 'remote') $section = 'remote';
-    elseif ($activeTab === 'offsite') $section = 's3';
-    header('Location: /storage-locations' . ($section ? '?section=' . $section : ''));
+    if ($activeTab === 'offsite') $section = 's3';
+    header('Location: /storage-locations' . ($section === 's3' ? '?section=s3' : ''));
     exit;
 }
 if ($activeTab === 'borg') { $activeTab = 'updates'; $updatesSection = 'borg'; }
