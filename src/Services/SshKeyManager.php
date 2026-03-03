@@ -132,7 +132,24 @@ class SshKeyManager
      */
     public static function buildSshRepoPath(string $unixUser, string $serverHost, string $repoName): string
     {
-        return "ssh://{$unixUser}@{$serverHost}/./{$repoName}";
+        // Strip web port from server_host (e.g. "192.168.1.200:8080" → "192.168.1.200")
+        // SSH port is handled separately via BORG_RSH -p
+        $host = self::stripHostPort($serverHost);
+        return "ssh://{$unixUser}@{$host}/./{$repoName}";
+    }
+
+    /**
+     * Strip port from a host string (e.g. "example.com:8080" → "example.com").
+     * The server_host setting may include the web port from APP_URL, but SSH
+     * repo paths must not include it — the SSH port is set via BORG_RSH.
+     */
+    public static function stripHostPort(string $host): string
+    {
+        // Handle IPv6 addresses like [::1]:8080
+        if (str_contains($host, ']')) {
+            return preg_replace('/]:\d+$/', ']', $host);
+        }
+        return preg_replace('/:\d+$/', '', $host);
     }
 
     /**

@@ -74,21 +74,27 @@ class RepositoryController extends Controller
         $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
         $host = $serverHost['value'] ?? '';
 
-        // Determine the default storage path (from settings) to check if this is a non-default location
-        $defaultLocation = $this->db->fetchOne("SELECT * FROM storage_locations WHERE is_default = 1");
-        $isNonDefault = $defaultLocation && $location['id'] && (int) $location['id'] !== (int) $defaultLocation['id'];
+        // Determine if this storage location differs from the SSH user's home directory.
+        // SSH home dir is always based on settings.storage_path, so compare actual paths
+        // rather than location IDs (the user may have changed which location is "default").
+        $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
+        $sshHomePath = rtrim($storageSetting['value'] ?? '/var/bbs/home', '/');
+        $locationPath = rtrim($location['path'], '/');
+        $isNonDefault = $locationPath !== $sshHomePath;
 
         if ($isNonDefault) {
-            // Non-default storage location: use absolute path
-            $localPath = rtrim($location['path'], '/') . '/' . $agentId . '/' . $name;
+            // Non-default storage location: use absolute path so borg finds the repo
+            // regardless of the SSH user's home directory
+            $localPath = $locationPath . '/' . $agentId . '/' . $name;
             if (!empty($agent['ssh_unix_user']) && !empty($host)) {
-                // Absolute SSH path (double slash after host)
-                $path = "ssh://{$agent['ssh_unix_user']}@{$host}//{$localPath}";
+                // Absolute SSH path (double slash after host); strip web port from host
+                $sshHost = SshKeyManager::stripHostPort($host);
+                $path = "ssh://{$agent['ssh_unix_user']}@{$sshHost}//{$localPath}";
             } else {
                 $path = $localPath;
             }
         } else {
-            // Default location: use relative path (unchanged behavior)
+            // Default location: use relative path (resolves to SSH user's home dir)
             if (!empty($agent['ssh_unix_user']) && !empty($host)) {
                 $path = SshKeyManager::buildSshRepoPath($agent['ssh_unix_user'], $host, $name);
             } else {
@@ -714,13 +720,15 @@ class RepositoryController extends Controller
             $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
             $host = $serverHost['value'] ?? '';
 
-            $defaultLoc = $this->db->fetchOne("SELECT id FROM storage_locations WHERE is_default = 1");
-            $copyIsNonDefault = $copyLoc && $defaultLoc && (int)($copyLoc['id'] ?? 0) !== (int)($defaultLoc['id'] ?? 0);
+            $storageSetting2 = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
+            $sshHomePath2 = rtrim($storageSetting2['value'] ?? '/var/bbs/home', '/');
+            $copyIsNonDefault = rtrim($copyStoragePath, '/') !== $sshHomePath2;
 
             if ($copyIsNonDefault) {
                 $localCopyPath = rtrim($copyStoragePath, '/') . '/' . $agentId . '/' . $copyName;
                 if (!empty($repo['ssh_unix_user']) && !empty($host)) {
-                    $copyPath = "ssh://{$repo['ssh_unix_user']}@{$host}//{$localCopyPath}";
+                    $sshHost2 = SshKeyManager::stripHostPort($host);
+                    $copyPath = "ssh://{$repo['ssh_unix_user']}@{$sshHost2}//{$localCopyPath}";
                 } else {
                     $copyPath = $localCopyPath;
                 }
