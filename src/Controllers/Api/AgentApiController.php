@@ -8,6 +8,7 @@ use BBS\Services\BorgCommandBuilder;
 use BBS\Services\Mailer;
 use BBS\Services\NotificationService;
 use BBS\Services\CatalogImporter;
+use BBS\Services\SshKeyManager;
 
 class AgentApiController extends Controller
 {
@@ -106,13 +107,17 @@ class AgentApiController extends Controller
         $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
         $sshPort = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'ssh_port'");
 
+        // Strip web port from server_host — agent uses this for SSH connections,
+        // and the SSH port is sent separately via ssh_port
+        $host = SshKeyManager::stripHostPort($serverHost['value'] ?? '');
+
         $this->json([
             'status' => 'ok',
             'agent_id' => $agent['id'],
             'name' => $agent['name'],
             'poll_interval' => (int) ($pollInterval['value'] ?? 30),
             'ssh_unix_user' => $agent['ssh_unix_user'] ?? '',
-            'server_host' => $serverHost['value'] ?? '',
+            'server_host' => $host,
             'ssh_port' => (int) ($sshPort['value'] ?? 22),
         ]);
     }
@@ -913,7 +918,7 @@ class AgentApiController extends Controller
             'status' => 'ok',
             'ssh_private_key' => $privateKey,
             'ssh_unix_user' => $agent['ssh_unix_user'],
-            'server_host' => $serverHost['value'] ?? '',
+            'server_host' => SshKeyManager::stripHostPort($serverHost['value'] ?? ''),
             'ssh_port' => (int) ($sshPort['value'] ?? 22),
         ]);
     }
