@@ -153,7 +153,7 @@ try {
         // Skip archives created in the last 30 minutes — the normal post-backup
         // catalog indexing handles those; triggering a rebuild too early causes loops
         $repos = $db->fetchAll(
-            "SELECT r.id, r.agent_id, a.id AS archive_id
+            "SELECT r.id, r.agent_id, r.repo_path, r.storage_type, a.id AS archive_id
              FROM repositories r
              JOIN archives a ON a.repository_id = r.id
              WHERE a.created_at < DATE_SUB(NOW(), INTERVAL 30 MINUTE)"
@@ -161,10 +161,18 @@ try {
         $needsRebuild = [];
         foreach ($repos as $row) {
             if (!isset($indexedIds[$row['archive_id']])) {
-                $needsRebuild[$row['id']] = $row['agent_id'];
+                $needsRebuild[$row['id']] = ['agent_id' => $row['agent_id'], 'repo_path' => $row['repo_path'], 'storage_type' => $row['storage_type']];
             }
         }
-        foreach ($needsRebuild as $repoId => $agentId) {
+        foreach ($needsRebuild as $repoId => $info) {
+            $agentId = $info['agent_id'];
+
+            // Skip repos whose data doesn't exist on disk (e.g. after restore to a new server)
+            if ($info['storage_type'] === 'local' || empty($info['storage_type'])) {
+                if (!empty($info['repo_path']) && !is_dir($info['repo_path'])) {
+                    continue;
+                }
+            }
             // Check for pending/running rebuild on this repo OR any repo for same agent
             // Concurrent rebuilds for same agent contend on borg repo locks
             $pending = $db->fetchOne(
@@ -935,16 +943,60 @@ foreach ($serverJobs as $sj) {
         $errors = [];
 
         foreach ($missingArchives as $crArchive) {
-            // Remote SSH repos: use RemoteSshService
+            // Remote SSH repos: stream via RemoteSshService (constant memory)
             if ($isRemoteSsh && $crRemoteConfig) {
-                $crResult = $remoteSshService->runBorgCommand(
+                $handle = $remoteSshService->openBorgProcess(
                     $crRemoteConfig,
-                    $crRepo['path'],
                     ['list', '--json-lines', $crRepo['path'] . '::' . $crArchive['archive_name']],
                     $passphrase
                 );
-                $crOutput = $crResult['output'] ?? '';
-                $crExitCode = $crResult['exit_code'] ?? -1;
+                if (isset($handle['error'])) {
+                    $errors[] = "Archive {$crArchive['archive_name']}: {$handle['error']}";
+                    continue;
+                }
+
+                $tsvFile = sys_get_temp_dir() . "/catalog_rebuild_{$agentId}_{$crArchive['id']}_" . getmypid() . '.tsv';
+                $tsvFh = fopen($tsvFile, 'w');
+                $archiveFileCount = 0;
+                $dirStats = [];
+
+                while (($line = fgets($handle['pipes'][1])) !== false) {
+                    $line = trim($line);
+                    if ($line === '') continue;
+                    $fileData = json_decode($line, true);
+                    if ($fileData && isset($fileData['path'])) {
+                        if (($fileData['type'] ?? '') !== 'd') {
+                            $path = $fileData['path'];
+                            if ($path !== '' && $path[0] !== '/') {
+                                $path = '/' . $path;
+                            }
+                            $size = (int) ($fileData['size'] ?? 0);
+                            $mtime = isset($fileData['mtime']) ? date('Y-m-d H:i:s', strtotime($fileData['mtime'])) : '\\N';
+                            $rawParent = dirname($path);
+
+                            fwrite($tsvFh, "{$agentId}\t{$crArchive['id']}\t{$escape($path)}\t{$escape(basename($path))}\t{$escape($rawParent)}\t{$size}\tU\t{$mtime}\n");
+                            $archiveFileCount++;
+
+                            if (!isset($dirStats[$rawParent])) {
+                                $dirStats[$rawParent] = [0, 0];
+                            }
+                            $dirStats[$rawParent][0]++;
+                            $dirStats[$rawParent][1] += $size;
+                        }
+                    }
+                }
+                fclose($tsvFh);
+                fclose($handle['pipes'][1]);
+                $crError = stream_get_contents($handle['pipes'][2]);
+                fclose($handle['pipes'][2]);
+                $crExitCode = proc_close($handle['proc']);
+                $remoteSshService->cleanupStreamingProcess($handle);
+
+                if ($crExitCode !== 0) {
+                    $errors[] = "Archive {$crArchive['archive_name']}: exit code {$crExitCode}";
+                    @unlink($tsvFile);
+                    continue;
+                }
             } else {
                 $archivePath = "{$crLocalPath}::{$crArchive['archive_name']}";
 
@@ -1024,45 +1076,6 @@ foreach ($serverJobs as $sj) {
                     @unlink($tsvFile);
                     continue;
                 }
-            }
-
-            // Remote SSH path: output is already buffered, parse it into TSV
-            if ($isRemoteSsh && $crRemoteConfig) {
-                if ($crExitCode !== 0) {
-                    $errors[] = "Archive {$crArchive['archive_name']}: exit code {$crExitCode}";
-                    continue;
-                }
-
-                $tsvFile = sys_get_temp_dir() . "/catalog_rebuild_{$agentId}_{$crArchive['id']}_" . getmypid() . '.tsv';
-                $tsvFh = fopen($tsvFile, 'w');
-                $archiveFileCount = 0;
-                $dirStats = [];
-
-                $lines = array_filter(explode("\n", trim($crOutput)));
-                foreach ($lines as $line) {
-                    $fileData = json_decode($line, true);
-                    if ($fileData && isset($fileData['path'])) {
-                        if (($fileData['type'] ?? '') !== 'd') {
-                            $path = $fileData['path'];
-                            if ($path !== '' && $path[0] !== '/') {
-                                $path = '/' . $path;
-                            }
-                            $size = (int) ($fileData['size'] ?? 0);
-                            $mtime = isset($fileData['mtime']) ? date('Y-m-d H:i:s', strtotime($fileData['mtime'])) : '\\N';
-                            $rawParent = dirname($path);
-
-                            fwrite($tsvFh, "{$agentId}\t{$crArchive['id']}\t{$escape($path)}\t{$escape(basename($path))}\t{$escape($rawParent)}\t{$size}\tU\t{$mtime}\n");
-                            $archiveFileCount++;
-
-                            if (!isset($dirStats[$rawParent])) {
-                                $dirStats[$rawParent] = [0, 0];
-                            }
-                            $dirStats[$rawParent][0]++;
-                            $dirStats[$rawParent][1] += $size;
-                        }
-                    }
-                }
-                fclose($tsvFh);
             }
 
             if ($archiveFileCount > 0) {

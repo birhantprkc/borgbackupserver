@@ -269,6 +269,62 @@ class RemoteSshService
     }
 
     /**
+     * Open a streaming borg process for remote SSH repos.
+     * Returns process handle, pipes, and temp key path for cleanup.
+     * Caller must fclose pipes, proc_close, and call cleanupStreamingProcess().
+     *
+     * @return array{proc: resource, pipes: array, key_file: string}|array{error: string}
+     */
+    public function openBorgProcess(array $config, array $borgArgs, string $passphrase = ''): array
+    {
+        $borgRemotePath = $config['borg_remote_path'] ?? null;
+        $cmd = array_merge(['borg'], $borgArgs);
+        if ($borgRemotePath && count($borgArgs) >= 1) {
+            array_splice($cmd, 2, 0, ['--remote-path=' . $borgRemotePath]);
+        }
+
+        $env = $this->buildServerEnv();
+        if (!empty($passphrase)) {
+            $env['BORG_PASSPHRASE'] = $passphrase;
+        }
+        $env['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes';
+        $env['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes';
+
+        try {
+            $sshKey = $this->decryptKey($config);
+            $keyFile = $this->writeTempKey($sshKey);
+        } catch (\Exception $e) {
+            return ['error' => $e->getMessage()];
+        }
+
+        $port = (int) ($config['remote_port'] ?? 22);
+        $env['BORG_RSH'] = "ssh -i {$keyFile} -p {$port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes";
+
+        $proc = proc_open($cmd, [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes, null, $env);
+
+        if (!is_resource($proc)) {
+            $this->cleanupTempKey($keyFile);
+            return ['error' => 'Failed to start borg process'];
+        }
+
+        fclose($pipes[0]);
+
+        return ['proc' => $proc, 'pipes' => $pipes, 'key_file' => $keyFile];
+    }
+
+    /**
+     * Clean up after openBorgProcess().
+     */
+    public function cleanupStreamingProcess(array $handle): void
+    {
+        $this->cleanupTempKey($handle['key_file'] ?? null);
+    }
+
+    /**
      * Count repositories using a given remote SSH config.
      */
     public function getRepoCount(int $configId): int

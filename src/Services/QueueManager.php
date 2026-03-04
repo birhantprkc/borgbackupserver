@@ -36,11 +36,9 @@ class QueueManager
      */
     public function processQueue(): array
     {
-        // Skip if maintenance mode is active
+        // Check maintenance mode — still process server-side jobs (catalog, prune, etc.)
         $maintenance = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'maintenance_mode'");
-        if (($maintenance['value'] ?? '0') === '1') {
-            return [];
-        }
+        $maintenanceMode = (($maintenance['value'] ?? '0') === '1');
 
         // Count currently active jobs (sent + running)
         $activeCount = $this->db->count('backup_jobs', "status IN ('sent', 'running')");
@@ -92,9 +90,16 @@ class QueueManager
         $promoted = [];
         $promotedCount = 0;
 
+        $serverSideTypes = ['prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full'];
+
         foreach ($queuedJobs as $job) {
             if ($promotedCount >= $slotsAvailable) {
                 break;
+            }
+
+            // In maintenance mode, only promote server-side jobs (not backups/restores)
+            if ($maintenanceMode && !in_array($job['task_type'], $serverSideTypes)) {
+                continue;
             }
 
             // Skip duplicate backup for the same plan (no point running the same backup twice)
