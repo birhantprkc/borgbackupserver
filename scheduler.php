@@ -772,7 +772,70 @@ foreach ($serverJobs as $sj) {
         ]);
         echo date('Y-m-d H:i:s') . " Catalog rebuild job #{$sj['id']}: starting for \"{$repoName}\"\n";
 
-        // Get all archives for this repo
+        // Sync archives from borg before rebuilding catalog (ensures DB is fresh)
+        $syncOutput = '';
+        $syncExitCode = -1;
+        if ($isRemoteSsh && !empty($sj['remote_ssh_config_id'])) {
+            $remoteSshService = $remoteSshService ?? new RemoteSshService();
+            $syncRemoteConfig = $remoteSshService->getById((int) $sj['remote_ssh_config_id']);
+            if ($syncRemoteConfig) {
+                $syncResult = $remoteSshService->runBorgCommand($syncRemoteConfig, $crRepo['path'], ['list', '--json', $crRepo['path']], $passphrase);
+                $syncOutput = $syncResult['output'] ?? '';
+                $syncExitCode = $syncResult['exit_code'] ?? -1;
+            }
+        } else {
+            $runAsUserSync = $sj['ssh_unix_user'] ?? null;
+            if ($runAsUserSync) {
+                $syncCmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-list', $runAsUserSync, $passphrase, $crLocalPath];
+                $syncEnvStrings = null;
+            } else {
+                $syncCmd = ['borg', 'list', '--json', $crLocalPath];
+                $syncEnv = [];
+                if ($passphrase) $syncEnv['BORG_PASSPHRASE'] = $passphrase;
+                $syncEnv['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes';
+                $syncEnv['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes';
+                $syncEnv['BORG_BASE_DIR'] = '/tmp/bbs-borg-www-data';
+                $syncEnv['HOME'] = '/tmp/bbs-borg-www-data';
+                $syncEnvStrings = array_filter($_SERVER, 'is_string') + $syncEnv;
+            }
+            $syncProc = proc_open($syncCmd, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $syncPipes, null, $syncEnvStrings);
+            if (is_resource($syncProc)) {
+                fclose($syncPipes[0]);
+                $syncOutput = stream_get_contents($syncPipes[1]);
+                fclose($syncPipes[1]);
+                fclose($syncPipes[2]);
+                $syncExitCode = proc_close($syncProc);
+            }
+        }
+
+        if ($syncExitCode <= 1) {
+            $syncData = json_decode($syncOutput, true);
+            $borgArchives = $syncData['archives'] ?? [];
+            $existingNames = array_column(
+                $db->fetchAll("SELECT archive_name FROM archives WHERE repository_id = ?", [$crRepo['id']]),
+                'archive_name'
+            );
+            $existingNamesMap = array_flip($existingNames);
+            $newCount = 0;
+            foreach ($borgArchives as $ba) {
+                $baName = $ba['name'] ?? '';
+                if ($baName && !isset($existingNamesMap[$baName])) {
+                    $baCreatedAt = isset($ba['start']) ? date('Y-m-d H:i:s', strtotime($ba['start'])) : date('Y-m-d H:i:s');
+                    $db->insert('archives', [
+                        'repository_id' => $crRepo['id'],
+                        'archive_name' => $baName,
+                        'created_at' => $baCreatedAt,
+                    ]);
+                    $newCount++;
+                }
+            }
+            if ($newCount > 0) {
+                $db->update('repositories', ['archive_count' => count($borgArchives)], 'id = ?', [$crRepo['id']]);
+                echo date('Y-m-d H:i:s') . " Catalog rebuild job #{$sj['id']}: synced {$newCount} new archives from borg\n";
+            }
+        }
+
+        // Get all archives for this repo (now includes any newly synced)
         $crArchives = $db->fetchAll("SELECT id, archive_name FROM archives WHERE repository_id = ? ORDER BY created_at ASC", [$crRepo['id']]);
         $totalArchives = count($crArchives);
 
