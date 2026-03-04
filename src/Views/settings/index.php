@@ -91,30 +91,6 @@ $updateAvailable = $updateService->isUpdateAvailable();
                             <?php endif; ?>
                         </div>
                     </div>
-                    <div class="mb-3">
-                        <div class="row g-3">
-                            <div class="col-7">
-                                <label class="form-label fw-semibold">Storage</label>
-                                <div class="d-flex align-items-center gap-2">
-                                    <input type="text" class="form-control" value="<?= htmlspecialchars($settings['storage_path'] ?? '') ?>" readonly>
-                                    <a href="/storage-locations" class="btn btn-sm btn-outline-primary text-nowrap">
-                                        <i class="bi bi-hdd-stack me-1"></i>Manage
-                                    </a>
-                                </div>
-                                <div class="form-text">Default storage path. <a href="/storage-locations">Manage all storage locations</a>.</div>
-                            </div>
-                            <div class="col-5">
-                                <label class="form-label fw-semibold">Alert at</label>
-                                <div class="input-group">
-                                    <input type="number" class="form-control text-center" name="storage_alert_threshold"
-                                           value="<?= htmlspecialchars($settings['storage_alert_threshold'] ?? '90') ?>" min="50" max="99">
-                                    <span class="input-group-text">%</span>
-                                </div>
-                                <div class="form-text">Send alert when storage exceeds this threshold.</div>
-                            </div>
-                        </div>
-                        <div class="form-text mt-2">Want to backup to a remote store? <a href="/storage-locations?section=remote">Configure Remote Storage</a></div>
-                    </div>
                     <?php $sshPort = (int) ($settings['ssh_port'] ?? 22); if ($sshPort !== 22): ?>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">SSH Port</label>
