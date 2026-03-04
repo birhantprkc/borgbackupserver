@@ -68,6 +68,13 @@
                     <i class="bi bi-box-seam me-1"></i> Upgrade Agents
                 </a>
                 <?php endif; ?>
+                <?php
+                $maintenanceMode = \BBS\Core\Database::getInstance()->fetchOne("SELECT `value` FROM settings WHERE `key` = 'maintenance_mode'");
+                if (($maintenanceMode['value'] ?? '0') === '1'): ?>
+                <a href="/settings" class="badge bg-warning text-dark text-decoration-none me-2 me-md-3 py-2 px-2">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i> Maintenance Mode: On
+                </a>
+                <?php endif; ?>
                 <div class="dropdown">
                     <a class="btn btn-link text-white dropdown-toggle text-decoration-none p-1" href="#" role="button" data-bs-toggle="dropdown">
                         <i class="bi bi-person-circle"></i>
@@ -155,19 +162,6 @@
 
         <!-- Main content -->
         <div class="flex-grow-1 main-content">
-
-            <!-- Maintenance mode banner -->
-            <?php
-            $maintenanceMode = \BBS\Core\Database::getInstance()->fetchOne("SELECT `value` FROM settings WHERE `key` = 'maintenance_mode'");
-            if (($maintenanceMode['value'] ?? '0') === '1'): ?>
-            <div class="alert alert-warning d-flex align-items-center m-3 m-md-4 mb-0" role="alert">
-                <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
-                <div>
-                    <strong>Maintenance mode active</strong> — new backup jobs are paused.
-                    <a href="/settings" class="alert-link ms-1">Go to Settings</a>
-                </div>
-            </div>
-            <?php endif; ?>
 
             <?php $flash = $flash ?? $this->getFlash(); ?>
 
