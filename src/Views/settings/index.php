@@ -63,6 +63,13 @@ $updateAvailable = $updateService->isUpdateAvailable();
                 </div>
                 <div class="card-body">
                     <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" role="switch" name="maintenance_mode" id="maintenance_mode" value="1" <?= ($settings['maintenance_mode'] ?? '0') === '1' ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-semibold" for="maintenance_mode">Maintenance Mode</label>
+                        </div>
+                        <div class="form-text">Pauses all new backup jobs. Existing running jobs will complete.</div>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label fw-semibold">Max Concurrent Jobs</label>
                         <input type="number" class="form-control" name="max_queue" value="<?= htmlspecialchars($settings['max_queue'] ?? '4') ?>" min="1" max="20">
                         <div class="form-text">Maximum backup jobs running simultaneously.</div>

@@ -253,6 +253,158 @@ class StorageLocationController extends Controller
     }
 
     /**
+     * POST /storage-locations/s3/list-backups — list available server backups in S3.
+     */
+    public function listS3Backups(): void
+    {
+        $this->requireAdmin();
+        $this->verifyCsrf();
+
+        $s3Service = new \BBS\Services\S3SyncService();
+        $creds = $s3Service->resolveCredentials(['credential_source' => 'global']);
+
+        if (empty($creds['bucket']) || empty($creds['access_key'])) {
+            $this->json(['success' => false, 'error' => 'S3 credentials not configured']);
+            return;
+        }
+
+        $helper = '/usr/local/bin/bbs-ssh-helper';
+        $cmd = sprintf(
+            'sudo %s rclone-server-list %s %s %s %s %s %s 2>&1',
+            escapeshellarg($helper),
+            escapeshellarg($creds['endpoint']),
+            escapeshellarg($creds['region']),
+            escapeshellarg($creds['bucket']),
+            escapeshellarg($creds['access_key']),
+            escapeshellarg($creds['secret_key']),
+            escapeshellarg($creds['path_prefix'] ?? '')
+        );
+
+        $output = shell_exec($cmd);
+        $json = json_decode($output, true);
+
+        if (!is_array($json)) {
+            $this->json(['success' => false, 'error' => 'Failed to list backups: ' . trim($output)]);
+            return;
+        }
+
+        $backups = [];
+        foreach ($json as $item) {
+            if (!isset($item['Name'])) continue;
+            $backups[] = [
+                'filename' => $item['Name'],
+                'size' => $item['Size'] ?? 0,
+                'modified' => $item['ModTime'] ?? '',
+            ];
+        }
+
+        // Sort newest first
+        usort($backups, function ($a, $b) {
+            return strcmp($b['modified'], $a['modified']);
+        });
+
+        $this->json(['success' => true, 'backups' => $backups]);
+    }
+
+    /**
+     * POST /storage-locations/s3/restore-backup — download and restore a server backup from S3.
+     */
+    public function restoreS3Backup(): void
+    {
+        $this->requireAdmin();
+        $this->verifyCsrf();
+
+        $filename = trim($_POST['filename'] ?? '');
+
+        if (empty($filename) || !preg_match('/^bbs-backup-.*\.tar\.gz$/', $filename)) {
+            $this->json(['success' => false, 'error' => 'Invalid backup filename']);
+            return;
+        }
+
+        $s3Service = new \BBS\Services\S3SyncService();
+        $creds = $s3Service->resolveCredentials(['credential_source' => 'global']);
+
+        if (empty($creds['bucket']) || empty($creds['access_key'])) {
+            $this->json(['success' => false, 'error' => 'S3 credentials not configured']);
+            return;
+        }
+
+        // Create temp directory
+        $tmpDir = '/tmp/bbs-restore-' . bin2hex(random_bytes(8));
+        mkdir($tmpDir, 0700, true);
+
+        $helper = '/usr/local/bin/bbs-ssh-helper';
+
+        // Step 1: Download the backup file
+        $dlCmd = sprintf(
+            'sudo %s rclone-server-download %s %s %s %s %s %s %s %s 2>&1',
+            escapeshellarg($helper),
+            escapeshellarg($filename),
+            escapeshellarg($tmpDir),
+            escapeshellarg($creds['endpoint']),
+            escapeshellarg($creds['region']),
+            escapeshellarg($creds['bucket']),
+            escapeshellarg($creds['access_key']),
+            escapeshellarg($creds['secret_key']),
+            escapeshellarg($creds['path_prefix'] ?? '')
+        );
+
+        $dlOutput = shell_exec($dlCmd);
+        $backupFile = $tmpDir . '/' . $filename;
+
+        if (!file_exists($backupFile)) {
+            // Cleanup
+            shell_exec('rm -rf ' . escapeshellarg($tmpDir));
+            $this->json(['success' => false, 'error' => 'Failed to download backup: ' . trim($dlOutput)]);
+            return;
+        }
+
+        // Step 2: Run bbs-restore --yes
+        $restoreCmd = sprintf(
+            'sudo %s server-restore %s 2>&1',
+            escapeshellarg($helper),
+            escapeshellarg($backupFile)
+        );
+
+        $restoreOutput = shell_exec($restoreCmd);
+
+        // Cleanup temp dir
+        shell_exec('rm -rf ' . escapeshellarg($tmpDir));
+
+        // Parse the new admin password from output
+        $newPassword = '';
+        if (preg_match('/NEW_ADMIN_PASSWORD=(.+)/', $restoreOutput, $matches)) {
+            $newPassword = trim($matches[1]);
+        }
+
+        // Enable maintenance mode — the restored DB is fresh, so insert the setting
+        // (bbs-restore also sets this, but the DB connection there uses CLI creds;
+        // this ensures it's set even if the restore script's insert was lost)
+        $db = \BBS\Core\Database::getInstance();
+        $existing = $db->fetchOne("SELECT `key` FROM settings WHERE `key` = 'maintenance_mode'");
+        if ($existing) {
+            $db->update('settings', ['value' => '1'], "`key` = ?", ['maintenance_mode']);
+        } else {
+            $db->insert('settings', ['key' => 'maintenance_mode', 'value' => '1']);
+        }
+
+        if (empty($newPassword)) {
+            $this->json([
+                'success' => false,
+                'error' => 'Restore may have failed — no new password generated',
+                'output' => $restoreOutput,
+            ]);
+            return;
+        }
+
+        $this->json([
+            'success' => true,
+            'username' => 'admin',
+            'password' => $newPassword,
+        ]);
+    }
+
+    /**
      * Write all storage location paths to /etc/bbs/allowed-storage-paths
      * so bbs-ssh-helper can validate repo directory creation on those paths.
      */

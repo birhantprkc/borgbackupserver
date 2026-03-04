@@ -30,11 +30,20 @@ ok()    { echo -e "  ${GREEN}✓${NC} $1"; }
 warn()  { echo -e "  ${YELLOW}⚠${NC} $1"; }
 error() { echo -e "  ${RED}✗${NC} $1"; }
 
-BACKUP_FILE="${1:-}"
+AUTO_YES=false
+BACKUP_FILE=""
 BBS_DIR="/var/www/bbs"
 
+# Parse arguments
+for arg in "$@"; do
+    case "$arg" in
+        --yes) AUTO_YES=true ;;
+        *) BACKUP_FILE="$arg" ;;
+    esac
+done
+
 if [ -z "$BACKUP_FILE" ]; then
-    echo "Usage: sudo bbs-restore <backup.tar.gz>"
+    echo "Usage: sudo bbs-restore [--yes] <backup.tar.gz>"
     exit 1
 fi
 
@@ -78,7 +87,10 @@ info "Current version: $CURRENT_VERSION"
 echo ""
 
 # Step 1: Checkout matching version
-if [ "$BACKUP_VERSION" != "unknown" ] && [ "$BACKUP_VERSION" != "$CURRENT_VERSION" ]; then
+if [ ! -d "$BBS_DIR/.git" ]; then
+    info "[1/7] No git repo (Docker) — skipping version checkout"
+    ok "Using installed version v${CURRENT_VERSION}"
+elif [ "$BACKUP_VERSION" != "unknown" ] && [ "$BACKUP_VERSION" != "$CURRENT_VERSION" ]; then
     info "[1/7] Checking out version v${BACKUP_VERSION} to match backup..."
     git config --global --add safe.directory "$BBS_DIR" 2>/dev/null || true
     git -C "$BBS_DIR" fetch --all --tags --force 2>/dev/null
@@ -96,9 +108,27 @@ fi
 
 # Step 2: Restore .env
 info "[2/7] Restoring config/.env..."
+
+# Save current DB credentials before overwriting (the running MySQL may have different creds
+# than the backup's .env, e.g., Docker container with random password vs bare-metal backup)
+SAVED_DB_HOST=""
+SAVED_DB_NAME=""
+SAVED_DB_USER=""
+SAVED_DB_PASS=""
 if [ -f "$BBS_DIR/config/.env" ]; then
-    echo -n "  Overwrite existing .env? [y/N] "
-    read -r REPLY
+    SAVED_DB_HOST=$(grep '^DB_HOST=' "$BBS_DIR/config/.env" | cut -d= -f2-)
+    SAVED_DB_NAME=$(grep '^DB_NAME=' "$BBS_DIR/config/.env" | cut -d= -f2-)
+    SAVED_DB_USER=$(grep '^DB_USER=' "$BBS_DIR/config/.env" | cut -d= -f2-)
+    SAVED_DB_PASS=$(grep '^DB_PASS=' "$BBS_DIR/config/.env" | cut -d= -f2-)
+fi
+
+if [ -f "$BBS_DIR/config/.env" ]; then
+    if [ "$AUTO_YES" = true ]; then
+        REPLY="y"
+    else
+        echo -n "  Overwrite existing .env? [y/N] "
+        read -r REPLY
+    fi
     if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
         echo "  Skipping .env restore (keeping existing)"
     else
@@ -121,6 +151,23 @@ DB_NAME=$(grep '^DB_NAME=' "$ENV_FILE" | cut -d= -f2-)
 DB_USER=$(grep '^DB_USER=' "$ENV_FILE" | cut -d= -f2-)
 DB_PASS=$(grep '^DB_PASS=' "$ENV_FILE" | cut -d= -f2-)
 
+# If the restored .env has different DB creds, try the current running creds first
+# (common in Docker where the backup is from a different server)
+if [ -n "$SAVED_DB_PASS" ] && [ "$SAVED_DB_PASS" != "$DB_PASS" ]; then
+    if mysql -h "${SAVED_DB_HOST:-localhost}" -u "$SAVED_DB_USER" -p"$SAVED_DB_PASS" -e "SELECT 1" &>/dev/null; then
+        warn "Backup .env has different DB password — using current running credentials"
+        DB_HOST="$SAVED_DB_HOST"
+        DB_NAME="$SAVED_DB_NAME"
+        DB_USER="$SAVED_DB_USER"
+        DB_PASS="$SAVED_DB_PASS"
+        # Update .env with working DB credentials
+        sed -i "s|^DB_HOST=.*|DB_HOST=${DB_HOST}|" "$ENV_FILE"
+        sed -i "s|^DB_NAME=.*|DB_NAME=${DB_NAME}|" "$ENV_FILE"
+        sed -i "s|^DB_USER=.*|DB_USER=${DB_USER}|" "$ENV_FILE"
+        sed -i "s|^DB_PASS=.*|DB_PASS=${DB_PASS}|" "$ENV_FILE"
+    fi
+fi
+
 if [ -z "$DB_NAME" ] || [ -z "$DB_USER" ]; then
     error "Could not read DB credentials from .env"
     exit 1
@@ -128,8 +175,12 @@ fi
 
 # Step 3: Import MySQL dump
 info "[3/7] Importing MySQL database..."
-echo -n "  This will DROP and recreate all tables in '$DB_NAME'. Continue? [y/N] "
-read -r REPLY
+if [ "$AUTO_YES" = true ]; then
+    REPLY="y"
+else
+    echo -n "  This will DROP and recreate all tables in '$DB_NAME'. Continue? [y/N] "
+    read -r REPLY
+fi
 if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
     echo "  Skipping database import"
 else
@@ -139,6 +190,31 @@ else
     mysql -h "${DB_HOST:-localhost}" -u "$DB_USER" -p"$DB_PASS" \
         "$DB_NAME" < "$TMPDIR/dump.sql" 2>/dev/null
     ok "Database imported"
+
+    # Clear stale job queue — old queued/running jobs are meaningless on a restored system
+    mysql -h "${DB_HOST:-localhost}" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" \
+        -e "DELETE FROM backup_jobs WHERE status IN ('queued', 'sent', 'running')" 2>/dev/null
+    ok "Cleared stale job queue"
+
+    # Enable maintenance mode — prevents scheduler from queuing new jobs before repos are restored
+    mysql -h "${DB_HOST:-localhost}" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" \
+        -e "INSERT INTO settings (\`key\`, \`value\`) VALUES ('maintenance_mode', '1') ON DUPLICATE KEY UPDATE \`value\` = '1'" 2>/dev/null
+    ok "Maintenance mode enabled (disable in Settings after verifying repos)"
+
+    # When running non-interactively, reset admin password so the caller can log in
+    if [ "$AUTO_YES" = true ]; then
+        NEW_PASS=$(openssl rand -base64 12 | tr -d '/+=' | head -c 16)
+        # Use PHP to both hash the password and update the DB (avoids bash $-escaping issues with bcrypt hashes)
+        php -r "
+            \$pass = \$argv[1];
+            \$hash = password_hash(\$pass, PASSWORD_DEFAULT);
+            \$pdo = new PDO('mysql:host=' . (\$argv[2] ?: 'localhost') . ';dbname=' . \$argv[3], \$argv[4], \$argv[5]);
+            \$stmt = \$pdo->prepare('UPDATE users SET password_hash = ? WHERE username = ?');
+            \$stmt->execute([\$hash, 'admin']);
+        " "$NEW_PASS" "${DB_HOST:-localhost}" "$DB_NAME" "$DB_USER" "$DB_PASS"
+        ok "Admin password reset"
+        echo "NEW_ADMIN_PASSWORD=$NEW_PASS"
+    fi
 fi
 
 # Step 4: Restore SSH host keys
@@ -238,9 +314,13 @@ else
     fi
 fi
 
-# Run bbs-update to fix all permissions
-info "Running bbs-update to fix permissions..."
-"$BBS_DIR/bin/bbs-update" "$BBS_DIR" 2>&1 | sed 's/^/  /'
+# Run bbs-update-run to fix all permissions (skip bbs-update's git pull in Docker)
+info "Running post-restore permission fixes..."
+if [ -f "$BBS_DIR/bin/bbs-update-run" ]; then
+    bash "$BBS_DIR/bin/bbs-update-run" "$BBS_DIR" 2>&1 | sed 's/^/  /'
+else
+    "$BBS_DIR/bin/bbs-update" "$BBS_DIR" 2>&1 | sed 's/^/  /'
+fi
 
 echo ""
 info "═══════════════════════════════════════════════════"

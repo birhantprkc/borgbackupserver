@@ -162,7 +162,10 @@
             if (($maintenanceMode['value'] ?? '0') === '1'): ?>
             <div class="alert alert-warning d-flex align-items-center m-3 m-md-4 mb-0" role="alert">
                 <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
-                <strong>Maintenance mode active</strong> — new backups are paused while an upgrade is in progress.
+                <div>
+                    <strong>Maintenance mode active</strong> — new backup jobs are paused.
+                    <a href="/settings" class="alert-link ms-1">Go to Settings</a>
+                </div>
             </div>
             <?php endif; ?>
 
