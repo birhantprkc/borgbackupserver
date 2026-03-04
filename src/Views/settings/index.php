@@ -73,7 +73,6 @@ $updateAvailable = $updateService->isUpdateAvailable();
                         <div class="col-lg-6">
                             <label class="form-label fw-semibold">Max Concurrent Jobs</label>
                             <input type="number" class="form-control" name="max_queue" value="<?= htmlspecialchars($settings['max_queue'] ?? '4') ?>" min="1" max="20">
-                            <div class="form-text">Maximum backup jobs running simultaneously.</div>
                         </div>
                     </div>
                     <div class="mb-3">
