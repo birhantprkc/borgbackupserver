@@ -63,7 +63,7 @@ $updateAvailable = $updateService->isUpdateAvailable();
                 </div>
                 <div class="card-body">
                     <?php $mmOn = ($settings['maintenance_mode'] ?? '0') === '1'; ?>
-                    <div class="rounded p-3 mb-3 d-flex align-items-center justify-content-between <?= $mmOn ? 'bg-warning bg-opacity-25 border border-warning' : 'bg-body-tertiary' ?>">
+                    <div class="rounded p-3 mb-3 d-flex align-items-center justify-content-between <?= $mmOn ? 'bg-warning bg-opacity-10 border border-warning' : 'bg-body-tertiary' ?>">
                         <div>
                             <div class="form-check form-switch mb-0">
                                 <input class="form-check-input" type="checkbox" role="switch" name="maintenance_mode" id="maintenance_mode" value="1" <?= $mmOn ? 'checked' : '' ?>>
