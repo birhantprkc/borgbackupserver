@@ -83,30 +83,6 @@ else
     echo "  Warning: ClickHouse not installed — catalog features will not work"
 fi
 
-# Create database and user if needed
-if ! mysql -e "SELECT 1 FROM mysql.user WHERE user='bbs'" 2>/dev/null | grep -q 1; then
-    echo "Creating BBS database and user..."
-    mysql -e "CREATE DATABASE IF NOT EXISTS bbs CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-    mysql -e "CREATE USER IF NOT EXISTS 'bbs'@'localhost' IDENTIFIED BY 'bbs';"
-    mysql -e "CREATE USER IF NOT EXISTS 'bbs'@'127.0.0.1' IDENTIFIED BY 'bbs';"
-    mysql -e "GRANT ALL PRIVILEGES ON bbs.* TO 'bbs'@'localhost';"
-    mysql -e "GRANT ALL PRIVILEGES ON bbs.* TO 'bbs'@'127.0.0.1';"
-    mysql -e "FLUSH PRIVILEGES;"
-fi
-
-# --- Storage directories ---
-mkdir -p /var/bbs/home
-mkdir -p /var/bbs/cache
-mkdir -p /var/bbs/backups
-
-# Set permissions on persistent volume directories
-# Only chown the top-level dirs (not -R) — per-user subdirs under home/ and cache/
-# have their own ownership (user:www-data) set by bbs-ssh-helper. A recursive chown
-# would clobber .ssh/authorized_keys and per-user borg cache directories.
-chown www-data:www-data /var/bbs/home /var/bbs/cache
-chown -R www-data:www-data /var/bbs/backups
-chown -R mysql:mysql "$MYSQL_DATADIR"
-
 # --- Application configuration ---
 # Extract hostname from APP_URL (strip protocol and trailing path)
 SERVER_HOST="$(echo "${APP_URL:-http://localhost}" | sed -E 's|https?://||' | sed 's|/.*||')"
@@ -130,6 +106,9 @@ if [ -z "$APP_KEY" ]; then
     APP_KEY="$(openssl rand -hex 32)"
 fi
 
+# Generate a random DB password for new installs
+DB_PASS="$(openssl rand -base64 16 | tr -d '/+=' | head -c 20)"
+
 # Create .env on volume if it doesn't exist (first run)
 if [ ! -f "$ENV_VOLUME" ]; then
     echo "Creating .env configuration..."
@@ -137,7 +116,7 @@ if [ ! -f "$ENV_VOLUME" ]; then
 DB_HOST=127.0.0.1
 DB_NAME=bbs
 DB_USER=bbs
-DB_PASS=bbs
+DB_PASS=$DB_PASS
 APP_URL=${APP_URL:-http://localhost}
 APP_KEY=$APP_KEY
 EOF
@@ -163,6 +142,33 @@ if ! grep -q 'CLICKHOUSE_HOST' "$ENV_VOLUME" 2>/dev/null; then
     echo "CLICKHOUSE_DB=bbs" >> "$ENV_VOLUME"
 fi
 
+# Read DB password from .env (may be the random one we just wrote, or an existing one)
+DB_PASS=$(grep '^DB_PASS=' "$ENV_VOLUME" | cut -d= -f2-)
+
+# Create database and user if needed
+if ! mysql -e "SELECT 1 FROM mysql.user WHERE user='bbs'" 2>/dev/null | grep -q 1; then
+    echo "Creating BBS database and user..."
+    mysql -e "CREATE DATABASE IF NOT EXISTS bbs CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+    mysql -e "CREATE USER IF NOT EXISTS 'bbs'@'localhost' IDENTIFIED BY '$DB_PASS';"
+    mysql -e "CREATE USER IF NOT EXISTS 'bbs'@'127.0.0.1' IDENTIFIED BY '$DB_PASS';"
+    mysql -e "GRANT ALL PRIVILEGES ON bbs.* TO 'bbs'@'localhost';"
+    mysql -e "GRANT ALL PRIVILEGES ON bbs.* TO 'bbs'@'127.0.0.1';"
+    mysql -e "FLUSH PRIVILEGES;"
+fi
+
+# --- Storage directories ---
+mkdir -p /var/bbs/home
+mkdir -p /var/bbs/cache
+mkdir -p /var/bbs/backups
+
+# Set permissions on persistent volume directories
+# Only chown the top-level dirs (not -R) — per-user subdirs under home/ and cache/
+# have their own ownership (user:www-data) set by bbs-ssh-helper. A recursive chown
+# would clobber .ssh/authorized_keys and per-user borg cache directories.
+chown www-data:www-data /var/bbs/home /var/bbs/cache
+chown -R www-data:www-data /var/bbs/backups
+chown -R mysql:mysql "$MYSQL_DATADIR"
+
 # Create ClickHouse database and tables
 if curl -sf http://localhost:8123/ping >/dev/null 2>&1; then
     echo "Setting up ClickHouse catalog tables..."
@@ -175,7 +181,7 @@ fi
 
 # --- Database setup ---
 FRESH_INSTALL=0
-if ! mysql -u bbs -pbbs bbs -e "SELECT 1 FROM settings LIMIT 1" 2>/dev/null; then
+if ! mysql -u bbs -p"$DB_PASS" bbs -e "SELECT 1 FROM settings LIMIT 1" 2>/dev/null; then
     FRESH_INSTALL=1
 fi
 
@@ -183,18 +189,18 @@ fi
 if [ -f "/var/www/bbs/schema.sql" ]; then
     if [ "$FRESH_INSTALL" -eq 1 ]; then
         echo "Importing database schema..."
-        mysql -u bbs -pbbs bbs < /var/www/bbs/schema.sql
+        mysql -u bbs -p"$DB_PASS" bbs < /var/www/bbs/schema.sql
     fi
 fi
 
 # Set essential settings
 echo "Configuring server settings..."
-mysql -u bbs -pbbs bbs -e "INSERT INTO settings (\`key\`, \`value\`) VALUES ('storage_path', '/var/bbs/home') ON DUPLICATE KEY UPDATE \`value\` = IF(\`value\` = '' OR \`value\` IS NULL, '/var/bbs/home', \`value\`);"
-mysql -u bbs -pbbs bbs -e "INSERT INTO settings (\`key\`, \`value\`) VALUES ('server_host', '$SERVER_HOST') ON DUPLICATE KEY UPDATE \`value\` = IF(\`value\` = '' OR \`value\` IS NULL, '$SERVER_HOST', \`value\`);"
+mysql -u bbs -p"$DB_PASS" bbs -e "INSERT INTO settings (\`key\`, \`value\`) VALUES ('storage_path', '/var/bbs/home') ON DUPLICATE KEY UPDATE \`value\` = IF(\`value\` = '' OR \`value\` IS NULL, '/var/bbs/home', \`value\`);"
+mysql -u bbs -p"$DB_PASS" bbs -e "INSERT INTO settings (\`key\`, \`value\`) VALUES ('server_host', '$SERVER_HOST') ON DUPLICATE KEY UPDATE \`value\` = IF(\`value\` = '' OR \`value\` IS NULL, '$SERVER_HOST', \`value\`);"
 
 # Set SSH port (must match the host-side port mapping for borg agent connections)
 SSH_PORT="${SSH_PORT:-22}"
-mysql -u bbs -pbbs bbs -e "INSERT INTO settings (\`key\`, \`value\`) VALUES ('ssh_port', '$SSH_PORT') ON DUPLICATE KEY UPDATE \`value\` = '$SSH_PORT';"
+mysql -u bbs -p"$DB_PASS" bbs -e "INSERT INTO settings (\`key\`, \`value\`) VALUES ('ssh_port', '$SSH_PORT') ON DUPLICATE KEY UPDATE \`value\` = '$SSH_PORT';"
 
 # Set admin password on fresh install
 if [ "$FRESH_INSTALL" -eq 1 ]; then
@@ -214,7 +220,7 @@ if [ "$FRESH_INSTALL" -eq 1 ]; then
     # Generate bcrypt hash and update admin password
     export ADMIN_PASS
     ADMIN_HASH=$(php -r "echo password_hash(\$_SERVER['ADMIN_PASS'], PASSWORD_BCRYPT, ['cost' => 12]);")
-    mysql -u bbs -pbbs bbs -e "UPDATE users SET password_hash = '$ADMIN_HASH' WHERE username = 'admin';"
+    mysql -u bbs -p"$DB_PASS" bbs -e "UPDATE users SET password_hash = '$ADMIN_HASH' WHERE username = 'admin';"
 fi
 
 # Run pending migrations
@@ -222,13 +228,13 @@ if [ -d "/var/www/bbs/migrations" ]; then
     echo "Running migrations..."
     for migration in /var/www/bbs/migrations/*.sql; do
         if [ -f "$migration" ]; then
-            mysql -u bbs -pbbs bbs < "$migration" 2>/dev/null || true
+            mysql -u bbs -p"$DB_PASS" bbs < "$migration" 2>/dev/null || true
         fi
     done
 fi
 
 # Sync borg versions from GitHub on fresh install or if table is empty
-BORG_COUNT=$(mysql -u bbs -pbbs bbs -N -e "SELECT COUNT(*) FROM borg_versions" 2>/dev/null || echo "0")
+BORG_COUNT=$(mysql -u bbs -p"$DB_PASS" bbs -N -e "SELECT COUNT(*) FROM borg_versions" 2>/dev/null || echo "0")
 if [ "$BORG_COUNT" -eq 0 ]; then
     echo "Syncing borg versions from GitHub..."
     cd /var/www/bbs && php -r "
@@ -245,12 +251,12 @@ fi
 # --- Recreate SSH users from database (needed after container restart) ---
 # Home directories are named by agent ID (e.g., /var/bbs/home/1), not by username.
 # Query the database for the username-to-directory mapping.
-STORAGE_PATH=$(mysql -u bbs -pbbs bbs -N -e "SELECT value FROM settings WHERE \`key\` = 'storage_path'" 2>/dev/null)
+STORAGE_PATH=$(mysql -u bbs -p"$DB_PASS" bbs -N -e "SELECT value FROM settings WHERE \`key\` = 'storage_path'" 2>/dev/null)
 STORAGE_PATH="${STORAGE_PATH:-/var/bbs/home}"
 RESTORED_USERS=0
 
 echo "Recreating SSH users from database..."
-mysql -u bbs -pbbs bbs -N -e "SELECT ssh_unix_user, id, IFNULL(ssh_home_dir, '') FROM agents WHERE ssh_unix_user IS NOT NULL AND ssh_unix_user != ''" 2>/dev/null | while read SSH_USER AGENT_ID SSH_HOME_DIR; do
+mysql -u bbs -p"$DB_PASS" bbs -N -e "SELECT ssh_unix_user, id, IFNULL(ssh_home_dir, '') FROM agents WHERE ssh_unix_user IS NOT NULL AND ssh_unix_user != ''" 2>/dev/null | while read SSH_USER AGENT_ID SSH_HOME_DIR; do
     # Use stored ssh_home_dir if available, fall back to STORAGE_PATH/AGENT_ID for pre-migration agents
     USER_HOME="${SSH_HOME_DIR:-$STORAGE_PATH/$AGENT_ID}"
     [ -d "$USER_HOME" ] || continue
