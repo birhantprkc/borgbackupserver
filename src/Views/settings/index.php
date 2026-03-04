@@ -62,18 +62,22 @@ $updateAvailable = $updateService->isUpdateAvailable();
                     <i class="bi bi-server me-1"></i> Server
                 </div>
                 <div class="card-body">
-                    <div class="row g-3 mb-3">
-                        <div class="col-lg-6">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" role="switch" name="maintenance_mode" id="maintenance_mode" value="1" <?= ($settings['maintenance_mode'] ?? '0') === '1' ? 'checked' : '' ?>>
+                    <?php $mmOn = ($settings['maintenance_mode'] ?? '0') === '1'; ?>
+                    <div class="rounded p-3 mb-3 d-flex align-items-center justify-content-between <?= $mmOn ? 'bg-warning bg-opacity-25 border border-warning' : 'bg-body-tertiary' ?>">
+                        <div>
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" role="switch" name="maintenance_mode" id="maintenance_mode" value="1" <?= $mmOn ? 'checked' : '' ?>>
                                 <label class="form-check-label fw-semibold" for="maintenance_mode">Maintenance Mode</label>
                             </div>
-                            <div class="form-text">Pauses all new backup jobs. Existing running jobs will complete.</div>
+                            <div class="form-text mb-0">Pauses all new backup jobs. Existing running jobs will complete.</div>
                         </div>
-                        <div class="col-lg-6">
-                            <label class="form-label fw-semibold">Max Concurrent Jobs</label>
-                            <input type="number" class="form-control" name="max_queue" value="<?= htmlspecialchars($settings['max_queue'] ?? '4') ?>" min="1" max="20">
-                        </div>
+                        <?php if ($mmOn): ?>
+                        <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle-fill me-1"></i>Active</span>
+                        <?php endif; ?>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Max Concurrent Jobs</label>
+                        <input type="number" class="form-control" name="max_queue" value="<?= htmlspecialchars($settings['max_queue'] ?? '4') ?>" min="1" max="20">
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Server Host / IP</label>
