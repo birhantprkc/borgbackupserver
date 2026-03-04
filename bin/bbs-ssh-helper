@@ -5,6 +5,7 @@
 # Usage:
 #   bbs-ssh-helper create-user <username> <home_dir> <public_key>
 #   bbs-ssh-helper create-repo-dir <repo_dir>
+#   bbs-ssh-helper borg-init <repo_path> <encryption> [passphrase]
 #   bbs-ssh-helper delete-user <username>
 #   bbs-ssh-helper install-gate
 #   bbs-ssh-helper update-all-keys
@@ -17,6 +18,18 @@
 set -euo pipefail
 
 ACTION="${1:-}"
+
+# Check if a path is under /var/bbs/ or a registered storage location
+is_allowed_path() {
+    local CHECK_PATH="$1"
+    [[ "$CHECK_PATH" =~ ^/var/bbs/ ]] && return 0
+    if [ -f /etc/bbs/allowed-storage-paths ]; then
+        while IFS= read -r allowed_path; do
+            [[ -n "$allowed_path" ]] && [[ "$CHECK_PATH" =~ ^"$allowed_path"/ ]] && return 0
+        done < /etc/bbs/allowed-storage-paths
+    fi
+    return 1
+}
 
 case "$ACTION" in
     create-user)
@@ -79,16 +92,7 @@ case "$ACTION" in
             exit 1
         fi
 
-        # Safety: only create under allowed storage paths
-        ALLOWED=0
-        if [[ "$REPO_DIR" =~ ^/var/bbs/ ]]; then
-            ALLOWED=1
-        elif [ -f /etc/bbs/allowed-storage-paths ]; then
-            while IFS= read -r allowed_path; do
-                [[ -n "$allowed_path" ]] && [[ "$REPO_DIR" =~ ^"$allowed_path"/ ]] && ALLOWED=1 && break
-            done < /etc/bbs/allowed-storage-paths
-        fi
-        if [ "$ALLOWED" -ne 1 ]; then
+        if ! is_allowed_path "$REPO_DIR"; then
             echo "Error: repo dir must be under /var/bbs/ or a registered storage location"
             exit 1
         fi
@@ -104,16 +108,15 @@ case "$ACTION" in
         # Create the repo directory
         mkdir -p "$REPO_DIR"
 
-        # Find the bbs-* user who owns the parent directory
+        # Find the bbs-* user who owns the parent directory.
+        # On NFS with admin mapping, stat may return UNKNOWN or the NFS-mapped user,
+        # so we also search by path when the owner isn't a bbs-* user.
         PARENT_OWNER=$(stat -c '%U' "$PARENT_DIR")
 
-        # If parent is still owned by root, try to find the correct bbs-* user.
-        # Works for default home dirs (/var/bbs/home/N/) and non-default storage
-        # locations where the parent dir basename is the agent_id (e.g., /mnt/storage/3/)
-        if [ "$PARENT_OWNER" = "root" ]; then
-            # First try: look for bbs-* user whose home matches this directory
+        if [[ ! "$PARENT_OWNER" =~ ^bbs- ]]; then
+            # Parent not owned by a bbs-* user (could be root, UNKNOWN, or NFS-mapped).
+            # Try to find the correct bbs-* user by matching the directory path.
             ACTUAL_USER=$(awk -F: -v home="$PARENT_DIR" '$6 == home && $1 ~ /^bbs-/ {print $1}' /etc/passwd)
-            # Second try: if parent basename is numeric, look for bbs-* user with that agent_id in their home
             if [ -z "$ACTUAL_USER" ]; then
                 BASENAME=$(basename "$PARENT_DIR")
                 if [[ "$BASENAME" =~ ^[0-9]+$ ]]; then
@@ -122,13 +125,16 @@ case "$ACTION" in
             fi
             if [ -n "$ACTUAL_USER" ]; then
                 PARENT_OWNER="$ACTUAL_USER"
-                chown "$ACTUAL_USER":www-data "$PARENT_DIR"
-                chmod 750 "$PARENT_DIR"
             fi
         fi
 
-        chown "$PARENT_OWNER":www-data "$REPO_DIR"
-        chmod 770 "$REPO_DIR"
+        # Set ownership (may fail on NFS with admin mapping — non-fatal)
+        if [[ "$PARENT_OWNER" =~ ^bbs- ]]; then
+            chown "$PARENT_OWNER":www-data "$PARENT_DIR" 2>/dev/null || true
+            chmod 750 "$PARENT_DIR" 2>/dev/null || true
+            chown "$PARENT_OWNER":www-data "$REPO_DIR" 2>/dev/null || true
+        fi
+        chmod 770 "$REPO_DIR" 2>/dev/null || true
         echo "OK"
         ;;
 
@@ -199,16 +205,7 @@ case "$ACTION" in
             exit 1
         fi
 
-        # Safety: only allow paths under /var/bbs/ or registered storage locations
-        ALLOWED=0
-        if [[ "$REPO_PATH" =~ ^/var/bbs/ ]]; then
-            ALLOWED=1
-        elif [ -f /etc/bbs/allowed-storage-paths ]; then
-            while IFS= read -r allowed_path; do
-                [[ -n "$allowed_path" ]] && [[ "$REPO_PATH" =~ ^"$allowed_path"/ ]] && ALLOWED=1 && break
-            done < /etc/bbs/allowed-storage-paths
-        fi
-        if [ "$ALLOWED" -ne 1 ]; then
+        if ! is_allowed_path "$REPO_PATH"; then
             echo "Error: repo path must be under /var/bbs/ or a registered storage location"
             exit 1
         fi
@@ -242,9 +239,8 @@ case "$ACTION" in
             exit 1
         fi
 
-        # Safety: repo path must be under /var/bbs/
-        if [[ ! "$REPO_PATH" =~ ^/var/bbs/ ]]; then
-            echo "Error: repo path must be under /var/bbs/"
+        if ! is_allowed_path "$REPO_PATH"; then
+            echo "Error: repo path must be under /var/bbs/ or a registered storage location"
             exit 1
         fi
 
@@ -286,9 +282,8 @@ case "$ACTION" in
         # Extract repo path from archive path (before ::)
         REPO_PATH="${ARCHIVE_PATH%%::*}"
 
-        # Safety: repo path must be under /var/bbs/
-        if [[ ! "$REPO_PATH" =~ ^/var/bbs/ ]]; then
-            echo "Error: repo path must be under /var/bbs/"
+        if ! is_allowed_path "$REPO_PATH"; then
+            echo "Error: repo path must be under /var/bbs/ or a registered storage location"
             exit 1
         fi
 
@@ -329,16 +324,16 @@ case "$ACTION" in
             exit 1
         fi
 
-        # Validate that at least one arg references /var/bbs (the repo path)
-        FOUND_BBS_PATH=false
+        # Validate that at least one arg is an allowed path
+        FOUND_ALLOWED_PATH=false
         for arg in "$@"; do
-            if [[ "$arg" =~ ^/var/bbs/ ]]; then
-                FOUND_BBS_PATH=true
+            if is_allowed_path "$arg"; then
+                FOUND_ALLOWED_PATH=true
                 break
             fi
         done
-        if [ "$FOUND_BBS_PATH" = false ]; then
-            echo "Error: borg command must include a path under /var/bbs/"
+        if [ "$FOUND_ALLOWED_PATH" = false ]; then
+            echo "Error: borg command must include a path under /var/bbs/ or a registered storage location"
             exit 1
         fi
 
@@ -359,6 +354,46 @@ case "$ACTION" in
         exit $?
         ;;
 
+    borg-init)
+        # Run borg init as root so it works on NFS and other filesystems where
+        # www-data may not have write access despite correct POSIX permissions.
+        # Usage: bbs-ssh-helper borg-init <repo_path> <encryption> [passphrase]
+        REPO_PATH="${2:-}"
+        ENCRYPTION="${3:-}"
+        PASSPHRASE="${4:-}"
+
+        if [ -z "$REPO_PATH" ] || [ -z "$ENCRYPTION" ]; then
+            echo "Usage: bbs-ssh-helper borg-init <repo_path> <encryption> [passphrase]"
+            exit 1
+        fi
+
+        if ! is_allowed_path "$REPO_PATH"; then
+            echo "Error: repo path must be under /var/bbs/ or a registered storage location"
+            exit 1
+        fi
+
+        # Validate encryption mode
+        case "$ENCRYPTION" in
+            none|repokey|repokey-blake2|keyfile|keyfile-blake2|authenticated|authenticated-blake2)
+                ;;
+            *)
+                echo "Error: invalid encryption mode: $ENCRYPTION"
+                exit 1
+                ;;
+        esac
+
+        mkdir -p /tmp/bbs-borg-init
+
+        BORG_PASSPHRASE="$PASSPHRASE" \
+        BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes \
+        BORG_RELOCATED_REPO_ACCESS_IS_OK=yes \
+        BORG_BASE_DIR="/tmp/bbs-borg-init" \
+        HOME="/tmp/bbs-borg-init" \
+            borg init "--encryption=$ENCRYPTION" "$REPO_PATH" 2>&1
+
+        exit $?
+        ;;
+
     fix-repo-perms)
         REPO_DIR="${2:-}"
         USERNAME="${3:-}"
@@ -368,16 +403,7 @@ case "$ACTION" in
             exit 1
         fi
 
-        # Safety: only allow paths under /var/bbs or registered storage locations
-        ALLOWED=0
-        if [[ "$REPO_DIR" =~ ^/var/bbs/ ]]; then
-            ALLOWED=1
-        elif [ -f /etc/bbs/allowed-storage-paths ]; then
-            while IFS= read -r allowed_path; do
-                [[ -n "$allowed_path" ]] && [[ "$REPO_DIR" =~ ^"$allowed_path"/ ]] && ALLOWED=1 && break
-            done < /etc/bbs/allowed-storage-paths
-        fi
-        if [ "$ALLOWED" -ne 1 ]; then
+        if ! is_allowed_path "$REPO_DIR"; then
             echo "Error: repo dir must be under /var/bbs/ or a registered storage location"
             exit 1
         fi
@@ -387,8 +413,10 @@ case "$ACTION" in
         fi
 
         if [ -d "$REPO_DIR" ]; then
-            chown -R "$USERNAME":www-data "$REPO_DIR"
-            chmod 770 "$REPO_DIR"
+            # chown may fail on NFS with admin mapping — non-fatal since
+            # all users map to the same NFS user anyway
+            chown -R "$USERNAME":www-data "$REPO_DIR" 2>/dev/null || true
+            chmod 770 "$REPO_DIR" 2>/dev/null || true
         fi
         echo "OK"
         ;;
@@ -615,16 +643,7 @@ case "$ACTION" in
             exit 1
         fi
 
-        # Safety: only allow paths under /var/bbs or registered storage locations
-        ALLOWED=0
-        if [[ "$DIR" =~ ^/var/bbs/ ]]; then
-            ALLOWED=1
-        elif [ -f /etc/bbs/allowed-storage-paths ]; then
-            while IFS= read -r allowed_path; do
-                [[ -n "$allowed_path" ]] && [[ "$DIR" =~ ^"$allowed_path"/ ]] && ALLOWED=1 && break
-            done < /etc/bbs/allowed-storage-paths
-        fi
-        if [ "$ALLOWED" -ne 1 ]; then
+        if ! is_allowed_path "$DIR"; then
             echo "Error: path must be under /var/bbs/ or a registered storage location"
             exit 1
         fi
@@ -854,6 +873,11 @@ SSHEOF
 
         PATHS_FILE="$HOME_DIR/.storage-paths"
 
+        # Ensure home directory exists (may not if user creation used a different path)
+        if [ ! -d "$HOME_DIR" ]; then
+            mkdir -p "$HOME_DIR"
+        fi
+
         if [ $# -le 2 ]; then
             # No extra paths — remove the file if it exists
             rm -f "$PATHS_FILE"
@@ -923,7 +947,7 @@ SSHEOF
         ;;
 
     *)
-        echo "Usage: bbs-ssh-helper {create-user|create-repo-dir|verify-repo|borg-extract|fix-repo-perms|fix-download-perms|delete-user|install-gate|update-all-keys|rclone-sync|rclone-restore|get-size|delete-storage|clear-borg-cache|update-storage-paths|update-allowed-paths} [args...]"
+        echo "Usage: bbs-ssh-helper {create-user|create-repo-dir|borg-init|verify-repo|borg-extract|fix-repo-perms|fix-download-perms|delete-user|install-gate|update-all-keys|rclone-sync|rclone-restore|get-size|delete-storage|clear-borg-cache|update-storage-paths|update-allowed-paths} [args...]"
         exit 1
         ;;
 esac

@@ -132,39 +132,21 @@ class RepositoryController extends Controller
             }
         }
 
-        // Build and run borg init using proc_open for clean env handling
-        $env = $_ENV;
+        // Update .storage-paths BEFORE borg init so SSH access works even if init fails
+        if (!empty($agent['ssh_unix_user'])) {
+            $this->updateAgentStoragePaths($agentId, $agent);
+        }
+
+        // Run borg init via bbs-ssh-helper (runs as root, works on NFS and other
+        // filesystems where www-data may lack write access despite POSIX permissions)
+        $initCmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-init', $localPath, $encryption];
         if ($encryption !== 'none' && !empty($passphrase)) {
-            $env['BORG_PASSPHRASE'] = $passphrase;
+            $initCmd[] = $passphrase;
         }
-        $env['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes';
-        $env['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes';
-        $env['BORG_BASE_DIR'] = '/tmp/bbs-borg-www-data';
-        $env['HOME'] = '/tmp/bbs-borg-www-data';
+        exec(implode(' ', array_map('escapeshellarg', $initCmd)) . ' 2>&1', $initOutput, $initRet);
 
-        $initCmd = ['borg', 'init', '--encryption=' . $encryption, $localPath];
-
-        $proc = proc_open($initCmd, [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ], $pipes, null, $env);
-
-        $output = [];
-        $retval = -1;
-        if (is_resource($proc)) {
-            fclose($pipes[0]);
-            $stdout = stream_get_contents($pipes[1]);
-            $stderr = stream_get_contents($pipes[2]);
-            fclose($pipes[1]);
-            fclose($pipes[2]);
-            $retval = proc_close($proc);
-            if (!empty($stdout)) $output[] = $stdout;
-            if (!empty($stderr)) $output[] = $stderr;
-        }
-
-        if ($retval !== 0) {
-            $errorMsg = implode("\n", $output);
+        if ($initRet !== 0) {
+            $errorMsg = implode("\n", $initOutput);
             $this->db->insert('server_log', [
                 'agent_id' => $agentId,
                 'level' => 'error',
@@ -174,7 +156,7 @@ class RepositoryController extends Controller
             $this->redirect("/clients/{$agentId}?tab=repos");
         }
 
-        // Fix ownership: borg init creates files as www-data, but the bbs-user needs to own them for SSH access
+        // Fix ownership: borg init creates files as root, but the bbs-user needs to own them for SSH access
         if (!empty($agent['ssh_unix_user'])) {
             $fixCmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'fix-repo-perms', $localPath, $agent['ssh_unix_user']];
             exec(implode(' ', array_map('escapeshellarg', $fixCmd)) . ' 2>&1', $fixOutput, $fixRet);
@@ -192,11 +174,6 @@ class RepositoryController extends Controller
             'level' => 'info',
             'message' => "Repository \"{$name}\" initialized ({$encryption}) at {$localPath}",
         ]);
-
-        // Update .storage-paths so bbs-ssh-gate allows borg access to this location
-        if (!empty($agent['ssh_unix_user'])) {
-            $this->updateAgentStoragePaths($agentId, $agent);
-        }
 
         $this->flash('success', "Repository \"{$name}\" created and initialized.");
         $this->redirect("/clients/{$agentId}?tab=repos");
