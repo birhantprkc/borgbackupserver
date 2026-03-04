@@ -14,7 +14,7 @@ set -euo pipefail
 BBS_DIR="${1:-/var/www/bbs}"
 
 # 2. Install/update PHP dependencies
-echo "[2/12] Installing PHP dependencies..."
+echo "[2/9] Installing PHP dependencies..."
 if command -v composer &>/dev/null; then
     composer install --no-dev --working-dir="$BBS_DIR" --quiet
 else
@@ -22,83 +22,45 @@ else
 fi
 
 # 3. Fix web file ownership
-echo "[3/12] Setting web file permissions..."
+echo "[3/9] Setting web file permissions..."
 chown -R www-data:www-data "$BBS_DIR"
 chmod 755 "$BBS_DIR/config"
 [ -f "$BBS_DIR/config/.env" ] && chmod 600 "$BBS_DIR/config/.env"
 
 # 4. Update SSH helper and gate
-echo "[4/12] Updating SSH helper..."
+echo "[4/9] Updating SSH helper..."
 cp "$BBS_DIR/bin/bbs-ssh-helper" /usr/local/bin/bbs-ssh-helper
 chmod 755 /usr/local/bin/bbs-ssh-helper
 /usr/local/bin/bbs-ssh-helper install-gate
 /usr/local/bin/bbs-ssh-helper update-all-keys
 
-# 5. Install/update ClickHouse for catalog storage
-echo "[5/12] Setting up ClickHouse..."
-if ! command -v clickhouse-server &>/dev/null; then
-    echo "  Installing ClickHouse..."
-    curl -fsSL -A 'Mozilla/5.0' 'https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key' | \
-        gpg --dearmor -o /usr/share/keyrings/clickhouse-keyring.gpg 2>/dev/null
-    ARCH=$(dpkg --print-architecture)
-    echo "deb [signed-by=/usr/share/keyrings/clickhouse-keyring.gpg arch=${ARCH}] https://packages.clickhouse.com/deb stable main" \
-        > /etc/apt/sources.list.d/clickhouse.list
-    apt-get update -qq 2>/dev/null
-    DEBIAN_FRONTEND=noninteractive apt-get install -y clickhouse-server clickhouse-client > /dev/null 2>&1
-    systemctl enable --now clickhouse-server > /dev/null 2>&1
-    # Wait for startup
-    for i in {1..10}; do
-        curl -sf http://localhost:8123/ping >/dev/null 2>&1 && break
-        sleep 1
-    done
-    echo "  ClickHouse installed and started"
-else
-    # Install/update config override to disable system log tables (reduces idle disk I/O)
+# 5. ClickHouse — ensure running and schema is current
+echo "[5/9] Checking ClickHouse..."
+if command -v clickhouse-server &>/dev/null; then
+    # Ensure config override is in place
     mkdir -p /etc/clickhouse-server/config.d
     if [ -f "$BBS_DIR/config/clickhouse-server-override.xml" ]; then
         cp "$BBS_DIR/config/clickhouse-server-override.xml" /etc/clickhouse-server/config.d/bbs-override.xml
-        # Restart to pick up config changes
-        systemctl restart clickhouse-server 2>/dev/null || true
-        # Wait for restart
-        for i in {1..10}; do
-            curl -sf http://localhost:8123/ping >/dev/null 2>&1 && break
-            sleep 1
-        done
-        # Drop old system log tables to reclaim disk space
-        for tbl in trace_log text_log metric_log asynchronous_metric_log part_log \
-                   processors_profile_log query_log query_thread_log query_views_log \
-                   query_metric_log session_log opentelemetry_span_log \
-                   asynchronous_insert_log backup_log s3_queue_log blob_storage_log \
-                   background_schedule_pool_log error_log; do
-            clickhouse-client --query "DROP TABLE IF EXISTS system.$tbl" 2>/dev/null || true
-        done
     fi
     # Ensure service is running
     systemctl is-active --quiet clickhouse-server || systemctl start clickhouse-server 2>/dev/null || true
+    # Ensure database and tables exist (idempotent)
+    clickhouse-client --query "CREATE DATABASE IF NOT EXISTS bbs" 2>/dev/null || true
+    clickhouse-client -d bbs --multiquery < "$BBS_DIR/schema-clickhouse.sql" 2>/dev/null || true
     echo "  OK"
-fi
-# Ensure database and tables exist (idempotent)
-clickhouse-client --query "CREATE DATABASE IF NOT EXISTS bbs" 2>/dev/null || true
-clickhouse-client -d bbs --multiquery < "$BBS_DIR/schema-clickhouse.sql" 2>/dev/null || true
-
-# Add ClickHouse env vars if missing
-ENV_FILE="$BBS_DIR/config/.env"
-if [ -f "$ENV_FILE" ] && ! grep -q 'CLICKHOUSE_HOST' "$ENV_FILE"; then
-    echo "" >> "$ENV_FILE"
-    echo "CLICKHOUSE_HOST=localhost" >> "$ENV_FILE"
-    echo "CLICKHOUSE_PORT=8123" >> "$ENV_FILE"
-    echo "CLICKHOUSE_DB=bbs" >> "$ENV_FILE"
-    echo "  Added ClickHouse config to .env"
+else
+    echo "  Warning: ClickHouse not installed (catalog features unavailable)"
+    echo "  Run the installer to set up ClickHouse, or reinstall BBS."
 fi
 
-# 6. Fix runtime directories
-echo "[6/12] Fixing runtime permissions..."
+# 6. Fix runtime directories and SSH permissions
+echo "[6/9] Fixing permissions..."
 
-# Borg cache dirs under /var/bbs/cache (avoid /tmp size limits)
+# Borg cache dir for www-data
 mkdir -p /var/bbs/cache/www-data
 chown www-data:www-data /var/bbs/cache/www-data
 
-# Fix permissions for each bbs-* user's borg dir and home
+# Fix per-user home and .ssh permissions (required for sshd StrictModes)
 for user in $(getent passwd | grep '^bbs-' | cut -d: -f1); do
     home=$(getent passwd "$user" | cut -d: -f6)
 
@@ -118,88 +80,34 @@ for user in $(getent passwd | grep '^bbs-' | cut -d: -f1); do
             chmod 700 "$home/.ssh"
             [ -f "$home/.ssh/authorized_keys" ] && chmod 600 "$home/.ssh/authorized_keys"
         fi
-
-        # Repo directories: owned by user, group www-data, 770
-        for repo in "$home"/*/; do
-            [ -d "$repo" ] || continue
-            # Skip .ssh and .catalog-logs
-            [ "$(basename "$repo")" = ".ssh" ] && continue
-            [ "$(basename "$repo")" = ".catalog-logs" ] && continue
-            chown -R "$user":www-data "$repo"
-            chmod 770 "$repo"
-        done
     fi
 done
 
-# 7. Fix sudoers (ensure bbs-update is allowed)
-echo "[7/12] Verifying sudoers..."
+# 7. Verify sudoers
+echo "[7/9] Verifying sudoers..."
 SUDOERS_FILE="/etc/sudoers.d/bbs-ssh-helper"
 EXPECTED="www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper, $BBS_DIR/bin/bbs-update"
-if [ -f "$SUDOERS_FILE" ]; then
-    if ! grep -q "bbs-update" "$SUDOERS_FILE"; then
-        echo "$EXPECTED" > "$SUDOERS_FILE"
-        chmod 440 "$SUDOERS_FILE"
-        echo "  Updated sudoers to include bbs-update"
-    else
-        echo "  OK"
-    fi
-else
+if [ ! -f "$SUDOERS_FILE" ] || ! grep -q "bbs-update" "$SUDOERS_FILE"; then
     echo "$EXPECTED" > "$SUDOERS_FILE"
     chmod 440 "$SUDOERS_FILE"
-    echo "  Created sudoers file"
+    echo "  Updated"
+else
+    echo "  OK"
 fi
 
-# Ensure borg sudoers rule exists (allows prune/compact as client users)
 BORG_SUDOERS="/etc/sudoers.d/bbs-borg"
 BORG_EXPECTED="www-data ALL=(bbs-*) NOPASSWD: /usr/bin/borg, /usr/local/bin/borg, /usr/bin/rclone, /usr/bin/env"
 if [ ! -f "$BORG_SUDOERS" ] || ! grep -q "/usr/bin/rclone" "$BORG_SUDOERS"; then
     echo "$BORG_EXPECTED" > "$BORG_SUDOERS"
     chmod 440 "$BORG_SUDOERS"
-    echo "  Updated borg sudoers rule"
 fi
 
-# 8. Install/upgrade rclone from official binary (apt package ships outdated Go runtime with CVEs)
-echo "[8/12] Updating rclone..."
-ARCH=$(dpkg --print-architecture)
-if curl -fsSL "https://downloads.rclone.org/rclone-current-linux-${ARCH}.zip" -o /tmp/rclone.zip 2>/dev/null; then
-    unzip -qo /tmp/rclone.zip -d /tmp \
-        && cp /tmp/rclone-*/rclone /usr/bin/rclone \
-        && chmod 755 /usr/bin/rclone \
-        && rm -rf /tmp/rclone*
-    echo "  OK ($(rclone --version 2>/dev/null | head -1))"
-else
-    if command -v rclone &>/dev/null; then
-        echo "  Warning: could not download rclone update, keeping $(rclone --version 2>/dev/null | head -1)"
-    else
-        echo "  Warning: rclone install failed (S3 sync will not work)"
-    fi
-fi
-
-# 9. Ensure Apprise is installed (needed for push notifications)
-echo "[9/12] Checking Apprise..."
-if command -v apprise &>/dev/null; then
-    echo "  OK ($(apprise --version 2>/dev/null || echo 'installed'))"
-else
-    echo "  Installing Apprise..."
-    if ! command -v pip3 &>/dev/null; then
-        apt-get update -qq 2>/dev/null
-        apt-get install -y python3-pip 2>/dev/null || true
-    fi
-    if command -v pip3 &>/dev/null; then
-        pip3 install --break-system-packages --no-cache-dir apprise 2>/dev/null \
-            || pip3 install --no-cache-dir apprise 2>/dev/null \
-            || echo "  Warning: Apprise install failed (push notifications will not work)"
-    else
-        echo "  Warning: pip3 not available, cannot install Apprise"
-    fi
-fi
-
-# 10. Run database migrations
-echo "[10/12] Running database migrations..."
+# 8. Run database migrations
+echo "[8/9] Running database migrations..."
 sudo -u www-data php "$BBS_DIR/migrate.php" 2>&1 || echo "  Warning: migration runner returned an error (migrations may run on next page load)"
 
-# 11. Fix storage path permissions
-echo "[11/12] Fixing storage path permissions..."
+# 9. Fix storage path permissions
+echo "[9/9] Fixing storage path permissions..."
 ENV_FILE="$BBS_DIR/config/.env"
 if [ -f "$ENV_FILE" ]; then
     DB_HOST=$(grep '^DB_HOST=' "$ENV_FILE" | cut -d= -f2-)
@@ -216,8 +124,6 @@ if [ -f "$ENV_FILE" ]; then
                 mkdir -p "$STORAGE_PATH"
                 echo "  Created $STORAGE_PATH"
             fi
-            # root-owned with www-data group so sshd StrictModes
-            # doesn't reject user homes underneath this path
             chown root:www-data "$STORAGE_PATH"
             chmod 775 "$STORAGE_PATH"
             echo "  Fixed $STORAGE_PATH"
@@ -231,14 +137,11 @@ else
     echo "  Warning: .env not found, skipping"
 fi
 
-# 12. Restart PHP-FPM to clear OPcache
-echo "[12/12] Restarting PHP..."
+# Restart PHP to clear OPcache
 PHP_FPM=$(systemctl list-units --type=service --no-legend 2>/dev/null | grep -oP 'php[0-9.]+-fpm\.service' | head -1 || true)
 if [ -n "$PHP_FPM" ]; then
-    echo "  Restarting $PHP_FPM..."
     systemctl restart "$PHP_FPM"
 else
-    # Try generic service name
     systemctl restart php-fpm 2>/dev/null || true
 fi
 
