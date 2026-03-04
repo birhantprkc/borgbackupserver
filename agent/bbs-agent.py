@@ -44,7 +44,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.14.0"
+AGENT_VERSION = "2.14.1"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -1021,12 +1021,9 @@ def execute_update_agent(config, task):
         api_request(config, "/api/agent/info", method="POST", data=info)
         logger.info("Restarting agent with new script...")
         if IS_WINDOWS:
-            # Windows launcher pattern: restart the Windows Service
-            # The service manager will re-launch the exe, which loads the updated .py
-            subprocess.Popen(
-                'cmd /c "timeout /t 2 /nobreak >nul & sc stop BorgBackupAgent & timeout /t 2 /nobreak >nul & sc start BorgBackupAgent"',
-                creationflags=0x00000008,  # DETACHED_PROCESS
-            )
+            # Windows launcher pattern: just exit cleanly. The launcher (bbs-agent.exe)
+            # monitors the subprocess and will automatically restart it with the
+            # updated bbs-agent-run.py after a short delay.
             sys.exit(0)
         else:
             os.execv(sys.executable, [sys.executable] + sys.argv)
