@@ -141,7 +141,7 @@ class DashboardController extends Controller
         $errorCount = $this->db->fetchOne($errorCountQuery, $jobParams)['cnt'];
 
         $recentJobs = $this->db->fetchAll("
-            SELECT bj.*, a.name as agent_name,
+            SELECT bj.*, SUBSTRING(bj.error_log, 1, 255) as error_log, a.name as agent_name,
                    r.name as repo_name, bp.name as plan_name
             FROM backup_jobs bj
             JOIN agents a ON a.id = bj.agent_id
@@ -153,7 +153,7 @@ class DashboardController extends Controller
         ", $jobParams);
 
         $activeJobs = $this->db->fetchAll("
-            SELECT bj.*, a.name as agent_name,
+            SELECT bj.*, SUBSTRING(bj.error_log, 1, 255) as error_log, a.name as agent_name,
                    r.name as repo_name, bp.name as plan_name
             FROM backup_jobs bj
             JOIN agents a ON a.id = bj.agent_id

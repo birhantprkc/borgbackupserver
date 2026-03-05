@@ -14,7 +14,7 @@ class QueueController extends Controller
         [$agentWhere, $agentParams] = $this->getAgentWhereClause('a');
 
         $inProgress = $this->db->fetchAll("
-            SELECT bj.*, a.name as agent_name, r.name as repo_name
+            SELECT bj.*, SUBSTRING(bj.error_log, 1, 255) as error_log, a.name as agent_name, r.name as repo_name
             FROM backup_jobs bj
             JOIN agents a ON a.id = bj.agent_id
             LEFT JOIN repositories r ON r.id = bj.repository_id
@@ -24,7 +24,7 @@ class QueueController extends Controller
         ", $agentParams);
 
         $completed = $this->db->fetchAll("
-            SELECT bj.*, a.name as agent_name, r.name as repo_name
+            SELECT bj.*, SUBSTRING(bj.error_log, 1, 255) as error_log, a.name as agent_name, r.name as repo_name
             FROM backup_jobs bj
             JOIN agents a ON a.id = bj.agent_id
             LEFT JOIN repositories r ON r.id = bj.repository_id
@@ -89,7 +89,7 @@ class QueueController extends Controller
         [$agentWhere, $agentParams] = $this->getAgentWhereClause('a');
 
         $inProgress = $this->db->fetchAll("
-            SELECT bj.*, a.name as agent_name, r.name as repo_name
+            SELECT bj.*, SUBSTRING(bj.error_log, 1, 255) as error_log, a.name as agent_name, r.name as repo_name
             FROM backup_jobs bj
             JOIN agents a ON a.id = bj.agent_id
             LEFT JOIN repositories r ON r.id = bj.repository_id
@@ -99,7 +99,7 @@ class QueueController extends Controller
         ", $agentParams);
 
         $completed = $this->db->fetchAll("
-            SELECT bj.*, a.name as agent_name, r.name as repo_name
+            SELECT bj.*, SUBSTRING(bj.error_log, 1, 255) as error_log, a.name as agent_name, r.name as repo_name
             FROM backup_jobs bj
             JOIN agents a ON a.id = bj.agent_id
             LEFT JOIN repositories r ON r.id = bj.repository_id
