@@ -540,7 +540,10 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
                 updateProgressBar(job, data);
                 updateDetails(job);
                 updateLogs(data.logs);
-                updateActions(job);
+                if (job.status !== previousStatus) {
+                    updateActions(job);
+                    previousStatus = job.status;
+                }
 
                 // Update error log section
                 if (job.status === 'failed' && job.error_log) {
