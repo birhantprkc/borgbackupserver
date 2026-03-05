@@ -833,102 +833,16 @@ function renderLogs(logs) {
 
 const csrfToken = '<?= $this->csrfToken() ?>';
 
-// Auto-refresh every 8 seconds
+// Fast refresh every 8 seconds (queues, jobs, logs — no ClickHouse)
 setInterval(function() {
     fetch('/dashboard/json', { credentials: 'same-origin' })
         .then(r => r.json())
         .then(data => {
-            // Stat cards
             document.getElementById('stat-agents').textContent = data.agentCount;
             document.getElementById('stat-online').textContent = data.onlineCount;
             document.getElementById('stat-running').textContent = data.runningJobs;
             document.getElementById('stat-queued').textContent = data.queuedJobs;
             document.getElementById('stat-errors').textContent = data.errorCount;
-
-            <?php if ($isAdmin): ?>
-            if (data.cpuLoad) {
-                const p = data.cpuLoad.percent, arc = 212.06, circ = 282.74;
-                document.getElementById('cpu-pct').textContent = p + '%';
-                document.getElementById('cpu-detail').textContent = data.cpuLoad['1min'] + ' / ' + data.cpuLoad.cores + ' cores';
-                const cpuArc = document.getElementById('cpu-arc');
-                cpuArc.setAttribute('stroke-dasharray', (arc * p / 100) + ' ' + circ);
-                cpuArc.setAttribute('stroke', p > 80 ? '#dc3545' : (p > 50 ? '#ffc107' : '#198754'));
-            }
-            if (data.memory) {
-                const p = data.memory.percent, arc = 212.06, circ = 282.74;
-                document.getElementById('mem-pct').textContent = p + '%';
-                const memArc = document.getElementById('mem-arc');
-                memArc.setAttribute('stroke-dasharray', (arc * p / 100) + ' ' + circ);
-                memArc.setAttribute('stroke', p > 85 ? '#dc3545' : (p > 60 ? '#ffc107' : '#0dcaf0'));
-            }
-            if (data.mysqlStats) {
-                const ms = data.mysqlStats;
-                const fmt = n => { n = Number(n); if (n >= 1000000) return (n/1000000).toFixed(1)+'M'; if (n >= 10000) return (n/1000).toFixed(1)+'K'; return n.toLocaleString(); };
-                const map = {
-                    'stat-catalog': ms.catalog_files, 'stat-archives': ms.archives,
-                    'stat-completed-jobs': ms.completed_jobs
-                };
-                for (const [id, val] of Object.entries(map)) {
-                    const el = document.getElementById(id);
-                    if (el) el.textContent = fmt(val);
-                }
-                // MySQL Health card
-                const qpsEl = document.getElementById('stat-qps');
-                if (qpsEl) qpsEl.textContent = ms.qps;
-                const connEl = document.getElementById('stat-connections');
-                if (connEl) connEl.textContent = ms.threads_connected;
-                const hitEl = document.getElementById('stat-hit-rate');
-                if (hitEl) hitEl.textContent = ms.hit_rate + '%';
-                const upEl = document.getElementById('stat-uptime');
-                if (upEl) {
-                    const u = Number(ms.uptime);
-                    const d = Math.floor(u / 86400), h = Math.floor((u % 86400) / 3600);
-                    upEl.textContent = d > 0 ? d + 'd ' + h + 'h' : h + 'h';
-                }
-                const bpEl = document.getElementById('stat-bp-usage');
-                if (bpEl) bpEl.textContent = ms.buffer_pool_used_pct + '%';
-                const slowEl = document.getElementById('stat-slow');
-                if (slowEl) slowEl.textContent = Number(ms.slow_queries).toLocaleString();
-            }
-            if (data.clickhouseStats) {
-                const ch = data.clickhouseStats;
-                const fmt = n => { n = Number(n); if (n >= 1000000) return (n/1000000).toFixed(1)+'M'; if (n >= 10000) return (n/1000).toFixed(1)+'K'; return n.toLocaleString(); };
-                const fmtB = b => { b = Number(b); if (b >= 1099511627776) return (b/1099511627776).toFixed(1)+'TB'; if (b >= 1073741824) return (b/1073741824).toFixed(1)+'GB'; if (b >= 1048576) return (b/1048576).toFixed(1)+'MB'; return (b/1024).toFixed(1)+'KB'; };
-                const chMap = {
-                    'stat-ch-disk': fmtB(ch.disk_bytes),
-                    'stat-ch-compression': ch.compression_ratio + 'x',
-                    'stat-ch-agents': ch.agent_count,
-                    'stat-ch-avg-archive': fmt(ch.avg_per_archive)
-                };
-                for (const [id, val] of Object.entries(chMap)) {
-                    const el = document.getElementById(id);
-                    if (el) el.textContent = val;
-                }
-                // Top repos table + pie chart
-                const repoTable = document.getElementById('ch-top-repos');
-                if (repoTable && ch.top_repos) {
-                    let html = '<tbody>';
-                    ch.top_repos.forEach((r, i) => {
-                        html += '<tr><td class="border-0 py-0 ps-0"><span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:'+pieColors[i%5]+';margin-right:4px;"></span><span class="fw-semibold">'+esc(r.name)+'</span></td><td class="border-0 py-0 text-end text-muted">'+fmt(r.rows)+' rows</td><td class="border-0 py-0 text-end text-muted d-none d-xl-table-cell">'+r.archives+' archives</td><td class="border-0 py-0 text-end text-muted">'+fmtB(r.disk_bytes)+'</td></tr>';
-                    });
-                    html += '</tbody>';
-                    repoTable.innerHTML = html;
-                }
-                if (typeof catalogPieChart !== 'undefined' && catalogPieChart && ch.top_repos) {
-                    const top5Disk = ch.top_repos.reduce((s, r) => s + Number(r.disk_bytes), 0);
-                    const otherDisk = Math.max(Number(ch.disk_bytes) - top5Disk, 0);
-                    const labels = ch.top_repos.map(r => r.name);
-                    const data = ch.top_repos.map(r => Number(r.disk_bytes));
-                    if (otherDisk > 0) { labels.push('Other'); data.push(otherDisk); }
-                    catalogPieChart.data.labels = labels;
-                    catalogPieChart.data.datasets[0].data = data;
-                    catalogPieChart.data.datasets[0].backgroundColor = pieColors.slice(0, data.length);
-                    catalogPieChart.update('none');
-                }
-            }
-            <?php endif; ?>
-
-            // Tables
             renderActiveJobs(data.activeJobs);
             renderUpcoming(data.upcomingSchedules, csrfToken);
             renderRecentJobs(data.recentJobs);
@@ -936,4 +850,97 @@ setInterval(function() {
         })
         .catch(() => {});
 }, 8000);
+
+<?php if ($isAdmin): ?>
+// Slow stats refresh every 60 seconds (ClickHouse, server health)
+function updateSlowStats(data) {
+    if (data.cpuLoad) {
+        const p = data.cpuLoad.percent, arc = 212.06, circ = 282.74;
+        document.getElementById('cpu-pct').textContent = p + '%';
+        document.getElementById('cpu-detail').textContent = data.cpuLoad['1min'] + ' / ' + data.cpuLoad.cores + ' cores';
+        const cpuArc = document.getElementById('cpu-arc');
+        cpuArc.setAttribute('stroke-dasharray', (arc * p / 100) + ' ' + circ);
+        cpuArc.setAttribute('stroke', p > 80 ? '#dc3545' : (p > 50 ? '#ffc107' : '#198754'));
+    }
+    if (data.memory) {
+        const p = data.memory.percent, arc = 212.06, circ = 282.74;
+        document.getElementById('mem-pct').textContent = p + '%';
+        const memArc = document.getElementById('mem-arc');
+        memArc.setAttribute('stroke-dasharray', (arc * p / 100) + ' ' + circ);
+        memArc.setAttribute('stroke', p > 85 ? '#dc3545' : (p > 60 ? '#ffc107' : '#0dcaf0'));
+    }
+    if (data.mysqlStats) {
+        const ms = data.mysqlStats;
+        const fmt = n => { n = Number(n); if (n >= 1000000) return (n/1000000).toFixed(1)+'M'; if (n >= 10000) return (n/1000).toFixed(1)+'K'; return n.toLocaleString(); };
+        const map = {
+            'stat-catalog': ms.catalog_files, 'stat-archives': ms.archives,
+            'stat-completed-jobs': ms.completed_jobs
+        };
+        for (const [id, val] of Object.entries(map)) {
+            const el = document.getElementById(id);
+            if (el) el.textContent = fmt(val);
+        }
+        const qpsEl = document.getElementById('stat-qps');
+        if (qpsEl) qpsEl.textContent = ms.qps;
+        const connEl = document.getElementById('stat-connections');
+        if (connEl) connEl.textContent = ms.threads_connected;
+        const hitEl = document.getElementById('stat-hit-rate');
+        if (hitEl) hitEl.textContent = ms.hit_rate + '%';
+        const upEl = document.getElementById('stat-uptime');
+        if (upEl) {
+            const u = Number(ms.uptime);
+            const d = Math.floor(u / 86400), h = Math.floor((u % 86400) / 3600);
+            upEl.textContent = d > 0 ? d + 'd ' + h + 'h' : h + 'h';
+        }
+        const bpEl = document.getElementById('stat-bp-usage');
+        if (bpEl) bpEl.textContent = ms.buffer_pool_used_pct + '%';
+        const slowEl = document.getElementById('stat-slow');
+        if (slowEl) slowEl.textContent = Number(ms.slow_queries).toLocaleString();
+    }
+    if (data.clickhouseStats) {
+        const ch = data.clickhouseStats;
+        const fmt = n => { n = Number(n); if (n >= 1000000) return (n/1000000).toFixed(1)+'M'; if (n >= 10000) return (n/1000).toFixed(1)+'K'; return n.toLocaleString(); };
+        const fmtB = b => { b = Number(b); if (b >= 1099511627776) return (b/1099511627776).toFixed(1)+'TB'; if (b >= 1073741824) return (b/1073741824).toFixed(1)+'GB'; if (b >= 1048576) return (b/1048576).toFixed(1)+'MB'; return (b/1024).toFixed(1)+'KB'; };
+        const chMap = {
+            'stat-ch-disk': fmtB(ch.disk_bytes),
+            'stat-ch-compression': ch.compression_ratio + 'x',
+            'stat-ch-agents': ch.agent_count,
+            'stat-ch-avg-archive': fmt(ch.avg_per_archive)
+        };
+        for (const [id, val] of Object.entries(chMap)) {
+            const el = document.getElementById(id);
+            if (el) el.textContent = val;
+        }
+        const repoTable = document.getElementById('ch-top-repos');
+        if (repoTable && ch.top_repos) {
+            let html = '<tbody>';
+            ch.top_repos.forEach((r, i) => {
+                html += '<tr><td class="border-0 py-0 ps-0"><span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:'+pieColors[i%5]+';margin-right:4px;"></span><span class="fw-semibold">'+esc(r.name)+'</span></td><td class="border-0 py-0 text-end text-muted">'+fmt(r.rows)+' rows</td><td class="border-0 py-0 text-end text-muted d-none d-xl-table-cell">'+r.archives+' archives</td><td class="border-0 py-0 text-end text-muted">'+fmtB(r.disk_bytes)+'</td></tr>';
+            });
+            html += '</tbody>';
+            repoTable.innerHTML = html;
+        }
+        if (typeof catalogPieChart !== 'undefined' && catalogPieChart && ch.top_repos) {
+            const top5Disk = ch.top_repos.reduce((s, r) => s + Number(r.disk_bytes), 0);
+            const otherDisk = Math.max(Number(ch.disk_bytes) - top5Disk, 0);
+            const labels = ch.top_repos.map(r => r.name);
+            const vals = ch.top_repos.map(r => Number(r.disk_bytes));
+            if (otherDisk > 0) { labels.push('Other'); vals.push(otherDisk); }
+            catalogPieChart.data.labels = labels;
+            catalogPieChart.data.datasets[0].data = vals;
+            catalogPieChart.data.datasets[0].backgroundColor = pieColors.slice(0, vals.length);
+            catalogPieChart.update('none');
+        }
+    }
+}
+function fetchSlowStats() {
+    fetch('/dashboard/stats-json', { credentials: 'same-origin' })
+        .then(r => r.json())
+        .then(updateSlowStats)
+        .catch(() => {});
+}
+// Background refresh on load, then every 60s
+setTimeout(fetchSlowStats, 500);
+setInterval(fetchSlowStats, 60000);
+<?php endif; ?>
 </script>

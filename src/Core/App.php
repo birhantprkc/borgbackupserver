@@ -76,6 +76,7 @@ class App
         $this->router->map('GET', '/', 'DashboardController@index');
         $this->router->map('GET', '/dashboard', 'DashboardController@index');
         $this->router->map('GET', '/dashboard/json', 'DashboardController@apiJson');
+        $this->router->map('GET', '/dashboard/stats-json', 'DashboardController@apiStatsJson');
 
         // Clients (Agents)
         $this->router->map('GET', '/clients', 'ClientController@index');
@@ -156,6 +157,8 @@ class App
         $this->router->map('POST', '/storage-locations/[i:id]/delete', 'StorageLocationController@destroy');
         $this->router->map('POST', '/storage-locations/s3', 'StorageLocationController@saveS3');
         $this->router->map('POST', '/storage-locations/s3/test', 'StorageLocationController@testS3');
+        $this->router->map('POST', '/storage-locations/s3/list-backups', 'StorageLocationController@listS3Backups');
+        $this->router->map('POST', '/storage-locations/s3/restore-backup', 'StorageLocationController@restoreS3Backup');
 
         // Remote SSH Configs
         $this->router->map('POST', '/remote-ssh-configs/create', 'RemoteSshConfigController@store');

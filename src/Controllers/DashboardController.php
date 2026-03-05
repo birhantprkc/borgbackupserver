@@ -13,21 +13,29 @@ class DashboardController extends Controller
         $this->requireAuth();
 
         $data = $this->getDashboardData();
+        // Include cached slow stats for initial render (stale is fine)
+        $data = array_merge($data, $this->getSlowStats(true));
         $data['pageTitle'] = 'Dashboard';
 
         $this->view('dashboard/index', $data);
     }
 
     /**
-     * GET /dashboard/json — AJAX endpoint for live refresh.
+     * GET /dashboard/json — AJAX endpoint for live refresh (fast, no ClickHouse).
      */
     public function apiJson(): void
     {
         $this->requireAuth();
-        $data = $this->getDashboardData();
-        header('Content-Type: application/json');
-        echo json_encode($data);
-        exit;
+        $this->json($this->getDashboardData());
+    }
+
+    /**
+     * GET /dashboard/stats-json — slow stats (ClickHouse, server health), polled every 60s.
+     */
+    public function apiStatsJson(): void
+    {
+        $this->requireAuth();
+        $this->json($this->getSlowStats(false));
     }
 
     /**
@@ -219,8 +227,7 @@ class DashboardController extends Controller
             ];
         }
 
-        // Server stats (admin only)
-        $result = [
+        return [
             'isAdmin' => $isAdmin,
             'agentCount' => (int) $agentCount,
             'onlineCount' => (int) $onlineCount,
@@ -232,17 +239,38 @@ class DashboardController extends Controller
             'upcomingSchedules' => $upcomingSchedules,
             'chartData' => $chartData,
         ];
+    }
 
-        if ($isAdmin) {
-            $cache = Cache::getInstance();
-            $result['cpuLoad'] = $cache->remember('server_cpu', 10, fn() => ServerStats::getCpuLoad());
-            $result['memory'] = $cache->remember('server_mem', 10, fn() => ServerStats::getMemory());
-            $result['partitions'] = $cache->remember('server_parts', 30, fn() => ServerStats::getPartitions());
-            $result['mysqlStats'] = $cache->remember('mysql_stats', 8, fn() => ServerStats::getMysqlStats());
-            $result['clickhouseStats'] = $cache->remember('ch_stats', 30, fn() => ServerStats::getClickHouseStats());
+    /**
+     * Slow stats: ClickHouse, server health, storage.
+     * Cached for 60s. When $cacheOnly is true, returns whatever is in cache (for page load).
+     */
+    private function getSlowStats(bool $cacheOnly = false): array
+    {
+        if (!$this->isAdmin()) {
+            return [];
+        }
 
-            // Storage disk usage
-            $result['storage'] = $cache->remember('storage_info', 30, function() {
+        $cache = Cache::getInstance();
+
+        if ($cacheOnly) {
+            return [
+                'cpuLoad' => $cache->get('server_cpu') ?? ServerStats::getCpuLoad(),
+                'memory' => $cache->get('server_mem') ?? ServerStats::getMemory(),
+                'partitions' => $cache->get('server_parts'),
+                'mysqlStats' => $cache->get('mysql_stats'),
+                'clickhouseStats' => $cache->get('ch_stats'),
+                'storage' => $cache->get('storage_info'),
+            ];
+        }
+
+        return [
+            'cpuLoad' => $cache->remember('server_cpu', 60, fn() => ServerStats::getCpuLoad()),
+            'memory' => $cache->remember('server_mem', 60, fn() => ServerStats::getMemory()),
+            'partitions' => $cache->remember('server_parts', 60, fn() => ServerStats::getPartitions()),
+            'mysqlStats' => $cache->remember('mysql_stats', 60, fn() => ServerStats::getMysqlStats()),
+            'clickhouseStats' => $cache->remember('ch_stats', 60, fn() => ServerStats::getClickHouseStats()),
+            'storage' => $cache->remember('storage_info', 60, function() {
                 $db = \BBS\Core\Database::getInstance();
                 $setting = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
                 $path = $setting['value'] ?? '';
@@ -278,9 +306,7 @@ class DashboardController extends Controller
                     }
                 }
                 return $info;
-            });
-        }
-
-        return $result;
+            }),
+        ];
     }
 }
