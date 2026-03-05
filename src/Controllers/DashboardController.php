@@ -13,8 +13,7 @@ class DashboardController extends Controller
         $this->requireAuth();
 
         $data = $this->getDashboardData();
-        // Include cached slow stats for initial render (stale is fine)
-        $data = array_merge($data, $this->getSlowStats(true));
+        $data = array_merge($data, $this->getSlowStats());
         $data['pageTitle'] = 'Dashboard';
 
         $this->view('dashboard/index', $data);
@@ -35,7 +34,7 @@ class DashboardController extends Controller
     public function apiStatsJson(): void
     {
         $this->requireAuth();
-        $this->json($this->getSlowStats(false));
+        $this->json($this->getSlowStats());
     }
 
     /**
@@ -245,25 +244,13 @@ class DashboardController extends Controller
      * Slow stats: ClickHouse, server health, storage.
      * Cached for 60s. When $cacheOnly is true, returns whatever is in cache (for page load).
      */
-    private function getSlowStats(bool $cacheOnly = false): array
+    private function getSlowStats(): array
     {
         if (!$this->isAdmin()) {
             return [];
         }
 
         $cache = Cache::getInstance();
-
-        if ($cacheOnly) {
-            // Compute fast stats immediately, defer only ClickHouse (slow: ~3s)
-            return [
-                'cpuLoad' => $cache->remember('server_cpu', 60, fn() => ServerStats::getCpuLoad()),
-                'memory' => $cache->remember('server_mem', 60, fn() => ServerStats::getMemory()),
-                'partitions' => $cache->remember('server_parts', 60, fn() => ServerStats::getPartitions()),
-                'mysqlStats' => $cache->remember('mysql_stats', 60, fn() => ServerStats::getMysqlStats()),
-                'clickhouseStats' => $cache->get('ch_stats'),
-                'storage' => $cache->remember('storage_info', 60, $this->getStorageCallback()),
-            ];
-        }
 
         return [
             'cpuLoad' => $cache->remember('server_cpu', 60, fn() => ServerStats::getCpuLoad()),

@@ -345,36 +345,38 @@ $pieColors = ['#36a2eb', '#ff6384', '#ffce56', '#4bc0c0', '#9966ff', '#6c757d'];
                                 </div>
                             </div>
                         </div>
+                        <?php if ($chStats): ?>
                         <!-- ClickHouse Stats Grid -->
-                        <div class="border-top pt-2 mt-1" id="ch-stats-grid"<?= !$chStats ? ' style="display:none"' : '' ?>>
+                        <div class="border-top pt-2 mt-1" id="ch-stats-grid">
                             <div class="row g-1 text-center" style="font-size:.7rem;">
                                 <div class="col-3">
-                                    <div class="fw-bold" style="font-size:.85rem;" id="stat-ch-disk"><?= $chStats ? \BBS\Services\ServerStats::formatBytes($chStats['disk_bytes']) : '--' ?></div>
+                                    <div class="fw-bold" style="font-size:.85rem;" id="stat-ch-disk"><?= \BBS\Services\ServerStats::formatBytes($chStats['disk_bytes']) ?></div>
                                     <div class="text-muted">Disk Usage</div>
                                 </div>
                                 <div class="col-3">
-                                    <div class="fw-bold" style="font-size:.85rem;" id="stat-ch-compression"><?= $chStats ? $chStats['compression_ratio'] . 'x' : '--' ?></div>
+                                    <div class="fw-bold" style="font-size:.85rem;" id="stat-ch-compression"><?= $chStats['compression_ratio'] ?>x</div>
                                     <div class="text-muted">Compress</div>
                                 </div>
                                 <div class="col-3">
-                                    <div class="fw-bold" style="font-size:.85rem;" id="stat-ch-agents"><?= $chStats ? $chStats['agent_count'] : '--' ?></div>
+                                    <div class="fw-bold" style="font-size:.85rem;" id="stat-ch-agents"><?= $chStats['agent_count'] ?></div>
                                     <div class="text-muted">Agents</div>
                                 </div>
                                 <div class="col-3">
-                                    <div class="fw-bold" style="font-size:.85rem;" id="stat-ch-avg-archive"><?= $chStats ? $compactNum($chStats['avg_per_archive']) : '--' ?></div>
+                                    <div class="fw-bold" style="font-size:.85rem;" id="stat-ch-avg-archive"><?= $compactNum($chStats['avg_per_archive']) ?></div>
                                     <div class="text-muted">Avg/Archive</div>
                                 </div>
                             </div>
                         </div>
                         <!-- Top Repositories Table -->
-                        <div class="border-top pt-2 mt-2" id="ch-repos-section"<?= empty($chStats['top_repos'] ?? null) ? ' style="display:none"' : '' ?>>
+                        <?php if (!empty($chStats['top_repos'])): ?>
+                        <div class="border-top pt-2 mt-2" id="ch-repos-section">
                             <div class="d-flex align-items-center mb-1">
                                 <i class="bi bi-trophy me-1 text-muted" style="font-size:.7rem;"></i>
                                 <span class="fw-semibold text-muted" style="font-size:.65rem;text-transform:uppercase;letter-spacing:.5px;">Top Repositories</span>
                             </div>
                             <table class="table table-sm mb-0" style="font-size:.7rem;" id="ch-top-repos">
                                 <tbody>
-                                    <?php foreach (($chStats['top_repos'] ?? []) as $i => $repo): ?>
+                                    <?php foreach ($chStats['top_repos'] as $i => $repo): ?>
                                     <tr>
                                         <td class="border-0 py-0 ps-0"><span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:<?= $pieColors[$i % 5] ?>;margin-right:4px;"></span><span class="fw-semibold"><?= htmlspecialchars($repo['name']) ?></span></td>
                                         <td class="border-0 py-0 text-end text-muted"><?= $compactNum($repo['rows']) ?> rows</td>
@@ -385,25 +387,26 @@ $pieColors = ['#36a2eb', '#ff6384', '#ffce56', '#4bc0c0', '#9966ff', '#6c757d'];
                                 </tbody>
                             </table>
                         </div>
+                        <?php endif; ?>
+                        <?php endif; ?>
                     </div>
                     <!-- Right: Pie Chart -->
+                    <?php if ($chStats && !empty($chStats['top_repos'])): ?>
                     <?php
-                        $pieLabels = []; $pieData = [];
-                        if ($chStats && !empty($chStats['top_repos'])) {
-                            $top5Disk = array_sum(array_column($chStats['top_repos'], 'disk_bytes'));
-                            $otherDisk = max($chStats['disk_bytes'] - $top5Disk, 0);
-                            $pieLabels = array_map(fn($r) => $r['name'], $chStats['top_repos']);
-                            $pieData = array_map(fn($r) => $r['disk_bytes'], $chStats['top_repos']);
-                            if ($otherDisk > 0) {
-                                $pieLabels[] = 'Other';
-                                $pieData[] = $otherDisk;
-                            }
+                        $top5Disk = array_sum(array_column($chStats['top_repos'], 'disk_bytes'));
+                        $otherDisk = max($chStats['disk_bytes'] - $top5Disk, 0);
+                        $pieLabels = array_map(fn($r) => $r['name'], $chStats['top_repos']);
+                        $pieData = array_map(fn($r) => $r['disk_bytes'], $chStats['top_repos']);
+                        if ($otherDisk > 0) {
+                            $pieLabels[] = 'Other';
+                            $pieData[] = $otherDisk;
                         }
                     ?>
-                    <div class="d-none d-md-flex flex-column align-items-center justify-content-center border-start ms-3 ps-3" style="flex:0 0 33%;max-width:33%;<?= empty($pieData) ? 'display:none !important;' : '' ?>" id="ch-pie-wrap">
+                    <div class="d-none d-md-flex flex-column align-items-center justify-content-center border-start ms-3 ps-3" style="flex:0 0 33%;max-width:33%;" id="ch-pie-wrap">
                         <div class="fw-semibold text-muted mb-2" style="font-size:.65rem;text-transform:uppercase;letter-spacing:.5px;">Top Repositories</div>
                         <canvas id="catalogPieChart" style="max-width:200px;max-height:200px;"></canvas>
                     </div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -675,6 +678,7 @@ new Chart(ctx, {
 // Catalog Pie Chart
 const pieColors = ['#36a2eb','#ff6384','#ffce56','#4bc0c0','#9966ff','#6c757d'];
 const fmtBytes = b => { b = Number(b); if (b >= 1099511627776) return (b/1099511627776).toFixed(1)+' TB'; if (b >= 1073741824) return (b/1073741824).toFixed(1)+' GB'; if (b >= 1048576) return (b/1048576).toFixed(1)+' MB'; return (b/1024).toFixed(1)+' KB'; };
+<?php if ($chStats && !empty($chStats['top_repos'])): ?>
 const pieCanvas = document.getElementById('catalogPieChart');
 let catalogPieChart = null;
 if (pieCanvas) {
@@ -684,7 +688,7 @@ if (pieCanvas) {
             labels: <?= json_encode($pieLabels) ?>,
             datasets: [{
                 data: <?= json_encode($pieData) ?>,
-                backgroundColor: pieColors.slice(0, Math.max(<?= count($pieData) ?>, 1)),
+                backgroundColor: pieColors.slice(0, <?= count($pieData) ?>),
                 borderWidth: isDark ? 0 : 1,
                 borderColor: isDark ? 'transparent' : '#fff',
             }]
@@ -707,6 +711,7 @@ if (pieCanvas) {
         }
     });
 }
+<?php endif; ?>
 
 // Helper: escape HTML
 function esc(str) { const d = document.createElement('div'); d.textContent = str ?? ''; return d.innerHTML; }
@@ -906,8 +911,6 @@ function updateSlowStats(data) {
             const el = document.getElementById(id);
             if (el) el.textContent = val;
         }
-        const statsGrid = document.getElementById('ch-stats-grid');
-        if (statsGrid) statsGrid.style.display = '';
         const repoTable = document.getElementById('ch-top-repos');
         if (repoTable && ch.top_repos) {
             let html = '<tbody>';
@@ -916,8 +919,6 @@ function updateSlowStats(data) {
             });
             html += '</tbody>';
             repoTable.innerHTML = html;
-            const reposSection = document.getElementById('ch-repos-section');
-            if (reposSection) reposSection.style.display = '';
         }
         if (typeof catalogPieChart !== 'undefined' && catalogPieChart && ch.top_repos) {
             const top5Disk = ch.top_repos.reduce((s, r) => s + Number(r.disk_bytes), 0);
@@ -929,8 +930,6 @@ function updateSlowStats(data) {
             catalogPieChart.data.datasets[0].data = vals;
             catalogPieChart.data.datasets[0].backgroundColor = pieColors.slice(0, vals.length);
             catalogPieChart.update('none');
-            const pieWrap = document.getElementById('ch-pie-wrap');
-            if (pieWrap) pieWrap.style.display = '';
         }
     }
 }
