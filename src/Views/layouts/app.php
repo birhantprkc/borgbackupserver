@@ -8,6 +8,9 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="/css/style.css?v=<?= filemtime(__DIR__ . '/../../../public/css/style.css') ?>" rel="stylesheet">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+    <meta name="theme-color" content="#2c3e50">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
@@ -352,5 +355,54 @@
     })();
     </script>
     <?php endif; ?>
+    <script>
+    (function(){
+        if (localStorage.getItem('pwa-dismissed')) return;
+        var isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+        if (isStandalone) return;
+        var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        if (!isMobile) return;
+
+        var deferredPrompt = null;
+        window.addEventListener('beforeinstallprompt', function(e) {
+            e.preventDefault();
+            deferredPrompt = e;
+            showBanner();
+        });
+
+        // iOS doesn't fire beforeinstallprompt — show banner with instructions
+        if (/iPhone|iPad|iPod/i.test(navigator.userAgent) && !navigator.standalone) {
+            setTimeout(showBanner, 2000);
+        }
+
+        function showBanner() {
+            if (document.getElementById('pwa-banner')) return;
+            var b = document.createElement('div');
+            b.id = 'pwa-banner';
+            b.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9999;padding:12px 16px;display:flex;align-items:center;gap:12px;background:#2c3e50;color:#fff;box-shadow:0 -2px 12px rgba(0,0,0,.3);font-size:14px;';
+            b.innerHTML = '<img src="/images/icon-192.png" style="width:36px;height:36px;border-radius:8px;flex-shrink:0;">' +
+                '<div style="flex:1;line-height:1.3;"><strong>Borg Backup Server</strong><br><span style="font-size:12px;opacity:.8;">Add to your home screen for quick access</span></div>' +
+                '<button id="pwa-install" style="background:#3498db;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer;">Add</button>' +
+                '<button id="pwa-close" style="background:none;border:none;color:#fff;opacity:.6;font-size:20px;padding:0 4px;cursor:pointer;line-height:1;">&times;</button>';
+            document.body.appendChild(b);
+
+            document.getElementById('pwa-close').addEventListener('click', function() {
+                b.remove();
+                localStorage.setItem('pwa-dismissed', '1');
+            });
+
+            document.getElementById('pwa-install').addEventListener('click', function() {
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    deferredPrompt.userChoice.then(function() { b.remove(); localStorage.setItem('pwa-dismissed', '1'); });
+                } else {
+                    // iOS: show instructions
+                    b.querySelector('div').innerHTML = '<strong>Tap <svg style="display:inline;vertical-align:middle;width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7-7 7 7"/><rect x="4" y="19" width="16" height="1" rx=".5" fill="currentColor" stroke="none"/></svg> then "Add to Home Screen"</strong>';
+                    document.getElementById('pwa-install').style.display = 'none';
+                }
+            });
+        }
+    })();
+    </script>
 </body>
 </html>
