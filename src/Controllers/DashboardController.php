@@ -254,13 +254,14 @@ class DashboardController extends Controller
         $cache = Cache::getInstance();
 
         if ($cacheOnly) {
+            // Compute fast stats immediately, defer only ClickHouse (slow: ~3s)
             return [
-                'cpuLoad' => $cache->get('server_cpu') ?? ServerStats::getCpuLoad(),
-                'memory' => $cache->get('server_mem') ?? ServerStats::getMemory(),
-                'partitions' => $cache->get('server_parts'),
-                'mysqlStats' => $cache->get('mysql_stats'),
+                'cpuLoad' => $cache->remember('server_cpu', 60, fn() => ServerStats::getCpuLoad()),
+                'memory' => $cache->remember('server_mem', 60, fn() => ServerStats::getMemory()),
+                'partitions' => $cache->remember('server_parts', 60, fn() => ServerStats::getPartitions()),
+                'mysqlStats' => $cache->remember('mysql_stats', 60, fn() => ServerStats::getMysqlStats()),
                 'clickhouseStats' => $cache->get('ch_stats'),
-                'storage' => $cache->get('storage_info'),
+                'storage' => $cache->remember('storage_info', 60, $this->getStorageCallback()),
             ];
         }
 
@@ -270,43 +271,48 @@ class DashboardController extends Controller
             'partitions' => $cache->remember('server_parts', 60, fn() => ServerStats::getPartitions()),
             'mysqlStats' => $cache->remember('mysql_stats', 60, fn() => ServerStats::getMysqlStats()),
             'clickhouseStats' => $cache->remember('ch_stats', 60, fn() => ServerStats::getClickHouseStats()),
-            'storage' => $cache->remember('storage_info', 60, function() {
-                $db = \BBS\Core\Database::getInstance();
-                $setting = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
-                $path = $setting['value'] ?? '';
-                $repoStats = $db->fetchOne("SELECT COUNT(*) as repo_count, COALESCE(SUM(size_bytes), 0) as total_repo_bytes FROM repositories");
-                $archiveStats = $db->fetchOne("SELECT COUNT(*) as total_archives, COALESCE(SUM(original_size), 0) as total_original, COALESCE(SUM(deduplicated_size), 0) as total_dedup, COALESCE(SUM(file_count), 0) as total_files FROM archives");
-                $clientCount = $db->fetchOne("SELECT COUNT(*) as cnt FROM agents");
-
-                $info = [
-                    'path' => $path,
-                    'repo_count' => (int) ($repoStats['repo_count'] ?? 0),
-                    'total_repo_bytes' => (int) ($repoStats['total_repo_bytes'] ?? 0),
-                    'total_archives' => (int) ($archiveStats['total_archives'] ?? 0),
-                    'total_original' => (int) ($archiveStats['total_original'] ?? 0),
-                    'total_dedup' => (int) ($archiveStats['total_dedup'] ?? 0),
-                    'total_files' => (int) ($archiveStats['total_files'] ?? 0),
-                    'dedup_savings' => 0,
-                    'client_count' => (int) ($clientCount['cnt'] ?? 0),
-                    'disk_total' => null,
-                    'disk_used' => null,
-                    'disk_free' => null,
-                    'disk_percent' => null,
-                ];
-                if ($info['total_original'] > 0) {
-                    $info['dedup_savings'] = round((1 - $info['total_dedup'] / $info['total_original']) * 100, 1);
-                }
-                if (!empty($path)) {
-                    $diskUsage = \BBS\Services\ServerStats::getDiskUsage($path);
-                    if ($diskUsage) {
-                        $info['disk_total'] = $diskUsage['total'];
-                        $info['disk_used'] = $diskUsage['used'];
-                        $info['disk_free'] = $diskUsage['free'];
-                        $info['disk_percent'] = $diskUsage['percent'];
-                    }
-                }
-                return $info;
-            }),
+            'storage' => $cache->remember('storage_info', 60, $this->getStorageCallback()),
         ];
+    }
+
+    private function getStorageCallback(): \Closure
+    {
+        return function() {
+            $db = \BBS\Core\Database::getInstance();
+            $setting = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
+            $path = $setting['value'] ?? '';
+            $repoStats = $db->fetchOne("SELECT COUNT(*) as repo_count, COALESCE(SUM(size_bytes), 0) as total_repo_bytes FROM repositories");
+            $archiveStats = $db->fetchOne("SELECT COUNT(*) as total_archives, COALESCE(SUM(original_size), 0) as total_original, COALESCE(SUM(deduplicated_size), 0) as total_dedup, COALESCE(SUM(file_count), 0) as total_files FROM archives");
+            $clientCount = $db->fetchOne("SELECT COUNT(*) as cnt FROM agents");
+
+            $info = [
+                'path' => $path,
+                'repo_count' => (int) ($repoStats['repo_count'] ?? 0),
+                'total_repo_bytes' => (int) ($repoStats['total_repo_bytes'] ?? 0),
+                'total_archives' => (int) ($archiveStats['total_archives'] ?? 0),
+                'total_original' => (int) ($archiveStats['total_original'] ?? 0),
+                'total_dedup' => (int) ($archiveStats['total_dedup'] ?? 0),
+                'total_files' => (int) ($archiveStats['total_files'] ?? 0),
+                'dedup_savings' => 0,
+                'client_count' => (int) ($clientCount['cnt'] ?? 0),
+                'disk_total' => null,
+                'disk_used' => null,
+                'disk_free' => null,
+                'disk_percent' => null,
+            ];
+            if ($info['total_original'] > 0) {
+                $info['dedup_savings'] = round((1 - $info['total_dedup'] / $info['total_original']) * 100, 1);
+            }
+            if (!empty($path)) {
+                $diskUsage = \BBS\Services\ServerStats::getDiskUsage($path);
+                if ($diskUsage) {
+                    $info['disk_total'] = $diskUsage['total'];
+                    $info['disk_used'] = $diskUsage['used'];
+                    $info['disk_free'] = $diskUsage['free'];
+                    $info['disk_percent'] = $diskUsage['percent'];
+                }
+            }
+            return $info;
+        };
     }
 }
