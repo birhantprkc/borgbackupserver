@@ -40,6 +40,13 @@ if [[ "$OS" == "Darwin" ]]; then
     else
         warn "No launchd plist found — skipping"
     fi
+elif [[ -f /usr/local/etc/rc.d/bbsagent ]]; then
+    # FreeBSD — rc.d
+    service bbsagent stop 2>/dev/null || /usr/local/etc/rc.d/bbsagent stop 2>/dev/null || true
+    ok "Stopped bbsagent service"
+    sysrc -x bbsagent_enable 2>/dev/null || true
+    rm -f /usr/local/etc/rc.d/bbsagent
+    ok "Removed rc.d service"
 elif [[ -f /etc/systemd/system/bbs-agent.service ]]; then
     # Linux — systemd
     if systemctl is-active --quiet bbs-agent 2>/dev/null; then

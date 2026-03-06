@@ -125,6 +125,10 @@ detect_os() {
         OS="macos"
         OS_VERSION=$(sw_vers -productVersion 2>/dev/null || echo "unknown")
         OS_PRETTY="macOS $OS_VERSION"
+    elif [ "$(uname)" = "FreeBSD" ]; then
+        OS="freebsd"
+        OS_VERSION=$(freebsd-version 2>/dev/null || uname -r)
+        OS_PRETTY="FreeBSD $OS_VERSION"
     else
         OS="unknown"
         OS_PRETTY="Unknown OS"
@@ -190,6 +194,14 @@ install_borg() {
         opensuse*|sles)
             zypper install -y borgbackup python3 >/dev/null 2>&1
             ;;
+        freebsd)
+            pkg install -y curl >/dev/null 2>&1 || true
+            pkg install -y borgbackup python3 >/dev/null 2>&1 || {
+                # Try versioned package if meta-package not available
+                pkg install -y py311-borgbackup python311 >/dev/null 2>&1 || \
+                pkg install -y py39-borgbackup python39 >/dev/null 2>&1 || true
+            }
+            ;;
         macos)
             if command -v brew &>/dev/null; then
                 brew install borgbackup python3 >/dev/null 2>&1
@@ -234,6 +246,10 @@ check_python3() {
             /opt/rh/rh-python38/root/usr/bin/python3
             /opt/rh/rh-python36/root/usr/bin/python3
             /usr/local/bin/python3
+            /usr/local/bin/python3.11
+            /usr/local/bin/python3.12
+            /usr/local/bin/python3.13
+            /usr/local/bin/python3.9
             /usr/bin/python3
         )
         for p in "${candidates[@]}"; do
@@ -270,6 +286,10 @@ check_python3() {
             ;;
         fedora)
             dnf install -y python3 >/dev/null 2>&1 || true
+            ;;
+        freebsd)
+            pkg install -y python3 >/dev/null 2>&1 || \
+            pkg install -y python311 >/dev/null 2>&1 || true
             ;;
         macos)
             brew install python3 >/dev/null 2>&1 || true
@@ -317,9 +337,11 @@ install_agent() {
         curl -sf -o "$INSTALL_DIR/bbs-agent.py" "$SERVER_URL/api/agent/download?file=bbs-agent.py"
     elif command -v wget &>/dev/null; then
         wget -q -O "$INSTALL_DIR/bbs-agent.py" "$SERVER_URL/api/agent/download?file=bbs-agent.py"
+    elif command -v fetch &>/dev/null; then
+        fetch -q -o "$INSTALL_DIR/bbs-agent.py" "$SERVER_URL/api/agent/download?file=bbs-agent.py"
     else
         stop_spinner
-        print_error "curl or wget required"
+        print_error "curl, wget, or fetch required"
         exit 1
     fi
 
@@ -330,6 +352,8 @@ install_agent() {
         curl -sf -o "$INSTALL_DIR/uninstall.sh" "$SERVER_URL/api/agent/download?file=uninstall.sh" 2>/dev/null || true
     elif command -v wget &>/dev/null; then
         wget -q -O "$INSTALL_DIR/uninstall.sh" "$SERVER_URL/api/agent/download?file=uninstall.sh" 2>/dev/null || true
+    elif command -v fetch &>/dev/null; then
+        fetch -q -o "$INSTALL_DIR/uninstall.sh" "$SERVER_URL/api/agent/download?file=uninstall.sh" 2>/dev/null || true
     fi
     chmod +x "$INSTALL_DIR/uninstall.sh" 2>/dev/null || true
 
@@ -363,6 +387,8 @@ install_ssh_key() {
         response=$(curl -sf -H "Authorization: Bearer $API_KEY" "$SERVER_URL/api/agent/ssh-key" 2>/dev/null || echo "")
     elif command -v wget &>/dev/null; then
         response=$(wget -q -O - --header="Authorization: Bearer $API_KEY" "$SERVER_URL/api/agent/ssh-key" 2>/dev/null || echo "")
+    elif command -v fetch &>/dev/null; then
+        response=$(fetch -q -o - "$SERVER_URL/api/agent/ssh-key" 2>/dev/null || echo "")
     fi
 
     stop_spinner
@@ -469,6 +495,64 @@ PLIST
         stop_spinner
         print_success "Service installed ${DIM}(launchd)${NC}"
         SERVICE_TYPE="launchd"
+    elif [ "$OS" = "freebsd" ]; then
+        start_spinner "Configuring rc.d service..."
+
+        cat > /usr/local/etc/rc.d/bbsagent <<RCEOF
+#!/bin/sh
+
+# PROVIDE: bbsagent
+# REQUIRE: NETWORKING
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="bbsagent"
+rcvar="bbsagent_enable"
+pidfile="/var/run/\${name}.pid"
+
+start_cmd="\${name}_start"
+stop_cmd="\${name}_stop"
+status_cmd="\${name}_status"
+
+bbsagent_start()
+{
+    echo "Starting \${name}."
+    /usr/sbin/daemon -f -p \${pidfile} $PYTHON3 $INSTALL_DIR/bbs-agent.py
+}
+
+bbsagent_stop()
+{
+    if [ -f \${pidfile} ]; then
+        echo "Stopping \${name}."
+        kill \$(cat \${pidfile}) 2>/dev/null
+        rm -f \${pidfile}
+    else
+        echo "\${name} is not running."
+    fi
+}
+
+bbsagent_status()
+{
+    if [ -f \${pidfile} ] && kill -0 \$(cat \${pidfile}) 2>/dev/null; then
+        echo "\${name} is running as pid \$(cat \${pidfile})."
+    else
+        echo "\${name} is not running."
+        return 1
+    fi
+}
+
+load_rc_config \$name
+run_rc_command "\$1"
+RCEOF
+
+        chmod +x /usr/local/etc/rc.d/bbsagent
+        sysrc bbsagent_enable=YES >/dev/null 2>&1
+        service bbsagent restart >/dev/null 2>&1 || /usr/local/etc/rc.d/bbsagent restart >/dev/null 2>&1
+
+        stop_spinner
+        print_success "Service installed and started ${DIM}(rc.d)${NC}"
+        SERVICE_TYPE="rcd"
     elif [ -d /run/systemd/system ] || command -v systemctl &>/dev/null; then
         start_spinner "Configuring systemd service..."
 
@@ -637,6 +721,10 @@ print_summary() {
         echo -e "  ${BULLET} Check status:    ${YELLOW}sudo launchctl list | grep borgbackupserver${NC}"
         echo -e "  ${BULLET} View logs:       ${YELLOW}tail -f /var/log/bbs-agent.log${NC}"
         echo -e "  ${BULLET} Restart agent:   ${YELLOW}sudo launchctl kickstart -k system/com.borgbackupserver.agent${NC}"
+    elif [ "$SERVICE_TYPE" = "rcd" ]; then
+        echo -e "  ${BULLET} Check status:    ${YELLOW}service bbsagent status${NC}"
+        echo -e "  ${BULLET} View logs:       ${YELLOW}tail -f /var/log/bbs-agent.log${NC}"
+        echo -e "  ${BULLET} Restart agent:   ${YELLOW}service bbsagent restart${NC}"
     elif [ "$SERVICE_TYPE" = "sysvinit" ]; then
         echo -e "  ${BULLET} Check status:    ${YELLOW}/etc/init.d/bbs-agent status${NC}"
         echo -e "  ${BULLET} View logs:       ${YELLOW}tail -f /var/log/bbs-agent.log${NC}"
