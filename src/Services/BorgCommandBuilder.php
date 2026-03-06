@@ -188,7 +188,7 @@ class BorgCommandBuilder
             } elseif (self::isSshRepo($repo['path'] ?? '')) {
                 // Local repo on BBS server: agent uses its installed SSH key
                 $port = $sshPort ?? 22;
-                $env['BORG_RSH'] = "ssh -i /etc/bbs-agent/ssh_key -p {$port} -o StrictHostKeyChecking=no -o BatchMode=yes";
+                $env['BORG_RSH'] = "ssh -i /etc/bbs-agent/ssh_key -p {$port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes";
             }
         } else {
             // Server-side: www-data can't write to /var/www/.config, redirect borg's config/cache

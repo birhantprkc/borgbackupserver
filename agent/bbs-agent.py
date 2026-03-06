@@ -44,7 +44,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.14.1"
+AGENT_VERSION = "2.14.2"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -456,12 +456,14 @@ def test_ssh_connection(config):
         'Permission denied' means auth actually failed (key mismatch).
         """
         try:
+            known_hosts_null = "NUL" if IS_WINDOWS else "/dev/null"
             proc = subprocess.Popen(
                 [
                     "ssh",
                     "-i", SSH_KEY_PATH,
                     "-p", ssh_port,
                     "-o", "StrictHostKeyChecking=no",
+                    "-o", "UserKnownHostsFile={}".format(known_hosts_null),
                     "-o", "BatchMode=yes",
                     "-o", "ConnectTimeout=10",
                     "{}@{}".format(ssh_user, server_host),
@@ -2052,6 +2054,8 @@ def execute_task(config, task):
             "/etc/bbs-agent/ssh_key", SSH_KEY_PATH.replace("\\", "/")
         ).replace(
             "/tmp/bbs-remote-ssh-key", REMOTE_KEY_PATH.replace("\\", "/")
+        ).replace(
+            "/dev/null", "NUL"
         )
 
     # Always allow relocated repos - common after S3 restore or copying repositories
@@ -2081,12 +2085,14 @@ def execute_task(config, task):
         ssh_info = load_ssh_info()
         if ssh_info and ssh_info.get("ssh_unix_user") and ssh_info.get("server_host"):
             try:
+                known_hosts_null = "NUL" if IS_WINDOWS else "/dev/null"
                 catalog_ssh = subprocess.Popen(
                     [
                         "ssh",
                         "-i", SSH_KEY_PATH,
                         "-p", str(ssh_info.get("ssh_port", 22)),
                         "-o", "StrictHostKeyChecking=no",
+                        "-o", "UserKnownHostsFile={}".format(known_hosts_null),
                         "-o", "BatchMode=yes",
                         "{}@{}".format(ssh_info['ssh_unix_user'], ssh_info['server_host']),
                         "catalog-write {}".format(job_id),
