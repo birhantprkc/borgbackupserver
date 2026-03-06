@@ -498,6 +498,7 @@ PLIST
     elif [ "$OS" = "freebsd" ]; then
         start_spinner "Configuring rc.d service..."
 
+        mkdir -p /usr/local/etc/rc.d
         cat > /usr/local/etc/rc.d/bbsagent <<RCEOF
 #!/bin/sh
 
