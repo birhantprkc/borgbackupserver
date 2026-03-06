@@ -44,7 +44,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.17.1"
+AGENT_VERSION = "2.17.2"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -96,17 +96,32 @@ current_job_id = None  # Job ID of currently executing task (for stall check res
 
 
 def _lockdown_key_windows(path):
-    """Remove all ACLs from a file, then grant read-only to SYSTEM and Administrators only."""
+    """Set SSH key permissions to SYSTEM and Administrators read-only.
+
+    Uses well-known SIDs instead of group names for locale independence
+    (e.g. Spanish Windows where group names differ).
+    """
+    # Remove inherited permissions (converts them to explicit ACEs)
     subprocess.run(
         ["icacls", path, "/inheritance:r"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
+    # Remove all common explicit ACEs using well-known SIDs
+    for sid in [
+        "*S-1-5-32-545",   # BUILTIN\Users
+        "*S-1-5-11",        # Authenticated Users
+        "*S-1-1-0",         # Everyone
+        "*S-1-5-32-546",   # BUILTIN\Guests
+        "*S-1-3-0",         # CREATOR OWNER
+        "*S-1-3-1",         # CREATOR GROUP
+    ]:
+        subprocess.run(
+            ["icacls", path, "/remove", sid],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+    # Grant read-only to SYSTEM and Administrators (the only ACEs OpenSSH allows)
     subprocess.run(
-        ["icacls", path, "/remove", "Users", "Authenticated Users", "Everyone", "BUILTIN\\Users"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-    )
-    subprocess.run(
-        ["icacls", path, "/grant:r", "SYSTEM:(R)", "Administrators:(R)"],
+        ["icacls", path, "/grant:r", "*S-1-5-18:(R)", "*S-1-5-32-544:(R)"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
 
@@ -379,6 +394,8 @@ def download_ssh_key(config):
     have_info = os.path.exists(SSH_INFO_PATH)
 
     if have_key and have_info:
+        if IS_WINDOWS:
+            _lockdown_key_windows(SSH_KEY_PATH)
         return True
 
     if have_key and not have_info:
