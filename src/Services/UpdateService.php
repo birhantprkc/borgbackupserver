@@ -372,17 +372,23 @@ class UpdateService
                 'os' => $os,
             ]);
 
-            $ctx = stream_context_create([
-                'http' => [
-                    'method' => 'POST',
-                    'header' => "Content-Type: application/json\r\nUser-Agent: BorgBackupServer/{$currentVersion}\r\n",
-                    'content' => $payload,
-                    'timeout' => 5,
-                ],
-            ]);
-
-            @file_get_contents('https://www.borgbackupserver.com/api/telemetry.php', false, $ctx);
+            // Set optimistically so we don't retry if endpoint is down
             $this->setSetting('telemetry_last_version', $currentVersion);
+
+            // Fire-and-forget via non-blocking socket (won't hang if server is down)
+            $host = 'www.borgbackupserver.com';
+            $path = '/api/telemetry.php';
+            $fp = @fsockopen('ssl://' . $host, 443, $errno, $errstr, 2);
+            if ($fp) {
+                $header = "POST {$path} HTTP/1.1\r\n";
+                $header .= "Host: {$host}\r\n";
+                $header .= "Content-Type: application/json\r\n";
+                $header .= "User-Agent: BorgBackupServer/{$currentVersion}\r\n";
+                $header .= "Content-Length: " . strlen($payload) . "\r\n";
+                $header .= "Connection: close\r\n\r\n";
+                fwrite($fp, $header . $payload);
+                fclose($fp);
+            }
         } catch (\Exception $e) {
             // Silently ignore telemetry failures
         }
