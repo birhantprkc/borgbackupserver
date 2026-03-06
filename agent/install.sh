@@ -313,8 +313,14 @@ parse_json_field() {
     local field="$2"
 
     # Try python3 first (handles all valid JSON correctly)
+    local py3=""
     if command -v python3 &>/dev/null; then
-        echo "$json" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('$field',''))" 2>/dev/null && return
+        py3="python3"
+    elif [ -n "$PYTHON3" ] && [ -x "$PYTHON3" ]; then
+        py3="$PYTHON3"
+    fi
+    if [ -n "$py3" ]; then
+        echo "$json" | "$py3" -c "import sys,json; d=json.load(sys.stdin); print(d.get('$field',''))" 2>/dev/null && return
     fi
 
     # Fallback: simple grep/sed extraction for flat JSON
