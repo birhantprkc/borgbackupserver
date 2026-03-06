@@ -213,6 +213,24 @@ $updateAvailable = $updateService->isUpdateAvailable();
         </div>
     </div>
 
+    <div class="card border-0 shadow-sm mt-4">
+        <div class="card-header bg-body fw-semibold">
+            <i class="bi bi-bar-chart me-1"></i> Usage Statistics
+        </div>
+        <div class="card-body">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="telemetry_opt_out" value="1"
+                       id="telemetryOptOut" <?= ($settings['telemetry_opt_out'] ?? '0') === '1' ? 'checked' : '' ?>>
+                <label class="form-check-label fw-semibold" for="telemetryOptOut">
+                    Disable Anonymous Usage Statistics
+                </label>
+            </div>
+            <div class="form-text">
+                BBS sends anonymous version and OS information once per version to help the developer understand what versions and platforms are in use. No identifying data is collected.
+            </div>
+        </div>
+    </div>
+
     <div class="mt-4">
         <button type="submit" class="btn btn-warning">
             <i class="bi bi-check-lg me-1"></i> Save General Settings

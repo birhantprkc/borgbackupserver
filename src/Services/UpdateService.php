@@ -140,6 +140,8 @@ class UpdateService
         $this->setSetting('latest_release_url', $htmlUrl);
         $this->setSetting('last_update_check', date('Y-m-d H:i:s'));
 
+        $this->sendTelemetryPing();
+
         return [
             'version' => $version,
             'notes' => $notes,
@@ -340,6 +342,50 @@ class UpdateService
         $start = strtotime($startedAt);
         $end = $endAt ? strtotime($endAt) : time();
         return max(0, $end - $start);
+    }
+
+    /**
+     * Send anonymous telemetry ping (version + OS) once per version.
+     */
+    private function sendTelemetryPing(): void
+    {
+        try {
+            if ($this->getSetting('telemetry_opt_out', '0') === '1') {
+                return;
+            }
+
+            $currentVersion = $this->getCurrentVersion();
+            if ($this->getSetting('telemetry_last_version') === $currentVersion) {
+                return;
+            }
+
+            $os = php_uname('s') . ' ' . php_uname('r');
+            if (file_exists('/etc/os-release')) {
+                $osRelease = parse_ini_file('/etc/os-release');
+                if (!empty($osRelease['PRETTY_NAME'])) {
+                    $os = $osRelease['PRETTY_NAME'];
+                }
+            }
+
+            $payload = json_encode([
+                'version' => $currentVersion,
+                'os' => $os,
+            ]);
+
+            $ctx = stream_context_create([
+                'http' => [
+                    'method' => 'POST',
+                    'header' => "Content-Type: application/json\r\nUser-Agent: BorgBackupServer/{$currentVersion}\r\n",
+                    'content' => $payload,
+                    'timeout' => 5,
+                ],
+            ]);
+
+            @file_get_contents('https://www.borgbackupserver.com/api/telemetry.php', false, $ctx);
+            $this->setSetting('telemetry_last_version', $currentVersion);
+        } catch (\Exception $e) {
+            // Silently ignore telemetry failures
+        }
     }
 
     private function getSetting(string $key, string $default = ''): string
