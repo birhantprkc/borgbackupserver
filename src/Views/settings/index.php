@@ -100,13 +100,11 @@ $updateAvailable = $updateService->isUpdateAvailable();
                             <?php endif; ?>
                         </div>
                     </div>
-                    <?php $sshPort = (int) ($settings['ssh_port'] ?? 22); if ($sshPort !== 22): ?>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">SSH Port</label>
-                        <input type="text" class="form-control" value="<?= $sshPort ?>" readonly>
-                        <div class="form-text"><i class="bi bi-info-circle me-1"></i>Agents connect via SSH on this non-standard port. Ensure client firewalls allow <strong>outbound TCP <?= $sshPort ?></strong>.</div>
+                        <input type="number" class="form-control" name="ssh_port" value="<?= (int) ($settings['ssh_port'] ?? 22) ?>" min="1" max="65535" style="max-width: 120px;">
+                        <div class="form-text">The SSH port agents use to connect for backups. Default is 22. Docker setups typically map to a different port (e.g. 2222).</div>
                     </div>
-                    <?php endif; ?>
                 </div>
             </div>
 
