@@ -355,6 +355,72 @@
     })();
     </script>
     <?php endif; ?>
+    <?php
+    // Docker first-run setup modal
+    $showDockerSetup = false;
+    if (file_exists('/.dockerenv') && (($_SESSION['user_role'] ?? '') === 'admin')) {
+        $dockerSetupRow = \BBS\Core\Database::getInstance()->fetchOne("SELECT `value` FROM settings WHERE `key` = 'docker_setup_complete'");
+        $showDockerSetup = empty($dockerSetupRow['value']) || $dockerSetupRow['value'] !== '1';
+    }
+    if ($showDockerSetup):
+        $dbSettings = \BBS\Core\Database::getInstance()->fetchAll("SELECT `key`, `value` FROM settings WHERE `key` IN ('server_host', 'ssh_port')");
+        $dockerSettings = [];
+        foreach ($dbSettings as $r) $dockerSettings[$r['key']] = $r['value'];
+        $currentHost = $dockerSettings['server_host'] ?? 'localhost';
+        $currentSshPort = $dockerSettings['ssh_port'] ?? '22';
+        // Split host:port
+        if (preg_match('/^(.+):(\d+)$/', $currentHost, $m)) {
+            $dockerHostname = $m[1];
+            $dockerWebPort = $m[2];
+        } else {
+            $dockerHostname = $currentHost;
+            $dockerWebPort = '8080';
+        }
+    ?>
+    <!-- Docker First-Run Setup Modal -->
+    <div class="modal fade" id="dockerSetupModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header border-0 pb-0">
+                    <div>
+                        <h5 class="modal-title fw-bold"><i class="bi bi-box-seam me-2"></i>Docker Setup</h5>
+                        <p class="text-muted small mb-0 mt-1">Configure your network settings so agents can connect to this server.</p>
+                    </div>
+                </div>
+                <form method="POST" action="/settings/docker-setup">
+                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                    <div class="modal-body pt-3">
+                        <div class="alert alert-info small mb-3">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Set these to match the ports you mapped when creating this Docker container.
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Server Hostname or IP</label>
+                            <input type="text" class="form-control" name="hostname" value="<?= htmlspecialchars($dockerHostname !== 'localhost' ? $dockerHostname : '') ?>" placeholder="e.g. 192.168.1.50 or backup.example.com" required>
+                            <div class="form-text">The address your backup clients will use to reach this server. Cannot be <code>localhost</code>.</div>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-6">
+                                <label class="form-label fw-semibold">Web Port</label>
+                                <input type="number" class="form-control" name="web_port" value="<?= htmlspecialchars($dockerWebPort) ?>" min="1" max="65535">
+                                <div class="form-text">Host port mapped to container port 80.</div>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-semibold">SSH Port</label>
+                                <input type="number" class="form-control" name="ssh_port" value="<?= htmlspecialchars($currentSshPort) ?>" min="1" max="65535">
+                                <div class="form-text">Host port mapped to container port 22.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0 pt-0">
+                        <button type="submit" class="btn btn-primary px-4"><i class="bi bi-check-lg me-1"></i> Save Settings</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <script>document.addEventListener('DOMContentLoaded', function(){ new bootstrap.Modal(document.getElementById('dockerSetupModal')).show(); });</script>
+    <?php endif; ?>
     <script>
     (function(){
         if (localStorage.getItem('pwa-dismissed')) return;

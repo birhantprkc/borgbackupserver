@@ -199,8 +199,14 @@ mysql -u bbs -p"$DB_PASS" bbs -e "INSERT INTO settings (\`key\`, \`value\`) VALU
 mysql -u bbs -p"$DB_PASS" bbs -e "INSERT INTO settings (\`key\`, \`value\`) VALUES ('server_host', '$SERVER_HOST') ON DUPLICATE KEY UPDATE \`value\` = IF(\`value\` = '' OR \`value\` IS NULL, '$SERVER_HOST', \`value\`);"
 
 # Set SSH port (must match the host-side port mapping for borg agent connections)
-SSH_PORT="${SSH_PORT:-22}"
-mysql -u bbs -p"$DB_PASS" bbs -e "INSERT INTO settings (\`key\`, \`value\`) VALUES ('ssh_port', '$SSH_PORT') ON DUPLICATE KEY UPDATE \`value\` = '$SSH_PORT';"
+if [ -n "$SSH_PORT" ]; then
+    # SSH_PORT explicitly provided via env — sync to database and mark Docker setup complete
+    mysql -u bbs -p"$DB_PASS" bbs -e "INSERT INTO settings (\`key\`, \`value\`) VALUES ('ssh_port', '$SSH_PORT') ON DUPLICATE KEY UPDATE \`value\` = '$SSH_PORT';"
+    mysql -u bbs -p"$DB_PASS" bbs -e "INSERT INTO settings (\`key\`, \`value\`) VALUES ('docker_setup_complete', '1') ON DUPLICATE KEY UPDATE \`value\` = '1';"
+else
+    # Not provided — seed default on fresh install, don't overwrite existing
+    mysql -u bbs -p"$DB_PASS" bbs -e "INSERT INTO settings (\`key\`, \`value\`) VALUES ('ssh_port', '22') ON DUPLICATE KEY UPDATE \`value\` = \`value\`;"
+fi
 
 # Set admin password on fresh install
 if [ "$FRESH_INSTALL" -eq 1 ]; then
