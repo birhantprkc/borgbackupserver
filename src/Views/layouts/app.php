@@ -358,7 +358,7 @@
     <?php
     // Docker first-run setup modal
     $showDockerSetup = false;
-    if (file_exists('/.dockerenv') && (($_SESSION['user_role'] ?? '') === 'admin')) {
+    if ((file_exists('/.dockerenv') || file_exists('/run/.containerenv')) && (($_SESSION['user_role'] ?? '') === 'admin')) {
         $dockerSetupRow = \BBS\Core\Database::getInstance()->fetchOne("SELECT `value` FROM settings WHERE `key` = 'docker_setup_complete'");
         $showDockerSetup = empty($dockerSetupRow['value']) || $dockerSetupRow['value'] !== '1';
     }

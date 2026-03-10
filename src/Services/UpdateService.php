@@ -24,11 +24,11 @@ class UpdateService
     }
 
     /**
-     * Detect if the application is running inside a Docker container.
+     * Detect if the application is running inside a container (Docker or Podman).
      */
     public static function isRunningInDocker(): bool
     {
-        return file_exists('/.dockerenv');
+        return file_exists('/.dockerenv') || file_exists('/run/.containerenv');
     }
 
     public function getIncludePrereleases(): bool
