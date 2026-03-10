@@ -1285,6 +1285,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     $editHasCompression = str_contains($editOpts, '--compression');
     $editCompType = 'lz4';
     if (preg_match('/--compression\s+(\S+)/', $editOpts, $m)) $editCompType = $m[1];
+    if (!$editHasCompression) $editCompType = 'none';
     ?>
     <div class="collapse edit-plan-panel" id="edit-plan-<?= $plan['id'] ?>">
         <div class="card border-0 shadow-sm mb-4 border-primary">
@@ -1493,14 +1494,13 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                 </div>
                             </div>
                             <div class="mt-2">
-                                <label class="form-label small text-muted">Compression type</label>
-                                <select class="form-select form-select-sm edit-comp-type" style="max-width: 200px;">
-                                    <option value="lz4" <?= $editCompType === 'lz4' ? 'selected' : '' ?>>lz4 (fast)</option>
-                                    <option value="zstd" <?= $editCompType === 'zstd' ? 'selected' : '' ?>>zstd (balanced)</option>
-                                    <option value="zstd,3" <?= $editCompType === 'zstd,3' ? 'selected' : '' ?>>zstd,3 (better ratio)</option>
-                                    <option value="zlib" <?= $editCompType === 'zlib' ? 'selected' : '' ?>>zlib (compatible)</option>
-                                    <option value="none" <?= !$editHasCompression ? 'selected' : '' ?>>None</option>
-                                </select>
+                                <label class="form-label small text-muted">
+                                    Compression spec
+                                    <a class="ms-1" href="https://borgbackup.readthedocs.io/en/stable/usage/help.html#borg-help-compression" target="_blank" rel="noopener" data-bs-toggle="tooltip" title="Open full borg help compression docs">Help</a>
+                                </label>
+                                <input class="form-control form-control-sm edit-comp-type" style="max-width: 260px;" value="<?= htmlspecialchars($editCompType) ?>" list="compressionSpecList" autocomplete="off">
+                                <div class="form-text">Examples: lz4, zstd, zstd,10, zlib,6, lzma,6, auto,lzma,6, obfuscate,110,none</div>
+                                <div class="invalid-feedback compression-spec-error">Compression spec is required when compression is enabled.</div>
                             </div>
                             <?php
                             // Extract custom options (not managed by checkboxes)
@@ -1581,6 +1581,21 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     <?php endforeach; ?>
 
     <!-- Create New Schedule -->
+    <datalist id="compressionSpecList">
+        <option value="none">
+        <option value="lz4">
+        <option value="zstd">
+        <option value="zstd,3">
+        <option value="zstd,10">
+        <option value="zlib">
+        <option value="zlib,6">
+        <option value="lzma">
+        <option value="lzma,6">
+        <option value="auto,lzma,6">
+        <option value="auto,zstd,10">
+        <option value="obfuscate,110,none">
+        <option value="obfuscate,3,auto,zstd,10">
+    </datalist>
     <div id="create-plan-section" style="display:none;">
     <?php if (empty($repositories)): ?>
     <div class="alert alert-warning">You need to <a href="?tab=repos">create a repository</a> before adding a backup schedule.</div>
@@ -1773,7 +1788,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                             <div class="col-md-6">
                                 <div class="form-check">
                                     <input class="form-check-input borg-opt" type="checkbox" name="opt_compression" id="optCompression" value="1" checked>
-                                    <label class="form-check-label" for="optCompression">Compression (lz4)</label>
+                                    <label class="form-check-label" for="optCompression">Compression</label>
                                 </div>
                                 <div class="form-check">
                                     <input class="form-check-input borg-opt" type="checkbox" name="opt_exclude_caches" id="optExcludeCaches" value="1" checked>
@@ -1804,14 +1819,13 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                             </div>
                         </div>
                         <div class="mt-2">
-                            <label class="form-label small text-muted">Compression type</label>
-                            <select class="form-select form-select-sm" name="compression_type" id="compressionType" style="max-width: 200px;">
-                                <option value="lz4" selected>lz4 (fast)</option>
-                                <option value="zstd">zstd (balanced)</option>
-                                <option value="zstd,3">zstd,3 (better ratio)</option>
-                                <option value="zlib">zlib (compatible)</option>
-                                <option value="none">None</option>
-                            </select>
+                            <label class="form-label small text-muted">
+                                Compression spec
+                                <a class="ms-1" href="https://borgbackup.readthedocs.io/en/stable/usage/help.html#borg-help-compression" target="_blank" rel="noopener" data-bs-toggle="tooltip" title="Open full borg help compression docs">Help</a>
+                            </label>
+                            <input class="form-control form-control-sm" name="compression_type" id="compressionType" style="max-width: 260px;" value="lz4" list="compressionSpecList" autocomplete="off">
+                            <div class="form-text">Examples: lz4, zstd, zstd,10, zlib,6, lzma,6, auto,lzma,6, obfuscate,110,none</div>
+                            <div class="invalid-feedback" id="compressionSpecError">Compression spec is required when compression is enabled.</div>
                         </div>
                         <div class="mt-2">
                             <label class="form-label small text-muted">Advanced Borg Options</label>
@@ -2072,7 +2086,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     }
     function buildCheckboxOpts(compChecked, compType, cacheChecked, oneFsChecked, noatimeChecked, numIdChecked, noXattrChecked, noAclChecked) {
         const opts = [];
-        if (compChecked && compType !== 'none') opts.push('--compression ' + compType);
+        if (compChecked && compType) opts.push('--compression ' + compType);
         if (cacheChecked) opts.push('--exclude-caches');
         if (oneFsChecked) opts.push('--one-file-system');
         if (noatimeChecked) opts.push('--noatime');
@@ -2089,9 +2103,12 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
 
         function syncCreateField() {
             const custom = stripManagedFlags(advField.value);
+            const compField = document.getElementById('compressionType');
+            const compEnabled = document.getElementById('optCompression').checked;
+            const compSpec = compField.value.trim();
             const checkbox = buildCheckboxOpts(
-                document.getElementById('optCompression').checked,
-                document.getElementById('compressionType').value,
+                compEnabled,
+                compSpec,
                 document.getElementById('optExcludeCaches').checked,
                 document.getElementById('optOneFs').checked,
                 document.getElementById('optNoatime').checked,
@@ -2100,10 +2117,11 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 document.getElementById('optNoAcls').checked
             );
             advField.value = [checkbox, custom].filter(Boolean).join(' ');
+            compField.classList.toggle('is-invalid', compEnabled && !compSpec);
         }
 
         createForm.querySelectorAll('.borg-opt').forEach(cb => cb.addEventListener('change', syncCreateField));
-        document.getElementById('compressionType').addEventListener('change', syncCreateField);
+        document.getElementById('compressionType').addEventListener('input', syncCreateField);
         // Initialize on load
         syncCreateField();
 
@@ -2119,9 +2137,11 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
 
         function syncEditField() {
             const custom = stripManagedFlags(advField.value);
+            const compEnabled = checks[0] && checks[0].checked;
+            const compSpec = compSelect.value.trim();
             const checkbox = buildCheckboxOpts(
-                checks[0] && checks[0].checked,
-                compSelect.value,
+                compEnabled,
+                compSpec,
                 checks[1] && checks[1].checked,
                 checks[2] && checks[2].checked,
                 checks[3] && checks[3].checked,
@@ -2130,10 +2150,11 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 checks[6] && checks[6].checked
             );
             advField.value = [checkbox, custom].filter(Boolean).join(' ');
+            compSelect.classList.toggle('is-invalid', compEnabled && !compSpec);
         }
 
         checks.forEach(cb => cb.addEventListener('change', syncEditField));
-        compSelect.addEventListener('change', syncEditField);
+        compSelect.addEventListener('input', syncEditField);
         // Initialize on load
         syncEditField();
 
@@ -2163,6 +2184,9 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
             document.getElementById('create-plan-section').style.display = 'none';
         });
     });
+
+    // Tooltips for help links in schedules tab
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootstrap.Tooltip(el));
     </script>
     </div><!-- /create-plan-section -->
     <?php endif; ?>
