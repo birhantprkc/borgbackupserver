@@ -32,6 +32,15 @@ if [ ! -d "$MYSQL_DATADIR/mysql" ]; then
     echo "Initializing MariaDB data directory..."
     mysql_install_db --user=mysql --datadir="$MYSQL_DATADIR" > /dev/null 2>&1
 fi
+
+# Force MariaDB to use UTC so CURRENT_TIMESTAMP values are consistent
+# with what TimeHelper::format() expects, regardless of the Docker host timezone.
+mkdir -p /etc/mysql/conf.d
+cat > /etc/mysql/conf.d/timezone.cnf << 'MYCNF'
+[mysqld]
+default-time-zone = '+00:00'
+MYCNF
+
 mysqld_safe --datadir="$MYSQL_DATADIR" &
 sleep 3
 

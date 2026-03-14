@@ -5,6 +5,7 @@ namespace BBS\Controllers;
 use BBS\Core\Controller;
 use BBS\Services\TwoFactorService;
 use BBS\Services\ReportService;
+use BBS\Services\SchedulerService;
 use BBS\Services\Mailer;
 
 class ProfileController extends Controller
@@ -63,8 +64,34 @@ class ProfileController extends Controller
         // Update timezone
         $timezone = trim($_POST['timezone'] ?? '');
         if ($timezone && in_array($timezone, timezone_identifiers_list()) && $timezone !== $user['timezone']) {
+            $oldTimezone = $user['timezone'];
             $this->db->update('users', ['timezone' => $timezone], 'id = ?', [$userId]);
             $_SESSION['timezone'] = $timezone;
+
+            // Propagate to schedules that still use the old timezone.
+            // Only update schedules matching the old timezone to avoid clobbering
+            // schedules intentionally set to a different timezone by other users.
+            if (($_SESSION['user_role'] ?? '') === 'admin') {
+                $affected = $this->db->fetchAll(
+                    "SELECT s.id FROM schedules s WHERE s.timezone = ?",
+                    [$oldTimezone]
+                );
+            } else {
+                $affected = $this->db->fetchAll(
+                    "SELECT s.id FROM schedules s
+                     JOIN backup_plans bp ON bp.id = s.backup_plan_id
+                     JOIN user_agents ua ON ua.agent_id = bp.agent_id
+                     WHERE ua.user_id = ? AND s.timezone = ?",
+                    [$userId, $oldTimezone]
+                );
+            }
+
+            $ids = array_column($affected, 'id');
+            if (!empty($ids)) {
+                $scheduler = new SchedulerService();
+                $scheduler->recalculateTimezone($ids, $timezone);
+            }
+
             $this->flash('success', 'Timezone updated.');
         }
 

@@ -120,6 +120,26 @@ class SchedulerService
         return $created;
     }
 
+    /**
+     * Update timezone and recalculate next_run for a batch of schedule IDs.
+     * Used when a user changes their profile timezone.
+     */
+    public function recalculateTimezone(array $scheduleIds, string $newTimezone): void
+    {
+        foreach ($scheduleIds as $id) {
+            $schedule = $this->db->fetchOne("SELECT * FROM schedules WHERE id = ?", [$id]);
+            if (!$schedule || !$schedule['enabled']) continue;
+
+            $schedule['timezone'] = $newTimezone;
+            $nextRun = $this->calculateNextRun($schedule);
+
+            $this->db->update('schedules', [
+                'timezone' => $newTimezone,
+                'next_run' => $nextRun,
+            ], 'id = ?', [$id]);
+        }
+    }
+
     private function calculateNextRun(array $schedule): ?string
     {
         $scheduleTz = new \DateTimeZone($schedule['timezone'] ?? 'UTC');
