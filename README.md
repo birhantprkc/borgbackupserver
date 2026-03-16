@@ -114,4 +114,4 @@ All documentation lives on the **[GitHub Wiki](https://github.com/marcpope/borgb
 
 ## License
 
-[MIT License](LICENSE)  -  Please consider supporting the author in the sidebar. This was an internal tool of Falcon Internet, originally built in 2018. Since then, it's been completely re-written and re-organized into a feature rich platform. 
+[MIT License](LICENSE) — [Support this project on GitHub Sponsors](https://github.com/sponsors/marcpope)
