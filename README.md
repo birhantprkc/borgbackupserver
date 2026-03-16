@@ -114,4 +114,10 @@ All documentation lives on the **[GitHub Wiki](https://github.com/marcpope/borgb
 
 ## License
 
-[MIT License](LICENSE) — [Support this project on GitHub Sponsors](https://github.com/sponsors/marcpope)
+[MIT License](LICENSE)
+
+---
+
+## Support
+
+This project was the love of years of refined work and production use within a small web hosting company. Consider making a small [monthly or one-time donation](https://github.com/sponsors/marcpope) to help keep the project going.
