@@ -52,9 +52,10 @@ class BorgCommandBuilder
         // Repository::archive
         $cmd[] = $repo['path'] . '::' . $archiveName;
 
-        // Directories to back up (one per line or space-delimited)
-        $dirs = preg_split('/[\s\n\r]+/', trim($plan['directories']));
+        // Directories to back up (one per line)
+        $dirs = preg_split('/[\n\r]+/', trim($plan['directories']));
         foreach ($dirs as $dir) {
+            $dir = trim($dir);
             if (!empty($dir)) {
                 $cmd[] = $dir;
             }

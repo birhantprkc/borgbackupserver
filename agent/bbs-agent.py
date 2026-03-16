@@ -580,7 +580,7 @@ def test_ssh_connection(config):
 def count_files(directories):
     """Pre-count files in directories for progress tracking."""
     total = 0
-    for dir_path in directories.split():
+    for dir_path in directories.splitlines():
         dir_path = dir_path.strip()
         if not os.path.exists(dir_path):
             continue
