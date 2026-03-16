@@ -44,7 +44,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.17.6"
+AGENT_VERSION = "2.17.7"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -2011,6 +2011,64 @@ def execute_restore_mysql(config, task):
     report_status(config, status_data)
 
 
+def _inhibit_sleep():
+    """Prevent the OS from sleeping while a task is running.
+    Returns state to pass to _allow_sleep() when done."""
+    if IS_WINDOWS:
+        try:
+            import ctypes
+            ES_CONTINUOUS = 0x80000000
+            ES_SYSTEM_REQUIRED = 0x00000001
+            ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED)
+            logger.debug("Sleep inhibited (Windows SetThreadExecutionState)")
+            return "windows"
+        except Exception as e:
+            logger.debug("Could not inhibit sleep: {}".format(e))
+    elif sys.platform == "darwin":
+        try:
+            proc = subprocess.Popen(
+                ["caffeinate", "-s"],
+                stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            logger.debug("Sleep inhibited (macOS caffeinate pid={})".format(proc.pid))
+            return proc
+        except Exception as e:
+            logger.debug("Could not inhibit sleep: {}".format(e))
+    else:
+        try:
+            proc = subprocess.Popen(
+                ["systemd-inhibit", "--what=sleep", "--who=bbs-agent",
+                 "--why=Backup in progress", "--mode=block", "sleep", "infinity"],
+                stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            logger.debug("Sleep inhibited (systemd-inhibit pid={})".format(proc.pid))
+            return proc
+        except Exception as e:
+            logger.debug("Could not inhibit sleep: {}".format(e))
+    return None
+
+
+def _allow_sleep(state):
+    """Re-allow sleep after task completes."""
+    if state is None:
+        return
+    if state == "windows":
+        try:
+            import ctypes
+            ES_CONTINUOUS = 0x80000000
+            ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)
+            logger.debug("Sleep re-enabled (Windows)")
+        except Exception:
+            pass
+    elif hasattr(state, "terminate"):
+        try:
+            state.terminate()
+            state.wait(timeout=5)
+            logger.debug("Sleep re-enabled (killed pid={})".format(state.pid))
+        except Exception:
+            pass
+
+
 def execute_task(config, task):
     """Execute a borg task and report progress/status."""
     job_id = task.get("job_id")
@@ -2029,6 +2087,18 @@ def execute_task(config, task):
 
     logger.info("Executing {} job #{}: {}".format(task_type, job_id, ' '.join(command)))
 
+    # Prevent the OS from sleeping during the task
+    sleep_state = _inhibit_sleep()
+    try:
+        _execute_task_inner(config, task, job_id, task_type, command, env_vars,
+                           archive_name, directories, plugins, cwd)
+    finally:
+        _allow_sleep(sleep_state)
+
+
+def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
+                        archive_name, directories, plugins, cwd):
+    """Inner task execution logic, wrapped by execute_task for sleep inhibition."""
     # Handle plugin test
     if task_type == "plugin_test":
         plugin_data = task.get("plugin", {})
