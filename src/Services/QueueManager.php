@@ -205,6 +205,17 @@ class QueueManager
                     'level' => 'info',
                     'message' => "Backup command: {$cmdStr}",
                 ]);
+
+                // Log plugin info for debugging
+                if (!empty($plugins)) {
+                    $pluginSlugs = array_map(fn($p) => $p['slug'] ?? '?', $plugins);
+                    $this->db->insert('server_log', [
+                        'agent_id' => $job['agent_id'],
+                        'backup_job_id' => $job['id'],
+                        'level' => 'info',
+                        'message' => "Plugins: " . implode(', ', $pluginSlugs),
+                    ]);
+                }
             } elseif (in_array($job['task_type'], ['prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full'])) {
                 // Server-side jobs — mark as sent, scheduler will execute them
                 $taskPayload = ['task' => $job['task_type'], 'server_side' => true, 'job_id' => $job['id']];

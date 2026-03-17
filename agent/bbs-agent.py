@@ -1105,6 +1105,7 @@ def log_to_server(config, job_id, message, level="info"):
 PLUGIN_DISPLAY_NAMES = {
     "mysql_dump": "MySQL Dump",
     "pg_dump": "PostgreSQL Dump",
+    "shell_hook": "Shell Script Hook",
 }
 
 
@@ -1601,7 +1602,7 @@ def cleanup_plugin_shell_hook(config, plugin_result):
 
 
 def test_plugin_shell_hook(config):
-    """Test that configured shell hook scripts exist and are executable."""
+    """Test shell hook scripts by actually running them (with a 30s timeout)."""
     pre_script = config.get("pre_script", "").strip()
     post_script = config.get("post_script", "").strip()
     results = []
@@ -1617,7 +1618,21 @@ def test_plugin_shell_hook(config):
             raise Exception("{} not found: {}".format(label, path))
         if not os.access(path, os.X_OK):
             raise Exception("{} not executable: {} - run: chmod +x {}".format(label, path, path))
-        results.append("{}: {} ok".format(label, path))
+        # Actually run the script to verify it works under the agent's context
+        try:
+            proc = subprocess.run(
+                [path],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=30,
+                universal_newlines=True,
+            )
+            output = (proc.stdout or "").strip()[:500]
+            if proc.returncode != 0:
+                raise Exception("{} exited with code {}: {}".format(label, proc.returncode, output))
+            results.append("{}: {} exit 0{}".format(label, path, " — {}".format(output) if output else ""))
+        except subprocess.TimeoutExpired:
+            raise Exception("{} timed out after 30s: {}".format(label, path))
 
     return " | ".join(results)
 
