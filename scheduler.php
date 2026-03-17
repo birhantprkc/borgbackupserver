@@ -175,10 +175,13 @@ try {
             }
             // Check for pending/running rebuild on this repo OR any repo for same agent
             // Concurrent rebuilds for same agent contend on borg repo locks
+            // Also skip if a rebuild completed in the last 24 hours (prevents infinite loop
+            // when some archives can never be indexed, e.g. corrupted or inaccessible)
             $pending = $db->fetchOne(
                 "SELECT id FROM backup_jobs
                  WHERE (repository_id = ? OR agent_id = ?) AND task_type IN ('catalog_rebuild', 'catalog_rebuild_full')
-                   AND status IN ('queued','sent','running')",
+                   AND (status IN ('queued','sent','running')
+                        OR (status IN ('completed','failed') AND completed_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)))",
                 [$repoId, $agentId]
             );
             if (!$pending) {
