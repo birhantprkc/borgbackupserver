@@ -250,13 +250,15 @@ case "$ACTION" in
         chown "$USERNAME":"$USERNAME" "$BORG_DIR"
 
         # Run borg list --json as the repo-owning user
+        # Do NOT use 2>&1 here — borg warnings on stderr corrupt the JSON output
+        # and cause json_decode to fail, which can wipe all archive records.
         sudo -u "$USERNAME" \
             BORG_PASSPHRASE="$PASSPHRASE" \
             BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes \
             BORG_RELOCATED_REPO_ACCESS_IS_OK=yes \
             BORG_BASE_DIR="$BORG_DIR" \
             HOME="$BORG_DIR" \
-            borg list --json "$REPO_PATH" 2>&1
+            borg list --json "$REPO_PATH"
 
         exit $?
         ;;

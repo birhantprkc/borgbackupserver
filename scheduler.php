@@ -153,7 +153,7 @@ try {
         // Skip archives created in the last 30 minutes — the normal post-backup
         // catalog indexing handles those; triggering a rebuild too early causes loops
         $repos = $db->fetchAll(
-            "SELECT r.id, r.agent_id, r.repo_path, r.storage_type, a.id AS archive_id
+            "SELECT r.id, r.agent_id, r.path as repo_path, r.storage_type, a.id AS archive_id
              FROM repositories r
              JOIN archives a ON a.repository_id = r.id
              WHERE a.created_at < DATE_SUB(NOW(), INTERVAL 30 MINUTE)"
@@ -594,6 +594,27 @@ foreach ($serverJobs as $sj) {
         $csNow = date('Y-m-d H:i:s');
         if ($csExitCode <= 1) {
             $csData = json_decode($csOutput, true);
+
+            // Safety check: if JSON parse failed (e.g., borg warnings mixed into output),
+            // fail the job rather than deleting all archive records
+            if ($csData === null || !isset($csData['archives'])) {
+                $errorMsg = "borg list output was not valid JSON (possible stderr contamination)";
+                $db->update('backup_jobs', [
+                    'status' => 'failed',
+                    'completed_at' => $csNow,
+                    'duration_seconds' => max(0, strtotime($csNow) - strtotime($startedAt)),
+                    'error_log' => $errorMsg,
+                ], 'id = ?', [$sj['id']]);
+                $db->insert('server_log', [
+                    'agent_id' => $sj['agent_id'],
+                    'backup_job_id' => $sj['id'],
+                    'level' => 'error',
+                    'message' => "Catalog sync failed: {$errorMsg}",
+                ]);
+                echo date('Y-m-d H:i:s') . " Catalog sync job #{$sj['id']} failed: {$errorMsg}\n";
+                continue;
+            }
+
             $archives = $csData['archives'] ?? [];
 
             // Clear existing archives for this repo and rebuild
@@ -1376,6 +1397,18 @@ foreach ($serverJobs as $sj) {
 
         if ($listExit <= 1 && $listOut) {
             $listData = json_decode($listOut, true);
+
+            // Safety check: if JSON parse failed (e.g., borg warnings mixed into output),
+            // skip the sync entirely to avoid deleting all archive records
+            if ($listData === null || !isset($listData['archives'])) {
+                $db->insert('server_log', [
+                    'agent_id' => $sj['agent_id'],
+                    'backup_job_id' => $sj['id'],
+                    'level' => 'warning',
+                    'message' => "Post-prune archive sync skipped: borg list output was not valid JSON",
+                ]);
+                echo date('Y-m-d H:i:s') . " Skipping post-prune archive sync for job #{$sj['id']}: invalid JSON from borg list\n";
+            } else {
             $borgArchives = [];
             if (!empty($listData['archives'])) {
                 foreach ($listData['archives'] as $a) {
@@ -1427,6 +1460,7 @@ foreach ($serverJobs as $sj) {
                     'message' => "Prune completed — all " . count($borgArchives) . " recovery point(s) retained, none removed",
                 ]);
             }
+            } // end JSON validation else
         }
     }
 
