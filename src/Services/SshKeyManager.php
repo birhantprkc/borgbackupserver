@@ -92,6 +92,13 @@ class SshKeyManager
         // Create Unix user via sudo helper
         $output = self::runHelper('create-user', $unixUser, $homeDir, $keys['public_key']);
         if ($output === null || !str_contains($output, 'OK')) {
+            // Log the actual error for debugging
+            $db = Database::getInstance();
+            $db->insert('server_log', [
+                'agent_id' => $agentId,
+                'level' => 'error',
+                'message' => "SSH provisioning failed: " . ($output ?: 'bbs-ssh-helper returned no output'),
+            ]);
             return null;
         }
 

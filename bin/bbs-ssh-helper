@@ -60,7 +60,12 @@ case "$ACTION" in
         fi
 
         # Set ownership: user owns, www-data group for server-side borg operations (init, prune, compact)
-        chown "$USERNAME":www-data "$HOME_DIR"
+        # This MUST succeed — sshd requires correct ownership of home/.ssh for key auth.
+        # If this fails (e.g. NAS/NFS mount), the SSH home dir must be on a local filesystem.
+        if ! chown "$USERNAME":www-data "$HOME_DIR" 2>&1; then
+            echo "Error: chown failed on $HOME_DIR — SSH home directories must be on a local filesystem, not a NAS/NFS mount. Check your storage_path setting."
+            exit 1
+        fi
         chmod 750 "$HOME_DIR"
 
         # Configure SSH authorized_keys with gate dispatcher

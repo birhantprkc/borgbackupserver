@@ -226,7 +226,10 @@ class ClientController extends Controller
             'user_id' => $userId,
         ]);
 
-        // Pre-flight checks before creating the client
+        // Determine SSH home path: use storage_path unless a separate storage location
+        // is configured for repos. SSH home dirs MUST be on a local filesystem (chown
+        // is required for sshd), so if storage_path points to a NAS/NFS mount that also
+        // has a matching storage location, fall back to /var/bbs/home.
         $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
         $storagePath = $storageSetting['value'] ?? null;
         if (!$storagePath) {
@@ -235,16 +238,27 @@ class ClientController extends Controller
             $this->redirect('/clients/add');
         }
 
+        // If storage_path matches a storage location, it's intended for repo storage
+        // (possibly a NAS/NFS mount). Use /var/bbs/home for SSH home dirs instead.
+        $sshHomePath = $storagePath;
+        $matchingLocation = $this->db->fetchOne(
+            "SELECT id FROM storage_locations WHERE path = ?",
+            [rtrim($storagePath, '/')]
+        );
+        if ($matchingLocation && is_dir('/var/bbs/home')) {
+            $sshHomePath = '/var/bbs/home';
+        }
+
         // Create storage directory
-        $clientDir = rtrim($storagePath, '/') . '/' . $id;
+        $clientDir = rtrim($sshHomePath, '/') . '/' . $id;
         if (!is_dir($clientDir) && !@mkdir($clientDir, 0755, true)) {
             $this->db->delete('agents', 'id = ?', [$id]);
-            $this->flash('danger', "Cannot create client — failed to create storage directory: {$clientDir}. Check permissions on {$storagePath}.");
+            $this->flash('danger', "Cannot create client — failed to create storage directory: {$clientDir}. Check permissions on {$sshHomePath}.");
             $this->redirect('/clients/add');
         }
 
         // Provision SSH access: create Unix user, SSH keys, authorized_keys
-        $sshResult = SshKeyManager::provisionClient($id, $name, $storagePath);
+        $sshResult = SshKeyManager::provisionClient($id, $name, $sshHomePath);
         if (!$sshResult) {
             // Clean up: remove storage dir and agent record
             @rmdir($clientDir);
