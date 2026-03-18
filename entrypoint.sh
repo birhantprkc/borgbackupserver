@@ -263,6 +263,17 @@ if [ "$BORG_COUNT" -eq 0 ]; then
     " 2>/dev/null || echo "Warning: Could not sync borg versions"
 fi
 
+# --- Regenerate allowed-storage-paths from database ---
+# This file lives in the container filesystem and is lost on recreation.
+# bbs-ssh-helper uses it to validate repo paths outside /var/bbs/.
+echo "Regenerating allowed storage paths..."
+STORAGE_LOCATIONS=$(mysql -u bbs -p"$DB_PASS" bbs -N -e "SELECT path FROM storage_locations" 2>/dev/null)
+if [ -n "$STORAGE_LOCATIONS" ]; then
+    mkdir -p /etc/bbs
+    echo "$STORAGE_LOCATIONS" > /etc/bbs/allowed-storage-paths
+    echo "  $(echo "$STORAGE_LOCATIONS" | wc -l) storage location(s) registered"
+fi
+
 # --- Recreate SSH users from database (needed after container restart) ---
 # Home directories are named by agent ID (e.g., /var/bbs/home/1), not by username.
 # Query the database for the username-to-directory mapping.
