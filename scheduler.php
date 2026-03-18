@@ -598,10 +598,18 @@ foreach ($serverJobs as $sj) {
         if ($csExitCode <= 1) {
             $csData = json_decode($csOutput, true);
 
-            // Safety check: if JSON parse failed (e.g., borg warnings mixed into output),
-            // fail the job rather than deleting all archive records
+            // Safety check: if JSON parse failed, fail the job rather than deleting all archive records
             if ($csData === null || !isset($csData['archives'])) {
-                $errorMsg = "borg list output was not valid JSON (possible stderr contamination)";
+                $stderrHint = !empty($csError) ? trim($csError) : '';
+                $stdoutHint = trim(substr($csOutput, 0, 500));
+                $errorMsg = "borg list output was not valid JSON";
+                if ($stderrHint) {
+                    $errorMsg .= ": " . $stderrHint;
+                } elseif ($stdoutHint) {
+                    $errorMsg .= ": " . $stdoutHint;
+                } else {
+                    $errorMsg .= " (empty output, exit code {$csExitCode})";
+                }
                 $db->update('backup_jobs', [
                     'status' => 'failed',
                     'completed_at' => $csNow,
