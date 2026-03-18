@@ -467,13 +467,15 @@ class RepositoryController extends Controller
         $this->requirePermission(PermissionService::REPO_MAINTENANCE, $repo['agent_id']);
 
         // Map action to task_type
+        // "Rebuild Full" dispatches as catalog_sync which wipes archives,
+        // re-reads them from borg (with sizes), then auto-queues catalog_rebuild
         $taskType = match($action) {
             'check' => 'repo_check',
             'compact' => 'compact',
             'repair' => 'repo_repair',
             'break_lock' => 'break_lock',
             'catalog_rebuild' => 'catalog_rebuild',
-            'catalog_rebuild_full' => 'catalog_rebuild_full',
+            'catalog_rebuild_full' => 'catalog_sync',
             default => null,
         };
 

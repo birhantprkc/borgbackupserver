@@ -840,9 +840,13 @@ foreach ($serverJobs as $sj) {
             }
         }
 
-        if ($syncExitCode <= 1) {
+        if ($syncExitCode <= 1 && $syncOutput) {
             $syncData = json_decode($syncOutput, true);
-            $borgArchives = $syncData['archives'] ?? [];
+            if ($syncData === null || !isset($syncData['archives'])) {
+                echo date('Y-m-d H:i:s') . " Catalog rebuild job #{$sj['id']}: borg list returned invalid JSON, skipping archive sync\n";
+                $syncData = ['archives' => []];
+            }
+            $borgArchives = $syncData['archives'];
             $existingNames = array_column(
                 $db->fetchAll("SELECT archive_name FROM archives WHERE repository_id = ?", [$crRepo['id']]),
                 'archive_name'
