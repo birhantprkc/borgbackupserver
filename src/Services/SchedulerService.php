@@ -54,7 +54,12 @@ class SchedulerService
             ", [$schedule['backup_plan_id']]);
 
             if ($existing) {
-                // Skip — already has a job in progress for this plan
+                // Skip — already has a job in progress for this plan.
+                // Still advance next_run so the dashboard doesn't show "Overdue"
+                $nextRun = $this->calculateNextRun($schedule);
+                $this->db->update('schedules', [
+                    'next_run' => $nextRun,
+                ], 'id = ?', [$schedule['id']]);
                 continue;
             }
             // Note: different plans on the same repo are allowed to queue.
