@@ -40,8 +40,15 @@ class QueueManager
         $maintenance = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'maintenance_mode'");
         $maintenanceMode = (($maintenance['value'] ?? '0') === '1');
 
-        // Count currently active jobs (sent + running)
-        $activeCount = $this->db->count('backup_jobs', "status IN ('sent', 'running')");
+        // Count currently active backup/restore jobs (sent + running) for ONLINE agents.
+        // Excludes: server-side tasks (run by scheduler), management tasks (update_borg,
+        // update_agent — don't consume backup slots), and jobs for offline agents (stuck
+        // jobs shouldn't block the entire queue).
+        $activeCount = $this->db->count('backup_jobs',
+            "status IN ('sent', 'running')
+             AND task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full', 'update_borg', 'update_agent')
+             AND agent_id IN (SELECT id FROM agents WHERE status = 'online')"
+        );
 
         $slotsAvailable = $this->maxQueue - $activeCount;
         if ($slotsAvailable <= 0) {
@@ -91,14 +98,32 @@ class QueueManager
         $promotedCount = 0;
 
         $serverSideTypes = ['prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full'];
+        $managementTypes = ['update_borg', 'update_agent'];
+
+        // Get agents that currently have a backup/restore running (for management task gating)
+        $busyAgents = $this->db->fetchAll(
+            "SELECT DISTINCT agent_id FROM backup_jobs
+             WHERE status IN ('sent', 'running')
+               AND task_type IN ('backup', 'restore', 'restore_mysql', 'restore_pg')"
+        );
+        $busyAgentIds = array_column($busyAgents, 'agent_id');
 
         foreach ($queuedJobs as $job) {
-            if ($promotedCount >= $slotsAvailable) {
+            $isManagement = in_array($job['task_type'], $managementTypes);
+
+            // Management tasks (update_borg, update_agent) bypass queue slots
+            // but wait if the agent has an active backup
+            if ($isManagement) {
+                if (in_array($job['agent_id'], $busyAgentIds)) {
+                    continue; // Wait for backup to finish
+                }
+                // Otherwise fall through to promote immediately
+            } elseif ($promotedCount >= $slotsAvailable) {
                 break;
             }
 
             // In maintenance mode, only promote server-side jobs (not backups/restores)
-            if ($maintenanceMode && !in_array($job['task_type'], $serverSideTypes)) {
+            if ($maintenanceMode && !in_array($job['task_type'], $serverSideTypes) && !$isManagement) {
                 continue;
             }
 

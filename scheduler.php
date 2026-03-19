@@ -47,13 +47,14 @@ if ($stale->rowCount() > 0) {
     }
 }
 
-// Step 2: Fail jobs for agents that are offline (queued, sent, or running)
+// Step 2: Fail jobs for agents that are offline (sent or running only)
+// Queued jobs are left alone — the agent may come back online and pick them up.
 // Excludes server-side tasks (prune, compact, catalog, etc.) — those don't need the agent
 $staleJobs = $db->fetchAll("
     SELECT bj.id, bj.agent_id, bj.task_type, bj.backup_plan_id, bj.status, a.name as agent_name
     FROM backup_jobs bj
     JOIN agents a ON a.id = bj.agent_id
-    WHERE bj.status IN ('queued', 'sent', 'running')
+    WHERE bj.status IN ('sent', 'running')
       AND a.status = 'offline'
       AND bj.task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full')
 ");
