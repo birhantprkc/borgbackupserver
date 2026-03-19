@@ -92,4 +92,14 @@ class Database
         $result = $this->fetchOne("SELECT COUNT(*) as cnt FROM {$table} WHERE {$where}", $params);
         return (int) $result['cnt'];
     }
+
+    /**
+     * Get MySQL's current timestamp as a string. Use this instead of PHP's
+     * date('Y-m-d H:i:s') for database writes to avoid timezone mismatches
+     * (PHP may use local time while MySQL is forced to UTC on Docker).
+     */
+    public function now(): string
+    {
+        return $this->fetchOne("SELECT NOW() as now")['now'];
+    }
 }

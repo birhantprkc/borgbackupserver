@@ -715,7 +715,7 @@ foreach ($serverJobs as $sj) {
                 // Update progress
                 $db->update('backup_jobs', [
                     'files_processed' => $archiveCount,
-                    'last_progress_at' => date('Y-m-d H:i:s'),
+                    'last_progress_at' => $db->now(),
                 ], 'id = ?', [$sj['id']]);
 
                 echo date('Y-m-d H:i:s') . "   Catalog sync {$archiveCount}/{$totalArchiveCount}: {$archiveName}\n";
@@ -1166,7 +1166,7 @@ foreach ($serverJobs as $sj) {
             // Update progress for UI progress bar (files_processed = archives processed)
             $db->update('backup_jobs', [
                 'files_processed' => $processedArchives,
-                'last_progress_at' => date('Y-m-d H:i:s'),
+                'last_progress_at' => $db->now(),
             ], 'id = ?', [$sj['id']]);
 
             // Log progress to server_log for UI visibility

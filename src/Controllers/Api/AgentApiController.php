@@ -200,7 +200,7 @@ class AgentApiController extends Controller
             $this->json(['status' => 'ok']);
         }
 
-        $data = ['status' => 'running', 'last_progress_at' => date('Y-m-d H:i:s')];
+        $data = ['status' => 'running', 'last_progress_at' => $this->db->now()];
         if (isset($input['files_total']))      $data['files_total'] = (int) $input['files_total'];
         if (isset($input['files_processed']))  $data['files_processed'] = (int) $input['files_processed'];
         if (isset($input['bytes_total']))      $data['bytes_total'] = (int) $input['bytes_total'];
@@ -311,7 +311,7 @@ class AgentApiController extends Controller
             $this->json(['status' => 'ok']);
         }
 
-        $now = date('Y-m-d H:i:s');
+        $now = $this->db->now();
         $startedAt = $job['started_at'] ?? $job['queued_at'] ?? $now;
         $duration = strtotime($now) - strtotime($startedAt);
 
