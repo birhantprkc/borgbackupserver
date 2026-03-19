@@ -876,7 +876,13 @@ def _install_borg_pip(target_version):
             logger.warning("Could not check/remove existing binary: {}".format(e))
 
     version_spec = "borgbackup=={}".format(target_version) if target_version and target_version != "latest" else "borgbackup"
-    cmd = ["pip3", "install", "--upgrade", version_spec]
+    # Use pip3 if available, fall back to pip (FreeBSD uses pip, not pip3)
+    pip_cmd = "pip3"
+    try:
+        subprocess.run(["pip3", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except FileNotFoundError:
+        pip_cmd = "pip"
+    cmd = [pip_cmd, "install", "--upgrade", version_spec]
     logger.info("Installing borg via pip: {}".format(' '.join(cmd)))
 
     try:
@@ -948,6 +954,9 @@ def _install_borg_package_manager():
         pre_cmd = None
     elif os.path.exists("/usr/bin/pacman"):
         cmd = ["pacman", "-Sy", "--noconfirm", "borg"]
+        pre_cmd = None
+    elif os.path.exists("/usr/local/sbin/pkg"):
+        cmd = ["pkg", "install", "-y", "borgbackup"]
         pre_cmd = None
     elif os.path.exists("/usr/local/bin/brew") or os.path.exists("/opt/homebrew/bin/brew"):
         cmd = ["brew", "install", "borgbackup"]
