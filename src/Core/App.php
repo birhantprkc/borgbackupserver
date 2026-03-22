@@ -33,7 +33,7 @@ class App
         $this->registerRoutes();
 
         // Redirect all UI routes to /upgrade while an upgrade is in progress
-        $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+        $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/';
         if (!str_starts_with($path, '/upgrade') && !str_starts_with($path, '/api/')
             && !str_starts_with($path, '/login') && !str_starts_with($path, '/logout')) {
             try {
