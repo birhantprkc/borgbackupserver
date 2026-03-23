@@ -144,19 +144,30 @@ class AgentApiController extends Controller
 
         // Detect stalled jobs: running/sent with no recent progress from this agent
         // Exclude server-side task types — those run in the scheduler, not on the agent
+        // Exclude jobs being delivered in THIS response (race condition: agent would
+        // report "not running" for a task it literally just received)
+        $deliveredJobIds = array_map(fn($t) => (int) ($t['job_id'] ?? 0), $tasks);
+        $excludeClause = '';
+        $stalledParams = [$agent['id']];
+        if (!empty($deliveredJobIds)) {
+            $placeholders = implode(',', array_fill(0, count($deliveredJobIds), '?'));
+            $excludeClause = "AND bj.id NOT IN ({$placeholders})";
+            $stalledParams = array_merge($stalledParams, $deliveredJobIds);
+        }
         $stalledJobs = $this->db->fetchAll("
-            SELECT id FROM backup_jobs
-            WHERE agent_id = ?
-              AND status IN ('running', 'sent')
-              AND task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full')
+            SELECT bj.id FROM backup_jobs bj
+            WHERE bj.agent_id = ?
+              AND bj.status IN ('running', 'sent')
+              AND bj.task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full')
+              {$excludeClause}
               AND (
-                  (last_progress_at IS NOT NULL AND last_progress_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE))
+                  (bj.last_progress_at IS NOT NULL AND bj.last_progress_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE))
                   OR
-                  (last_progress_at IS NULL AND started_at IS NOT NULL AND started_at < DATE_SUB(NOW(), INTERVAL 30 MINUTE))
+                  (bj.last_progress_at IS NULL AND bj.started_at IS NOT NULL AND bj.started_at < DATE_SUB(NOW(), INTERVAL 30 MINUTE))
                   OR
-                  (last_progress_at IS NULL AND started_at IS NULL AND queued_at < DATE_SUB(NOW(), INTERVAL 30 MINUTE))
+                  (bj.last_progress_at IS NULL AND bj.started_at IS NULL AND bj.queued_at < DATE_SUB(NOW(), INTERVAL 30 MINUTE))
               )
-        ", [$agent['id']]);
+        ", $stalledParams);
 
         $response = [
             'status' => 'ok',
