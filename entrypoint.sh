@@ -33,12 +33,20 @@ if [ ! -d "$MYSQL_DATADIR/mysql" ]; then
     mysql_install_db --user=mysql --datadir="$MYSQL_DATADIR" > /dev/null 2>&1
 fi
 
+# Use persistent volume for temp files so large catalog imports and MySQL
+# temp tables don't fill the container's overlay filesystem
+mkdir -p /var/bbs/tmp
+chown www-data:www-data /var/bbs/tmp
+chmod 1777 /var/bbs/tmp
+export TMPDIR=/var/bbs/tmp
+
 # Force MariaDB to use UTC so CURRENT_TIMESTAMP values are consistent
 # with what TimeHelper::format() expects, regardless of the Docker host timezone.
 mkdir -p /etc/mysql/conf.d
 cat > /etc/mysql/conf.d/timezone.cnf << 'MYCNF'
 [mysqld]
 default-time-zone = '+00:00'
+tmpdir = /var/bbs/tmp
 MYCNF
 
 mysqld_safe --datadir="$MYSQL_DATADIR" &
@@ -70,7 +78,7 @@ if command -v clickhouse-server &>/dev/null; then
     <tmp_path>/var/bbs/clickhouse/tmp/</tmp_path>
 </clickhouse>
 CHXML
-    sudo -u clickhouse clickhouse-server --daemon --config-file=/etc/clickhouse-server/config.xml 2>/dev/null || true
+    TMPDIR=/var/bbs/tmp sudo -u clickhouse clickhouse-server --daemon --config-file=/etc/clickhouse-server/config.xml 2>/dev/null || true
     for i in {1..15}; do
         curl -sf http://localhost:8123/ping >/dev/null 2>&1 && break
         sleep 1
@@ -385,6 +393,7 @@ echo "Setting up scheduler cron..."
 touch /var/log/bbs-scheduler.log
 chown www-data:www-data /var/log/bbs-scheduler.log
 cat > /etc/cron.d/bbs-scheduler << 'CRON'
+TMPDIR=/var/bbs/tmp
 * * * * * www-data cd /var/www/bbs && /usr/local/bin/php scheduler.php >> /var/log/bbs-scheduler.log 2>&1
 # Save UIDs for any user home dirs that have .ssh/ but no .uid file yet
 */5 * * * * root for d in /var/bbs/home/*/; do [ -d "$d/.ssh" ] && [ ! -f "$d/.uid" ] && stat -c \%u "$d" > "$d/.uid" 2>/dev/null; done
