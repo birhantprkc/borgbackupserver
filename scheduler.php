@@ -1547,7 +1547,7 @@ if ((int) date('i') % 15 === 0) {
     $remoteSshService = $remoteSshService ?? new RemoteSshService();
     $remoteConfigs = $db->fetchAll("SELECT * FROM remote_ssh_configs");
     foreach ($remoteConfigs as $rc) {
-        $rcFull = $remoteSshService->getDecryptedConfig((int) $rc['id']);
+        $rcFull = $remoteSshService->getDecrypted((int) $rc['id']);
         if ($rcFull) {
             $diskData = $remoteSshService->getDiskUsage($rcFull);
             $remoteSshService->updateDiskUsage((int) $rc['id'], $diskData);
