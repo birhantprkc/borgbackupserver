@@ -1156,6 +1156,31 @@ function applyRemotePreset(select, form) {
                     <span><i class="bi bi-archive me-1"></i><?= $rsc['repo_count'] ?> repo<?= $rsc['repo_count'] !== 1 ? 's' : '' ?></span>
                     <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Active</span>
                 </div>
+                <?php
+                $hasDiskData = !empty($rsc['disk_total_bytes']) && (int)$rsc['disk_total_bytes'] > 0;
+                $wasChecked = !empty($rsc['disk_checked_at']);
+                ?>
+                <?php if ($hasDiskData): ?>
+                <div class="mt-2">
+                    <?php
+                    $rscTotal = (int)$rsc['disk_total_bytes'];
+                    $rscUsed = (int)$rsc['disk_used_bytes'];
+                    $rscFree = (int)$rsc['disk_free_bytes'];
+                    $rscPct = $rscTotal > 0 ? round(($rscUsed / $rscTotal) * 100, 1) : 0;
+                    $rscBarColor = $rscPct >= 90 ? 'danger' : ($rscPct >= 75 ? 'warning' : 'success');
+                    ?>
+                    <div class="d-flex justify-content-between small text-muted mb-1">
+                        <span><?= \BBS\Services\ServerStats::formatBytes($rscUsed) ?> used</span>
+                        <span><?= \BBS\Services\ServerStats::formatBytes($rscFree) ?> free</span>
+                    </div>
+                    <div class="progress" style="height: 6px;">
+                        <div class="progress-bar bg-<?= $rscBarColor ?>" style="width: <?= $rscPct ?>%"></div>
+                    </div>
+                    <div class="text-muted small mt-1"><?= \BBS\Services\ServerStats::formatBytes($rscTotal) ?> total &middot; <?= $rscPct ?>% used &middot; checked <?= \BBS\Core\TimeHelper::ago($rsc['disk_checked_at']) ?></div>
+                </div>
+                <?php elseif ($wasChecked): ?>
+                <div class="mt-2 small text-muted"><i class="bi bi-exclamation-triangle me-1"></i>Quota unavailable — provider does not support disk usage queries</div>
+                <?php endif; ?>
                 <div id="remoteSshTestResult<?= $rsc['id'] ?>" class="mt-2"></div>
             </div>
         </div>

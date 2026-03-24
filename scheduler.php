@@ -1542,6 +1542,24 @@ if ((int) date('i') % 5 === 0) {
     }
 }
 
+// Step 5b: Poll remote SSH host disk usage (every 15 minutes)
+if ((int) date('i') % 15 === 0) {
+    $remoteSshService = $remoteSshService ?? new RemoteSshService();
+    $remoteConfigs = $db->fetchAll("SELECT * FROM remote_ssh_configs");
+    foreach ($remoteConfigs as $rc) {
+        $rcFull = $remoteSshService->getDecryptedConfig((int) $rc['id']);
+        if ($rcFull) {
+            $diskData = $remoteSshService->getDiskUsage($rcFull);
+            $remoteSshService->updateDiskUsage((int) $rc['id'], $diskData);
+            if ($diskData) {
+                echo date('Y-m-d H:i:s') . " Remote SSH \"{$rc['name']}\": {$diskData['percent']}% used\n";
+            } else {
+                echo date('Y-m-d H:i:s') . " Remote SSH \"{$rc['name']}\": df unavailable\n";
+            }
+        }
+    }
+}
+
 // Step 6: Check storage for low disk space (all storage locations)
 $notificationService = $notificationService ?? new NotificationService();
 $thresholdSetting = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_alert_threshold'");
@@ -1571,11 +1589,28 @@ foreach ($storageLocations as $sl) {
         }
     }
 }
+
+// Also check remote SSH storage
+$remoteConfigs = $db->fetchAll("SELECT * FROM remote_ssh_configs WHERE disk_total_bytes IS NOT NULL AND disk_total_bytes > 0");
+foreach ($remoteConfigs as $rc) {
+    $total = (int) $rc['disk_total_bytes'];
+    $free = (int) $rc['disk_free_bytes'];
+    if ($total > 0) {
+        $usagePercent = round((($total - $free) / $total) * 100, 1);
+        if ($usagePercent >= $storageThreshold) {
+            $notificationService->notify('storage_low', null, null,
+                "Remote storage \"{$rc['name']}\" is at {$usagePercent}% capacity ({$rc['remote_user']}@{$rc['remote_host']})",
+                'warning');
+            $anyLow = true;
+        }
+    }
+}
+
 if (!$anyLow) {
     $notificationService->resolve('storage_low', null, null);
 }
 
-// Step 6: Cleanup old resolved notifications and server logs
+// Step 7: Cleanup old resolved notifications and server logs
 $notificationService->cleanup();
 
 // Purge server_log entries older than 30 days

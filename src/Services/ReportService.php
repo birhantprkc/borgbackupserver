@@ -160,6 +160,23 @@ class ReportService
             ],
         ];
 
+        // Remote SSH storage
+        $remoteConfigs = $this->db->fetchAll("SELECT name, remote_host, remote_user, disk_total_bytes, disk_used_bytes, disk_free_bytes FROM remote_ssh_configs WHERE disk_total_bytes IS NOT NULL AND disk_total_bytes > 0 ORDER BY name");
+        $remoteStorageData = [];
+        foreach ($remoteConfigs as $rc) {
+            $remoteStorageData[] = [
+                'name' => $rc['name'],
+                'host' => $rc['remote_user'] . '@' . $rc['remote_host'],
+                'disk_total' => (int) $rc['disk_total_bytes'],
+                'disk_used' => (int) $rc['disk_used_bytes'],
+                'disk_free' => (int) $rc['disk_free_bytes'],
+                'disk_percent' => (int) $rc['disk_total_bytes'] > 0 ? round(((int) $rc['disk_used_bytes'] / (int) $rc['disk_total_bytes']) * 100, 1) : 0,
+            ];
+        }
+        if (!empty($remoteStorageData)) {
+            $data['remote_storage'] = $remoteStorageData;
+        }
+
         // Upsert: update existing report for this date or create new one
         $existing = $this->db->fetchOne("SELECT id FROM daily_reports WHERE report_date = ?", [$reportDate]);
         if ($existing) {
@@ -373,6 +390,23 @@ class ReportService
                     </table>
                 </div>
             HTML;
+        }
+
+        // Remote storage section
+        if (!empty($data['remote_storage'])) {
+            $html .= '<div style="padding:0 24px 16px;">';
+            $html .= '<h3 style="font-size:16px;margin:0 0 12px 0;color:#333;">Remote Storage</h3>';
+            $html .= '<table style="font-size:13px;border-collapse:collapse;">';
+            foreach ($data['remote_storage'] as $rs) {
+                $rsPct = $rs['disk_percent'];
+                $rsColor = $rsPct >= 90 ? '#dc3545' : ($rsPct >= 75 ? '#ffc107' : '#28a745');
+                $rsName = htmlspecialchars($rs['name']);
+                $rsUsed = self::formatBytes($rs['disk_used']);
+                $rsTotal = self::formatBytes($rs['disk_total']);
+                $html .= "<tr><td style='padding:4px 16px 4px 0;color:#6c757d;'>{$rsName}</td>"
+                        . "<td style='padding:4px 0;'><span style='color:{$rsColor};font-weight:600;'>{$rsPct}%</span> used ({$rsUsed} / {$rsTotal})</td></tr>";
+            }
+            $html .= '</table></div>';
         }
 
         // Footer

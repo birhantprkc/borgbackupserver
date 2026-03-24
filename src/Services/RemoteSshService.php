@@ -214,6 +214,98 @@ class RemoteSshService
     }
 
     /**
+     * Check disk usage on a remote SSH host by running df -k.
+     * Returns ['total' => bytes, 'used' => bytes, 'free' => bytes, 'percent' => int] or null if unavailable.
+     */
+    public function getDiskUsage(array $config): ?array
+    {
+        $keyFile = null;
+        try {
+            $sshKey = $this->decryptKey($config);
+            $keyFile = $this->writeTempKey($sshKey);
+
+            $port = (int) ($config['remote_port'] ?? 22);
+            $basePath = $config['remote_base_path'] ?: './';
+
+            $sshCmd = [
+                'ssh',
+                '-i', $keyFile,
+                '-p', (string) $port,
+                '-o', 'StrictHostKeyChecking=no',
+                '-o', 'UserKnownHostsFile=/dev/null',
+                '-o', 'BatchMode=yes',
+                '-o', 'ConnectTimeout=10',
+                "{$config['remote_user']}@{$config['remote_host']}",
+                "df -k {$basePath}",
+            ];
+
+            $proc = proc_open($sshCmd, [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ], $pipes, null, $this->buildServerEnv());
+
+            if (!is_resource($proc)) {
+                return null;
+            }
+
+            fclose($pipes[0]);
+            $stdout = trim(stream_get_contents($pipes[1]));
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            $exitCode = proc_close($proc);
+
+            if ($exitCode !== 0 || empty($stdout)) {
+                return null;
+            }
+
+            // Parse df -k output (second line has the data)
+            $lines = preg_split('/\n/', $stdout);
+            if (count($lines) < 2) {
+                return null;
+            }
+
+            // Handle wrapped lines: if line 2 has fewer than 4 fields,
+            // the filesystem name was long and wrapped — join with next line
+            $dataLine = $lines[1];
+            $fields = preg_split('/\s+/', trim($dataLine));
+            if (count($fields) < 4 && isset($lines[2])) {
+                $dataLine = $lines[1] . ' ' . $lines[2];
+                $fields = preg_split('/\s+/', trim($dataLine));
+            }
+
+            // Fields: Filesystem 1K-blocks Used Available Use% Mounted
+            if (count($fields) < 4) {
+                return null;
+            }
+
+            $total = (int) $fields[1] * 1024;
+            $used = (int) $fields[2] * 1024;
+            $free = (int) $fields[3] * 1024;
+            $percent = $total > 0 ? (int) round(($used / $total) * 100) : 0;
+
+            return ['total' => $total, 'used' => $used, 'free' => $free, 'percent' => $percent];
+        } catch (\Exception $e) {
+            return null;
+        } finally {
+            $this->cleanupTempKey($keyFile);
+        }
+    }
+
+    /**
+     * Store disk usage data for a remote SSH config.
+     */
+    public function updateDiskUsage(int $configId, ?array $diskData): void
+    {
+        $this->db->update('remote_ssh_configs', [
+            'disk_total_bytes' => $diskData ? $diskData['total'] : null,
+            'disk_used_bytes' => $diskData ? $diskData['used'] : null,
+            'disk_free_bytes' => $diskData ? $diskData['free'] : null,
+            'disk_checked_at' => $this->db->now(),
+        ], 'id = ?', [$configId]);
+    }
+
+    /**
      * Decrypt the SSH private key from a config record.
      */
     private function decryptKey(array $config): string
