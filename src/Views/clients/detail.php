@@ -193,14 +193,15 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                         <?php endif; ?>
                         <?php if ($this->isAdmin()): ?>
                         <hr class="my-3">
-                        <p class="text-muted small mb-2">For agents connecting from outside your network.</p>
+                        <p class="text-muted small mb-2">For agents connecting from outside your network. Leave empty to use global settings.</p>
                         <div class="mb-3">
                             <label class="form-label fw-semibold small">Server Host Override</label>
-                            <input type="text" class="form-control form-control-sm" name="server_host_override" value="<?= htmlspecialchars($agent['server_host_override'] ?? '') ?>" placeholder="Use global setting">
+                            <input type="text" class="form-control form-control-sm" name="server_host_override" value="<?= htmlspecialchars($agent['server_host_override'] ?? '') ?>" placeholder="e.g. backup.example.com">
+                            <div class="form-text">Hostname or IP only — no protocol or port.</div>
                         </div>
                         <div>
                             <label class="form-label fw-semibold small">SSH Port Override</label>
-                            <input type="number" class="form-control form-control-sm" name="ssh_port_override" value="<?= htmlspecialchars($agent['ssh_port_override'] ?? '') ?>" placeholder="Use global setting" min="1" max="65535">
+                            <input type="number" class="form-control form-control-sm" name="ssh_port_override" value="<?= htmlspecialchars($agent['ssh_port_override'] ?? '') ?>" placeholder="e.g. 22222" min="1" max="65535">
                         </div>
                         <?php endif; ?>
                     </div>
