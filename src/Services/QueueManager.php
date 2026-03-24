@@ -30,6 +30,18 @@ class QueueManager
     }
 
     /**
+     * Get the SSH port for a specific agent, checking per-agent override first.
+     */
+    private function getSshPortForAgent(int $agentId): int
+    {
+        $agent = $this->db->fetchOne("SELECT ssh_port_override FROM agents WHERE id = ?", [$agentId]);
+        if ($agent && !empty($agent['ssh_port_override'])) {
+            return (int) $agent['ssh_port_override'];
+        }
+        return $this->getSshPort();
+    }
+
+    /**
      * Process the queue: assign queued jobs to agents (up to max_queue limit).
      * Prune/compact jobs are marked for server-side execution (not sent to agents).
      * Returns the jobs that were promoted to 'sent' status.
@@ -200,7 +212,7 @@ class QueueManager
                     $cmd = BorgCommandBuilder::appendRemotePath($cmd, $job['borg_remote_path'] ?? null);
                 }
 
-                $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPort(), $remoteSshConfig);
+                $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPortForAgent($job['agent_id']), $remoteSshConfig);
 
                 $extra = [
                     'job_id' => $job['id'],
@@ -367,7 +379,7 @@ class QueueManager
                     $cmd = BorgCommandBuilder::appendRemotePath($cmd, $job['borg_remote_path'] ?? null);
                 }
 
-                $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPort(), $remoteSshConfig);
+                $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPortForAgent($job['agent_id']), $remoteSshConfig);
                 $extra = [
                     'job_id' => $job['id'],
                     'archive_name' => $archiveName,
@@ -496,7 +508,7 @@ class QueueManager
             $cmd = BorgCommandBuilder::appendRemotePath($cmd, $archive['borg_remote_path'] ?? null);
         }
 
-        $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPort(), $remoteSshConfig);
+        $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPortForAgent($job['agent_id']), $remoteSshConfig);
 
         $extra = ['job_id' => $job['id']];
         if ($destination) {
@@ -584,7 +596,7 @@ class QueueManager
             $cmd = BorgCommandBuilder::appendRemotePath($cmd, $archive['borg_remote_path'] ?? null);
         }
 
-        $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPort(), $remoteSshConfig);
+        $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPortForAgent($job['agent_id']), $remoteSshConfig);
 
         $payload = [
             'task' => 'restore_mysql',
@@ -685,7 +697,7 @@ class QueueManager
             $cmd = BorgCommandBuilder::appendRemotePath($cmd, $archive['borg_remote_path'] ?? null);
         }
 
-        $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPort(), $remoteSshConfig);
+        $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPortForAgent($job['agent_id']), $remoteSshConfig);
 
         $payload = [
             'task' => 'restore_pg',

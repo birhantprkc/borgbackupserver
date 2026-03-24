@@ -167,7 +167,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
 
     <!-- Edit Client Modal -->
     <div class="modal fade" id="editClientModal" tabindex="-1">
-        <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <form method="POST" action="/clients/<?= $agent['id'] ?>/edit">
                     <div class="modal-header">
@@ -189,6 +189,18 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                 <option value="<?= $u['id'] ?>" <?= ($agent['user_id'] ?? '') == $u['id'] ? 'selected' : '' ?>><?= htmlspecialchars($u['username']) ?></option>
                                 <?php endforeach; ?>
                             </select>
+                        </div>
+                        <?php endif; ?>
+                        <?php if ($this->isAdmin()): ?>
+                        <hr class="my-3">
+                        <p class="text-muted small mb-2">For agents connecting from outside your network.</p>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold small">Server Host Override</label>
+                            <input type="text" class="form-control form-control-sm" name="server_host_override" value="<?= htmlspecialchars($agent['server_host_override'] ?? '') ?>" placeholder="Use global setting">
+                        </div>
+                        <div>
+                            <label class="form-label fw-semibold small">SSH Port Override</label>
+                            <input type="number" class="form-control form-control-sm" name="ssh_port_override" value="<?= htmlspecialchars($agent['ssh_port_override'] ?? '') ?>" placeholder="Use global setting" min="1" max="65535">
                         </div>
                         <?php endif; ?>
                     </div>

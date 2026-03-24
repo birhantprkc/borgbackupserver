@@ -1435,6 +1435,14 @@ class ClientController extends Controller
         if ($this->isAdmin() && array_key_exists('user_id', $_POST)) {
             $data['user_id'] = $_POST['user_id'] !== '' ? (int) $_POST['user_id'] : null;
         }
+        if ($this->isAdmin() && array_key_exists('server_host_override', $_POST)) {
+            $host = trim($_POST['server_host_override']);
+            $data['server_host_override'] = $host !== '' ? $host : null;
+        }
+        if ($this->isAdmin() && array_key_exists('ssh_port_override', $_POST)) {
+            $port = trim($_POST['ssh_port_override']);
+            $data['ssh_port_override'] = ($port !== '' && (int) $port > 0 && (int) $port <= 65535) ? (int) $port : null;
+        }
 
         if (!empty($data)) {
             $this->db->update('agents', $data, 'id = ?', [$id]);

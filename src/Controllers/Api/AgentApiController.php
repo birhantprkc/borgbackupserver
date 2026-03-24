@@ -107,9 +107,9 @@ class AgentApiController extends Controller
         $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
         $sshPort = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'ssh_port'");
 
-        // Strip web port from server_host — agent uses this for SSH connections,
-        // and the SSH port is sent separately via ssh_port
-        $host = SshKeyManager::stripHostPort($serverHost['value'] ?? '');
+        // Per-agent overrides take precedence over global settings
+        $host = !empty($agent['server_host_override']) ? $agent['server_host_override'] : SshKeyManager::stripHostPort($serverHost['value'] ?? '');
+        $port = !empty($agent['ssh_port_override']) ? (int) $agent['ssh_port_override'] : (int) ($sshPort['value'] ?? 22);
 
         $this->json([
             'status' => 'ok',
@@ -118,7 +118,7 @@ class AgentApiController extends Controller
             'poll_interval' => (int) ($pollInterval['value'] ?? 30),
             'ssh_unix_user' => $agent['ssh_unix_user'] ?? '',
             'server_host' => $host,
-            'ssh_port' => (int) ($sshPort['value'] ?? 22),
+            'ssh_port' => $port,
         ]);
     }
 
@@ -922,15 +922,19 @@ class AgentApiController extends Controller
         }
 
         // Return server_host and ssh_port settings so the agent knows how to connect
+        // Per-agent overrides take precedence over global settings
         $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
         $sshPort = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'ssh_port'");
+
+        $host = !empty($agent['server_host_override']) ? $agent['server_host_override'] : SshKeyManager::stripHostPort($serverHost['value'] ?? '');
+        $port = !empty($agent['ssh_port_override']) ? (int) $agent['ssh_port_override'] : (int) ($sshPort['value'] ?? 22);
 
         $this->json([
             'status' => 'ok',
             'ssh_private_key' => $privateKey,
             'ssh_unix_user' => $agent['ssh_unix_user'],
-            'server_host' => SshKeyManager::stripHostPort($serverHost['value'] ?? ''),
-            'ssh_port' => (int) ($sshPort['value'] ?? 22),
+            'server_host' => $host,
+            'ssh_port' => $port,
         ]);
     }
 

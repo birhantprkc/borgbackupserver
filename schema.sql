@@ -105,6 +105,8 @@ CREATE TABLE agents (
     ssh_public_key TEXT DEFAULT NULL,
     ssh_private_key_encrypted TEXT DEFAULT NULL,
     ssh_home_dir VARCHAR(255) DEFAULT NULL,
+    server_host_override VARCHAR(255) DEFAULT NULL,
+    ssh_port_override INT DEFAULT NULL,
     status ENUM('setup', 'online', 'offline', 'error') NOT NULL DEFAULT 'setup',
     last_heartbeat DATETIME DEFAULT NULL,
     user_id INT DEFAULT NULL,
