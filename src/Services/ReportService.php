@@ -25,8 +25,12 @@ class ReportService
             $tz = $_SESSION['timezone'] ?? 'UTC';
             $reportDate = (new \DateTime('now', new \DateTimeZone($tz)))->format('Y-m-d');
         }
-        $dayStart = $reportDate . ' 00:00:00';
-        $dayEnd = $reportDate . ' 23:59:59';
+        // Count backups since the last report (not just "today" which is timezone-dependent)
+        $lastReport = $this->db->fetchOne(
+            "SELECT created_at FROM daily_reports WHERE report_date < ? ORDER BY report_date DESC LIMIT 1",
+            [$reportDate]
+        );
+        $sinceTime = $lastReport['created_at'] ?? date('Y-m-d H:i:s', strtotime('-24 hours'));
 
         // All agents
         $agents = $this->db->fetchAll("SELECT id, name, hostname, status, last_heartbeat FROM agents ORDER BY name");
@@ -50,8 +54,8 @@ class ReportService
                 ORDER BY bj.completed_at DESC LIMIT 1
             ", [$agent['id']]);
 
-            // Jobs today for this agent
-            $todayStats = $this->db->fetchOne("
+            // Backups since last report for this agent
+            $periodStats = $this->db->fetchOne("
                 SELECT
                     SUM(bj.status = 'completed') as completed,
                     SUM(bj.status = 'failed') as failed,
@@ -59,14 +63,14 @@ class ReportService
                 FROM backup_jobs bj
                 LEFT JOIN archives a ON a.backup_job_id = bj.id
                 WHERE bj.agent_id = ? AND bj.task_type = 'backup'
-                  AND bj.queued_at BETWEEN ? AND ?
-            ", [$agent['id'], $dayStart, $dayEnd]);
+                  AND bj.completed_at > ?
+            ", [$agent['id'], $sinceTime]);
 
-            $completed = (int) ($todayStats['completed'] ?? 0);
-            $failed = (int) ($todayStats['failed'] ?? 0);
+            $completed = (int) ($periodStats['completed'] ?? 0);
+            $failed = (int) ($periodStats['failed'] ?? 0);
             $totalCompleted += $completed;
             $totalFailed += $failed;
-            $totalBytes += (int) ($todayStats['total_bytes'] ?? 0);
+            $totalBytes += (int) ($periodStats['total_bytes'] ?? 0);
 
             $agentData[] = [
                 'id' => $agent['id'],
@@ -156,10 +160,17 @@ class ReportService
             ],
         ];
 
-        $id = $this->db->insert('daily_reports', [
-            'report_date' => $reportDate,
-            'data' => json_encode($data),
-        ]);
+        // Upsert: update existing report for this date or create new one
+        $existing = $this->db->fetchOne("SELECT id FROM daily_reports WHERE report_date = ?", [$reportDate]);
+        if ($existing) {
+            $this->db->update('daily_reports', ['data' => json_encode($data)], 'id = ?', [$existing['id']]);
+            $id = (int) $existing['id'];
+        } else {
+            $id = $this->db->insert('daily_reports', [
+                'report_date' => $reportDate,
+                'data' => json_encode($data),
+            ]);
+        }
 
         return ['id' => $id, 'data' => $data];
     }

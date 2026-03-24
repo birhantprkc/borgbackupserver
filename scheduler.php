@@ -1647,17 +1647,16 @@ if (!$lastJobCleanupTime || strtotime($lastJobCleanupTime) < time() - 86400) {
 // Step 10: Generate daily backup report (once per calendar day)
 // Check if a report already exists for today's date — prevents duplicate generation
 // regardless of what time zone or hour the scheduler runs.
+// Regenerate today's report every run so counts stay current
+// (the report is emailed at each user's preferred hour — it should reflect
+// all backups completed so far, not just the ones before midnight)
 $todayDate = date('Y-m-d');
-$existingReport = $db->fetchOne("SELECT id FROM daily_reports WHERE report_date = ? LIMIT 1", [$todayDate]);
-if (!$existingReport) {
-    try {
-        $reportService = new \BBS\Services\ReportService();
-        $report = $reportService->generate($todayDate);
-        echo date('Y-m-d H:i:s') . " Generated daily report #{$report['id']}\n";
-        $reportService->cleanup();
-    } catch (\Exception $e) {
-        echo date('Y-m-d H:i:s') . " Daily report error: {$e->getMessage()}\n";
-    }
+try {
+    $reportService = new \BBS\Services\ReportService();
+    $report = $reportService->generate($todayDate);
+    $reportService->cleanup();
+} catch (\Exception $e) {
+    echo date('Y-m-d H:i:s') . " Daily report error: {$e->getMessage()}\n";
 }
 
 // Step 10b: Email daily report to subscribers at their preferred local hour
