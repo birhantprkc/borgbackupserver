@@ -35,7 +35,7 @@ chmod 755 /usr/local/bin/bbs-ssh-helper
 /usr/local/bin/bbs-ssh-helper update-all-keys
 
 # 4b. Set PHP max_execution_time (default 30s is too short for large operations)
-PHP_INI_DIR=$(php -r 'echo php_ini_scanned_dir();' 2>/dev/null)
+PHP_INI_DIR=$(php -i 2>/dev/null | grep -oP 'Scan this dir for additional .ini files => \K\S+' | head -1)
 if [ -n "$PHP_INI_DIR" ] && [ -d "$PHP_INI_DIR" ]; then
     echo "max_execution_time = 300" > "$PHP_INI_DIR/bbs.ini"
 fi
