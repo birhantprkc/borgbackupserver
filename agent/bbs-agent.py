@@ -214,7 +214,7 @@ def load_config():
     }
 
 
-def api_request(config, endpoint, method="GET", data=None, timeout=30):
+def api_request(config, endpoint, method="GET", data=None, timeout=60):
     """Make an authenticated request to the BBS server."""
     url = "{}{}".format(config['server_url'], endpoint)
     headers = {

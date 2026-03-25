@@ -34,6 +34,12 @@ chmod 755 /usr/local/bin/bbs-ssh-helper
 /usr/local/bin/bbs-ssh-helper install-gate
 /usr/local/bin/bbs-ssh-helper update-all-keys
 
+# 4b. Set PHP max_execution_time (default 30s is too short for large operations)
+PHP_INI_DIR=$(php -r 'echo php_ini_scanned_dir();' 2>/dev/null)
+if [ -n "$PHP_INI_DIR" ] && [ -d "$PHP_INI_DIR" ]; then
+    echo "max_execution_time = 300" > "$PHP_INI_DIR/bbs.ini"
+fi
+
 # 5. ClickHouse — ensure running and schema is current
 echo "[5/9] Checking ClickHouse..."
 if command -v clickhouse-server &>/dev/null; then

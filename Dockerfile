@@ -51,6 +51,10 @@ RUN pip3 install --break-system-packages --no-cache-dir apprise && \
 # Install PHP extensions
 RUN docker-php-ext-install pdo pdo_mysql mbstring
 
+# PHP configuration: increase max_execution_time (default 30s is too short for
+# large backup operations, catalog imports, and API calls under load)
+RUN echo "max_execution_time = 300" > /usr/local/etc/php/conf.d/bbs.ini
+
 # Install Composer
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 
