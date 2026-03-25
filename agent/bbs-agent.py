@@ -1611,9 +1611,10 @@ def cleanup_plugin_shell_hook(config, plugin_result):
 
 
 def test_plugin_shell_hook(config):
-    """Test shell hook scripts by actually running them (with a 30s timeout)."""
+    """Test shell hook scripts by actually running them."""
     pre_script = config.get("pre_script", "").strip()
     post_script = config.get("post_script", "").strip()
+    timeout = int(config.get("timeout", 300))
     results = []
 
     if not pre_script and not post_script:
@@ -1633,7 +1634,7 @@ def test_plugin_shell_hook(config):
                 [path],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                timeout=30,
+                timeout=timeout,
                 universal_newlines=True,
             )
             output = (proc.stdout or "").strip()[:500]
@@ -1641,7 +1642,7 @@ def test_plugin_shell_hook(config):
                 raise Exception("{} exited with code {}: {}".format(label, proc.returncode, output))
             results.append("{}: {} exit 0{}".format(label, path, " — {}".format(output) if output else ""))
         except subprocess.TimeoutExpired:
-            raise Exception("{} timed out after 30s: {}".format(label, path))
+            raise Exception("{} timed out after {}s: {}".format(label, timeout, path))
 
     return " | ".join(results)
 
