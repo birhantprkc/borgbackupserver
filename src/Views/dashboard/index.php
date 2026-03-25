@@ -276,46 +276,13 @@ $pieColors = ['#36a2eb', '#ff6384', '#ffce56', '#4bc0c0', '#9966ff', '#6c757d'];
         </div>
         <?php endif; ?>
 
+        <?php /* Remote storage dashboard widgets — disabled pending redesign
         <?php if (!empty($storage['remote_storage'])): ?>
         <?php foreach ($storage['remote_storage'] as $rs): ?>
-        <?php if ($rs['disk_total'] !== null && $rs['disk_total'] > 0): ?>
-        <div class="card border-0 shadow-sm mt-3">
-            <div class="card-header bg-body d-flex justify-content-between align-items-center py-2">
-                <span class="fw-semibold" style="font-size:.8rem;">
-                    <i class="bi bi-hdd-network me-1"></i><?= htmlspecialchars($rs['name']) ?>
-                </span>
-                <span class="text-muted" style="font-size:.65rem;"><?= htmlspecialchars($rs['host']) ?></span>
-            </div>
-            <div class="card-body py-2 px-3">
-                <?php
-                $rsPct = $rs['disk_percent'];
-                $rsBarColor = $rsPct >= 90 ? 'danger' : ($rsPct >= 75 ? 'warning' : 'success');
-                ?>
-                <div class="d-flex justify-content-between" style="font-size:.65rem;">
-                    <span class="text-muted"><?= \BBS\Services\ServerStats::formatBytes($rs['disk_used']) ?> used</span>
-                    <span class="text-muted"><?= \BBS\Services\ServerStats::formatBytes($rs['disk_free']) ?> free of <?= \BBS\Services\ServerStats::formatBytes($rs['disk_total']) ?></span>
-                </div>
-                <div class="progress mt-1" style="height: 5px;">
-                    <div class="progress-bar bg-<?= $rsBarColor ?>" style="width: <?= $rsPct ?>%"></div>
-                </div>
-                <div class="text-end mt-1" style="font-size:.6rem;color:#888;"><?= $rsPct ?>% used<?php if ($rs['checked_at']): ?> &middot; <?= \BBS\Core\TimeHelper::ago($rs['checked_at']) ?><?php endif; ?></div>
-            </div>
-        </div>
-        <?php elseif ($rs['checked_at']): ?>
-        <div class="card border-0 shadow-sm mt-3">
-            <div class="card-header bg-body d-flex justify-content-between align-items-center py-2">
-                <span class="fw-semibold" style="font-size:.8rem;">
-                    <i class="bi bi-hdd-network me-1"></i><?= htmlspecialchars($rs['name']) ?>
-                </span>
-                <span class="text-muted" style="font-size:.65rem;"><?= htmlspecialchars($rs['host']) ?></span>
-            </div>
-            <div class="card-body py-2 px-3">
-                <div class="text-muted small"><i class="bi bi-exclamation-triangle me-1"></i>Quota unavailable</div>
-            </div>
-        </div>
-        <?php endif; ?>
+        ...
         <?php endforeach; ?>
         <?php endif; ?>
+        */ ?>
 
         <?php if (!empty($mysqlStats)): ?>
         <div class="card border-0 shadow-sm mt-4">
