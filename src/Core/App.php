@@ -106,6 +106,7 @@ class App
         $this->router->map('POST', '/repositories/create', 'RepositoryController@store');
         $this->router->map('POST', '/repositories/[i:id]/delete', 'RepositoryController@delete');
         $this->router->map('POST', '/repositories/[i:id]/maintenance', 'RepositoryController@maintenance');
+        $this->router->map('POST', '/repositories/[i:id]/rename', 'RepositoryController@rename');
         $this->router->map('GET', '/clients/[i:agentId]/repo/[i:id]', 'RepositoryController@detail');
         $this->router->map('POST', '/clients/[i:agentId]/repo/[i:id]/s3-restore', 'RepositoryController@s3Restore');
         $this->router->map('POST', '/clients/[i:agentId]/repo/[i:id]/s3-config', 'RepositoryController@s3Config');

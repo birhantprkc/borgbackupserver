@@ -21,13 +21,27 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
         <div class="d-flex justify-content-between align-items-start">
             <div>
                 <h4 class="mb-0">
-                    <i class="bi bi-archive text-primary me-2"></i><?= htmlspecialchars($repo['name']) ?>
+                    <i class="bi bi-archive text-primary me-2"></i><span id="repoNameDisplay"><?= htmlspecialchars($repo['name']) ?></span>
                     <?php if (($repo['storage_type'] ?? 'local') === 'remote_ssh'): ?>
                     <span class="badge bg-info ms-2" style="font-size: 0.6em; vertical-align: middle;"><i class="bi bi-hdd-network me-1"></i>Remote SSH</span>
                     <?php else: ?>
                     <span class="badge bg-secondary ms-2" style="font-size: 0.6em; vertical-align: middle;"><i class="bi bi-hdd me-1"></i>Local</span>
+                    <button type="button" class="btn btn-sm btn-link text-muted p-0 ms-2" id="renameToggle" title="Rename repository"><i class="bi bi-pencil"></i></button>
                     <?php endif; ?>
                 </h4>
+                <?php if (($repo['storage_type'] ?? 'local') !== 'remote_ssh'): ?>
+                <form method="POST" action="/repositories/<?= $repo['id'] ?>/rename" class="mt-2 d-none" id="renameForm">
+                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                    <div class="d-flex align-items-center gap-2">
+                        <input type="text" name="name" class="form-control form-control-sm" style="max-width: 300px;" value="<?= htmlspecialchars($repo['name']) ?>" required>
+                        <button type="submit" class="btn btn-sm btn-primary"<?= $activeJob ? ' disabled title="Wait for active jobs to finish"' : '' ?>>Rename</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="renameCancel">Cancel</button>
+                    </div>
+                    <?php if ($activeJob): ?>
+                    <div class="form-text text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Cannot rename while jobs are running.</div>
+                    <?php endif; ?>
+                </form>
+                <?php endif; ?>
             </div>
             <?php if ($activeJob): ?>
             <span class="badge bg-info"><i class="bi bi-hourglass-split me-1"></i>Active: <?= $activeJob['task_type'] ?></span>
@@ -537,5 +551,23 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
         });
     }
 })();
+
+// Rename toggle
+var renameToggle = document.getElementById('renameToggle');
+var renameForm = document.getElementById('renameForm');
+var renameCancel = document.getElementById('renameCancel');
+if (renameToggle && renameForm) {
+    renameToggle.addEventListener('click', function() {
+        renameForm.classList.remove('d-none');
+        renameToggle.classList.add('d-none');
+        renameForm.querySelector('input[name="name"]').focus();
+    });
+    if (renameCancel) {
+        renameCancel.addEventListener('click', function() {
+            renameForm.classList.add('d-none');
+            renameToggle.classList.remove('d-none');
+        });
+    }
+}
 </script>
 <?php endif; ?>

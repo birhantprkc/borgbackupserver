@@ -406,6 +406,134 @@ class RepositoryController extends Controller
         $this->redirect("/clients/{$agentId}?tab=repos");
     }
 
+    public function rename(int $id): void
+    {
+        $this->requireAuth();
+        $this->verifyCsrf();
+
+        $newName = trim($_POST['name'] ?? '');
+
+        $repo = $this->db->fetchOne("
+            SELECT r.*, a.id as agent_id
+            FROM repositories r
+            JOIN agents a ON a.id = r.agent_id
+            WHERE r.id = ?
+        ", [$id]);
+
+        if (!$repo || !$this->canAccessAgent($repo['agent_id'])) {
+            $this->flash('danger', 'Repository not found.');
+            $this->redirect('/clients');
+        }
+
+        $agentId = $repo['agent_id'];
+        $this->requirePermission(PermissionService::MANAGE_REPOS, $agentId);
+
+        if (empty($newName)) {
+            $this->flash('danger', 'Repository name cannot be empty.');
+            $this->redirect("/clients/{$agentId}/repo/{$id}");
+        }
+
+        // Only allow rename on local repos
+        if (($repo['storage_type'] ?? 'local') === 'remote_ssh') {
+            $this->flash('danger', 'Rename is not supported for remote SSH repositories.');
+            $this->redirect("/clients/{$agentId}/repo/{$id}");
+        }
+
+        // Block if any jobs are in progress
+        $activeJobs = $this->db->fetchOne(
+            "SELECT COUNT(*) as cnt FROM backup_jobs WHERE repository_id = ? AND status IN ('queued', 'sent', 'running')", [$id]
+        );
+        if ((int) ($activeJobs['cnt'] ?? 0) > 0) {
+            $this->flash('danger', 'Cannot rename repository while jobs are active. Wait for them to finish first.');
+            $this->redirect("/clients/{$agentId}/repo/{$id}");
+        }
+
+        // Build new path by replacing the last path component with the sanitized name
+        $safeName = $this->sanitizePathName($newName);
+        $lastSlash = strrpos($repo['path'], '/');
+        $newPath = substr($repo['path'], 0, $lastSlash + 1) . $safeName;
+
+        // Check for duplicate path
+        $existing = $this->db->fetchOne("SELECT id FROM repositories WHERE path = ? AND id != ?", [$newPath, $id]);
+        if ($existing) {
+            $this->flash('danger', 'A repository already exists at that path. Try a different name.');
+            $this->redirect("/clients/{$agentId}/repo/{$id}");
+        }
+
+        // Rename on disk
+        $oldLocalPath = BorgCommandBuilder::getLocalRepoPath($repo);
+        if (!empty($oldLocalPath) && is_dir($oldLocalPath)) {
+            $newLocalPath = dirname($oldLocalPath) . '/' . $safeName;
+
+            // Safety: validate paths are within allowed storage locations
+            $allowedPaths = array_column(
+                $this->db->fetchAll("SELECT path FROM storage_locations"),
+                'path'
+            );
+            $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
+            if (!empty($storageSetting['value'])) {
+                $allowedPaths[] = $storageSetting['value'];
+            }
+
+            $pathAllowed = false;
+            $realLocal = realpath($oldLocalPath);
+            foreach ($allowedPaths as $ap) {
+                if (!empty($ap) && $realLocal && str_starts_with($realLocal, realpath($ap) ?: '')) {
+                    $pathAllowed = true;
+                    break;
+                }
+            }
+
+            if (!$pathAllowed) {
+                $this->db->insert('server_log', [
+                    'agent_id' => $agentId,
+                    'level' => 'warning',
+                    'message' => "Rename blocked for repo \"{$repo['name']}\" — path outside known storage location.",
+                ]);
+                $this->flash('danger', 'Cannot rename — repository path is outside known storage locations.');
+                $this->redirect("/clients/{$agentId}/repo/{$id}");
+            }
+
+            $output = [];
+            $retval = 0;
+            $cmd = 'sudo /usr/local/bin/bbs-ssh-helper rename-repo-dir '
+                 . escapeshellarg($oldLocalPath) . ' '
+                 . escapeshellarg($newLocalPath) . ' 2>&1';
+            exec($cmd, $output, $retval);
+
+            if ($retval !== 0) {
+                $this->db->insert('server_log', [
+                    'agent_id' => $agentId,
+                    'level' => 'error',
+                    'message' => "Failed to rename repo directory: " . implode(' ', $output),
+                ]);
+                $this->flash('danger', 'Rename failed: ' . implode(' ', $output));
+                $this->redirect("/clients/{$agentId}/repo/{$id}");
+            }
+        }
+
+        // Update database
+        $this->db->update('repositories', [
+            'name' => $newName,
+            'path' => $newPath,
+        ], 'id = ?', [$id]);
+
+        // Refresh storage paths for the agent
+        $agent = $this->db->fetchOne("SELECT * FROM agents WHERE id = ?", [$agentId]);
+        if ($agent && !empty($agent['ssh_unix_user'])) {
+            $this->updateAgentStoragePaths($agentId, $agent);
+        }
+
+        $this->db->insert('server_log', [
+            'agent_id' => $agentId,
+            'level' => 'info',
+            'message' => "Repository renamed from \"{$repo['name']}\" to \"{$newName}\"",
+        ]);
+
+        $this->flash('success', "Repository renamed to \"{$newName}\".");
+        $this->redirect("/clients/{$agentId}/repo/{$id}");
+    }
+
     private function generatePassphrase(): string
     {
         $segments = [];

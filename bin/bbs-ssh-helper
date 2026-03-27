@@ -688,6 +688,47 @@ case "$ACTION" in
         echo "OK"
         ;;
 
+    rename-repo-dir)
+        OLD_DIR="${2:-}"
+        NEW_DIR="${3:-}"
+
+        if [ -z "$OLD_DIR" ] || [ -z "$NEW_DIR" ]; then
+            echo "Usage: bbs-ssh-helper rename-repo-dir <old_dir> <new_dir>"
+            exit 1
+        fi
+
+        # Safety: refuse system directories
+        case "$OLD_DIR" in
+            /|/bin|/boot|/dev|/etc|/home|/lib*|/opt|/proc|/root|/run|/sbin|/srv|/sys|/tmp|/usr|/var|/var/www|/var/www/bbs)
+                echo "Error: refusing to rename system directory: $OLD_DIR"
+                exit 1
+                ;;
+        esac
+
+        if ! is_allowed_path "$OLD_DIR"; then
+            echo "Error: source path must be under /var/bbs/ or a registered storage location"
+            exit 1
+        fi
+
+        if ! is_allowed_path "$NEW_DIR"; then
+            echo "Error: target path must be under /var/bbs/ or a registered storage location"
+            exit 1
+        fi
+
+        if [ ! -d "$OLD_DIR" ]; then
+            echo "Error: source directory does not exist: $OLD_DIR"
+            exit 1
+        fi
+
+        if [ -d "$NEW_DIR" ]; then
+            echo "Error: target directory already exists: $NEW_DIR"
+            exit 1
+        fi
+
+        mv "$OLD_DIR" "$NEW_DIR"
+        echo "OK"
+        ;;
+
     clear-borg-cache)
         # Clear borg cache for a specific user
         # Usage: bbs-ssh-helper clear-borg-cache <username>
