@@ -12,6 +12,24 @@ use BBS\Services\SshKeyManager;
 
 class RepositoryController extends Controller
 {
+    /**
+     * Sanitize a repo name for use as a filesystem directory name.
+     * Keeps the original name in the DB as a vanity/display name.
+     */
+    private function sanitizePathName(string $name): string
+    {
+        // Transliterate to ASCII, lowercase
+        $slug = mb_strtolower($name, 'UTF-8');
+        // Replace any non-alphanumeric characters (except hyphens and underscores) with hyphens
+        $slug = preg_replace('/[^a-z0-9_-]+/', '-', $slug);
+        // Collapse multiple hyphens
+        $slug = preg_replace('/-{2,}/', '-', $slug);
+        // Trim hyphens from ends
+        $slug = trim($slug, '-');
+        // Fallback if empty after sanitization
+        return $slug ?: 'repo';
+    }
+
     public function store(): void
     {
         $this->requireAuth();
@@ -82,10 +100,13 @@ class RepositoryController extends Controller
         $sshHomePath = $sshHomeDir ? rtrim(dirname($sshHomeDir), '/') : null;
         $isNonDefault = !$sshHomePath || $locationPath !== $sshHomePath;
 
+        // Sanitize the name for filesystem use (vanity name stays in DB)
+        $safeName = $this->sanitizePathName($name);
+
         if ($isNonDefault) {
             // Non-default storage location: use absolute path so borg finds the repo
             // regardless of the SSH user's home directory
-            $localPath = $locationPath . '/' . $agentId . '/' . $name;
+            $localPath = $locationPath . '/' . $agentId . '/' . $safeName;
             if (!empty($agent['ssh_unix_user']) && !empty($host)) {
                 // Absolute SSH path (double slash after host); strip web port from host
                 $sshHost = SshKeyManager::stripHostPort($host);
@@ -96,10 +117,17 @@ class RepositoryController extends Controller
         } else {
             // Default location: use relative path (resolves to SSH user's home dir)
             if (!empty($agent['ssh_unix_user']) && !empty($host)) {
-                $path = SshKeyManager::buildSshRepoPath($agent['ssh_unix_user'], $host, $name);
+                $path = SshKeyManager::buildSshRepoPath($agent['ssh_unix_user'], $host, $safeName);
             } else {
-                $path = rtrim($location['path'], '/') . '/' . $agentId . '/' . $name;
+                $path = rtrim($location['path'], '/') . '/' . $agentId . '/' . $safeName;
             }
+        }
+
+        // Check for duplicate path (two vanity names could sanitize to the same slug)
+        $existing = $this->db->fetchOne("SELECT id FROM repositories WHERE path = ?", [$path]);
+        if ($existing) {
+            $this->flash('danger', "A repository already exists at that path. Try a different name.");
+            $this->redirect("/clients/{$agentId}?tab=repos");
         }
 
         $repoId = $this->db->insert('repositories', [
@@ -196,8 +224,9 @@ class RepositoryController extends Controller
             $this->redirect("/clients/{$agentId}?tab=repos");
         }
 
-        // Build the SSH repo path
-        $repoPath = $remoteSshService->buildRepoPath($config, $name);
+        // Build the SSH repo path (sanitize name for filesystem)
+        $safeName = $this->sanitizePathName($name);
+        $repoPath = $remoteSshService->buildRepoPath($config, $safeName);
 
         // Run borg init over SSH first — only save to DB if it succeeds
         $result = $remoteSshService->initRepo($config, $repoPath, $encryption, $passphrase);
