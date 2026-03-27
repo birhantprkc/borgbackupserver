@@ -134,7 +134,7 @@ class RepositoryController extends Controller
             'agent_id' => $agentId,
             'storage_type' => 'local',
             'storage_location_id' => $location['id'] ?? null,
-            'name' => $name,
+            'name' => $safeName,
             'path' => $path,
             'encryption' => $encryption,
             'passphrase_encrypted' => $encryption !== 'none' ? Encryption::encrypt($passphrase) : null,
@@ -246,7 +246,7 @@ class RepositoryController extends Controller
             'agent_id' => $agentId,
             'storage_type' => 'remote_ssh',
             'remote_ssh_config_id' => $remoteSshConfigId,
-            'name' => $name,
+            'name' => $safeName,
             'path' => $repoPath,
             'encryption' => $encryption,
             'passphrase_encrypted' => $encryption !== 'none' ? Encryption::encrypt($passphrase) : null,
@@ -255,7 +255,7 @@ class RepositoryController extends Controller
         $this->db->insert('server_log', [
             'agent_id' => $agentId,
             'level' => 'info',
-            'message' => "Remote repository \"{$name}\" initialized ({$encryption}) on {$config['remote_user']}@{$config['remote_host']}",
+            'message' => "Remote repository \"{$safeName}\" initialized ({$encryption}) on {$config['remote_user']}@{$config['remote_host']}",
         ]);
 
         $this->flash('success', "Repository \"{$name}\" created on {$config['remote_host']} and initialized.");
@@ -453,6 +453,11 @@ class RepositoryController extends Controller
         $lastSlash = strrpos($repo['path'], '/');
         $newPath = substr($repo['path'], 0, $lastSlash + 1) . $safeName;
 
+        if (empty($safeName)) {
+            $this->flash('danger', 'Repository name must contain at least one alphanumeric character.');
+            $this->redirect("/clients/{$agentId}/repo/{$id}");
+        }
+
         // Check for duplicate path
         $existing = $this->db->fetchOne("SELECT id FROM repositories WHERE path = ? AND id != ?", [$newPath, $id]);
         if ($existing) {
@@ -512,9 +517,9 @@ class RepositoryController extends Controller
             }
         }
 
-        // Update database
+        // Update database (name must match directory for getLocalRepoPath)
         $this->db->update('repositories', [
-            'name' => $newName,
+            'name' => $safeName,
             'path' => $newPath,
         ], 'id = ?', [$id]);
 
@@ -527,10 +532,10 @@ class RepositoryController extends Controller
         $this->db->insert('server_log', [
             'agent_id' => $agentId,
             'level' => 'info',
-            'message' => "Repository renamed from \"{$repo['name']}\" to \"{$newName}\"",
+            'message' => "Repository renamed from \"{$repo['name']}\" to \"{$safeName}\"",
         ]);
 
-        $this->flash('success', "Repository renamed to \"{$newName}\".");
+        $this->flash('success', "Repository renamed to \"{$safeName}\".");
         $this->redirect("/clients/{$agentId}/repo/{$id}");
     }
 
