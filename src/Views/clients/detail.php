@@ -296,11 +296,11 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
             <div class="card border-0 shadow-sm h-100 metric-card-blue">
                 <div class="card-body d-flex align-items-center position-relative">
                     <?php if ($nextBackup && $nextBackup['plan_id']): ?>
-                    <div class="dropdown position-absolute top-0 end-0 mt-2 me-2">
-                        <button class="btn btn-sm btn-link text-muted p-1 border-0" type="button" data-bs-toggle="dropdown">
+                    <div class="dropdown position-absolute top-0 end-0 mt-2 me-2" style="z-index:2147483647;">
+                        <button class="btn btn-sm btn-link text-muted p-1 border-0" type="button" data-bs-toggle="dropdown" data-bs-strategy="fixed">
                             <i class="bi bi-three-dots-vertical"></i>
                         </button>
-                        <ul class="dropdown-menu dropdown-menu-end">
+                        <ul class="dropdown-menu dropdown-menu-end" style="z-index:2147483647;">
                             <li>
                                 <form method="POST" action="/plans/<?= $nextBackup['plan_id'] ?>/trigger">
                                     <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
@@ -1199,11 +1199,11 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         <div class="col-md-6 col-lg-4">
             <div class="card border-0 shadow-sm h-100 schedule-card" style="overflow: visible;">
                 <div class="card-body p-3 position-relative">
-                    <div class="dropdown position-absolute" style="top:8px;right:8px;z-index:10;">
-                        <button class="btn btn-sm btn-link text-muted p-1 border-0" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <div class="dropdown position-absolute" style="top:8px;right:8px;z-index:2147483647;">
+                        <button class="btn btn-sm btn-link text-muted p-1 border-0" type="button" data-bs-toggle="dropdown" data-bs-strategy="fixed" aria-expanded="false">
                             <i class="bi bi-three-dots-vertical"></i>
                         </button>
-                        <ul class="dropdown-menu dropdown-menu-end">
+                        <ul class="dropdown-menu dropdown-menu-end" style="z-index:2147483647;">
                             <li>
                                 <form method="POST" action="/plans/<?= $plan['id'] ?>/trigger">
                                     <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
