@@ -1859,7 +1859,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                             </div>
                             <div class="col">
                                 <label class="form-label small text-muted">Hours</label>
-                                <input type="number" class="form-control" name="prune_hours" value="24" min="0">
+                                <input type="number" class="form-control" name="prune_hours" value="0" min="0">
                             </div>
                             <div class="col">
                                 <label class="form-label small text-muted">Days</label>
@@ -2136,9 +2136,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     .then(tpl => {
                         document.getElementById('directoriesInput').value = (tpl.directories || '').replace(/\\n/g, '\n');
                         document.getElementById('excludesInput').value = (tpl.excludes || '').replace(/\\n/g, '\n');
-                        if (tpl.advanced_options) {
-                            applyTemplateOptions(tpl.advanced_options, createForm, document.getElementById('compressionType'), advField);
-                        }
+                        applyTemplateOptions(tpl.advanced_options || '', createForm, document.getElementById('compressionType'), advField);
                         syncCreateField();
                     });
             });
@@ -2210,22 +2208,20 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 .then(tpl => {
                     panel.querySelector('.edit-directories').value = (tpl.directories || '').replace(/\\n/g, '\n');
                     panel.querySelector('.edit-excludes').value = (tpl.excludes || '').replace(/\\n/g, '\n');
-                    if (tpl.advanced_options) {
-                        const opts = tpl.advanced_options;
-                        const checks = panel.querySelectorAll('.edit-borg-opt');
-                        const compMatch = opts.match(/--compression\s+(\S+)/);
-                        if (checks[0]) checks[0].checked = !!compMatch;
-                        if (checks[1]) checks[1].checked = opts.includes('--exclude-caches');
-                        if (checks[2]) checks[2].checked = opts.includes('--one-file-system');
-                        if (checks[3]) checks[3].checked = opts.includes('--noatime');
-                        if (checks[4]) checks[4].checked = opts.includes('--numeric-ids');
-                        if (checks[5]) checks[5].checked = opts.includes('--noxattrs');
-                        if (checks[6]) checks[6].checked = opts.includes('--noacls');
-                        if (compMatch) panel.querySelector('.edit-comp-type').value = compMatch[1];
-                        let custom = opts;
-                        managedFlags.forEach(f => { custom = custom.replace(new RegExp(f, 'g'), ''); });
-                        panel.querySelector('.edit-adv-field').value = custom.replace(/\s+/g, ' ').trim();
-                    }
+                    const opts = tpl.advanced_options || '';
+                    const checks = panel.querySelectorAll('.edit-borg-opt');
+                    const compMatch = opts.match(/--compression\s+(\S+)/);
+                    if (checks[0]) checks[0].checked = !!compMatch;
+                    if (checks[1]) checks[1].checked = opts.includes('--exclude-caches');
+                    if (checks[2]) checks[2].checked = opts.includes('--one-file-system');
+                    if (checks[3]) checks[3].checked = opts.includes('--noatime');
+                    if (checks[4]) checks[4].checked = opts.includes('--numeric-ids');
+                    if (checks[5]) checks[5].checked = opts.includes('--noxattrs');
+                    if (checks[6]) checks[6].checked = opts.includes('--noacls');
+                    if (compMatch) panel.querySelector('.edit-comp-type').value = compMatch[1];
+                    let custom = opts;
+                    managedFlags.forEach(f => { custom = custom.replace(new RegExp(f, 'g'), ''); });
+                    panel.querySelector('.edit-adv-field').value = custom.replace(/\s+/g, ' ').trim();
                     // Trigger sync via checkbox change event
                     const firstCheck = panel.querySelector('.edit-borg-opt');
                     if (firstCheck) firstCheck.dispatchEvent(new Event('change'));
