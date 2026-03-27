@@ -523,8 +523,8 @@ const serviceSchemas = {
         fields: [
             { name: 'smtp_host', label: 'SMTP Server', type: 'text', required: true, placeholder: 'smtp.gmail.com', width: 'col-md-4' },
             { name: 'smtp_port', label: 'Port', type: 'number', placeholder: '587', width: 'col-md-2', default: '587' },
-            { name: 'smtp_user', label: 'Username', type: 'text', required: true, placeholder: 'user@gmail.com', width: 'col-md-6' },
-            { name: 'smtp_pass', label: 'Password', type: 'password', required: true, placeholder: 'App password', width: 'col-md-6' },
+            { name: 'smtp_user', label: 'Username', type: 'text', placeholder: 'user@gmail.com (optional)', width: 'col-md-6' },
+            { name: 'smtp_pass', label: 'Password', type: 'password', placeholder: 'App password (optional)', width: 'col-md-6' },
             { name: 'smtp_to', label: 'Send To', type: 'email', required: true, placeholder: 'recipient@example.com', width: 'col-md-6' },
             { name: 'smtp_from', label: 'From Address', type: 'email', placeholder: 'Same as username', width: 'col-md-6', help: 'Leave blank to use username' },
             { name: 'smtp_secure', label: 'Security', type: 'select', width: 'col-md-3', default: 'starttls', options: [
@@ -539,12 +539,13 @@ const serviceSchemas = {
             const host = f.smtp_host || '';
             const port = f.smtp_port || '587';
             const to = encodeURIComponent(f.smtp_to || '');
-            const from = encodeURIComponent(f.smtp_from || f.smtp_user || '');
+            const from = encodeURIComponent(f.smtp_from || f.smtp_user || f.smtp_to || '');
             let mode = '';
             if (f.smtp_secure === 'ssl') mode = 'mailtos';
             else if (f.smtp_secure === 'none') mode = 'mailto';
             else mode = 'mailto';
-            return `${mode}://${user}:${pass}@${host}:${port}?to=${to}&from=${from}`;
+            const auth = (f.smtp_user || f.smtp_pass) ? `${user}:${pass}@` : '';
+            return `${mode}://${auth}${host}:${port}?to=${to}&from=${from}`;
         }
     },
     discord: {
