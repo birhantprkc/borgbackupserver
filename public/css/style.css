@@ -492,7 +492,7 @@ body.bg-body-secondary {
 }
 
 .repo-card .dropdown-menu {
-    z-index: 1050;
+    z-index: 2147483647 !important;
     font-size: 0.8rem;
     min-width: 140px;
     padding: 0.25rem 0;
@@ -534,7 +534,7 @@ body.bg-body-secondary {
 }
 
 .schedule-card .dropdown-menu {
-    z-index: 1050;
+    z-index: 2147483647 !important;
     font-size: 0.8rem;
     min-width: 140px;
     padding: 0.25rem 0;

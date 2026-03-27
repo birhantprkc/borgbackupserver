@@ -694,7 +694,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     </script>
 
     <?php if (!empty($repositories)): ?>
-    <div id="repo-cards-grid" class="row g-3 mb-4 pb-5">
+    <div id="repo-cards-grid" class="row g-3 mb-4 pb-5" style="overflow:visible;">
         <?php foreach ($repositories as $repo):
             $s = $repo['size_bytes'];
             $sizeLabel = $s >= 1073741824 ? round($s / 1073741824, 1) . ' GB' : ($s >= 1048576 ? round($s / 1048576, 1) . ' MB' : ($s > 0 ? round($s / 1024, 1) . ' KB' : '--'));
@@ -1174,7 +1174,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
 
     <!-- Existing Plans -->
     <?php if (!empty($plans)): ?>
-    <div id="schedule-cards-grid" class="row g-3 mb-4">
+    <div id="schedule-cards-grid" class="row g-3 mb-4" style="overflow:visible;">
         <?php foreach ($plans as $plan):
             $freq = $plan['frequency'] ?? 'manual';
             $isActive = $plan['schedule_enabled'] ?? false;
