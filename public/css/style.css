@@ -402,7 +402,7 @@ body.bg-body-secondary {
 
 .client-tab-content {
     border-radius: 0 0 8px 8px;
-    overflow-x: hidden;
+    overflow: visible;
     background-color: var(--bs-tertiary-bg) !important;
 }
 
