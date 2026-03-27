@@ -697,6 +697,31 @@ case "$ACTION" in
             exit 1
         fi
 
+        # Reject path traversal attempts
+        case "$OLD_DIR" in
+            *..*)
+                echo "Error: path traversal not allowed in source path"
+                exit 1
+                ;;
+        esac
+        case "$NEW_DIR" in
+            *..*)
+                echo "Error: path traversal not allowed in target path"
+                exit 1
+                ;;
+        esac
+
+        # Reject dangerous characters in the new directory basename
+        NEW_BASENAME=$(basename "$NEW_DIR")
+        if echo "$NEW_BASENAME" | grep -qP '[^a-zA-Z0-9._-]'; then
+            echo "Error: new directory name contains invalid characters (only a-z, 0-9, dots, hyphens, underscores allowed): $NEW_BASENAME"
+            exit 1
+        fi
+        if [ -z "$NEW_BASENAME" ] || [ "$NEW_BASENAME" = "." ] || [ "$NEW_BASENAME" = ".." ]; then
+            echo "Error: invalid new directory name: $NEW_BASENAME"
+            exit 1
+        fi
+
         # Safety: refuse system directories
         case "$OLD_DIR" in
             /|/bin|/boot|/dev|/etc|/home|/lib*|/opt|/proc|/root|/run|/sbin|/srv|/sys|/tmp|/usr|/var|/var/www|/var/www/bbs)
@@ -712,6 +737,14 @@ case "$ACTION" in
 
         if ! is_allowed_path "$NEW_DIR"; then
             echo "Error: target path must be under /var/bbs/ or a registered storage location"
+            exit 1
+        fi
+
+        # Both paths must share the same parent directory (no cross-directory moves)
+        OLD_PARENT=$(dirname "$OLD_DIR")
+        NEW_PARENT=$(dirname "$NEW_DIR")
+        if [ "$OLD_PARENT" != "$NEW_PARENT" ]; then
+            echo "Error: rename must stay within the same parent directory"
             exit 1
         fi
 
