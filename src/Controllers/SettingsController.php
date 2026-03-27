@@ -131,6 +131,7 @@ class SettingsController extends Controller
         $description = trim($_POST['description'] ?? '');
         $directories = trim($_POST['directories'] ?? '');
         $excludes = trim($_POST['excludes'] ?? '');
+        $advancedOptions = trim($_POST['advanced_options'] ?? '');
 
         if (empty($name) || empty($directories)) {
             $this->flash('danger', 'Template name and directories are required.');
@@ -142,6 +143,7 @@ class SettingsController extends Controller
             'description' => $description,
             'directories' => $directories,
             'excludes' => $excludes ?: null,
+            'advanced_options' => $advancedOptions ?: null,
         ]);
 
         $this->flash('success', "Template \"{$name}\" created.");
@@ -157,6 +159,7 @@ class SettingsController extends Controller
         $description = trim($_POST['description'] ?? '');
         $directories = trim($_POST['directories'] ?? '');
         $excludes = trim($_POST['excludes'] ?? '');
+        $advancedOptions = trim($_POST['advanced_options'] ?? '');
 
         if (empty($name) || empty($directories)) {
             $this->flash('danger', 'Template name and directories are required.');
@@ -168,6 +171,7 @@ class SettingsController extends Controller
             'description' => $description,
             'directories' => $directories,
             'excludes' => $excludes ?: null,
+            'advanced_options' => $advancedOptions ?: null,
         ], 'id = ?', [$id]);
 
         $this->flash('success', "Template \"{$name}\" updated.");

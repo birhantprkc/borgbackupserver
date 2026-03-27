@@ -1127,7 +1127,7 @@ function updateBuiltUrl(containerId, schema, prefix) {
         <i class="bi bi-clipboard-check me-1"></i> Backup Templates
     </div>
     <div class="card-body">
-        <p class="text-muted small mb-3">Templates pre-fill directories and excludes when creating backup plans. Select a template to auto-populate the form.</p>
+        <p class="text-muted small mb-3">Templates pre-fill directories, excludes, and borg options when creating backup plans. Select a template to auto-populate the form.</p>
 
         <?php if (!empty($templates)): ?>
         <div class="table-responsive mb-4">
@@ -1138,6 +1138,7 @@ function updateBuiltUrl(containerId, schema, prefix) {
                         <th>Description</th>
                         <th>Directories</th>
                         <th>Excludes</th>
+                        <th>Options</th>
                         <th></th>
                     </tr>
                 </thead>
@@ -1148,6 +1149,7 @@ function updateBuiltUrl(containerId, schema, prefix) {
                         <td class="small text-muted"><?= htmlspecialchars($tpl['description'] ?? '') ?></td>
                         <td><code class="small"><?= htmlspecialchars(str_replace("\n", ', ', $tpl['directories'])) ?></code></td>
                         <td><code class="small"><?= htmlspecialchars(str_replace("\n", ', ', $tpl['excludes'] ?? '')) ?></code></td>
+                        <td><code class="small"><?= htmlspecialchars($tpl['advanced_options'] ?? '') ?></code></td>
                         <td class="text-nowrap">
                             <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#edit-tpl-<?= $tpl['id'] ?>">
                                 <i class="bi bi-pencil"></i>
@@ -1158,24 +1160,76 @@ function updateBuiltUrl(containerId, schema, prefix) {
                             </form>
                         </td>
                     </tr>
+                    <?php
+                        $editAdv = $tpl['advanced_options'] ?? '';
+                        $editHasComp = (bool)preg_match('/--compression\s+(\S+)/', $editAdv, $editCompMatch);
+                        $editCompSpec = $editHasComp ? $editCompMatch[1] : 'lz4';
+                    ?>
                     <tr class="collapse" id="edit-tpl-<?= $tpl['id'] ?>">
-                        <td colspan="5">
-                            <form method="POST" action="/settings/templates/<?= $tpl['id'] ?>/edit" class="p-2">
+                        <td colspan="6">
+                            <form method="POST" action="/settings/templates/<?= $tpl['id'] ?>/edit" class="p-2 tpl-form">
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                <div class="row g-2">
+                                <div class="row g-2 mb-2">
                                     <div class="col-md-3">
+                                        <label class="form-label small text-muted mb-0">Name</label>
                                         <input type="text" class="form-control form-control-sm" name="name" value="<?= htmlspecialchars($tpl['name']) ?>" required>
                                     </div>
                                     <div class="col-md-3">
+                                        <label class="form-label small text-muted mb-0">Description</label>
                                         <input type="text" class="form-control form-control-sm" name="description" value="<?= htmlspecialchars($tpl['description'] ?? '') ?>" placeholder="Description">
                                     </div>
-                                    <div class="col-md-2">
+                                    <div class="col-md-3">
+                                        <label class="form-label small text-muted mb-0">Directories</label>
                                         <textarea class="form-control form-control-sm" name="directories" rows="3" required placeholder="One per line"><?= htmlspecialchars($tpl['directories']) ?></textarea>
                                     </div>
-                                    <div class="col-md-2">
+                                    <div class="col-md-3">
+                                        <label class="form-label small text-muted mb-0">Excludes</label>
                                         <textarea class="form-control form-control-sm" name="excludes" rows="3" placeholder="One per line"><?= htmlspecialchars($tpl['excludes'] ?? '') ?></textarea>
                                     </div>
-                                    <div class="col-md-2 d-flex align-items-start">
+                                </div>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-md-6">
+                                        <label class="form-label small text-muted mb-0">Borg Options</label>
+                                        <div class="d-flex flex-wrap gap-3">
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input tpl-borg-opt" type="checkbox" data-flag="compression" <?= $editHasComp ? 'checked' : '' ?>>
+                                                <label class="form-check-label small">Compression</label>
+                                            </div>
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input tpl-borg-opt" type="checkbox" data-flag="--exclude-caches" <?= str_contains($editAdv, '--exclude-caches') ? 'checked' : '' ?>>
+                                                <label class="form-check-label small">Exclude caches</label>
+                                            </div>
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input tpl-borg-opt" type="checkbox" data-flag="--one-file-system" <?= str_contains($editAdv, '--one-file-system') ? 'checked' : '' ?>>
+                                                <label class="form-check-label small">One file system</label>
+                                            </div>
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input tpl-borg-opt" type="checkbox" data-flag="--noatime" <?= str_contains($editAdv, '--noatime') ? 'checked' : '' ?>>
+                                                <label class="form-check-label small">No atime</label>
+                                            </div>
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input tpl-borg-opt" type="checkbox" data-flag="--numeric-ids" <?= str_contains($editAdv, '--numeric-ids') ? 'checked' : '' ?>>
+                                                <label class="form-check-label small">Numeric IDs</label>
+                                            </div>
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input tpl-borg-opt" type="checkbox" data-flag="--noxattrs" <?= str_contains($editAdv, '--noxattrs') ? 'checked' : '' ?>>
+                                                <label class="form-check-label small">Skip xattrs</label>
+                                            </div>
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input tpl-borg-opt" type="checkbox" data-flag="--noacls" <?= str_contains($editAdv, '--noacls') ? 'checked' : '' ?>>
+                                                <label class="form-check-label small">Skip ACLs</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label small text-muted mb-0">Compression spec</label>
+                                        <input type="text" class="form-control form-control-sm tpl-comp-type" value="<?= htmlspecialchars($editCompSpec) ?>" placeholder="lz4">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label small text-muted mb-0">Custom options</label>
+                                        <input type="text" class="form-control form-control-sm font-monospace tpl-adv-field" name="advanced_options" value="<?= htmlspecialchars($editAdv) ?>">
+                                    </div>
+                                    <div class="col-md-2 d-flex align-items-end">
                                         <button type="submit" class="btn btn-sm btn-primary w-100">Save</button>
                                     </div>
                                 </div>
@@ -1189,9 +1243,9 @@ function updateBuiltUrl(containerId, schema, prefix) {
         <?php endif; ?>
 
         <h6>Add Template</h6>
-        <form method="POST" action="/settings/templates/add">
+        <form method="POST" action="/settings/templates/add" class="tpl-form" id="addTplForm">
             <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-            <div class="row g-3">
+            <div class="row g-3 mb-2">
                 <div class="col-md-3">
                     <label class="form-label fw-semibold">Name</label>
                     <input type="text" class="form-control" name="name" required placeholder="e.g. cPanel Server">
@@ -1200,13 +1254,56 @@ function updateBuiltUrl(containerId, schema, prefix) {
                     <label class="form-label fw-semibold">Description</label>
                     <input type="text" class="form-control" name="description" placeholder="Short description">
                 </div>
-                <div class="col-md-2">
+                <div class="col-md-3">
                     <label class="form-label fw-semibold">Directories</label>
                     <textarea class="form-control" name="directories" rows="3" required placeholder="/home&#10;/etc&#10;/var/www"></textarea>
                 </div>
-                <div class="col-md-2">
+                <div class="col-md-3">
                     <label class="form-label fw-semibold">Excludes</label>
                     <textarea class="form-control" name="excludes" rows="3" placeholder="*.tmp&#10;*.log"></textarea>
+                </div>
+            </div>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Borg Options</label>
+                    <div class="d-flex flex-wrap gap-3">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input tpl-borg-opt" type="checkbox" data-flag="compression" checked>
+                            <label class="form-check-label small">Compression</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input tpl-borg-opt" type="checkbox" data-flag="--exclude-caches" checked>
+                            <label class="form-check-label small">Exclude caches</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input tpl-borg-opt" type="checkbox" data-flag="--one-file-system">
+                            <label class="form-check-label small">One file system</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input tpl-borg-opt" type="checkbox" data-flag="--noatime" checked>
+                            <label class="form-check-label small">No atime</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input tpl-borg-opt" type="checkbox" data-flag="--numeric-ids">
+                            <label class="form-check-label small">Numeric IDs</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input tpl-borg-opt" type="checkbox" data-flag="--noxattrs">
+                            <label class="form-check-label small">Skip xattrs</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input tpl-borg-opt" type="checkbox" data-flag="--noacls">
+                            <label class="form-check-label small">Skip ACLs</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold">Compression spec</label>
+                    <input type="text" class="form-control form-control-sm tpl-comp-type" value="lz4" placeholder="lz4">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold">Custom options</label>
+                    <input type="text" class="form-control form-control-sm font-monospace tpl-adv-field" name="advanced_options" placeholder="e.g. --pattern ...">
                 </div>
                 <div class="col-md-2 d-flex align-items-end">
                     <button type="submit" class="btn btn-success w-100">Add Template</button>
@@ -1215,6 +1312,38 @@ function updateBuiltUrl(containerId, schema, prefix) {
         </form>
     </div>
 </div>
+<script>
+(function() {
+    const managedFlags = ['--compression\\s+\\S+', '--exclude-caches', '--one-file-system', '--noatime', '--numeric-ids', '--noxattrs', '--noacls'];
+    function stripManaged(val) {
+        managedFlags.forEach(f => { val = val.replace(new RegExp(f, 'g'), ''); });
+        return val.replace(/\s+/g, ' ').trim();
+    }
+    function syncTplForm(form) {
+        const advField = form.querySelector('.tpl-adv-field');
+        const compType = form.querySelector('.tpl-comp-type');
+        const checks = form.querySelectorAll('.tpl-borg-opt');
+        const custom = stripManaged(advField.value);
+        const opts = [];
+        checks.forEach(cb => {
+            if (!cb.checked) return;
+            if (cb.dataset.flag === 'compression') {
+                if (compType.value.trim()) opts.push('--compression ' + compType.value.trim());
+            } else {
+                opts.push(cb.dataset.flag);
+            }
+        });
+        advField.value = [opts.join(' '), custom].filter(Boolean).join(' ');
+    }
+    document.querySelectorAll('.tpl-form').forEach(form => {
+        form.querySelectorAll('.tpl-borg-opt').forEach(cb => cb.addEventListener('change', () => syncTplForm(form)));
+        const compType = form.querySelector('.tpl-comp-type');
+        if (compType) compType.addEventListener('input', () => syncTplForm(form));
+        form.addEventListener('submit', () => syncTplForm(form));
+        syncTplForm(form);
+    });
+})();
+</script>
 <?php endif; ?>
 
 <!-- Updates Tab -->
