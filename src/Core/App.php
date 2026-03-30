@@ -243,6 +243,11 @@ class App
         $this->router->map('POST', '/api/v1/clients/[i:id]/repositories', 'Api\\AdminApiController@createRepository');
         $this->router->map('GET', '/api/v1/clients/[i:id]/plans', 'Api\\AdminApiController@listPlans');
         $this->router->map('POST', '/api/v1/clients/[i:id]/plans', 'Api\\AdminApiController@createPlan');
+        $this->router->map('GET', '/api/v1/plugins', 'Api\\AdminApiController@listPlugins');
+        $this->router->map('GET', '/api/v1/plugins/schema', 'Api\\AdminApiController@getPluginSchema');
+        $this->router->map('GET', '/api/v1/clients/[i:id]/plugin-configs', 'Api\\AdminApiController@listPluginConfigs');
+        $this->router->map('POST', '/api/v1/clients/[i:id]/plugin-configs', 'Api\\AdminApiController@createPluginConfig');
+        $this->router->map('GET', '/api/v1/storage', 'Api\\AdminApiController@listStorageLocations');
 
         // Catalog & Restore (client-facing)
         $this->router->map('GET', '/clients/[i:id]/catalog/[i:archive_id]', 'ClientController@catalog');

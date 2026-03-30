@@ -202,9 +202,17 @@ class AdminApiController extends Controller
         $name = trim($input['name'] ?? '');
         $encryption = $input['encryption'] ?? 'repokey-blake2';
         $passphrase = $input['passphrase'] ?? '';
+        $storageType = $input['storage_type'] ?? 'local';
+        $remoteSshConfigId = !empty($input['remote_ssh_config_id']) ? (int) $input['remote_ssh_config_id'] : null;
 
         if (empty($name)) {
             $this->json(['error' => 'Repository name is required'], 400);
+        }
+
+        // Route to remote SSH handler if requested
+        if ($storageType === 'remote_ssh') {
+            $this->createRemoteSshRepository($agentId, $name, $encryption, $passphrase, $remoteSshConfigId);
+            return;
         }
 
         $validEncryptions = ['none', 'repokey', 'repokey-blake2', 'authenticated', 'authenticated-blake2'];
@@ -435,6 +443,44 @@ class AdminApiController extends Controller
             'enabled' => $frequency !== 'manual' ? 1 : 0,
         ]);
 
+        // Attach plugin configs if provided
+        // Format: "plugins": [{"plugin_config_id": 5}, {"plugin_config_id": 8}]
+        // Or: "plugins": {"1": 5, "2": 8}  (plugin_id: plugin_config_id)
+        $plugins = $input['plugins'] ?? [];
+        $order = 0;
+        if (is_array($plugins)) {
+            foreach ($plugins as $key => $val) {
+                if (is_array($val)) {
+                    // Array of objects: [{"plugin_config_id": 5}]
+                    $configId = (int) ($val['plugin_config_id'] ?? 0);
+                    if ($configId <= 0) continue;
+                    $pc = $this->db->fetchOne("SELECT plugin_id FROM plugin_configs WHERE id = ? AND agent_id = ?", [$configId, $agentId]);
+                    if (!$pc) continue;
+                    $this->db->insert('backup_plan_plugins', [
+                        'backup_plan_id' => $planId,
+                        'plugin_id' => $pc['plugin_id'],
+                        'plugin_config_id' => $configId,
+                        'config' => '{}',
+                        'execution_order' => $order++,
+                        'enabled' => 1,
+                    ]);
+                } else {
+                    // Map format: {plugin_id: config_id}
+                    $pluginId = (int) $key;
+                    $configId = (int) $val;
+                    if ($pluginId <= 0 || $configId <= 0) continue;
+                    $this->db->insert('backup_plan_plugins', [
+                        'backup_plan_id' => $planId,
+                        'plugin_id' => $pluginId,
+                        'plugin_config_id' => $configId,
+                        'config' => '{}',
+                        'execution_order' => $order++,
+                        'enabled' => 1,
+                    ]);
+                }
+            }
+        }
+
         $this->db->insert('server_log', [
             'agent_id' => $agentId,
             'level' => 'info',
@@ -448,7 +494,235 @@ class AdminApiController extends Controller
             'directories' => $directories,
             'frequency' => $frequency,
             'schedule_id' => (int) $scheduleId,
+            'plugins_attached' => $order,
         ], 201);
+    }
+
+    // ── Plugins ──────────────────────────────────────────
+
+    public function listPlugins(): void
+    {
+        $this->requireApiToken();
+
+        $plugins = $this->db->fetchAll("SELECT id, slug, name, description, plugin_type, is_active FROM plugins ORDER BY name");
+
+        $this->json(['plugins' => $plugins]);
+    }
+
+    public function listPluginConfigs(int $agentId): void
+    {
+        $this->requireApiToken();
+
+        $agent = $this->db->fetchOne("SELECT id FROM agents WHERE id = ?", [$agentId]);
+        if (!$agent) {
+            $this->json(['error' => 'Client not found'], 404);
+        }
+
+        $configs = $this->db->fetchAll("
+            SELECT pc.id, pc.name, pc.config, p.slug, p.name as plugin_name
+            FROM plugin_configs pc
+            JOIN plugins p ON p.id = pc.plugin_id
+            WHERE pc.agent_id = ?
+            ORDER BY p.name, pc.name
+        ", [$agentId]);
+
+        // Decode config JSON and mask sensitive fields
+        foreach ($configs as &$cfg) {
+            $decoded = json_decode($cfg['config'], true) ?: [];
+            // Mask sensitive values
+            foreach ($decoded as $k => &$v) {
+                if (in_array($k, ['password', 'secret_key', 'access_key']) && !empty($v)) {
+                    $v = '********';
+                }
+            }
+            $cfg['config'] = $decoded;
+        }
+
+        $this->json(['plugin_configs' => $configs]);
+    }
+
+    public function createPluginConfig(int $agentId): void
+    {
+        $this->requireApiToken();
+        $input = $this->getJsonInput();
+
+        $agent = $this->db->fetchOne("SELECT id FROM agents WHERE id = ?", [$agentId]);
+        if (!$agent) {
+            $this->json(['error' => 'Client not found'], 404);
+        }
+
+        $pluginSlug = trim($input['plugin'] ?? '');
+        $configName = trim($input['name'] ?? '');
+        $config = $input['config'] ?? [];
+
+        if (empty($pluginSlug) || empty($configName)) {
+            $this->json(['error' => 'plugin (slug) and name are required'], 400);
+        }
+
+        $plugin = $this->db->fetchOne("SELECT id, slug FROM plugins WHERE slug = ?", [$pluginSlug]);
+        if (!$plugin) {
+            $this->json(['error' => "Unknown plugin: {$pluginSlug}"], 404);
+        }
+
+        // Check duplicate name
+        $existing = $this->db->fetchOne(
+            "SELECT id FROM plugin_configs WHERE agent_id = ? AND plugin_id = ? AND name = ?",
+            [$agentId, $plugin['id'], $configName]
+        );
+        if ($existing) {
+            $this->json(['error' => "A config named \"{$configName}\" already exists for this plugin"], 409);
+        }
+
+        // Encrypt sensitive fields
+        $schema = (new \BBS\Services\PluginManager($this->db))->getPluginSchema($pluginSlug);
+        foreach ($schema as $field => $def) {
+            if (!empty($def['sensitive']) && !empty($config[$field])) {
+                $config[$field] = Encryption::encrypt($config[$field]);
+            }
+        }
+
+        // Enable plugin for agent if not already
+        $agentPlugin = $this->db->fetchOne(
+            "SELECT id FROM agent_plugins WHERE agent_id = ? AND plugin_id = ?",
+            [$agentId, $plugin['id']]
+        );
+        if (!$agentPlugin) {
+            $this->db->insert('agent_plugins', [
+                'agent_id' => $agentId,
+                'plugin_id' => $plugin['id'],
+                'enabled' => 1,
+            ]);
+        } else {
+            $this->db->update('agent_plugins', ['enabled' => 1], 'id = ?', [$agentPlugin['id']]);
+        }
+
+        $configId = $this->db->insert('plugin_configs', [
+            'agent_id' => $agentId,
+            'plugin_id' => $plugin['id'],
+            'name' => $configName,
+            'config' => json_encode($config),
+        ]);
+
+        $this->json([
+            'id' => (int) $configId,
+            'plugin' => $pluginSlug,
+            'name' => $configName,
+        ], 201);
+    }
+
+    public function getPluginSchema(): void
+    {
+        $this->requireApiToken();
+
+        $pm = new \BBS\Services\PluginManager($this->db);
+        $plugins = $this->db->fetchAll("SELECT slug, name FROM plugins WHERE is_active = 1 ORDER BY name");
+
+        $schemas = [];
+        foreach ($plugins as $p) {
+            $schema = $pm->getPluginSchema($p['slug']);
+            // Strip sensitive defaults
+            foreach ($schema as &$field) {
+                if (!empty($field['sensitive'])) {
+                    unset($field['default']);
+                }
+            }
+            $schemas[$p['slug']] = [
+                'name' => $p['name'],
+                'fields' => $schema,
+            ];
+        }
+
+        $this->json(['schemas' => $schemas]);
+    }
+
+    // ── Storage Locations ────────────────────────────────
+
+    public function listStorageLocations(): void
+    {
+        $this->requireApiToken();
+
+        $locations = $this->db->fetchAll("SELECT id, name, path, is_default, created_at FROM storage_locations ORDER BY name");
+        $remoteConfigs = $this->db->fetchAll("
+            SELECT id, name, provider, remote_host, remote_port, remote_user, remote_base_path,
+                   borg_remote_path, append_repo_name, disk_total_bytes, disk_used_bytes,
+                   disk_free_bytes, disk_checked_at, created_at
+            FROM remote_ssh_configs ORDER BY name
+        ");
+
+        $this->json([
+            'local' => $locations,
+            'remote_ssh' => $remoteConfigs,
+        ]);
+    }
+
+    // ── Remote SSH Repos ────────────────────────────────
+
+    private function createRemoteSshRepository(int $agentId, string $name, string $encryption, string $passphrase, ?int $remoteSshConfigId): void
+    {
+        if (!$remoteSshConfigId) {
+            $this->json(['error' => 'remote_ssh_config_id is required for remote SSH repositories'], 400);
+        }
+
+        $remoteSshService = new \BBS\Services\RemoteSshService();
+        $config = $remoteSshService->getById($remoteSshConfigId);
+        if (!$config) {
+            $this->json(['error' => 'Remote SSH config not found'], 404);
+        }
+
+        $safeName = $this->sanitizeRepoName($name);
+
+        // Auto-generate passphrase if needed
+        if (empty($passphrase) && $encryption !== 'none') {
+            $segments = [];
+            for ($i = 0; $i < 5; $i++) {
+                $segments[] = strtoupper(substr(bin2hex(random_bytes(3)), 0, 4));
+            }
+            $passphrase = implode('-', $segments);
+        }
+
+        $repoPath = $remoteSshService->buildRepoPath($config, $safeName);
+
+        $result = $remoteSshService->initRepo($config, $repoPath, $encryption, $passphrase);
+        if (!$result['success']) {
+            $errorMsg = $result['stderr'] ?? $result['output'] ?? 'Unknown error';
+            $this->db->insert('server_log', [
+                'agent_id' => $agentId,
+                'level' => 'error',
+                'message' => "borg init failed for remote repo \"{$safeName}\" via API on {$config['remote_host']}: {$errorMsg}",
+            ]);
+            $this->json(['error' => "Failed to initialize repository on {$config['remote_host']}: {$errorMsg}"], 500);
+        }
+
+        $repoId = $this->db->insert('repositories', [
+            'agent_id' => $agentId,
+            'storage_type' => 'remote_ssh',
+            'remote_ssh_config_id' => $remoteSshConfigId,
+            'name' => $safeName,
+            'path' => $repoPath,
+            'encryption' => $encryption,
+            'passphrase_encrypted' => $encryption !== 'none' ? Encryption::encrypt($passphrase) : null,
+        ]);
+
+        $this->db->insert('server_log', [
+            'agent_id' => $agentId,
+            'level' => 'info',
+            'message' => "Remote repository \"{$safeName}\" created via API on {$config['remote_user']}@{$config['remote_host']}",
+        ]);
+
+        $response = [
+            'id' => (int) $repoId,
+            'name' => $safeName,
+            'path' => $repoPath,
+            'encryption' => $encryption,
+            'storage_type' => 'remote_ssh',
+            'remote_host' => $config['remote_host'],
+        ];
+
+        if ($encryption !== 'none') {
+            $response['passphrase'] = $passphrase;
+        }
+
+        $this->json($response, 201);
     }
 
     // ── Helpers ──────────────────────────────────────────

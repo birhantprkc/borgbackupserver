@@ -1443,7 +1443,14 @@ function updateBuiltUrl(containerId, schema, prefix) {
                 <tr><td><span class="badge bg-success">GET</span></td><td><code>/api/v1/clients/{id}/repositories</code></td><td>List repositories</td></tr>
                 <tr><td><span class="badge bg-primary">POST</span></td><td><code>/api/v1/clients/{id}/repositories</code></td><td>Create a repository</td></tr>
                 <tr><td><span class="badge bg-success">GET</span></td><td><code>/api/v1/clients/{id}/plans</code></td><td>List backup plans</td></tr>
-                <tr><td><span class="badge bg-primary">POST</span></td><td><code>/api/v1/clients/{id}/plans</code></td><td>Create a backup plan</td></tr>
+                <tr><td><span class="badge bg-primary">POST</span></td><td><code>/api/v1/clients/{id}/plans</code></td><td>Create a backup plan (with optional plugin configs)</td></tr>
+                <tr><td colspan="3" class="text-muted small fw-semibold pt-2">Plugins</td></tr>
+                <tr><td><span class="badge bg-success">GET</span></td><td><code>/api/v1/plugins</code></td><td>List available plugins</td></tr>
+                <tr><td><span class="badge bg-success">GET</span></td><td><code>/api/v1/plugins/schema</code></td><td>Get plugin field schemas</td></tr>
+                <tr><td><span class="badge bg-success">GET</span></td><td><code>/api/v1/clients/{id}/plugin-configs</code></td><td>List plugin configs for a client</td></tr>
+                <tr><td><span class="badge bg-primary">POST</span></td><td><code>/api/v1/clients/{id}/plugin-configs</code></td><td>Create a plugin config</td></tr>
+                <tr><td colspan="3" class="text-muted small fw-semibold pt-2">Storage</td></tr>
+                <tr><td><span class="badge bg-success">GET</span></td><td><code>/api/v1/storage</code></td><td>List local &amp; remote SSH storage locations</td></tr>
             </tbody>
         </table>
 
