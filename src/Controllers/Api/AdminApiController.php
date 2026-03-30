@@ -172,29 +172,29 @@ class AdminApiController extends Controller
 
     // ── Repositories ─────────────────────────────────────
 
-    public function listRepositories(int $agentId): void
+    public function listRepositories(int $id): void
     {
         $this->requireApiToken();
 
-        $agent = $this->db->fetchOne("SELECT id FROM agents WHERE id = ?", [$agentId]);
+        $agent = $this->db->fetchOne("SELECT id FROM agents WHERE id = ?", [$id]);
         if (!$agent) {
             $this->json(['error' => 'Client not found'], 404);
         }
 
         $repos = $this->db->fetchAll(
             "SELECT id, name, path, encryption, storage_type, size_bytes, archive_count, created_at
-             FROM repositories WHERE agent_id = ? ORDER BY name", [$agentId]
+             FROM repositories WHERE agent_id = ? ORDER BY name", [$id]
         );
 
         $this->json(['repositories' => $repos]);
     }
 
-    public function createRepository(int $agentId): void
+    public function createRepository(int $id): void
     {
         $this->requireApiToken();
         $input = $this->getJsonInput();
 
-        $agent = $this->db->fetchOne("SELECT * FROM agents WHERE id = ?", [$agentId]);
+        $agent = $this->db->fetchOne("SELECT * FROM agents WHERE id = ?", [$id]);
         if (!$agent) {
             $this->json(['error' => 'Client not found'], 404);
         }
@@ -211,7 +211,7 @@ class AdminApiController extends Controller
 
         // Route to remote SSH handler if requested
         if ($storageType === 'remote_ssh') {
-            $this->createRemoteSshRepository($agentId, $name, $encryption, $passphrase, $remoteSshConfigId);
+            $this->createRemoteSshRepository($id, $name, $encryption, $passphrase, $remoteSshConfigId);
             return;
         }
 
@@ -259,7 +259,7 @@ class AdminApiController extends Controller
         $isNonDefault = !$sshHomePath || $locationPath !== $sshHomePath;
 
         if ($isNonDefault) {
-            $localPath = $locationPath . '/' . $agentId . '/' . $safeName;
+            $localPath = $locationPath . '/' . $id . '/' . $safeName;
             if (!empty($agent['ssh_unix_user']) && !empty($host)) {
                 $sshHost = SshKeyManager::stripHostPort($host);
                 $path = "ssh://{$agent['ssh_unix_user']}@{$sshHost}//{$localPath}";
@@ -270,7 +270,7 @@ class AdminApiController extends Controller
             if (!empty($agent['ssh_unix_user']) && !empty($host)) {
                 $path = SshKeyManager::buildSshRepoPath($agent['ssh_unix_user'], $host, $safeName);
             } else {
-                $path = rtrim($location['path'], '/') . '/' . $agentId . '/' . $safeName;
+                $path = rtrim($location['path'], '/') . '/' . $id . '/' . $safeName;
             }
         }
 
@@ -281,7 +281,7 @@ class AdminApiController extends Controller
         }
 
         $repoId = $this->db->insert('repositories', [
-            'agent_id' => $agentId,
+            'agent_id' => $id,
             'storage_type' => 'local',
             'storage_location_id' => $location['id'] ?? null,
             'name' => $safeName,
@@ -317,14 +317,14 @@ class AdminApiController extends Controller
         if ($exitCode !== 0) {
             $errorMsg = trim($stderr ?: $stdout);
             $this->db->insert('server_log', [
-                'agent_id' => $agentId,
+                'agent_id' => $id,
                 'level' => 'error',
                 'message' => "borg init failed for repo \"{$safeName}\" via API: {$errorMsg}",
             ]);
         }
 
         $this->db->insert('server_log', [
-            'agent_id' => $agentId,
+            'agent_id' => $id,
             'level' => 'info',
             'message' => "Repository \"{$safeName}\" created via API ({$encryption})",
         ]);
@@ -350,11 +350,11 @@ class AdminApiController extends Controller
 
     // ── Backup Plans ─────────────────────────────────────
 
-    public function listPlans(int $agentId): void
+    public function listPlans(int $id): void
     {
         $this->requireApiToken();
 
-        $agent = $this->db->fetchOne("SELECT id FROM agents WHERE id = ?", [$agentId]);
+        $agent = $this->db->fetchOne("SELECT id FROM agents WHERE id = ?", [$id]);
         if (!$agent) {
             $this->json(['error' => 'Client not found'], 404);
         }
@@ -368,17 +368,17 @@ class AdminApiController extends Controller
             LEFT JOIN repositories r ON r.id = bp.repository_id
             WHERE bp.agent_id = ?
             ORDER BY bp.name
-        ", [$agentId]);
+        ", [$id]);
 
         $this->json(['plans' => $plans]);
     }
 
-    public function createPlan(int $agentId): void
+    public function createPlan(int $id): void
     {
         $this->requireApiToken();
         $input = $this->getJsonInput();
 
-        $agent = $this->db->fetchOne("SELECT id FROM agents WHERE id = ?", [$agentId]);
+        $agent = $this->db->fetchOne("SELECT id FROM agents WHERE id = ?", [$id]);
         if (!$agent) {
             $this->json(['error' => 'Client not found'], 404);
         }
@@ -406,7 +406,7 @@ class AdminApiController extends Controller
         // Verify repository belongs to this agent
         $repo = $this->db->fetchOne(
             "SELECT id FROM repositories WHERE id = ? AND agent_id = ?",
-            [$repositoryId, $agentId]
+            [$repositoryId, $id]
         );
         if (!$repo) {
             $this->json(['error' => 'Repository not found or does not belong to this client'], 404);
@@ -418,7 +418,7 @@ class AdminApiController extends Controller
         }
 
         $planId = $this->db->insert('backup_plans', [
-            'agent_id' => $agentId,
+            'agent_id' => $id,
             'repository_id' => $repositoryId,
             'name' => $name,
             'directories' => $directories,
@@ -454,7 +454,7 @@ class AdminApiController extends Controller
                     // Array of objects: [{"plugin_config_id": 5}]
                     $configId = (int) ($val['plugin_config_id'] ?? 0);
                     if ($configId <= 0) continue;
-                    $pc = $this->db->fetchOne("SELECT plugin_id FROM plugin_configs WHERE id = ? AND agent_id = ?", [$configId, $agentId]);
+                    $pc = $this->db->fetchOne("SELECT plugin_id FROM plugin_configs WHERE id = ? AND agent_id = ?", [$configId, $id]);
                     if (!$pc) continue;
                     $this->db->insert('backup_plan_plugins', [
                         'backup_plan_id' => $planId,
@@ -482,7 +482,7 @@ class AdminApiController extends Controller
         }
 
         $this->db->insert('server_log', [
-            'agent_id' => $agentId,
+            'agent_id' => $id,
             'level' => 'info',
             'message' => "Backup plan \"{$name}\" created via API (schedule: {$frequency})",
         ]);
@@ -509,11 +509,11 @@ class AdminApiController extends Controller
         $this->json(['plugins' => $plugins]);
     }
 
-    public function listPluginConfigs(int $agentId): void
+    public function listPluginConfigs(int $id): void
     {
         $this->requireApiToken();
 
-        $agent = $this->db->fetchOne("SELECT id FROM agents WHERE id = ?", [$agentId]);
+        $agent = $this->db->fetchOne("SELECT id FROM agents WHERE id = ?", [$id]);
         if (!$agent) {
             $this->json(['error' => 'Client not found'], 404);
         }
@@ -524,7 +524,7 @@ class AdminApiController extends Controller
             JOIN plugins p ON p.id = pc.plugin_id
             WHERE pc.agent_id = ?
             ORDER BY p.name, pc.name
-        ", [$agentId]);
+        ", [$id]);
 
         // Decode config JSON and mask sensitive fields
         foreach ($configs as &$cfg) {
@@ -541,12 +541,12 @@ class AdminApiController extends Controller
         $this->json(['plugin_configs' => $configs]);
     }
 
-    public function createPluginConfig(int $agentId): void
+    public function createPluginConfig(int $id): void
     {
         $this->requireApiToken();
         $input = $this->getJsonInput();
 
-        $agent = $this->db->fetchOne("SELECT id FROM agents WHERE id = ?", [$agentId]);
+        $agent = $this->db->fetchOne("SELECT id FROM agents WHERE id = ?", [$id]);
         if (!$agent) {
             $this->json(['error' => 'Client not found'], 404);
         }
@@ -567,7 +567,7 @@ class AdminApiController extends Controller
         // Check duplicate name
         $existing = $this->db->fetchOne(
             "SELECT id FROM plugin_configs WHERE agent_id = ? AND plugin_id = ? AND name = ?",
-            [$agentId, $plugin['id'], $configName]
+            [$id, $plugin['id'], $configName]
         );
         if ($existing) {
             $this->json(['error' => "A config named \"{$configName}\" already exists for this plugin"], 409);
@@ -584,11 +584,11 @@ class AdminApiController extends Controller
         // Enable plugin for agent if not already
         $agentPlugin = $this->db->fetchOne(
             "SELECT id FROM agent_plugins WHERE agent_id = ? AND plugin_id = ?",
-            [$agentId, $plugin['id']]
+            [$id, $plugin['id']]
         );
         if (!$agentPlugin) {
             $this->db->insert('agent_plugins', [
-                'agent_id' => $agentId,
+                'agent_id' => $id,
                 'plugin_id' => $plugin['id'],
                 'enabled' => 1,
             ]);
@@ -597,7 +597,7 @@ class AdminApiController extends Controller
         }
 
         $configId = $this->db->insert('plugin_configs', [
-            'agent_id' => $agentId,
+            'agent_id' => $id,
             'plugin_id' => $plugin['id'],
             'name' => $configName,
             'config' => json_encode($config),
@@ -657,7 +657,7 @@ class AdminApiController extends Controller
 
     // ── Remote SSH Repos ────────────────────────────────
 
-    private function createRemoteSshRepository(int $agentId, string $name, string $encryption, string $passphrase, ?int $remoteSshConfigId): void
+    private function createRemoteSshRepository(int $id, string $name, string $encryption, string $passphrase, ?int $remoteSshConfigId): void
     {
         if (!$remoteSshConfigId) {
             $this->json(['error' => 'remote_ssh_config_id is required for remote SSH repositories'], 400);
@@ -686,7 +686,7 @@ class AdminApiController extends Controller
         if (!$result['success']) {
             $errorMsg = $result['stderr'] ?? $result['output'] ?? 'Unknown error';
             $this->db->insert('server_log', [
-                'agent_id' => $agentId,
+                'agent_id' => $id,
                 'level' => 'error',
                 'message' => "borg init failed for remote repo \"{$safeName}\" via API on {$config['remote_host']}: {$errorMsg}",
             ]);
@@ -694,7 +694,7 @@ class AdminApiController extends Controller
         }
 
         $repoId = $this->db->insert('repositories', [
-            'agent_id' => $agentId,
+            'agent_id' => $id,
             'storage_type' => 'remote_ssh',
             'remote_ssh_config_id' => $remoteSshConfigId,
             'name' => $safeName,
@@ -704,7 +704,7 @@ class AdminApiController extends Controller
         ]);
 
         $this->db->insert('server_log', [
-            'agent_id' => $agentId,
+            'agent_id' => $id,
             'level' => 'info',
             'message' => "Remote repository \"{$safeName}\" created via API on {$config['remote_user']}@{$config['remote_host']}",
         ]);
@@ -727,12 +727,12 @@ class AdminApiController extends Controller
 
     // ── Repo Edit/Delete ────────────────────────────────
 
-    public function renameRepository(int $agentId, int $repoId): void
+    public function renameRepository(int $id, int $repoId): void
     {
         $this->requireApiToken();
         $input = $this->getJsonInput();
 
-        $repo = $this->db->fetchOne("SELECT r.*, a.id as agent_id FROM repositories r JOIN agents a ON a.id = r.agent_id WHERE r.id = ? AND r.agent_id = ?", [$repoId, $agentId]);
+        $repo = $this->db->fetchOne("SELECT r.*, a.id as agent_id FROM repositories r JOIN agents a ON a.id = r.agent_id WHERE r.id = ? AND r.agent_id = ?", [$repoId, $id]);
         if (!$repo) {
             $this->json(['error' => 'Repository not found'], 404);
         }
@@ -778,7 +778,7 @@ class AdminApiController extends Controller
         $this->db->update('repositories', ['name' => $safeName, 'path' => $newPath], 'id = ?', [$repoId]);
 
         $this->db->insert('server_log', [
-            'agent_id' => $agentId,
+            'agent_id' => $id,
             'level' => 'info',
             'message' => "Repository renamed from \"{$repo['name']}\" to \"{$safeName}\" via API",
         ]);
@@ -786,11 +786,11 @@ class AdminApiController extends Controller
         $this->json(['status' => 'ok', 'name' => $safeName, 'path' => $newPath]);
     }
 
-    public function deleteRepository(int $agentId, int $repoId): void
+    public function deleteRepository(int $id, int $repoId): void
     {
         $this->requireApiToken();
 
-        $repo = $this->db->fetchOne("SELECT r.*, a.id as agent_id FROM repositories r JOIN agents a ON a.id = r.agent_id WHERE r.id = ? AND r.agent_id = ?", [$repoId, $agentId]);
+        $repo = $this->db->fetchOne("SELECT r.*, a.id as agent_id FROM repositories r JOIN agents a ON a.id = r.agent_id WHERE r.id = ? AND r.agent_id = ?", [$repoId, $id]);
         if (!$repo) {
             $this->json(['error' => 'Repository not found'], 404);
         }
@@ -813,14 +813,14 @@ class AdminApiController extends Controller
 
         $this->db->delete('repositories', 'id = ?', [$repoId]);
 
-        $agent = $this->db->fetchOne("SELECT * FROM agents WHERE id = ?", [$agentId]);
+        $agent = $this->db->fetchOne("SELECT * FROM agents WHERE id = ?", [$id]);
         if ($agent && !empty($agent['ssh_unix_user'])) {
             // Refresh storage paths
-            $repos = $this->db->fetchAll("SELECT r.*, sl.path as location_path FROM repositories r LEFT JOIN storage_locations sl ON sl.id = r.storage_location_id WHERE r.agent_id = ?", [$agentId]);
+            $repos = $this->db->fetchAll("SELECT r.*, sl.path as location_path FROM repositories r LEFT JOIN storage_locations sl ON sl.id = r.storage_location_id WHERE r.agent_id = ?", [$id]);
             $storagePaths = [];
             foreach ($repos as $r) {
                 if (!empty($r['location_path'])) {
-                    $storagePaths[] = rtrim($r['location_path'], '/') . '/' . $agentId;
+                    $storagePaths[] = rtrim($r['location_path'], '/') . '/' . $id;
                 }
             }
             if (!empty($storagePaths)) {
@@ -830,7 +830,7 @@ class AdminApiController extends Controller
         }
 
         $this->db->insert('server_log', [
-            'agent_id' => $agentId,
+            'agent_id' => $id,
             'level' => 'info',
             'message' => "Repository \"{$repo['name']}\" deleted via API",
         ]);
@@ -840,12 +840,12 @@ class AdminApiController extends Controller
 
     // ── Plan Edit/Delete/Trigger ─────────────────────────
 
-    public function updatePlan(int $agentId, int $planId): void
+    public function updatePlan(int $id, int $planId): void
     {
         $this->requireApiToken();
         $input = $this->getJsonInput();
 
-        $plan = $this->db->fetchOne("SELECT * FROM backup_plans WHERE id = ? AND agent_id = ?", [$planId, $agentId]);
+        $plan = $this->db->fetchOne("SELECT * FROM backup_plans WHERE id = ? AND agent_id = ?", [$planId, $id]);
         if (!$plan) {
             $this->json(['error' => 'Plan not found'], 404);
         }
@@ -858,7 +858,7 @@ class AdminApiController extends Controller
             }
         }
         if (isset($input['repository_id'])) {
-            $repo = $this->db->fetchOne("SELECT id FROM repositories WHERE id = ? AND agent_id = ?", [(int) $input['repository_id'], $agentId]);
+            $repo = $this->db->fetchOne("SELECT id FROM repositories WHERE id = ? AND agent_id = ?", [(int) $input['repository_id'], $id]);
             if (!$repo) {
                 $this->json(['error' => 'Repository not found or does not belong to this client'], 404);
             }
@@ -911,7 +911,7 @@ class AdminApiController extends Controller
                 if (is_array($val)) {
                     $configId = (int) ($val['plugin_config_id'] ?? 0);
                     if ($configId <= 0) continue;
-                    $pc = $this->db->fetchOne("SELECT plugin_id FROM plugin_configs WHERE id = ? AND agent_id = ?", [$configId, $agentId]);
+                    $pc = $this->db->fetchOne("SELECT plugin_id FROM plugin_configs WHERE id = ? AND agent_id = ?", [$configId, $id]);
                     if (!$pc) continue;
                     $this->db->insert('backup_plan_plugins', [
                         'backup_plan_id' => $planId, 'plugin_id' => $pc['plugin_id'],
@@ -934,11 +934,11 @@ class AdminApiController extends Controller
         $this->json(['status' => 'ok', 'message' => 'Plan updated']);
     }
 
-    public function deletePlan(int $agentId, int $planId): void
+    public function deletePlan(int $id, int $planId): void
     {
         $this->requireApiToken();
 
-        $plan = $this->db->fetchOne("SELECT * FROM backup_plans WHERE id = ? AND agent_id = ?", [$planId, $agentId]);
+        $plan = $this->db->fetchOne("SELECT * FROM backup_plans WHERE id = ? AND agent_id = ?", [$planId, $id]);
         if (!$plan) {
             $this->json(['error' => 'Plan not found'], 404);
         }
@@ -946,7 +946,7 @@ class AdminApiController extends Controller
         $this->db->delete('backup_plans', 'id = ?', [$planId]);
 
         $this->db->insert('server_log', [
-            'agent_id' => $agentId,
+            'agent_id' => $id,
             'level' => 'info',
             'message' => "Backup plan \"{$plan['name']}\" deleted via API",
         ]);
@@ -954,11 +954,11 @@ class AdminApiController extends Controller
         $this->json(['status' => 'ok', 'message' => "Plan \"{$plan['name']}\" deleted"]);
     }
 
-    public function pausePlan(int $agentId, int $planId): void
+    public function pausePlan(int $id, int $planId): void
     {
         $this->requireApiToken();
 
-        $plan = $this->db->fetchOne("SELECT * FROM backup_plans WHERE id = ? AND agent_id = ?", [$planId, $agentId]);
+        $plan = $this->db->fetchOne("SELECT * FROM backup_plans WHERE id = ? AND agent_id = ?", [$planId, $id]);
         if (!$plan) {
             $this->json(['error' => 'Plan not found'], 404);
         }
@@ -973,11 +973,11 @@ class AdminApiController extends Controller
         $this->json(['status' => 'ok', 'message' => "Plan \"{$plan['name']}\" paused"]);
     }
 
-    public function resumePlan(int $agentId, int $planId): void
+    public function resumePlan(int $id, int $planId): void
     {
         $this->requireApiToken();
 
-        $plan = $this->db->fetchOne("SELECT * FROM backup_plans WHERE id = ? AND agent_id = ?", [$planId, $agentId]);
+        $plan = $this->db->fetchOne("SELECT * FROM backup_plans WHERE id = ? AND agent_id = ?", [$planId, $id]);
         if (!$plan) {
             $this->json(['error' => 'Plan not found'], 404);
         }
@@ -992,11 +992,11 @@ class AdminApiController extends Controller
         $this->json(['status' => 'ok', 'message' => "Plan \"{$plan['name']}\" resumed"]);
     }
 
-    public function triggerPlan(int $agentId, int $planId): void
+    public function triggerPlan(int $id, int $planId): void
     {
         $this->requireApiToken();
 
-        $plan = $this->db->fetchOne("SELECT * FROM backup_plans WHERE id = ? AND agent_id = ?", [$planId, $agentId]);
+        $plan = $this->db->fetchOne("SELECT * FROM backup_plans WHERE id = ? AND agent_id = ?", [$planId, $id]);
         if (!$plan) {
             $this->json(['error' => 'Plan not found'], 404);
         }
@@ -1011,14 +1011,14 @@ class AdminApiController extends Controller
 
         $jobId = $this->db->insert('backup_jobs', [
             'backup_plan_id' => $planId,
-            'agent_id' => $agentId,
+            'agent_id' => $id,
             'repository_id' => $plan['repository_id'],
             'task_type' => 'backup',
             'status' => 'queued',
         ]);
 
         $this->db->insert('server_log', [
-            'agent_id' => $agentId,
+            'agent_id' => $id,
             'level' => 'info',
             'message' => "Backup triggered via API for plan \"{$plan['name']}\"",
         ]);
@@ -1052,11 +1052,11 @@ class AdminApiController extends Controller
 
     // ── Jobs & Queue ─────────────────────────────────────
 
-    public function listJobs(int $agentId): void
+    public function listJobs(int $id): void
     {
         $this->requireApiToken();
 
-        $agent = $this->db->fetchOne("SELECT id FROM agents WHERE id = ?", [$agentId]);
+        $agent = $this->db->fetchOne("SELECT id FROM agents WHERE id = ?", [$id]);
         if (!$agent) {
             $this->json(['error' => 'Client not found'], 404);
         }
@@ -1066,7 +1066,7 @@ class AdminApiController extends Controller
         $status = $_GET['status'] ?? null;
 
         $where = "bj.agent_id = ?";
-        $params = [$agentId];
+        $params = [$id];
 
         if ($status) {
             $where .= " AND bj.status = ?";
@@ -1096,7 +1096,7 @@ class AdminApiController extends Controller
         ]);
     }
 
-    public function getJob(int $agentId, int $jobId): void
+    public function getJob(int $id, int $jobId): void
     {
         $this->requireApiToken();
 
@@ -1106,7 +1106,7 @@ class AdminApiController extends Controller
             LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
             LEFT JOIN repositories r ON r.id = bj.repository_id
             WHERE bj.id = ? AND bj.agent_id = ?
-        ", [$jobId, $agentId]);
+        ", [$jobId, $id]);
 
         if (!$job) {
             $this->json(['error' => 'Job not found'], 404);
