@@ -641,7 +641,7 @@ class AdminApiController extends Controller
     {
         $this->requireApiToken();
 
-        $locations = $this->db->fetchAll("SELECT id, name, path, is_default, created_at FROM storage_locations ORDER BY name");
+        $locations = $this->db->fetchAll("SELECT id, label as name, path, is_default, created_at FROM storage_locations ORDER BY label");
         $remoteConfigs = $this->db->fetchAll("
             SELECT id, name, provider, remote_host, remote_port, remote_user, remote_base_path,
                    borg_remote_path, append_repo_name, disk_total_bytes, disk_used_bytes,
