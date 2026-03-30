@@ -1444,6 +1444,20 @@ function updateBuiltUrl(containerId, schema, prefix) {
                 <tr><td><span class="badge bg-primary">POST</span></td><td><code>/api/v1/clients/{id}/repositories</code></td><td>Create a repository</td></tr>
                 <tr><td><span class="badge bg-success">GET</span></td><td><code>/api/v1/clients/{id}/plans</code></td><td>List backup plans</td></tr>
                 <tr><td><span class="badge bg-primary">POST</span></td><td><code>/api/v1/clients/{id}/plans</code></td><td>Create a backup plan (with optional plugin configs)</td></tr>
+                <tr><td><span class="badge bg-warning text-dark">PUT</span></td><td><code>/api/v1/clients/{id}/repositories/{repo_id}</code></td><td>Rename a repository</td></tr>
+                <tr><td><span class="badge bg-danger">DELETE</span></td><td><code>/api/v1/clients/{id}/repositories/{repo_id}</code></td><td>Delete a repository</td></tr>
+                <tr><td colspan="3" class="text-muted small fw-semibold pt-2">Backup Plans</td></tr>
+                <tr><td><span class="badge bg-success">GET</span></td><td><code>/api/v1/clients/{id}/plans</code></td><td>List backup plans</td></tr>
+                <tr><td><span class="badge bg-primary">POST</span></td><td><code>/api/v1/clients/{id}/plans</code></td><td>Create a backup plan</td></tr>
+                <tr><td><span class="badge bg-warning text-dark">PUT</span></td><td><code>/api/v1/clients/{id}/plans/{plan_id}</code></td><td>Edit plan, schedule, plugins</td></tr>
+                <tr><td><span class="badge bg-danger">DELETE</span></td><td><code>/api/v1/clients/{id}/plans/{plan_id}</code></td><td>Delete a plan</td></tr>
+                <tr><td><span class="badge bg-primary">POST</span></td><td><code>/api/v1/clients/{id}/plans/{plan_id}/pause</code></td><td>Pause schedule</td></tr>
+                <tr><td><span class="badge bg-primary">POST</span></td><td><code>/api/v1/clients/{id}/plans/{plan_id}/resume</code></td><td>Resume schedule</td></tr>
+                <tr><td><span class="badge bg-primary">POST</span></td><td><code>/api/v1/clients/{id}/plans/{plan_id}/trigger</code></td><td>Run backup now</td></tr>
+                <tr><td colspan="3" class="text-muted small fw-semibold pt-2">Jobs &amp; Queue</td></tr>
+                <tr><td><span class="badge bg-success">GET</span></td><td><code>/api/v1/clients/{id}/jobs</code></td><td>Backup history (paginated)</td></tr>
+                <tr><td><span class="badge bg-success">GET</span></td><td><code>/api/v1/clients/{id}/jobs/{job_id}</code></td><td>Job detail with output</td></tr>
+                <tr><td><span class="badge bg-success">GET</span></td><td><code>/api/v1/queue</code></td><td>Global queue (all active jobs)</td></tr>
                 <tr><td colspan="3" class="text-muted small fw-semibold pt-2">Plugins</td></tr>
                 <tr><td><span class="badge bg-success">GET</span></td><td><code>/api/v1/plugins</code></td><td>List available plugins</td></tr>
                 <tr><td><span class="badge bg-success">GET</span></td><td><code>/api/v1/plugins/schema</code></td><td>Get plugin field schemas</td></tr>

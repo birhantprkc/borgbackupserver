@@ -725,7 +725,486 @@ class AdminApiController extends Controller
         $this->json($response, 201);
     }
 
+    // ── Repo Edit/Delete ────────────────────────────────
+
+    public function renameRepository(int $agentId, int $repoId): void
+    {
+        $this->requireApiToken();
+        $input = $this->getJsonInput();
+
+        $repo = $this->db->fetchOne("SELECT r.*, a.id as agent_id FROM repositories r JOIN agents a ON a.id = r.agent_id WHERE r.id = ? AND r.agent_id = ?", [$repoId, $agentId]);
+        if (!$repo) {
+            $this->json(['error' => 'Repository not found'], 404);
+        }
+
+        $newName = trim($input['name'] ?? '');
+        if (empty($newName)) {
+            $this->json(['error' => 'name is required'], 400);
+        }
+
+        if (($repo['storage_type'] ?? 'local') === 'remote_ssh') {
+            $this->json(['error' => 'Rename is not supported for remote SSH repositories'], 400);
+        }
+
+        $activeJobs = $this->db->fetchOne("SELECT COUNT(*) as cnt FROM backup_jobs WHERE repository_id = ? AND status IN ('queued', 'sent', 'running')", [$repoId]);
+        if ((int) ($activeJobs['cnt'] ?? 0) > 0) {
+            $this->json(['error' => 'Cannot rename while jobs are active'], 409);
+        }
+
+        $safeName = $this->sanitizeRepoName($newName);
+        if (empty($safeName)) {
+            $this->json(['error' => 'Name must contain at least one alphanumeric character'], 400);
+        }
+
+        $lastSlash = strrpos($repo['path'], '/');
+        $newPath = substr($repo['path'], 0, $lastSlash + 1) . $safeName;
+
+        $existing = $this->db->fetchOne("SELECT id FROM repositories WHERE path = ? AND id != ?", [$newPath, $repoId]);
+        if ($existing) {
+            $this->json(['error' => 'A repository already exists at that path'], 409);
+        }
+
+        // Rename on disk
+        $oldLocalPath = BorgCommandBuilder::getLocalRepoPath($repo);
+        if (!empty($oldLocalPath) && is_dir($oldLocalPath)) {
+            $newLocalPath = dirname($oldLocalPath) . '/' . $safeName;
+            $cmd = 'sudo /usr/local/bin/bbs-ssh-helper rename-repo-dir ' . escapeshellarg($oldLocalPath) . ' ' . escapeshellarg($newLocalPath) . ' 2>&1';
+            exec($cmd, $output, $retval);
+            if ($retval !== 0) {
+                $this->json(['error' => 'Rename failed: ' . implode(' ', $output)], 500);
+            }
+        }
+
+        $this->db->update('repositories', ['name' => $safeName, 'path' => $newPath], 'id = ?', [$repoId]);
+
+        $this->db->insert('server_log', [
+            'agent_id' => $agentId,
+            'level' => 'info',
+            'message' => "Repository renamed from \"{$repo['name']}\" to \"{$safeName}\" via API",
+        ]);
+
+        $this->json(['status' => 'ok', 'name' => $safeName, 'path' => $newPath]);
+    }
+
+    public function deleteRepository(int $agentId, int $repoId): void
+    {
+        $this->requireApiToken();
+
+        $repo = $this->db->fetchOne("SELECT r.*, a.id as agent_id FROM repositories r JOIN agents a ON a.id = r.agent_id WHERE r.id = ? AND r.agent_id = ?", [$repoId, $agentId]);
+        if (!$repo) {
+            $this->json(['error' => 'Repository not found'], 404);
+        }
+
+        $planCount = $this->db->fetchOne("SELECT COUNT(*) as cnt FROM backup_plans WHERE repository_id = ?", [$repoId]);
+        if ((int) ($planCount['cnt'] ?? 0) > 0) {
+            $this->json(['error' => 'Cannot delete — repository has backup plans attached. Delete the plans first.'], 409);
+        }
+
+        $activeJobs = $this->db->fetchOne("SELECT COUNT(*) as cnt FROM backup_jobs WHERE repository_id = ? AND status IN ('queued', 'sent', 'running')", [$repoId]);
+        if ((int) ($activeJobs['cnt'] ?? 0) > 0) {
+            $this->json(['error' => 'Cannot delete — repository has active jobs'], 409);
+        }
+
+        // Delete from disk
+        $localPath = BorgCommandBuilder::getLocalRepoPath($repo);
+        if (!empty($localPath) && is_dir($localPath)) {
+            exec('sudo /usr/local/bin/bbs-ssh-helper delete-storage ' . escapeshellarg($localPath) . ' 2>&1', $output, $retval);
+        }
+
+        $this->db->delete('repositories', 'id = ?', [$repoId]);
+
+        $agent = $this->db->fetchOne("SELECT * FROM agents WHERE id = ?", [$agentId]);
+        if ($agent && !empty($agent['ssh_unix_user'])) {
+            // Refresh storage paths
+            $repos = $this->db->fetchAll("SELECT r.*, sl.path as location_path FROM repositories r LEFT JOIN storage_locations sl ON sl.id = r.storage_location_id WHERE r.agent_id = ?", [$agentId]);
+            $storagePaths = [];
+            foreach ($repos as $r) {
+                if (!empty($r['location_path'])) {
+                    $storagePaths[] = rtrim($r['location_path'], '/') . '/' . $agentId;
+                }
+            }
+            if (!empty($storagePaths)) {
+                $pathList = implode("\n", array_unique($storagePaths));
+                exec('sudo /usr/local/bin/bbs-ssh-helper update-storage-paths ' . escapeshellarg($agent['ssh_unix_user']) . ' ' . escapeshellarg($pathList) . ' 2>&1');
+            }
+        }
+
+        $this->db->insert('server_log', [
+            'agent_id' => $agentId,
+            'level' => 'info',
+            'message' => "Repository \"{$repo['name']}\" deleted via API",
+        ]);
+
+        $this->json(['status' => 'ok', 'message' => "Repository \"{$repo['name']}\" deleted"]);
+    }
+
+    // ── Plan Edit/Delete/Trigger ─────────────────────────
+
+    public function updatePlan(int $agentId, int $planId): void
+    {
+        $this->requireApiToken();
+        $input = $this->getJsonInput();
+
+        $plan = $this->db->fetchOne("SELECT * FROM backup_plans WHERE id = ? AND agent_id = ?", [$planId, $agentId]);
+        if (!$plan) {
+            $this->json(['error' => 'Plan not found'], 404);
+        }
+
+        // Update plan fields (only those provided)
+        $planData = [];
+        foreach (['name', 'directories', 'excludes', 'advanced_options'] as $field) {
+            if (isset($input[$field])) {
+                $planData[$field] = trim($input[$field]) ?: null;
+            }
+        }
+        if (isset($input['repository_id'])) {
+            $repo = $this->db->fetchOne("SELECT id FROM repositories WHERE id = ? AND agent_id = ?", [(int) $input['repository_id'], $agentId]);
+            if (!$repo) {
+                $this->json(['error' => 'Repository not found or does not belong to this client'], 404);
+            }
+            $planData['repository_id'] = (int) $input['repository_id'];
+        }
+        foreach (['prune_minutes', 'prune_hours', 'prune_days', 'prune_weeks', 'prune_months', 'prune_years'] as $field) {
+            if (isset($input[$field])) {
+                $planData[$field] = (int) $input[$field];
+            }
+        }
+        if (isset($input['enabled'])) {
+            $planData['enabled'] = $input['enabled'] ? 1 : 0;
+        }
+
+        if (!empty($planData)) {
+            $this->db->update('backup_plans', $planData, 'id = ?', [$planId]);
+        }
+
+        // Update schedule if provided
+        $schedule = $this->db->fetchOne("SELECT * FROM schedules WHERE backup_plan_id = ?", [$planId]);
+        if ($schedule) {
+            $schedData = [];
+            if (isset($input['frequency'])) $schedData['frequency'] = $input['frequency'];
+            if (isset($input['times'])) $schedData['times'] = $input['times'];
+            if (isset($input['day_of_week'])) $schedData['day_of_week'] = $input['day_of_week'];
+            if (isset($input['day_of_month'])) $schedData['day_of_month'] = $input['day_of_month'];
+            if (isset($input['timezone'])) $schedData['timezone'] = $input['timezone'];
+
+            if (isset($input['frequency'])) {
+                $schedData['enabled'] = ($input['frequency'] !== 'manual') ? 1 : 0;
+                // Calculate next_run
+                $freq = $input['frequency'];
+                $times = $input['times'] ?? $schedule['times'] ?? '02:00';
+                $dow = $input['day_of_week'] ?? $schedule['day_of_week'];
+                $dom = $input['day_of_month'] ?? $schedule['day_of_month'];
+                $tz = $input['timezone'] ?? $schedule['timezone'] ?? 'UTC';
+                $schedData['next_run'] = $this->calcNextRun($freq, $times, $dow, $dom, $tz);
+            }
+
+            if (!empty($schedData)) {
+                $this->db->update('schedules', $schedData, 'id = ?', [$schedule['id']]);
+            }
+        }
+
+        // Update plugins if provided
+        if (isset($input['plugins'])) {
+            $this->db->query("DELETE FROM backup_plan_plugins WHERE backup_plan_id = ?", [$planId]);
+            $order = 0;
+            foreach ($input['plugins'] as $key => $val) {
+                if (is_array($val)) {
+                    $configId = (int) ($val['plugin_config_id'] ?? 0);
+                    if ($configId <= 0) continue;
+                    $pc = $this->db->fetchOne("SELECT plugin_id FROM plugin_configs WHERE id = ? AND agent_id = ?", [$configId, $agentId]);
+                    if (!$pc) continue;
+                    $this->db->insert('backup_plan_plugins', [
+                        'backup_plan_id' => $planId, 'plugin_id' => $pc['plugin_id'],
+                        'plugin_config_id' => $configId, 'config' => '{}',
+                        'execution_order' => $order++, 'enabled' => 1,
+                    ]);
+                } else {
+                    $pluginId = (int) $key;
+                    $configId = (int) $val;
+                    if ($pluginId <= 0 || $configId <= 0) continue;
+                    $this->db->insert('backup_plan_plugins', [
+                        'backup_plan_id' => $planId, 'plugin_id' => $pluginId,
+                        'plugin_config_id' => $configId, 'config' => '{}',
+                        'execution_order' => $order++, 'enabled' => 1,
+                    ]);
+                }
+            }
+        }
+
+        $this->json(['status' => 'ok', 'message' => 'Plan updated']);
+    }
+
+    public function deletePlan(int $agentId, int $planId): void
+    {
+        $this->requireApiToken();
+
+        $plan = $this->db->fetchOne("SELECT * FROM backup_plans WHERE id = ? AND agent_id = ?", [$planId, $agentId]);
+        if (!$plan) {
+            $this->json(['error' => 'Plan not found'], 404);
+        }
+
+        $this->db->delete('backup_plans', 'id = ?', [$planId]);
+
+        $this->db->insert('server_log', [
+            'agent_id' => $agentId,
+            'level' => 'info',
+            'message' => "Backup plan \"{$plan['name']}\" deleted via API",
+        ]);
+
+        $this->json(['status' => 'ok', 'message' => "Plan \"{$plan['name']}\" deleted"]);
+    }
+
+    public function pausePlan(int $agentId, int $planId): void
+    {
+        $this->requireApiToken();
+
+        $plan = $this->db->fetchOne("SELECT * FROM backup_plans WHERE id = ? AND agent_id = ?", [$planId, $agentId]);
+        if (!$plan) {
+            $this->json(['error' => 'Plan not found'], 404);
+        }
+
+        $schedule = $this->db->fetchOne("SELECT * FROM schedules WHERE backup_plan_id = ?", [$planId]);
+        if (!$schedule) {
+            $this->json(['error' => 'No schedule found for this plan'], 404);
+        }
+
+        $this->db->update('schedules', ['enabled' => 0], 'id = ?', [$schedule['id']]);
+
+        $this->json(['status' => 'ok', 'message' => "Plan \"{$plan['name']}\" paused"]);
+    }
+
+    public function resumePlan(int $agentId, int $planId): void
+    {
+        $this->requireApiToken();
+
+        $plan = $this->db->fetchOne("SELECT * FROM backup_plans WHERE id = ? AND agent_id = ?", [$planId, $agentId]);
+        if (!$plan) {
+            $this->json(['error' => 'Plan not found'], 404);
+        }
+
+        $schedule = $this->db->fetchOne("SELECT * FROM schedules WHERE backup_plan_id = ?", [$planId]);
+        if (!$schedule) {
+            $this->json(['error' => 'No schedule found for this plan'], 404);
+        }
+
+        $this->db->update('schedules', ['enabled' => 1], 'id = ?', [$schedule['id']]);
+
+        $this->json(['status' => 'ok', 'message' => "Plan \"{$plan['name']}\" resumed"]);
+    }
+
+    public function triggerPlan(int $agentId, int $planId): void
+    {
+        $this->requireApiToken();
+
+        $plan = $this->db->fetchOne("SELECT * FROM backup_plans WHERE id = ? AND agent_id = ?", [$planId, $agentId]);
+        if (!$plan) {
+            $this->json(['error' => 'Plan not found'], 404);
+        }
+
+        // Check for existing active job on this plan
+        $activeJob = $this->db->fetchOne(
+            "SELECT id FROM backup_jobs WHERE backup_plan_id = ? AND status IN ('queued', 'sent', 'running')", [$planId]
+        );
+        if ($activeJob) {
+            $this->json(['error' => 'A backup is already queued or running for this plan'], 409);
+        }
+
+        $jobId = $this->db->insert('backup_jobs', [
+            'backup_plan_id' => $planId,
+            'agent_id' => $agentId,
+            'repository_id' => $plan['repository_id'],
+            'task_type' => 'backup',
+            'status' => 'queued',
+        ]);
+
+        $this->db->insert('server_log', [
+            'agent_id' => $agentId,
+            'level' => 'info',
+            'message' => "Backup triggered via API for plan \"{$plan['name']}\"",
+        ]);
+
+        $this->json(['status' => 'ok', 'job_id' => (int) $jobId, 'message' => "Backup queued for plan \"{$plan['name']}\""]);
+    }
+
+    // ── Client Edit ──────────────────────────────────────
+
+    public function updateClient(int $id): void
+    {
+        $this->requireApiToken();
+        $input = $this->getJsonInput();
+
+        $agent = $this->db->fetchOne("SELECT * FROM agents WHERE id = ?", [$id]);
+        if (!$agent) {
+            $this->json(['error' => 'Client not found'], 404);
+        }
+
+        $data = [];
+        if (isset($input['name'])) $data['name'] = trim($input['name']);
+
+        if (empty($data)) {
+            $this->json(['error' => 'No fields to update'], 400);
+        }
+
+        $this->db->update('agents', $data, 'id = ?', [$id]);
+
+        $this->json(['status' => 'ok', 'message' => 'Client updated']);
+    }
+
+    // ── Jobs & Queue ─────────────────────────────────────
+
+    public function listJobs(int $agentId): void
+    {
+        $this->requireApiToken();
+
+        $agent = $this->db->fetchOne("SELECT id FROM agents WHERE id = ?", [$agentId]);
+        if (!$agent) {
+            $this->json(['error' => 'Client not found'], 404);
+        }
+
+        $limit = min((int) ($_GET['limit'] ?? 50), 200);
+        $offset = (int) ($_GET['offset'] ?? 0);
+        $status = $_GET['status'] ?? null;
+
+        $where = "bj.agent_id = ?";
+        $params = [$agentId];
+
+        if ($status) {
+            $where .= " AND bj.status = ?";
+            $params[] = $status;
+        }
+
+        $jobs = $this->db->fetchAll("
+            SELECT bj.id, bj.task_type, bj.status, bj.files_total, bj.files_processed,
+                   bj.bytes_total, bj.bytes_processed, bj.duration_seconds,
+                   bj.status_message, bj.queued_at, bj.started_at, bj.completed_at,
+                   bp.name as plan_name, r.name as repository_name
+            FROM backup_jobs bj
+            LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
+            LEFT JOIN repositories r ON r.id = bj.repository_id
+            WHERE {$where}
+            ORDER BY bj.queued_at DESC
+            LIMIT {$limit} OFFSET {$offset}
+        ", $params);
+
+        $total = $this->db->fetchOne("SELECT COUNT(*) as cnt FROM backup_jobs bj WHERE {$where}", $params);
+
+        $this->json([
+            'jobs' => $jobs,
+            'total' => (int) $total['cnt'],
+            'limit' => $limit,
+            'offset' => $offset,
+        ]);
+    }
+
+    public function getJob(int $agentId, int $jobId): void
+    {
+        $this->requireApiToken();
+
+        $job = $this->db->fetchOne("
+            SELECT bj.*, bp.name as plan_name, r.name as repository_name
+            FROM backup_jobs bj
+            LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
+            LEFT JOIN repositories r ON r.id = bj.repository_id
+            WHERE bj.id = ? AND bj.agent_id = ?
+        ", [$jobId, $agentId]);
+
+        if (!$job) {
+            $this->json(['error' => 'Job not found'], 404);
+        }
+
+        $this->json($job);
+    }
+
+    public function getQueue(): void
+    {
+        $this->requireApiToken();
+
+        $jobs = $this->db->fetchAll("
+            SELECT bj.id, bj.task_type, bj.status, bj.status_message,
+                   bj.queued_at, bj.started_at, bj.files_total, bj.files_processed,
+                   bj.bytes_total, bj.bytes_processed,
+                   a.name as client_name, a.id as client_id,
+                   bp.name as plan_name, r.name as repository_name
+            FROM backup_jobs bj
+            JOIN agents a ON a.id = bj.agent_id
+            LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
+            LEFT JOIN repositories r ON r.id = bj.repository_id
+            WHERE bj.status IN ('queued', 'sent', 'running')
+            ORDER BY bj.queued_at ASC
+        ");
+
+        $this->json(['queue' => $jobs, 'count' => count($jobs)]);
+    }
+
     // ── Helpers ──────────────────────────────────────────
+
+    private function calcNextRun(string $frequency, string $times, $dayOfWeek, $dayOfMonth, string $timezone = 'UTC'): ?string
+    {
+        if ($frequency === 'manual') return null;
+
+        $tz = new \DateTimeZone($timezone);
+        $utcTz = new \DateTimeZone('UTC');
+        $now = new \DateTime('now', $utcTz);
+
+        $intervals = ['10min' => 'PT10M', '15min' => 'PT15M', '30min' => 'PT30M', 'hourly' => 'PT1H'];
+        if (isset($intervals[$frequency])) {
+            $now->add(new \DateInterval($intervals[$frequency]));
+            return $now->format('Y-m-d H:i:s');
+        }
+
+        $nowLocal = clone $now;
+        $nowLocal->setTimezone($tz);
+
+        $timeList = array_filter(array_map('trim', explode(',', $times)));
+        $firstTime = !empty($timeList) ? $timeList[0] : '02:00';
+
+        if ($frequency === 'daily' && !empty($timeList)) {
+            $today = new \DateTime('today', $tz);
+            foreach ($timeList as $time) {
+                $candidate = clone $today;
+                $parts = explode(':', $time);
+                $candidate->setTime((int)($parts[0] ?? 0), (int)($parts[1] ?? 0));
+                if ($candidate > $nowLocal) {
+                    $candidate->setTimezone($utcTz);
+                    return $candidate->format('Y-m-d H:i:s');
+                }
+            }
+            $tomorrow = new \DateTime('tomorrow', $tz);
+            $parts = explode(':', $timeList[0]);
+            $tomorrow->setTime((int)($parts[0] ?? 0), (int)($parts[1] ?? 0));
+            $tomorrow->setTimezone($utcTz);
+            return $tomorrow->format('Y-m-d H:i:s');
+        }
+
+        if ($frequency === 'weekly' && $dayOfWeek !== null) {
+            $days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            $dayName = $days[(int) $dayOfWeek] ?? 'Monday';
+            $parts = explode(':', $firstTime);
+            $next = new \DateTime("next {$dayName}", $tz);
+            $next->setTime((int)($parts[0] ?? 0), (int)($parts[1] ?? 0));
+            $next->setTimezone($utcTz);
+            return $next->format('Y-m-d H:i:s');
+        }
+
+        if ($frequency === 'monthly') {
+            $parts = explode(':', $firstTime);
+            $next = new \DateTime('first day of next month', $tz);
+            if ($dayOfMonth === 'last') {
+                $next = new \DateTime('last day of this month', $tz);
+                if ($next <= $nowLocal) {
+                    $next = new \DateTime('last day of next month', $tz);
+                }
+            } else {
+                $dom = max(1, min(28, (int) $dayOfMonth));
+                $next->setDate((int) $next->format('Y'), (int) $next->format('m'), $dom);
+            }
+            $next->setTime((int)($parts[0] ?? 0), (int)($parts[1] ?? 0));
+            $next->setTimezone($utcTz);
+            return $next->format('Y-m-d H:i:s');
+        }
+
+        return null;
+    }
 
     private function sanitizeRepoName(string $name): string
     {
