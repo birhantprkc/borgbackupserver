@@ -60,7 +60,7 @@ class AdminApiController extends Controller
             "SELECT bp.id, bp.name, bp.directories, bp.excludes, bp.advanced_options, bp.enabled,
                     s.frequency, s.times, s.day_of_week, s.day_of_month
              FROM backup_plans bp
-             LEFT JOIN schedules s ON s.plan_id = bp.id
+             LEFT JOIN schedules s ON s.backup_plan_id = bp.id
              WHERE bp.agent_id = ? ORDER BY bp.name", [$id]
         );
 
@@ -356,7 +356,7 @@ class AdminApiController extends Controller
                    bp.enabled, bp.repository_id, r.name as repository_name,
                    s.frequency, s.times, s.day_of_week, s.day_of_month
             FROM backup_plans bp
-            LEFT JOIN schedules s ON s.plan_id = bp.id
+            LEFT JOIN schedules s ON s.backup_plan_id = bp.id
             LEFT JOIN repositories r ON r.id = bp.repository_id
             WHERE bp.agent_id = ?
             ORDER BY bp.name
@@ -427,7 +427,7 @@ class AdminApiController extends Controller
 
         // Create schedule
         $scheduleId = $this->db->insert('schedules', [
-            'plan_id' => $planId,
+            'backup_plan_id' => $planId,
             'frequency' => $frequency,
             'times' => $times,
             'day_of_week' => $dayOfWeek,
