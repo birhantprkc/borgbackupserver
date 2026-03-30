@@ -44,7 +44,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.19.0"
+AGENT_VERSION = "2.19.1"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -1114,6 +1114,7 @@ def log_to_server(config, job_id, message, level="info"):
 PLUGIN_DISPLAY_NAMES = {
     "mysql_dump": "MySQL Dump",
     "pg_dump": "PostgreSQL Dump",
+    "mongo_dump": "MongoDB Dump",
     "shell_hook": "Shell Script Hook",
 }
 
@@ -1164,6 +1165,20 @@ def _plugin_summary(slug, config, result):
         total_size = sum(os.path.getsize(f) for f in dump_files if os.path.exists(f))
         size_str = _format_size(total_size)
         return "PostgreSQL dump: {} database(s) ({}) dumped to {} ({})".format(len(dump_files), ', '.join(db_names), dump_dir, size_str)
+    if slug == "mongo_dump":
+        dump_dir = result.get("dump_dir", "")
+        databases = result.get("databases", [])
+        # Calculate total size of dump directory
+        total_size = 0
+        for db_name in databases:
+            db_path = os.path.join(dump_dir, db_name)
+            if os.path.isdir(db_path):
+                for f in os.listdir(db_path):
+                    fp = os.path.join(db_path, f)
+                    if os.path.isfile(fp):
+                        total_size += os.path.getsize(fp)
+        size_str = _format_size(total_size)
+        return "MongoDB dump: {} database(s) ({}) dumped to {} ({})".format(len(databases), ', '.join(databases), dump_dir, size_str)
     if slug == "shell_hook":
         parts = []
         pre = result.get("pre_script", "")
@@ -1512,6 +1527,172 @@ def test_plugin_pg_dump(config):
     return "Connection successful. Found {} database(s): {}".format(len(dbs), ', '.join(dbs[:10]))
 
 
+def _mongo_auth_args(host, port, user, password, auth_db):
+    """Build mongodump/mongorestore auth arguments. Returns list of args."""
+    args = ["--host={}".format(host), "--port={}".format(port)]
+    if user and password:
+        args.extend([
+            "--username={}".format(user),
+            "--password={}".format(password),
+            "--authenticationDatabase={}".format(auth_db),
+        ])
+    return args
+
+
+def _find_mongosh():
+    """Find mongosh or mongo shell binary."""
+    for name in ["mongosh", "mongo"]:
+        try:
+            r = subprocess.run([name, "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5)
+            if r.returncode == 0:
+                return name
+        except (FileNotFoundError, OSError):
+            continue
+    return None
+
+
+def _parse_mongo_db_list(raw_output, exclude=None):
+    """Parse mongosh JSON.stringify output to get database names.
+
+    mongosh --quiet may still emit extra lines (warnings, connection info).
+    We look for the JSON array line containing the database list.
+    """
+    import json as _json
+    if exclude is None:
+        exclude = []
+    for line in raw_output.split("\n"):
+        line = line.strip()
+        if line.startswith("["):
+            try:
+                names = _json.loads(line)
+                if isinstance(names, list):
+                    return [n for n in names if isinstance(n, str) and n not in exclude]
+            except (ValueError, TypeError):
+                continue
+    # Fallback: treat each non-empty, single-word line as a DB name
+    dbs = []
+    for line in raw_output.split("\n"):
+        name = line.strip()
+        if name and " " not in name and name not in exclude:
+            dbs.append(name)
+    if dbs:
+        return dbs
+    raise Exception("Could not parse database list from mongosh output: {}".format(raw_output[:500]))
+
+
+def execute_plugin_mongo_dump(config):
+    """Dump MongoDB databases before backup using mongodump."""
+    dump_dir = config.get("dump_dir", "/home/bbs/mongodump")
+    os.makedirs(dump_dir, exist_ok=True)
+
+    host = config.get("host", "127.0.0.1")
+    port = str(config.get("port", 27017))
+    user = config.get("user", "")
+    password = config.get("password", "")
+    auth_db = config.get("auth_db", "admin")
+    databases = config.get("databases", "*")
+    compress = config.get("compress", True)
+    exclude = config.get("exclude_databases", ["admin", "config", "local"])
+    extra_options = config.get("extra_options", "")
+
+    if isinstance(exclude, str):
+        exclude = [x.strip() for x in exclude.split(",") if x.strip()]
+
+    if isinstance(databases, str) and databases.strip() == "*":
+        # List all databases via mongosh
+        shell = _find_mongosh()
+        if not shell:
+            raise Exception("Neither mongosh nor mongo found. Install MongoDB Database Tools.")
+
+        list_cmd = [shell, "--host", host, "--port", port]
+        if user and password:
+            list_cmd.extend(["-u", user, "-p", password, "--authenticationDatabase", auth_db])
+        list_cmd.extend(["--quiet", "--eval", "JSON.stringify(db.adminCommand('listDatabases').databases.map(d => d.name))"])
+
+        result = subprocess.run(list_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
+        if result.returncode != 0:
+            raise Exception("Failed to list databases: {}".format(result.stderr.decode('utf-8', errors='replace').strip()))
+
+        raw_output = result.stdout.decode("utf-8", errors="replace").strip()
+        databases = _parse_mongo_db_list(raw_output, exclude)
+    elif isinstance(databases, str):
+        databases = [d.strip() for d in databases.split(",") if d.strip()]
+
+    if not databases:
+        raise Exception("No databases found to dump")
+
+    dump_files = []
+    auth_args = _mongo_auth_args(host, port, user, password, auth_db)
+
+    for db in databases:
+        logger.info("Dumping MongoDB database {} to {}".format(db, dump_dir))
+
+        cmd = ["mongodump"] + auth_args + ["--db={}".format(db), "--out={}".format(dump_dir)]
+        if compress:
+            cmd.append("--gzip")
+        if extra_options:
+            cmd.extend(extra_options.split())
+
+        r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=3600)
+        if r.returncode != 0:
+            raise Exception("mongodump failed for {}: {}".format(db, r.stderr.decode('utf-8', errors='replace')))
+
+        # mongodump creates dump_dir/db_name/ directory
+        db_dump_path = os.path.join(dump_dir, db)
+        dump_files.append(db_dump_path)
+
+    logger.info("MongoDB dump complete: {} database(s) in {}".format(len(databases), dump_dir))
+    return {
+        "dump_files": dump_files,
+        "dump_dir": dump_dir,
+        "databases": databases,
+        "per_database": True,
+        "compress": compress,
+    }
+
+
+def cleanup_plugin_mongo_dump(config, plugin_result):
+    """Delete MongoDB dump directories after backup if cleanup_after is enabled."""
+    if not config.get("cleanup_after", True):
+        return
+    dump_dir = plugin_result.get("dump_dir")
+    if not dump_dir or not os.path.exists(dump_dir):
+        return
+    logger.info("Cleaning up MongoDB dumps in {}".format(dump_dir))
+    databases = plugin_result.get("databases", [])
+    for db_name in databases:
+        db_path = os.path.join(dump_dir, db_name)
+        if os.path.isdir(db_path):
+            import shutil
+            shutil.rmtree(db_path, ignore_errors=True)
+
+
+def test_plugin_mongo_dump(config):
+    """Test MongoDB connectivity without dumping."""
+    host = config.get("host", "127.0.0.1")
+    port = str(config.get("port", 27017))
+    user = config.get("user", "")
+    password = config.get("password", "")
+    auth_db = config.get("auth_db", "admin")
+
+    shell = _find_mongosh()
+    if not shell:
+        raise Exception("Neither mongosh nor mongo found. Install MongoDB Database Tools.")
+
+    cmd = [shell, "--host", host, "--port", port]
+    if user and password:
+        cmd.extend(["-u", user, "-p", password, "--authenticationDatabase", auth_db])
+    cmd.extend(["--quiet", "--eval", "JSON.stringify(db.adminCommand('listDatabases').databases.map(d => d.name))"])
+
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+    if result.returncode != 0:
+        raise Exception("Connection failed: {}".format(result.stderr.decode('utf-8', errors='replace').strip()))
+
+    raw_output = result.stdout.decode("utf-8", errors="replace").strip()
+    dbs = _parse_mongo_db_list(raw_output)
+    return "Connection successful. Found {} database(s): {}".format(len(dbs), ', '.join(dbs[:10]))
+
+
 def execute_plugin_shell_hook(config):
     """Run pre-backup shell script hook."""
     pre_script = config.get("pre_script", "").strip()
@@ -1696,6 +1877,12 @@ def execute_restore_pg(config, task):
     pg_env = os.environ.copy()
     pg_env["PGPASSWORD"] = password
 
+    # Report running status immediately so the server tracks accurate start time
+    api_request(config, "/api/agent/progress", method="POST", data={
+        "job_id": job_id,
+        "output_log": "Extracting database dumps from archive...",
+    })
+
     # Step 1: Extract dump files from borg archive
     logger.info("Job #{}: Extracting PostgreSQL dumps from archive".format(job_id))
     if cwd:
@@ -1761,6 +1948,30 @@ def execute_restore_pg(config, task):
 
         try:
             psql_base = ["psql", "-h", host, "-p", port, "-U", user]
+            pg_dump_base = ["pg_dump", "-h", host, "-p", port, "-U", user]
+
+            # Safety backup: dump the current database before replacing it
+            if mode == "replace":
+                safety_file = os.path.join(dump_dir, "{}_pre_restore.sql.gz".format(target_db))
+                logger.info("Job #{}: Creating safety backup of {} to {}".format(job_id, target_db, safety_file))
+                try:
+                    dump_cmd = pg_dump_base + [target_db]
+                    dump_proc = subprocess.Popen(dump_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=pg_env)
+                    import gzip as _gzip_pg_safety
+                    with _gzip_pg_safety.open(safety_file, "wb") as sf:
+                        while True:
+                            chunk = dump_proc.stdout.read(65536)
+                            if not chunk:
+                                break
+                            sf.write(chunk)
+                    dump_proc.wait()
+                    if dump_proc.returncode != 0:
+                        stderr_out = dump_proc.stderr.read().decode("utf-8", errors="replace")
+                        logger.warning("Job #{}: Safety backup of {} failed (continuing anyway): {}".format(job_id, target_db, stderr_out[:200]))
+                    else:
+                        logger.info("Job #{}: Safety backup saved to {}".format(job_id, safety_file))
+                except Exception as e:
+                    logger.warning("Job #{}: Safety backup of {} failed (continuing anyway): {}".format(job_id, target_db, e))
 
             # Create target database if renaming
             if mode == "rename":
@@ -2066,6 +2277,168 @@ def execute_restore_mysql(config, task):
     report_status(config, status_data)
 
 
+def execute_restore_mongo(config, task):
+    """Restore MongoDB databases from a borg archive."""
+    job_id = task.get("job_id")
+    command = task.get("command", [])
+    if command and command[0] == "borg" and BORG_PATH:
+        command[0] = BORG_PATH
+    env_vars = task.get("env", {})
+    cwd = task.get("cwd")
+    databases = task.get("databases", [])
+    mongo_config = task.get("mongo_config", {})
+
+    host = mongo_config.get("host", "127.0.0.1")
+    port = str(mongo_config.get("port", 27017))
+    user = mongo_config.get("user", "")
+    password = mongo_config.get("password", "")
+    auth_db = mongo_config.get("auth_db", "admin")
+    compress = mongo_config.get("compress", True)
+    dump_dir = mongo_config.get("dump_dir", "/home/bbs/mongodump")
+
+    # Write temporary SSH key for remote SSH repos
+    remote_ssh_key = task.get("remote_ssh_key")
+    remote_key_path = REMOTE_KEY_PATH
+    if remote_ssh_key:
+        try:
+            normalized_key = remote_ssh_key.replace("\r\n", "\n").replace("\r", "\n").rstrip() + "\n"
+            with open(remote_key_path, "w") as kf:
+                kf.write(normalized_key)
+            if IS_WINDOWS:
+                _lockdown_key_windows(remote_key_path)
+            else:
+                os.chmod(remote_key_path, 0o600)
+            logger.info("Wrote temporary SSH key for remote repo")
+        except Exception as e:
+            logger.error("Failed to write remote SSH key: {}".format(e))
+            report_status(config, {
+                "job_id": job_id, "result": "failed",
+                "error_log": "Failed to write remote SSH key: {}".format(e),
+            })
+            return
+
+    # Report running status immediately so the server tracks accurate start time
+    api_request(config, "/api/agent/progress", method="POST", data={
+        "job_id": job_id,
+        "output_log": "Extracting database dumps from archive...",
+    })
+
+    # Step 1: Extract dump files from borg archive
+    logger.info("Job #{}: Extracting MongoDB dumps from archive".format(job_id))
+    if cwd:
+        os.makedirs(cwd, exist_ok=True)
+
+    env = os.environ.copy()
+    env.update(env_vars)
+
+    try:
+        proc = subprocess.run(
+            command, env=env, cwd=cwd,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=3600,
+        )
+        if proc.returncode > 1:
+            report_status(config, {
+                "job_id": job_id, "result": "failed",
+                "error_log": "borg extract failed: {}".format(proc.stderr.decode('utf-8', errors='replace')[:5000]),
+            })
+            return
+    except Exception as e:
+        report_status(config, {
+            "job_id": job_id, "result": "failed",
+            "error_log": "borg extract error: {}".format(e),
+        })
+        return
+    finally:
+        # Clean up temporary SSH key
+        if remote_ssh_key and os.path.exists(remote_key_path):
+            try:
+                os.unlink(remote_key_path)
+            except Exception:
+                pass
+
+    # Step 2: Restore each database using mongorestore
+    auth_args = _mongo_auth_args(host, port, user, password, auth_db)
+    imported = []
+    errors = []
+    total = len(databases)
+    for i, db_entry in enumerate(databases):
+        db_name = db_entry.get("database")
+        mode = db_entry.get("mode", "replace")
+        target_db = db_entry.get("target_name", "{}_copy".format(db_name)) if mode == "rename" else db_name
+
+        # mongodump creates dump_dir/db_name/ directory
+        db_dump_path = os.path.join(dump_dir, db_name)
+        if not os.path.isdir(db_dump_path):
+            errors.append("{}: dump directory not found at {}".format(db_name, db_dump_path))
+            continue
+
+        logger.info("Job #{}: Restoring {} as {} ({}/{})".format(job_id, db_name, target_db, i + 1, total))
+
+        # Report progress
+        api_request(config, "/api/agent/progress", method="POST", data={
+            "job_id": job_id,
+            "files_processed": i,
+            "files_total": total,
+            "output_log": "Restoring {} as {}...".format(db_name, target_db),
+        })
+
+        try:
+            # Safety backup: dump the current database before replacing it
+            if mode == "replace":
+                safety_path = os.path.join(dump_dir, "{}_pre_restore".format(target_db))
+                logger.info("Job #{}: Creating safety backup of {} to {}".format(job_id, target_db, safety_path))
+                try:
+                    safety_cmd = ["mongodump"] + auth_args + ["--db={}".format(target_db), "--out={}".format(dump_dir + "/_pre_restore")]
+                    if compress:
+                        safety_cmd.append("--gzip")
+                    r_safety = subprocess.run(safety_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=3600)
+                    if r_safety.returncode != 0:
+                        logger.warning("Job #{}: Safety backup of {} failed (continuing anyway): {}".format(
+                            job_id, target_db, r_safety.stderr.decode("utf-8", errors="replace")[:200]))
+                    else:
+                        logger.info("Job #{}: Safety backup saved to {}/_pre_restore/{}".format(job_id, dump_dir, target_db))
+                except Exception as e:
+                    logger.warning("Job #{}: Safety backup of {} failed (continuing anyway): {}".format(job_id, target_db, e))
+
+            cmd = ["mongorestore"] + auth_args + ["--db={}".format(target_db), "--drop"]
+            if compress:
+                cmd.append("--gzip")
+            cmd.append(db_dump_path)
+
+            r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=3600)
+            if r.returncode != 0:
+                stderr = r.stderr.decode('utf-8', errors='replace')[:500]
+                errors.append("{}: restore failed: {}".format(db_name, stderr))
+                continue
+
+            imported.append("{} -> {}".format(db_name, target_db))
+
+        except Exception as e:
+            errors.append("{}: {}".format(db_name, e))
+
+    # Report final status
+    if errors and not imported:
+        result = "failed"
+        error_log = "; ".join(errors)
+    else:
+        result = "completed"
+        error_log = "; ".join(errors) if errors else None
+
+    status_data = {
+        "job_id": job_id,
+        "result": result,
+        "files_total": total,
+        "files_processed": len(imported),
+    }
+    if error_log:
+        status_data["error_log"] = error_log[:10000]
+    if imported:
+        status_data["output_log"] = "Imported: {}".format(', '.join(imported))
+
+    report_status(config, status_data)
+
+
 def _inhibit_sleep():
     """Prevent the OS from sleeping while a task is running.
     Returns state to pass to _allow_sleep() when done."""
@@ -2185,6 +2558,11 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
     # Handle PostgreSQL database restore
     if task_type == "restore_pg":
         execute_restore_pg(config, task)
+        return
+
+    # Handle MongoDB database restore
+    if task_type == "restore_mongo":
+        execute_restore_mongo(config, task)
         return
 
     # Report running immediately so the UI shows activity
@@ -2524,6 +2902,15 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
             "databases": pg_result.get("databases", []),
             "per_database": True,
             "compress": pg_result.get("compress", True),
+        }
+
+    # Report backed-up databases from mongo_dump plugin
+    if result == "completed" and task_type == "backup" and plugin_results.get("mongo_dump"):
+        mongo_result = plugin_results["mongo_dump"]
+        status_data["databases_backed_up"] = {
+            "databases": mongo_result.get("databases", []),
+            "per_database": mongo_result.get("per_database", True),
+            "compress": mongo_result.get("compress", True),
         }
 
     # Report final status to server. For completed backups with catalog,
