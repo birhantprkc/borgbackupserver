@@ -581,10 +581,23 @@ class QueueManager
 
         $dumpDir = $mysqlConfig['dump_dir'] ?? '/home/bbs/mysql';
 
-        // Build borg extract command: extract the dump_dir from the archive
+        // Build borg extract command: extract only the specific dump file(s) needed
         $repo = ['path' => $archive['repo_path'], 'passphrase_encrypted' => $archive['passphrase_encrypted']];
-        $extractPath = ltrim($dumpDir, '/');
-        $cmd = BorgCommandBuilder::buildExtractCommand($repo, $archive['archive_name'], [$extractPath]);
+        $extractPaths = [];
+        $basePath = ltrim($dumpDir, '/');
+        if ($perDatabase && !empty($databases)) {
+            foreach ($databases as $db) {
+                $dbName = $db['database'] ?? '';
+                if (empty($dbName)) continue;
+                $ext = $compress ? '.sql.gz' : '.sql';
+                $extractPaths[] = $basePath . '/' . $dbName . $ext;
+            }
+        }
+        // Fallback to full directory if non-per-database or no specific DBs
+        if (empty($extractPaths)) {
+            $extractPaths[] = $basePath;
+        }
+        $cmd = BorgCommandBuilder::buildExtractCommand($repo, $archive['archive_name'], $extractPaths);
 
         // Handle remote SSH repos
         $remoteSshConfig = null;

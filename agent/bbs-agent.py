@@ -44,7 +44,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.18.6"
+AGENT_VERSION = "2.19.0"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -1946,6 +1946,30 @@ def execute_restore_mysql(config, task):
 
         try:
             mysql_base = ["mysql", "--host={}".format(host), "--port={}".format(port), "--user={}".format(user), "--password={}".format(password)]
+            mysqldump_base = ["mysqldump", "--host={}".format(host), "--port={}".format(port), "--user={}".format(user), "--password={}".format(password), "--single-transaction", "--quick"]
+
+            # Safety backup: dump the current database before replacing it
+            if mode == "replace":
+                safety_file = os.path.join(dump_dir, "{}_pre_restore.sql.gz".format(target_db))
+                logger.info("Job #{}: Creating safety backup of {} to {}".format(job_id, target_db, safety_file))
+                try:
+                    dump_cmd = mysqldump_base + [target_db]
+                    dump_proc = subprocess.Popen(dump_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    import gzip as _gzip_safety
+                    with _gzip_safety.open(safety_file, "wb") as sf:
+                        while True:
+                            chunk = dump_proc.stdout.read(65536)
+                            if not chunk:
+                                break
+                            sf.write(chunk)
+                    dump_proc.wait()
+                    if dump_proc.returncode != 0:
+                        stderr_out = dump_proc.stderr.read().decode("utf-8", errors="replace")
+                        logger.warning("Job #{}: Safety backup of {} failed (continuing anyway): {}".format(job_id, target_db, stderr_out[:200]))
+                    else:
+                        logger.info("Job #{}: Safety backup saved to {}".format(job_id, safety_file))
+                except Exception as e:
+                    logger.warning("Job #{}: Safety backup of {} failed (continuing anyway): {}".format(job_id, target_db, e))
 
             # Create target database if renaming
             if mode == "rename":
