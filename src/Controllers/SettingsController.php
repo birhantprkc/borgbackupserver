@@ -18,10 +18,18 @@ class SettingsController extends Controller
 
         $templates = $this->db->fetchAll("SELECT * FROM backup_templates ORDER BY name");
 
+        $apiTokens = $this->db->fetchAll("
+            SELECT t.id, t.name, t.created_at, t.last_used_at, u.username
+            FROM api_tokens t
+            JOIN users u ON u.id = t.user_id
+            ORDER BY t.created_at
+        ");
+
         $this->view('settings/index', [
             'pageTitle' => 'Settings',
             'settings' => $settings,
             'templates' => $templates,
+            'apiTokens' => $apiTokens,
         ]);
     }
 
@@ -186,6 +194,48 @@ class SettingsController extends Controller
         $this->db->delete('backup_templates', 'id = ?', [$id]);
         $this->flash('success', 'Template deleted.');
         $this->redirect('/settings?tab=templates');
+    }
+
+    public function createApiToken(): void
+    {
+        $this->requireAdmin();
+        $this->verifyCsrf();
+
+        $name = trim($_POST['name'] ?? '');
+        if (empty($name)) {
+            $this->flash('danger', 'Token name is required.');
+            $this->redirect('/settings?tab=api');
+        }
+
+        // Check duplicate name
+        $existing = $this->db->fetchOne("SELECT id FROM api_tokens WHERE name = ?", [$name]);
+        if ($existing) {
+            $this->flash('danger', "A token with name \"{$name}\" already exists.");
+            $this->redirect('/settings?tab=api');
+        }
+
+        $token = 'bbs_tok_' . bin2hex(random_bytes(24));
+        $hash = hash('sha256', $token);
+
+        $this->db->insert('api_tokens', [
+            'name' => $name,
+            'token_hash' => $hash,
+            'user_id' => $_SESSION['user_id'],
+        ]);
+
+        $_SESSION['new_api_token'] = $token;
+        $this->flash('success', 'API token created. Copy it now — it will not be shown again.');
+        $this->redirect('/settings?tab=api');
+    }
+
+    public function revokeApiToken(int $id): void
+    {
+        $this->requireAdmin();
+        $this->verifyCsrf();
+
+        $this->db->delete('api_tokens', 'id = ?', [$id]);
+        $this->flash('success', 'API token revoked.');
+        $this->redirect('/settings?tab=api');
     }
 
     public function agentUpdatesJson(): void

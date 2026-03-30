@@ -82,6 +82,51 @@ class Controller
         }
     }
 
+    /**
+     * Authenticate via Bearer token for admin API endpoints.
+     * Returns the user record associated with the token.
+     */
+    protected function requireApiToken(): array
+    {
+        $header = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+        $token = '';
+        if (str_starts_with($header, 'Bearer ')) {
+            $token = substr($header, 7);
+        }
+
+        if (empty($token)) {
+            $this->json(['error' => 'Missing authorization token. Use: Authorization: Bearer <token>'], 401);
+        }
+
+        if (!$this->checkRateLimit('admin_api', 20, 300)) {
+            $this->json(['error' => 'Too many failed attempts. Try again later.'], 429);
+        }
+
+        $hash = hash('sha256', $token);
+        $apiToken = $this->db->fetchOne(
+            "SELECT t.*, u.role FROM api_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = ?",
+            [$hash]
+        );
+
+        if (!$apiToken) {
+            $this->json(['error' => 'Invalid API token'], 401);
+        }
+
+        if ($apiToken['role'] !== 'admin') {
+            $this->json(['error' => 'API token must belong to an admin user'], 403);
+        }
+
+        $this->resetRateLimit('admin_api');
+
+        $this->db->query("UPDATE api_tokens SET last_used_at = NOW() WHERE id = ?", [$apiToken['id']]);
+
+        return [
+            'id' => $apiToken['user_id'],
+            'token_id' => $apiToken['id'],
+            'token_name' => $apiToken['name'],
+        ];
+    }
+
     protected function currentUser(): ?array
     {
         if (empty($_SESSION['user_id'])) {

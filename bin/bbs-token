@@ -1,0 +1,170 @@
+#!/usr/bin/env php
+<?php
+/**
+ * BBS API Token Management CLI
+ *
+ * Usage:
+ *   bbs-token create --name "ansible-provisioner"
+ *   bbs-token list
+ *   bbs-token revoke <name>
+ */
+
+// Must run from BBS install directory
+$bbsDir = dirname(__DIR__);
+$envFile = $bbsDir . '/config/.env';
+
+if (!file_exists($envFile)) {
+    fwrite(STDERR, "Error: BBS config not found at {$envFile}\n");
+    fwrite(STDERR, "Run this from the BBS install directory (e.g. /var/www/bbs)\n");
+    exit(1);
+}
+
+// Load .env
+$env = parse_ini_file($envFile);
+if (!$env || empty($env['DB_HOST'])) {
+    fwrite(STDERR, "Error: Cannot parse config file\n");
+    exit(1);
+}
+
+// Connect to database
+try {
+    $dsn = "mysql:host={$env['DB_HOST']};dbname={$env['DB_NAME']};charset=utf8mb4";
+    $pdo = new PDO($dsn, $env['DB_USER'], $env['DB_PASS'] ?? '', [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    ]);
+} catch (PDOException $e) {
+    fwrite(STDERR, "Database error: {$e->getMessage()}\n");
+    exit(1);
+}
+
+// Parse command
+$action = $argv[1] ?? '';
+
+switch ($action) {
+    case 'create':
+        createToken($pdo, $argv);
+        break;
+    case 'list':
+        listTokens($pdo);
+        break;
+    case 'revoke':
+        revokeToken($pdo, $argv);
+        break;
+    default:
+        usage();
+        break;
+}
+
+function usage(): void
+{
+    echo "BBS API Token Management\n\n";
+    echo "Usage:\n";
+    echo "  bbs-token create --name <name>    Create a new admin API token\n";
+    echo "  bbs-token list                    List all API tokens\n";
+    echo "  bbs-token revoke <name>           Revoke a token by name\n";
+    echo "\nExamples:\n";
+    echo "  bbs-token create --name \"ansible-provisioner\"\n";
+    echo "  bbs-token revoke \"ansible-provisioner\"\n";
+    exit(0);
+}
+
+function createToken(PDO $pdo, array $argv): void
+{
+    // Parse --name flag
+    $name = '';
+    for ($i = 2; $i < count($argv); $i++) {
+        if ($argv[$i] === '--name' && isset($argv[$i + 1])) {
+            $name = trim($argv[$i + 1]);
+            break;
+        }
+    }
+
+    if (empty($name)) {
+        fwrite(STDERR, "Error: --name is required\n");
+        fwrite(STDERR, "Usage: bbs-token create --name <name>\n");
+        exit(1);
+    }
+
+    // Check for duplicate name
+    $stmt = $pdo->prepare("SELECT id FROM api_tokens WHERE name = ?");
+    $stmt->execute([$name]);
+    if ($stmt->fetch()) {
+        fwrite(STDERR, "Error: A token with name \"{$name}\" already exists\n");
+        exit(1);
+    }
+
+    // Find the first admin user to associate the token with
+    $stmt = $pdo->prepare("SELECT id, username FROM users WHERE role = 'admin' ORDER BY id LIMIT 1");
+    $stmt->execute();
+    $admin = $stmt->fetch();
+    if (!$admin) {
+        fwrite(STDERR, "Error: No admin user found in the database\n");
+        exit(1);
+    }
+
+    // Generate token
+    $token = 'bbs_tok_' . bin2hex(random_bytes(24));
+    $hash = hash('sha256', $token);
+
+    $stmt = $pdo->prepare("INSERT INTO api_tokens (name, token_hash, user_id) VALUES (?, ?, ?)");
+    $stmt->execute([$name, $hash, $admin['id']]);
+
+    echo "{$token}\n";
+
+    fwrite(STDERR, "Token created: \"{$name}\" (associated with user: {$admin['username']})\n");
+    fwrite(STDERR, "Save this token — it cannot be shown again.\n");
+}
+
+function listTokens(PDO $pdo): void
+{
+    $stmt = $pdo->prepare("
+        SELECT t.name, t.created_at, t.last_used_at, u.username
+        FROM api_tokens t
+        JOIN users u ON u.id = t.user_id
+        ORDER BY t.created_at
+    ");
+    $stmt->execute();
+    $tokens = $stmt->fetchAll();
+
+    if (empty($tokens)) {
+        echo "No API tokens found.\n";
+        return;
+    }
+
+    printf("%-30s %-15s %-20s %-20s\n", "NAME", "USER", "CREATED", "LAST USED");
+    printf("%-30s %-15s %-20s %-20s\n", str_repeat('-', 30), str_repeat('-', 15), str_repeat('-', 20), str_repeat('-', 20));
+
+    foreach ($tokens as $t) {
+        printf("%-30s %-15s %-20s %-20s\n",
+            $t['name'],
+            $t['username'],
+            $t['created_at'],
+            $t['last_used_at'] ?? 'never'
+        );
+    }
+}
+
+function revokeToken(PDO $pdo, array $argv): void
+{
+    $name = trim($argv[2] ?? '');
+    if (empty($name)) {
+        fwrite(STDERR, "Error: Token name is required\n");
+        fwrite(STDERR, "Usage: bbs-token revoke <name>\n");
+        exit(1);
+    }
+
+    $stmt = $pdo->prepare("SELECT id FROM api_tokens WHERE name = ?");
+    $stmt->execute([$name]);
+    $token = $stmt->fetch();
+
+    if (!$token) {
+        fwrite(STDERR, "Error: No token found with name \"{$name}\"\n");
+        exit(1);
+    }
+
+    $stmt = $pdo->prepare("DELETE FROM api_tokens WHERE id = ?");
+    $stmt->execute([$token['id']]);
+
+    echo "Token \"{$name}\" revoked.\n";
+}

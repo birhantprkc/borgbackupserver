@@ -148,6 +148,8 @@ class App
         $this->router->map('POST', '/settings/templates/add', 'SettingsController@addTemplate');
         $this->router->map('POST', '/settings/templates/[i:id]/edit', 'SettingsController@editTemplate');
         $this->router->map('POST', '/settings/templates/[i:id]/delete', 'SettingsController@deleteTemplate');
+        $this->router->map('POST', '/settings/api/tokens/create', 'SettingsController@createApiToken');
+        $this->router->map('POST', '/settings/api/tokens/[i:id]/revoke', 'SettingsController@revokeApiToken');
         $this->router->map('POST', '/settings/docker-setup', 'SettingsController@dockerSetup');
         $this->router->map('POST', '/settings/test-smtp', 'SettingsController@testSmtp');
         $this->router->map('POST', '/settings/check-update', 'SettingsController@checkUpdate');
@@ -231,6 +233,16 @@ class App
         $this->router->map('GET', '/api/agent/download', 'Api\\AgentApiController@downloadFile');
         $this->router->map('GET', '/get-agent', 'Api\\AgentApiController@getAgent');
         $this->router->map('GET', '/get-agent-windows', 'Api\\AgentApiController@getAgentWindows');
+
+        // Admin API (token-authenticated)
+        $this->router->map('GET', '/api/v1/clients', 'Api\\AdminApiController@listClients');
+        $this->router->map('POST', '/api/v1/clients', 'Api\\AdminApiController@createClient');
+        $this->router->map('GET', '/api/v1/clients/[i:id]', 'Api\\AdminApiController@getClient');
+        $this->router->map('DELETE', '/api/v1/clients/[i:id]', 'Api\\AdminApiController@deleteClient');
+        $this->router->map('GET', '/api/v1/clients/[i:id]/repositories', 'Api\\AdminApiController@listRepositories');
+        $this->router->map('POST', '/api/v1/clients/[i:id]/repositories', 'Api\\AdminApiController@createRepository');
+        $this->router->map('GET', '/api/v1/clients/[i:id]/plans', 'Api\\AdminApiController@listPlans');
+        $this->router->map('POST', '/api/v1/clients/[i:id]/plans', 'Api\\AdminApiController@createPlan');
 
         // Catalog & Restore (client-facing)
         $this->router->map('GET', '/clients/[i:id]/catalog/[i:archive_id]', 'ClientController@catalog');

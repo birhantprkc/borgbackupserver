@@ -39,6 +39,11 @@ $updateAvailable = $updateService->isUpdateAvailable();
         </a>
     </li>
     <li class="nav-item">
+        <a class="nav-link <?= $activeTab === 'api' ? 'active' : '' ?>" href="/settings?tab=api">
+            <i class="bi bi-key me-1"></i><span class="tab-label">API</span>
+        </a>
+    </li>
+    <li class="nav-item">
         <a class="nav-link <?= $activeTab === 'updates' ? 'active' : '' ?>" href="/settings?tab=updates">
             <i class="bi bi-cloud-arrow-down me-1"></i><span class="tab-label">Updates</span>
             <?php if ($updateAvailable): ?>
@@ -1344,6 +1349,120 @@ function updateBuiltUrl(containerId, schema, prefix) {
     });
 })();
 </script>
+<?php endif; ?>
+
+<!-- API Tab -->
+<?php if ($activeTab === 'api'): ?>
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+        <i class="bi bi-key me-1"></i> API Tokens
+    </div>
+    <div class="card-body">
+        <p class="text-muted small mb-3">API tokens allow automated access to the BBS provisioning API. Tokens have full admin access. Keep them secret.</p>
+
+        <?php if (!empty($_SESSION['new_api_token'])): ?>
+        <div class="alert alert-success d-flex align-items-center mb-3">
+            <i class="bi bi-shield-check me-2 fs-5"></i>
+            <div class="flex-grow-1">
+                <strong>New API Token</strong> — copy it now, it will not be shown again:
+                <div class="mt-1">
+                    <code id="newTokenValue" class="user-select-all fs-6"><?= htmlspecialchars($_SESSION['new_api_token']) ?></code>
+                    <button type="button" class="btn btn-sm btn-outline-success ms-2" onclick="navigator.clipboard.writeText(document.getElementById('newTokenValue').textContent).then(() => { this.innerHTML = '<i class=\'bi bi-check\'></i> Copied'; })">
+                        <i class="bi bi-clipboard"></i> Copy
+                    </button>
+                </div>
+            </div>
+        </div>
+        <?php unset($_SESSION['new_api_token']); ?>
+        <?php endif; ?>
+
+        <?php if (!empty($apiTokens)): ?>
+        <div class="table-responsive mb-4">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Name</th>
+                        <th>User</th>
+                        <th>Created</th>
+                        <th>Last Used</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($apiTokens as $token): ?>
+                    <tr>
+                        <td class="fw-semibold"><i class="bi bi-key me-1 text-muted"></i><?= htmlspecialchars($token['name']) ?></td>
+                        <td class="small text-muted"><?= htmlspecialchars($token['username']) ?></td>
+                        <td class="small text-muted"><?= \BBS\Core\TimeHelper::format($token['created_at'], 'M j, Y') ?></td>
+                        <td class="small text-muted"><?= $token['last_used_at'] ? \BBS\Core\TimeHelper::format($token['last_used_at'], 'M j, Y g:i A') : '<span class="text-muted">never</span>' ?></td>
+                        <td>
+                            <form method="POST" action="/settings/api/tokens/<?= $token['id'] ?>/revoke" class="d-inline" data-confirm="Revoke API token &quot;<?= htmlspecialchars($token['name']) ?>&quot;? Any automation using this token will stop working." data-confirm-danger>
+                                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                <button class="btn btn-sm btn-outline-danger"><i class="bi bi-x-circle me-1"></i>Revoke</button>
+                            </form>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <?php endif; ?>
+
+        <h6>Create Token</h6>
+        <form method="POST" action="/settings/api/tokens/create">
+            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Token Name</label>
+                    <input type="text" class="form-control" name="name" required placeholder="e.g. ansible-provisioner">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-success w-100"><i class="bi bi-plus-circle me-1"></i>Create Token</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm mt-4">
+    <div class="card-header bg-body fw-semibold">
+        <i class="bi bi-book me-1"></i> API Reference
+    </div>
+    <div class="card-body">
+        <p class="text-muted small mb-3">Use your API token with the <code>Authorization: Bearer &lt;token&gt;</code> header. All endpoints accept and return JSON.</p>
+
+        <table class="table table-sm small mb-0">
+            <thead class="table-light">
+                <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><span class="badge bg-success">GET</span></td><td><code>/api/v1/clients</code></td><td>List all clients</td></tr>
+                <tr><td><span class="badge bg-primary">POST</span></td><td><code>/api/v1/clients</code></td><td>Create a client (returns api_key for agent install)</td></tr>
+                <tr><td><span class="badge bg-success">GET</span></td><td><code>/api/v1/clients/{id}</code></td><td>Get client details with repos &amp; plans</td></tr>
+                <tr><td><span class="badge bg-danger">DELETE</span></td><td><code>/api/v1/clients/{id}</code></td><td>Delete a client</td></tr>
+                <tr><td><span class="badge bg-success">GET</span></td><td><code>/api/v1/clients/{id}/repositories</code></td><td>List repositories</td></tr>
+                <tr><td><span class="badge bg-primary">POST</span></td><td><code>/api/v1/clients/{id}/repositories</code></td><td>Create a repository</td></tr>
+                <tr><td><span class="badge bg-success">GET</span></td><td><code>/api/v1/clients/{id}/plans</code></td><td>List backup plans</td></tr>
+                <tr><td><span class="badge bg-primary">POST</span></td><td><code>/api/v1/clients/{id}/plans</code></td><td>Create a backup plan</td></tr>
+            </tbody>
+        </table>
+
+        <div class="mt-3">
+            <p class="small text-muted mb-1"><strong>Example: Create a client</strong></p>
+            <pre class="bg-body-secondary p-2 rounded small mb-0"><code>curl -X POST https://your-server/api/v1/clients \
+  -H "Authorization: Bearer bbs_tok_..." \
+  -H "Content-Type: application/json" \
+  -d '{"name": "web-server-01"}'</code></pre>
+        </div>
+
+        <div class="mt-3">
+            <p class="small text-muted mb-1"><strong>CLI token management</strong></p>
+            <pre class="bg-body-secondary p-2 rounded small mb-0"><code>sudo /var/www/bbs/bin/bbs-token create --name "ansible"
+sudo /var/www/bbs/bin/bbs-token list
+sudo /var/www/bbs/bin/bbs-token revoke "ansible"</code></pre>
+        </div>
+    </div>
+</div>
 <?php endif; ?>
 
 <!-- Updates Tab -->

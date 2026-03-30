@@ -422,6 +422,20 @@ INSERT INTO plugins (slug, name, description, plugin_type) VALUES
 ('s3_sync', 'S3 Offsite Sync', 'Automatic sync of repositories to any S3-compatible storage after backup and prune operations. Stores a manifest for fast restore without long borg operations.', 'post_backup');
 
 -- --------------------------------------------------------
+-- API Tokens (admin API authentication)
+-- --------------------------------------------------------
+
+CREATE TABLE api_tokens (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    token_hash VARCHAR(64) NOT NULL UNIQUE,
+    user_id INT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_used_at DATETIME DEFAULT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- --------------------------------------------------------
 -- Backup Templates
 -- --------------------------------------------------------
 
