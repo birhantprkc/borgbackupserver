@@ -232,13 +232,29 @@ class BorgCommandBuilder
             return $repo['local_path'];
         }
 
+        // Extract the directory name from the SSH path rather than using $repo['name'],
+        // because the name column may not match the actual directory after renames.
+        $parsedPath = parse_url($repo['path'], PHP_URL_PATH) ?? '';
+        // Relative paths: /./reponame -> reponame
+        // Absolute paths: //var/bbs/home/27/reponame -> /var/bbs/home/27/reponame
+        if (str_starts_with($parsedPath, '//')) {
+            // Absolute path embedded in SSH URL — return as-is (strip leading extra slash)
+            return substr($parsedPath, 1);
+        }
+
+        // Relative path (e.g. /./reponame) — need to resolve against a base dir
+        $repoDir = ltrim($parsedPath, '/');
+        if (str_starts_with($repoDir, './')) {
+            $repoDir = substr($repoDir, 2);
+        }
+
         $db = \BBS\Core\Database::getInstance();
 
         // If repo has a storage_location_id, use that location's path
         if (!empty($repo['storage_location_id'])) {
             $loc = $db->fetchOne("SELECT path FROM storage_locations WHERE id = ?", [$repo['storage_location_id']]);
             if ($loc) {
-                return rtrim($loc['path'], '/') . '/' . $repo['agent_id'] . '/' . $repo['name'];
+                return rtrim($loc['path'], '/') . '/' . $repo['agent_id'] . '/' . $repoDir;
             }
         }
 
@@ -246,14 +262,14 @@ class BorgCommandBuilder
         if (!empty($repo['agent_id'])) {
             $agent = $db->fetchOne("SELECT ssh_home_dir FROM agents WHERE id = ?", [$repo['agent_id']]);
             if ($agent && !empty($agent['ssh_home_dir'])) {
-                return $agent['ssh_home_dir'] . '/' . $repo['name'];
+                return $agent['ssh_home_dir'] . '/' . $repoDir;
             }
         }
 
         // Final fallback: derive from global storage_path (pre-migration compatibility)
         $setting = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
         if ($setting) {
-            return rtrim($setting['value'], '/') . '/' . $repo['agent_id'] . '/' . $repo['name'];
+            return rtrim($setting['value'], '/') . '/' . $repo['agent_id'] . '/' . $repoDir;
         }
 
         return $repo['path'];
