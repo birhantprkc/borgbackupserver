@@ -1226,8 +1226,8 @@ class ClientController extends Controller
             $this->redirect("/clients/{$id}?tab=restore");
         }
 
+        $pluginManager = new \BBS\Services\PluginManager($this->db);
         if ($pluginConfigId) {
-            $pluginManager = new \BBS\Services\PluginManager();
             $configCheck = $pluginManager->getPluginConfig($pluginConfigId);
             if (!$configCheck || $configCheck['agent_id'] != $id || $configCheck['slug'] !== 'mongo_dump') {
                 $this->flash('danger', 'Invalid MongoDB connection selected.');
@@ -1247,7 +1247,6 @@ class ClientController extends Controller
             $this->redirect("/clients/{$id}?tab=restore");
         }
 
-        $pluginManager = new \BBS\Services\PluginManager();
         $enabledPlugins = $pluginManager->getEnabledAgentPlugins($id);
         $mongoEnabled = false;
         foreach ($enabledPlugins as $p) {

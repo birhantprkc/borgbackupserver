@@ -708,9 +708,23 @@ class QueueManager
 
         $dumpDir = $pgConfig['dump_dir'] ?? '/home/bbs/pgdump';
 
+        // Build borg extract command targeting only the specific dump file(s) needed
         $repo = ['path' => $archive['repo_path'], 'passphrase_encrypted' => $archive['passphrase_encrypted']];
-        $extractPath = ltrim($dumpDir, '/');
-        $cmd = BorgCommandBuilder::buildExtractCommand($repo, $archive['archive_name'], [$extractPath]);
+        $extractPaths = [];
+        $basePath = ltrim($dumpDir, '/');
+        $perDatabase = $dbInfo['per_database'] ?? true;
+        if ($perDatabase && !empty($databases)) {
+            foreach ($databases as $db) {
+                $dbName = $db['database'] ?? '';
+                if (empty($dbName)) continue;
+                $ext = $compress ? '.sql.gz' : '.sql';
+                $extractPaths[] = $basePath . '/' . $dbName . $ext;
+            }
+        }
+        if (empty($extractPaths)) {
+            $extractPaths[] = $basePath;
+        }
+        $cmd = BorgCommandBuilder::buildExtractCommand($repo, $archive['archive_name'], $extractPaths);
 
         // Handle remote SSH repos
         $remoteSshConfig = null;
@@ -808,9 +822,22 @@ class QueueManager
 
         $dumpDir = $mongoConfig['dump_dir'] ?? '/home/bbs/mongodump';
 
+        // Build borg extract command targeting only the specific database directories needed
+        // mongodump creates dump_dir/db_name/ directories
         $repo = ['path' => $archive['repo_path'], 'passphrase_encrypted' => $archive['passphrase_encrypted']];
-        $extractPath = ltrim($dumpDir, '/');
-        $cmd = BorgCommandBuilder::buildExtractCommand($repo, $archive['archive_name'], [$extractPath]);
+        $extractPaths = [];
+        $basePath = ltrim($dumpDir, '/');
+        if (!empty($databases)) {
+            foreach ($databases as $db) {
+                $dbName = $db['database'] ?? '';
+                if (empty($dbName)) continue;
+                $extractPaths[] = $basePath . '/' . $dbName;
+            }
+        }
+        if (empty($extractPaths)) {
+            $extractPaths[] = $basePath;
+        }
+        $cmd = BorgCommandBuilder::buildExtractCommand($repo, $archive['archive_name'], $extractPaths);
 
         // Handle remote SSH repos
         $remoteSshConfig = null;

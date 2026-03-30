@@ -44,7 +44,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.20.0"
+AGENT_VERSION = "2.19.1"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -1877,6 +1877,12 @@ def execute_restore_pg(config, task):
     pg_env = os.environ.copy()
     pg_env["PGPASSWORD"] = password
 
+    # Report running status immediately so the server tracks accurate start time
+    api_request(config, "/api/agent/progress", method="POST", data={
+        "job_id": job_id,
+        "output_log": "Extracting database dumps from archive...",
+    })
+
     # Step 1: Extract dump files from borg archive
     logger.info("Job #{}: Extracting PostgreSQL dumps from archive".format(job_id))
     if cwd:
@@ -1942,6 +1948,30 @@ def execute_restore_pg(config, task):
 
         try:
             psql_base = ["psql", "-h", host, "-p", port, "-U", user]
+            pg_dump_base = ["pg_dump", "-h", host, "-p", port, "-U", user]
+
+            # Safety backup: dump the current database before replacing it
+            if mode == "replace":
+                safety_file = os.path.join(dump_dir, "{}_pre_restore.sql.gz".format(target_db))
+                logger.info("Job #{}: Creating safety backup of {} to {}".format(job_id, target_db, safety_file))
+                try:
+                    dump_cmd = pg_dump_base + [target_db]
+                    dump_proc = subprocess.Popen(dump_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=pg_env)
+                    import gzip as _gzip_pg_safety
+                    with _gzip_pg_safety.open(safety_file, "wb") as sf:
+                        while True:
+                            chunk = dump_proc.stdout.read(65536)
+                            if not chunk:
+                                break
+                            sf.write(chunk)
+                    dump_proc.wait()
+                    if dump_proc.returncode != 0:
+                        stderr_out = dump_proc.stderr.read().decode("utf-8", errors="replace")
+                        logger.warning("Job #{}: Safety backup of {} failed (continuing anyway): {}".format(job_id, target_db, stderr_out[:200]))
+                    else:
+                        logger.info("Job #{}: Safety backup saved to {}".format(job_id, safety_file))
+                except Exception as e:
+                    logger.warning("Job #{}: Safety backup of {} failed (continuing anyway): {}".format(job_id, target_db, e))
 
             # Create target database if renaming
             if mode == "rename":
@@ -2287,6 +2317,12 @@ def execute_restore_mongo(config, task):
             })
             return
 
+    # Report running status immediately so the server tracks accurate start time
+    api_request(config, "/api/agent/progress", method="POST", data={
+        "job_id": job_id,
+        "output_log": "Extracting database dumps from archive...",
+    })
+
     # Step 1: Extract dump files from borg archive
     logger.info("Job #{}: Extracting MongoDB dumps from archive".format(job_id))
     if cwd:
@@ -2348,6 +2384,23 @@ def execute_restore_mongo(config, task):
         })
 
         try:
+            # Safety backup: dump the current database before replacing it
+            if mode == "replace":
+                safety_path = os.path.join(dump_dir, "{}_pre_restore".format(target_db))
+                logger.info("Job #{}: Creating safety backup of {} to {}".format(job_id, target_db, safety_path))
+                try:
+                    safety_cmd = ["mongodump"] + auth_args + ["--db={}".format(target_db), "--out={}".format(dump_dir + "/_pre_restore")]
+                    if compress:
+                        safety_cmd.append("--gzip")
+                    r_safety = subprocess.run(safety_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=3600)
+                    if r_safety.returncode != 0:
+                        logger.warning("Job #{}: Safety backup of {} failed (continuing anyway): {}".format(
+                            job_id, target_db, r_safety.stderr.decode("utf-8", errors="replace")[:200]))
+                    else:
+                        logger.info("Job #{}: Safety backup saved to {}/_pre_restore/{}".format(job_id, dump_dir, target_db))
+                except Exception as e:
+                    logger.warning("Job #{}: Safety backup of {} failed (continuing anyway): {}".format(job_id, target_db, e))
+
             cmd = ["mongorestore"] + auth_args + ["--db={}".format(target_db), "--drop"]
             if compress:
                 cmd.append("--gzip")
