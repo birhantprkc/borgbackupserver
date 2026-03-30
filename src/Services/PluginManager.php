@@ -479,6 +479,73 @@ class PluginManager
                     'default' => '--no-owner --no-privileges',
                 ],
             ],
+            'mongo_dump' => [
+                'host' => [
+                    'type' => 'text',
+                    'label' => 'MongoDB Host',
+                    'default' => '127.0.0.1',
+                    'help' => 'Use 127.0.0.1 instead of localhost to avoid IPv6 connection issues.',
+                ],
+                'port' => [
+                    'type' => 'number',
+                    'label' => 'Port',
+                    'default' => 27017,
+                ],
+                'user' => [
+                    'type' => 'text',
+                    'label' => 'Username',
+                    'default' => '',
+                    'help' => 'Leave empty if MongoDB does not require authentication.',
+                ],
+                'password' => [
+                    'type' => 'text',
+                    'label' => 'Password',
+                    'generate' => true,
+                    'sensitive' => true,
+                    'help' => 'Leave empty if MongoDB does not require authentication.',
+                ],
+                'auth_db' => [
+                    'type' => 'text',
+                    'label' => 'Authentication Database',
+                    'default' => 'admin',
+                    'help' => 'The database used for authentication (usually "admin").',
+                ],
+                'databases' => [
+                    'type' => 'text',
+                    'label' => 'Databases',
+                    'default' => '*',
+                    'help' => 'Use * for all databases, or a comma-separated list of specific names.',
+                ],
+                'dump_dir' => [
+                    'type' => 'text',
+                    'label' => 'Dump Directory',
+                    'default' => '/home/bbs/mongodump',
+                    'required' => true,
+                    'help' => 'Local directory where dumps are saved. Automatically included in backup directories.',
+                ],
+                'compress' => [
+                    'type' => 'checkbox',
+                    'label' => 'Compress dumps (gzip)',
+                    'default' => true,
+                ],
+                'cleanup_after' => [
+                    'type' => 'checkbox',
+                    'label' => 'Delete dumps after backup completes',
+                    'default' => true,
+                ],
+                'exclude_databases' => [
+                    'type' => 'tags',
+                    'label' => 'Exclude Databases',
+                    'default' => ['admin', 'config', 'local'],
+                    'help' => 'Comma-separated list of databases to skip when using * above.',
+                ],
+                'extra_options' => [
+                    'type' => 'text',
+                    'label' => 'Extra mongodump Options',
+                    'default' => '',
+                    'help' => 'Additional command-line flags for mongodump (e.g. --oplog for replica sets).',
+                ],
+            ],
             's3_sync' => [
                 'credential_source' => [
                     'type' => 'select',
@@ -590,6 +657,23 @@ class PluginManager
                 . "-- For database restore via GUI (requires additional privileges):\n"
                 . "ALTER ROLE backup_user CREATEDB;\n"
                 . "GRANT ALL PRIVILEGES ON DATABASE mydb TO backup_user;",
+            'mongo_dump' => "-- MongoDB user setup for backup (run in mongosh):\n"
+                . "use admin\n"
+                . "db.createUser({\n"
+                . "  user: \"bbs_backup\",\n"
+                . "  pwd: \"strong_password\",\n"
+                . "  roles: [\n"
+                . "    { role: \"backup\", db: \"admin\" },\n"
+                . "    { role: \"readAnyDatabase\", db: \"admin\" }\n"
+                . "  ]\n"
+                . "})\n\n"
+                . "-- For database restore via GUI (additional roles):\n"
+                . "db.grantRolesToUser(\"bbs_backup\", [\n"
+                . "  { role: \"restore\", db: \"admin\" },\n"
+                . "  { role: \"readWriteAnyDatabase\", db: \"admin\" }\n"
+                . "])\n\n"
+                . "-- Note: Authentication is optional. Leave username/password\n"
+                . "-- empty if your MongoDB instance does not require auth.",
         ];
 
         return $help[$slug] ?? '';

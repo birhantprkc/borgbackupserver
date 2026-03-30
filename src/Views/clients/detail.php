@@ -2255,6 +2255,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     $pluginLogos = [
         'mysql_dump' => '/images/mysql.png',
         'pg_dump' => '/images/postgresql.svg',
+        'mongo_dump' => '/images/mongodb.svg',
     ];
     $randomPass = substr(str_shuffle('abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'), 0, 20);
 
@@ -2650,20 +2651,24 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
     <?php
     $mysqlPluginEnabled = false;
     $pgPluginEnabled = false;
+    $mongoPluginEnabled = false;
     $mysqlConfigs = [];
     $pgConfigs = [];
+    $mongoConfigs = [];
     foreach ($agentPlugins as $ap) {
         if ($ap['slug'] === 'mysql_dump' && $ap['agent_enabled']) $mysqlPluginEnabled = true;
         if ($ap['slug'] === 'pg_dump' && $ap['agent_enabled']) $pgPluginEnabled = true;
+        if ($ap['slug'] === 'mongo_dump' && $ap['agent_enabled']) $mongoPluginEnabled = true;
     }
     if (!empty($pluginConfigs)) {
         foreach ($pluginConfigs as $pc) {
             if ($pc['slug'] === 'mysql_dump' && $mysqlPluginEnabled) $mysqlConfigs[] = $pc;
             if ($pc['slug'] === 'pg_dump' && $pgPluginEnabled) $pgConfigs[] = $pc;
+            if ($pc['slug'] === 'mongo_dump' && $mongoPluginEnabled) $mongoConfigs[] = $pc;
         }
     }
-    $dbPluginEnabled = $mysqlPluginEnabled || $pgPluginEnabled;
-    $allDbConfigs = array_merge($mysqlConfigs, $pgConfigs);
+    $dbPluginEnabled = $mysqlPluginEnabled || $pgPluginEnabled || $mongoPluginEnabled;
+    $allDbConfigs = array_merge($mysqlConfigs, $pgConfigs, $mongoConfigs);
     $defaultDbUser = 'your_user';
     if (!empty($mysqlConfigs)) {
         $firstCfg = json_decode($mysqlConfigs[0]['config'] ?? '{}', true);
@@ -2738,6 +2743,13 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
                                 <optgroup label="PostgreSQL">
                                 <?php foreach ($pgConfigs as $pc): ?>
                                     <option value="pg:<?= $pc['id'] ?>"><?= htmlspecialchars($pc['name']) ?></option>
+                                <?php endforeach; ?>
+                                </optgroup>
+                            <?php endif; ?>
+                            <?php if (!empty($mongoConfigs)): ?>
+                                <optgroup label="MongoDB">
+                                <?php foreach ($mongoConfigs as $mc): ?>
+                                    <option value="mongo:<?= $mc['id'] ?>"><?= htmlspecialchars($mc['name']) ?></option>
                                 <?php endforeach; ?>
                                 </optgroup>
                             <?php endif; ?>
@@ -2985,7 +2997,7 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
             </div>
         </div>
 
-        <form id="db-restore-form" method="POST" action="/clients/<?= $agent['id'] ?>/restore-mysql" data-mysql-action="/clients/<?= $agent['id'] ?>/restore-mysql" data-pg-action="/clients/<?= $agent['id'] ?>/restore-pg" style="display:none;">
+        <form id="db-restore-form" method="POST" action="/clients/<?= $agent['id'] ?>/restore-mysql" data-mysql-action="/clients/<?= $agent['id'] ?>/restore-mysql" data-pg-action="/clients/<?= $agent['id'] ?>/restore-pg" data-mongo-action="/clients/<?= $agent['id'] ?>/restore-mongo" style="display:none;">
             <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
             <input type="hidden" name="archive_id" id="db-restore-archive-id">
             <input type="hidden" name="plugin_config_id" id="db-restore-config-id">
@@ -3006,6 +3018,10 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
         array_combine(
             array_map(function($pc) { return 'pg:' . $pc['id']; }, $pgConfigs),
             array_map(function($pc) { $c = json_decode($pc['config'] ?? '{}', true); return $c['user'] ?? 'backup_user'; }, $pgConfigs)
+        ),
+        array_combine(
+            array_map(function($mongoc) { return 'mongo:' . $mongoc['id']; }, $mongoConfigs),
+            array_map(function($mongoc) { $c = json_decode($mongoc['config'] ?? '{}', true); return $c['user'] ?? ''; }, $mongoConfigs)
         )
     )) ?>;</script>
     <?php

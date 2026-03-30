@@ -658,20 +658,33 @@
             const grantSpan = document.getElementById('db-restore-grant-user');
             const grantCode = document.getElementById('db-restore-grant-code');
             const form = document.getElementById('db-restore-form');
-            const user = (window.DB_CONFIG_USERS && window.DB_CONFIG_USERS[dbConfigId.value]) || 'backup_user';
+            const rawUser = window.DB_CONFIG_USERS && window.DB_CONFIG_USERS[dbConfigId.value];
+            const user = (rawUser !== undefined && rawUser !== null && rawUser !== '') ? rawUser : (type === 'mongo' ? '' : 'backup_user');
 
             if (grantSpan) grantSpan.textContent = user;
 
             if (grantCode) {
                 if (type === 'pg') {
                     grantCode.textContent = 'ALTER ROLE ' + user + ' CREATEDB; GRANT ALL PRIVILEGES ON DATABASE mydb TO ' + user + ';';
+                } else if (type === 'mongo') {
+                    if (user) {
+                        grantCode.textContent = "use admin; db.createUser({user: '" + user + "', pwd: '<password>', roles: [{role: 'root', db: 'admin'}]});";
+                    } else {
+                        grantCode.textContent = 'MongoDB authentication is not configured — no grant required.';
+                    }
                 } else {
                     grantCode.innerHTML = "GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER, CREATE, INSERT, DROP, ALTER, INDEX, REFERENCES ON *.* TO '" + '<span id="db-restore-grant-user">' + user + '</span>' + "'@'localhost'; FLUSH PRIVILEGES;";
                 }
             }
 
             if (form) {
-                form.action = form.dataset[type === 'pg' ? 'pgAction' : 'mysqlAction'] || form.action;
+                if (type === 'pg') {
+                    form.action = form.dataset.pgAction || form.action;
+                } else if (type === 'mongo') {
+                    form.action = form.dataset.mongoAction || form.action;
+                } else {
+                    form.action = form.dataset.mysqlAction || form.action;
+                }
             }
         }
         if (dbConfigId) {
