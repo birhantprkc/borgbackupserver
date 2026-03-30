@@ -1878,6 +1878,12 @@ def execute_restore_mysql(config, task):
             })
             return
 
+    # Report running status immediately so the server tracks accurate start time
+    api_request(config, "/api/agent/progress", method="POST", data={
+        "job_id": job_id,
+        "output_log": "Extracting database dumps from archive...",
+    })
+
     # Step 1: Extract dump files from borg archive
     logger.info("Job #{}: Extracting MySQL dumps from archive".format(job_id))
     if cwd:
