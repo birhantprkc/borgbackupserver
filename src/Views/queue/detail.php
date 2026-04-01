@@ -393,8 +393,9 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
     function fmtDate(d) {
         if (!d) return '--';
         const dt = new Date(d.replace(' ','T')+'Z');
+        const tOpts = window.BBS_TIME_24H ? {hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false} : {hour:'numeric',minute:'2-digit',second:'2-digit'};
         return dt.toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'}) + ' ' +
-               dt.toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit',second:'2-digit'});
+               dt.toLocaleTimeString('en-US', tOpts);
     }
 
     function fmtDur(s) {

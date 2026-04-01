@@ -216,7 +216,7 @@ class DashboardController extends Controller
             $hourKey = $hourDt->format('Y-m-d H:00');
             $localDt = clone $hourDt;
             $localDt->setTimezone($userTz);
-            $label = $localDt->format('ga');
+            $label = (($_SESSION['time_format'] ?? '12h') === '24h') ? $localDt->format('H:00') : $localDt->format('ga');
             $counts = $hourCounts[$hourKey] ?? [];
             $chartData[] = [
                 'label' => $label,

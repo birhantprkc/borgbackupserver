@@ -225,6 +225,7 @@
     <!-- Toast container -->
     <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer" style="z-index:1090;"></div>
 
+    <script>window.BBS_TIME_24H = <?= json_encode(($_SESSION['time_format'] ?? '12h') === '24h') ?>;</script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
     function toggleTheme() {

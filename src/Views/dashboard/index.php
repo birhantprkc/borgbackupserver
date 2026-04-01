@@ -740,12 +740,13 @@ function fmtCountdown(diffSec) {
     return { text: Math.floor(diffSec/86400) + 'd ' + Math.floor((diffSec%86400)/3600) + 'h', cls: 'text-muted' };
 }
 
-// Helper: format date like "Jan 30, 4:15 PM"
+// Helper: format date like "Jan 30, 4:15 PM" or "Jan 30, 16:15"
 function fmtDate(str) {
     if (!str) return '--';
     const d = new Date(str.replace(' ', 'T') + 'Z');
+    const timeOpts = window.BBS_TIME_24H ? { hour: '2-digit', minute: '2-digit', hour12: false } : { hour: 'numeric', minute: '2-digit' };
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' +
-           d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+           d.toLocaleTimeString('en-US', timeOpts);
 }
 
 function renderActiveJobs(jobs) {

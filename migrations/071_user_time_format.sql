@@ -1,0 +1,1 @@
+ALTER TABLE users ADD COLUMN time_format VARCHAR(3) NOT NULL DEFAULT '12h' AFTER timezone;

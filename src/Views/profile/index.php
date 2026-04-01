@@ -81,6 +81,14 @@
                     </div>
 
                     <div class="mb-3">
+                        <label class="form-label">Time Format</label>
+                        <select class="form-select" name="time_format">
+                            <option value="12h" <?= ($user['time_format'] ?? '12h') === '12h' ? 'selected' : '' ?>>12-hour (1:30 PM)</option>
+                            <option value="24h" <?= ($user['time_format'] ?? '12h') === '24h' ? 'selected' : '' ?>>24-hour (13:30)</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
                         <label class="form-label">Role</label>
                         <input type="text" class="form-control" value="<?= ucfirst($user['role']) ?>" disabled>
                     </div>

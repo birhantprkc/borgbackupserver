@@ -13,6 +13,7 @@ CREATE TABLE users (
     role ENUM('admin', 'user') NOT NULL DEFAULT 'user',
     all_clients TINYINT(1) NOT NULL DEFAULT 0,
     timezone VARCHAR(50) NOT NULL DEFAULT 'America/New_York',
+    time_format VARCHAR(3) NOT NULL DEFAULT '12h',
     theme VARCHAR(10) NOT NULL DEFAULT 'dark',
     totp_secret VARCHAR(255) DEFAULT NULL,
     totp_enabled TINYINT(1) NOT NULL DEFAULT 0,

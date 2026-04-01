@@ -95,6 +95,14 @@ class ProfileController extends Controller
             $this->flash('success', 'Timezone updated.');
         }
 
+        // Update time format
+        $timeFormat = $_POST['time_format'] ?? '';
+        if (in_array($timeFormat, ['12h', '24h']) && $timeFormat !== ($user['time_format'] ?? '12h')) {
+            $this->db->update('users', ['time_format' => $timeFormat], 'id = ?', [$userId]);
+            $_SESSION['time_format'] = $timeFormat;
+            $this->flash('success', 'Time format updated.');
+        }
+
         // Update email
         $email = trim($_POST['email'] ?? '');
         if ($email && $email !== $user['email']) {

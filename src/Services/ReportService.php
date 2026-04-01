@@ -241,9 +241,13 @@ class ReportService
             else $offline++;
         }
 
-        $fmtTime = function (string $utc, string $format) use ($tz): string {
+        $is24h = \BBS\Core\TimeHelper::is24h();
+        $fmtTime = function (string $utc, string $format) use ($tz, $is24h): string {
             $dt = new \DateTime($utc, new \DateTimeZone('UTC'));
             $dt->setTimezone($tz);
+            if ($is24h) {
+                $format = str_replace(['g:i A T', 'g:i A', 'g:i a'], ['H:i T', 'H:i', 'H:i'], $format);
+            }
             return $dt->format($format);
         };
 

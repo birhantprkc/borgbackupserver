@@ -243,8 +243,9 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
     function formatDate(d) {
         if (!d) return '';
         const dt = new Date(d.replace(' ', 'T') + 'Z');
+        const tOpts = window.BBS_TIME_24H ? { hour: '2-digit', minute: '2-digit', hour12: false } : { hour: 'numeric', minute: '2-digit' };
         return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
-               ', ' + dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+               ', ' + dt.toLocaleTimeString('en-US', tOpts);
     }
 
     function formatDuration(s) {

@@ -65,6 +65,7 @@ class AuthController extends Controller
         $_SESSION['username'] = $user['username'];
         $_SESSION['user_role'] = $user['role'];
         $_SESSION['timezone'] = $user['timezone'] ?? 'America/New_York';
+        $_SESSION['time_format'] = $user['time_format'] ?? '12h';
         $_SESSION['theme'] = $user['theme'] ?? 'dark';
         $_SESSION['login_time'] = time();
         $_SESSION['last_activity'] = time();

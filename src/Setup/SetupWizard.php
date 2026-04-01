@@ -274,6 +274,7 @@ ENV;
                     $_SESSION['username'] = $admin['username'];
                     $_SESSION['user_role'] = $admin['role'];
                     $_SESSION['timezone'] = $admin['timezone'] ?? 'America/New_York';
+                    $_SESSION['time_format'] = $admin['time_format'] ?? '12h';
                     $_SESSION['login_time'] = time();
                     $_SESSION['last_activity'] = time();
                 }
