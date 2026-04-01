@@ -174,12 +174,15 @@
 
                             <h6 class="mt-3 mb-2">Storage</h6>
                             <div class="mb-3">
-                                <label class="form-label fw-semibold">Storage Path</label>
-                                <input type="text" class="form-control bg-body-secondary" value="/var/bbs/home" readonly>
                                 <input type="hidden" name="storage_path" value="/var/bbs/home">
-                                <div class="form-text">Agent home directories are stored at <code>/var/bbs/home</code>.
-                                    To use external storage (NFS, dedicated drives), add it as a <strong>Storage Location</strong> after setup.
-                                    You can also bind-mount your storage volume to <code>/var/bbs/home</code> before continuing.</div>
+                                <div class="p-3 bg-body-secondary rounded small">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    <strong>Default storage:</strong> <code>/var/bbs/home</code> — SSH keys, agent home directories, and repositories are stored here by default.
+                                    On Docker, the MySQL database and ClickHouse data are also under <code>/var/bbs</code>.
+                                    On bare metal installs, MySQL uses its default location (<code>/var/lib/mysql</code>).
+                                    <br><br>
+                                    Ensure this partition has enough space for your backup data. To store repositories on external storage (NFS, dedicated drives, etc.), use the <strong>Storage Locations</strong> page after setup.
+                                </div>
                             </div>
 
                             <h6 class="mt-4 mb-2">Server Connection</h6>
