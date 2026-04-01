@@ -460,7 +460,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                     <div class="flex-grow-1">
                         <div class="d-flex justify-content-between">
                             <span class="fw-semibold"><?= ucfirst($job['task_type']) ?></span>
-                            <small class="text-muted"><?= \BBS\Core\TimeHelper::format($job['started_at'] ?? $job['queued_at'], 'M j g:ia') ?></small>
+                            <small class="text-muted"><?= \BBS\Core\TimeHelper::format($job['completed_at'] ?? $job['started_at'] ?? $job['queued_at'], 'M j g:ia') ?></small>
                         </div>
                         <div class="small text-muted">
                             <?= htmlspecialchars($job['repo_name'] ?? '') ?>
