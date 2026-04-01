@@ -452,7 +452,7 @@ $pieColors = ['#36a2eb', '#ff6384', '#ffce56', '#4bc0c0', '#9966ff', '#6c757d'];
                             <?php
                                 $elapsed = '';
                                 if ($job['started_at']) {
-                                    $e = time() - strtotime($job['started_at']);
+                                    $e = time() - strtotime($job['started_at'] . ' UTC');
                                     $elapsed = $e >= 3600 ? floor($e / 3600) . 'h ' . floor(($e % 3600) / 60) . 'm'
                                         : ($e >= 60 ? floor($e / 60) . 'm ' . ($e % 60) . 's' : $e . 's');
                                 }

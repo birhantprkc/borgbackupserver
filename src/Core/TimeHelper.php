@@ -14,7 +14,11 @@ class TimeHelper
         $dt->setTimezone(new \DateTimeZone(self::userTz()));
 
         if (self::is24h()) {
-            $format = str_replace(['g:i A T', 'g:i A', 'g:i a'], ['H:i T', 'H:i', 'H:i'], $format);
+            $format = str_replace(
+                ['g:i:s A T', 'g:i:s A', 'g:i A T', 'g:i A', 'g:ia', 'g:i a'],
+                ['H:i:s T',   'H:i:s',   'H:i T',   'H:i',   'H:i',  'H:i'],
+                $format
+            );
         }
 
         return $dt->format($format);

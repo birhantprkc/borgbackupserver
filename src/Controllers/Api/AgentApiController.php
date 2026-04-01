@@ -324,7 +324,12 @@ class AgentApiController extends Controller
 
         $now = $this->db->now();
         $startedAt = $job['started_at'] ?? $job['queued_at'] ?? $now;
-        $duration = strtotime($now) - strtotime($startedAt);
+        // Calculate duration in MySQL to avoid PHP/MySQL timezone mismatches
+        $durRow = $this->db->fetchOne(
+            "SELECT TIMESTAMPDIFF(SECOND, ?, NOW()) as dur",
+            [$startedAt]
+        );
+        $duration = (int) ($durRow['dur'] ?? 0);
 
         // "cataloging" means borg finished but agent is about to upload catalog —
         // keep job as "running" so it doesn't appear completed prematurely
@@ -682,10 +687,14 @@ class AgentApiController extends Controller
             @unlink($catalogImport['path']);
 
             // Now mark the job as completed (was kept as 'running' during import)
+            $catDurRow = $this->db->fetchOne(
+                "SELECT TIMESTAMPDIFF(SECOND, ?, NOW()) as dur",
+                [$startedAt]
+            );
             $this->db->update('backup_jobs', [
                 'status' => 'completed',
-                'completed_at' => date('Y-m-d H:i:s'),
-                'duration_seconds' => max(0, strtotime(date('Y-m-d H:i:s')) - strtotime($startedAt)),
+                'completed_at' => $this->db->now(),
+                'duration_seconds' => max(0, (int) ($catDurRow['dur'] ?? 0)),
                 'status_message' => null,
             ], 'id = ?', [$jobId]);
         }
