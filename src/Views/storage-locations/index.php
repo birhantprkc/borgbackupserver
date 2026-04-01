@@ -1001,32 +1001,15 @@ function applyRemotePreset(select, form) {
                         </h6>
                         <code class="small text-muted"><?= htmlspecialchars($loc['path']) ?></code>
                     </div>
-                    <div class="dropdown">
-                        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown">
-                            <i class="bi bi-three-dots-vertical"></i>
+                    <?php if (!$loc['is_default'] && $loc['repo_count'] === 0): ?>
+                    <form method="POST" action="/storage-locations/<?= $loc['id'] ?>/delete"
+                          onsubmit="return confirm('Delete storage location \'<?= htmlspecialchars($loc['label'], ENT_QUOTES) ?>\'?')">
+                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
+                            <i class="bi bi-trash"></i>
                         </button>
-                        <ul class="dropdown-menu dropdown-menu-end">
-                            <li>
-                                <a class="dropdown-item" href="#" data-bs-toggle="collapse"
-                                   data-bs-target="#editLoc<?= $loc['id'] ?>"
-                                   onclick="event.preventDefault();">
-                                    <i class="bi bi-pencil me-1"></i> Edit
-                                </a>
-                            </li>
-                            <?php if (!$loc['is_default'] && $loc['repo_count'] === 0): ?>
-                            <li><hr class="dropdown-divider"></li>
-                            <li>
-                                <form method="POST" action="/storage-locations/<?= $loc['id'] ?>/delete"
-                                      onsubmit="return confirm('Delete storage location \'<?= htmlspecialchars($loc['label'], ENT_QUOTES) ?>\'?')">
-                                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                    <button type="submit" class="dropdown-item text-danger">
-                                        <i class="bi bi-trash me-1"></i> Delete
-                                    </button>
-                                </form>
-                            </li>
-                            <?php endif; ?>
-                        </ul>
-                    </div>
+                    </form>
+                    <?php endif; ?>
                 </div>
 
                 <!-- Disk Usage -->
@@ -1058,35 +1041,7 @@ function applyRemotePreset(select, form) {
                 </div>
             </div>
 
-            <!-- Inline Edit Form (collapsed) -->
-            <div class="collapse" id="editLoc<?= $loc['id'] ?>">
-                <div class="card-footer bg-light">
-                    <form method="POST" action="/storage-locations/<?= $loc['id'] ?>">
-                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                        <div class="row g-2">
-                            <div class="col-md-4">
-                                <input type="text" class="form-control form-control-sm" name="label"
-                                       value="<?= htmlspecialchars($loc['label']) ?>" required>
-                            </div>
-                            <div class="col-md-4">
-                                <input type="text" class="form-control form-control-sm" name="path"
-                                       value="<?= htmlspecialchars($loc['path']) ?>" required
-                                       <?= $loc['repo_count'] > 0 ? 'readonly title="Cannot change path while repos exist"' : '' ?>>
-                            </div>
-                            <div class="col-md-2 d-flex align-items-center">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="is_default"
-                                           id="editDefault<?= $loc['id'] ?>"
-                                           <?= $loc['is_default'] ? 'checked' : '' ?>>
-                                    <label class="form-check-label small" for="editDefault<?= $loc['id'] ?>">Default</label>
-                                </div>
-                            </div>
-                            <div class="col-md-2 d-flex align-items-center">
-                                <button type="submit" class="btn btn-sm btn-primary w-100">Save</button>
-                            </div>
-                        </div>
-                    </form>
-                </div>
+            <!-- No edit — storage locations are immutable once created. Delete and recreate to change. -->
             </div>
         </div>
     </div>
