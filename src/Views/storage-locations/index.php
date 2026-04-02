@@ -1041,8 +1041,6 @@ function applyRemotePreset(select, form) {
                 </div>
             </div>
 
-            <!-- No edit — storage locations are immutable once created. Delete and recreate to change. -->
-            </div>
         </div>
     </div>
     <?php endforeach; ?>
