@@ -557,23 +557,41 @@ class PluginManager
                     ],
                     'default' => 'full',
                 ],
-                'partial_options' => [
-                    'type' => 'tags',
-                    'label' => 'Partial Backup Components',
-                    'default' => ['web', 'db', 'mail'],
-                    'help' => 'Select which components to include: web, db, mail. Only used when Backup Type is "Partial".',
+                'include_web' => [
+                    'type' => 'checkbox',
+                    'label' => 'Include website files',
+                    'default' => true,
+                    'show_when' => ['backup_type' => 'partial'],
                 ],
-                'extra_options' => [
-                    'type' => 'tags',
-                    'label' => 'Extra Options',
-                    'default' => [],
-                    'help' => 'Optional flags: no-logs, no-stats, no-mail-contents.',
+                'include_db' => [
+                    'type' => 'checkbox',
+                    'label' => 'Include databases',
+                    'default' => true,
+                    'show_when' => ['backup_type' => 'partial'],
+                ],
+                'include_mail' => [
+                    'type' => 'checkbox',
+                    'label' => 'Include email',
+                    'default' => true,
+                    'show_when' => ['backup_type' => 'partial'],
+                ],
+                'no_logs' => [
+                    'type' => 'checkbox',
+                    'label' => 'Exclude log files',
+                    'default' => false,
+                    'show_when' => ['backup_type' => 'partial'],
+                ],
+                'no_stats' => [
+                    'type' => 'checkbox',
+                    'label' => 'Exclude stats files',
+                    'default' => false,
+                    'show_when' => ['backup_type' => 'partial'],
                 ],
                 'domains' => [
                     'type' => 'text',
                     'label' => 'Domains',
                     'default' => 'all',
-                    'help' => 'Use "all" for all domains, or space/comma-separated list. Supports regex (e.g. ^example\.(.*)$).',
+                    'help' => 'Use "all" for all domains, or space/comma-separated list.',
                 ],
                 'output_dir' => [
                     'type' => 'text',
@@ -592,18 +610,6 @@ class PluginManager
                     'label' => 'Compression Level',
                     'default' => 6,
                     'help' => 'Compression level 1-9 (default 6). Higher = smaller files but slower.',
-                ],
-                'exclude_dirs' => [
-                    'type' => 'text',
-                    'label' => 'Exclude Directories',
-                    'default' => '',
-                    'help' => 'Comma-separated directories to exclude, relative to webroot (e.g. html/cache, html/tmp).',
-                ],
-                'exclude_exts' => [
-                    'type' => 'text',
-                    'label' => 'Exclude Extensions',
-                    'default' => '',
-                    'help' => 'Comma-separated file extensions to exclude (e.g. jpg, gif, mp4).',
                 ],
                 'cleanup_after' => [
                     'type' => 'checkbox',

@@ -1712,15 +1712,6 @@ def execute_plugin_interworx(config):
     domains = config.get("domains", "all")
     compression = str(config.get("compression", 6))
     no_disabled = config.get("no_disabled", True)
-    exclude_dirs = config.get("exclude_dirs", "")
-    exclude_exts = config.get("exclude_exts", "")
-    partial_options = config.get("partial_options", ["web", "db", "mail"])
-    extra_options = config.get("extra_options", [])
-
-    if isinstance(partial_options, str):
-        partial_options = [x.strip() for x in partial_options.split(",") if x.strip()]
-    if isinstance(extra_options, str):
-        extra_options = [x.strip() for x in extra_options.split(",") if x.strip()]
 
     # Build command
     cmd = [os.path.expanduser("~iworx/bin/backup.pex")]
@@ -1739,28 +1730,25 @@ def execute_plugin_interworx(config):
     if backup_type == "structure_only":
         cmd.append("--structure-only")
     elif backup_type == "partial":
-        opts = list(partial_options) + list(extra_options)
+        opts = []
+        if config.get("include_web", True):
+            opts.append("web")
+        if config.get("include_db", True):
+            opts.append("db")
+        if config.get("include_mail", True):
+            opts.append("mail")
+        if config.get("no_logs", False):
+            opts.append("no-logs")
+        if config.get("no_stats", False):
+            opts.append("no-stats")
         if opts:
             cmd.extend(["--backup-options"] + opts)
     else:
         # Full backup
-        opts = ["all"] + list(extra_options)
-        cmd.extend(["--backup-options"] + opts)
+        cmd.extend(["--backup-options", "all"])
 
     if no_disabled:
         cmd.append("--no-disabled")
-
-    # Exclude dirs
-    if exclude_dirs:
-        dirs = [d.strip() for d in exclude_dirs.split(",") if d.strip()]
-        if dirs:
-            cmd.extend(["--exclude-dirs"] + dirs)
-
-    # Exclude extensions
-    if exclude_exts:
-        exts = [e.strip() for e in exclude_exts.split(",") if e.strip()]
-        if exts:
-            cmd.extend(["--exclude-exts"] + exts)
 
     logger.info("Running InterWorx backup: {}".format(" ".join(cmd)))
 

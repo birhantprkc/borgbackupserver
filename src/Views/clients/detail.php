@@ -2404,14 +2404,29 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                             <?php foreach ($schema as $field => $def):
                                 $val = $cfgData[$field] ?? $def['default'] ?? '';
                                 if (is_array($val)) $val = implode(', ', $val);
+                                $showWhen = $def['show_when'] ?? null;
+                                $showWhenAttr = '';
+                                if ($showWhen) {
+                                    $swField = array_key_first($showWhen);
+                                    $swValue = $showWhen[$swField];
+                                    $showWhenAttr = ' class="plugin-show-when" data-show-field="' . htmlspecialchars($swField) . '" data-show-value="' . htmlspecialchars($swValue) . '"';
+                                }
                             ?>
-                            <div class="mb-2">
+                            <div class="mb-2"<?= $showWhenAttr ?>>
                                 <?php if ($def['type'] === 'checkbox'): ?>
                                     <div class="form-check"><input class="form-check-input" type="checkbox" name="plugin_config[<?= $field ?>]" value="1" id="editCfg<?= $cfg['id'] ?>_<?= $field ?>" <?= $val ? 'checked' : '' ?>><label class="form-check-label small" for="editCfg<?= $cfg['id'] ?>_<?= $field ?>"><?= htmlspecialchars($def['label']) ?></label></div>
+                                <?php elseif ($def['type'] === 'select'): ?>
+                                    <label class="form-label small fw-semibold mb-1"><?= htmlspecialchars($def['label']) ?></label>
+                                    <select class="form-select form-select-sm plugin-select-trigger" name="plugin_config[<?= $field ?>]" data-field="<?= $field ?>">
+                                        <?php foreach ($def['options'] as $optVal => $optLabel): ?>
+                                        <option value="<?= htmlspecialchars($optVal) ?>" <?= $val === $optVal ? 'selected' : '' ?>><?= htmlspecialchars($optLabel) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
                                 <?php else: ?>
                                     <label class="form-label small fw-semibold mb-1"><?= htmlspecialchars($def['label']) ?></label>
                                     <input type="<?= $def['type'] === 'number' ? 'number' : 'text' ?>" class="form-control form-control-sm" name="plugin_config[<?= $field ?>]" value="<?= !empty($def['sensitive']) ? '' : htmlspecialchars($val) ?>" <?= !empty($def['sensitive']) ? 'placeholder="(unchanged if empty)"' : '' ?>>
                                 <?php endif; ?>
+                                <?php if (!empty($def['help'])): ?><div class="form-text small"><?= htmlspecialchars($def['help']) ?></div><?php endif; ?>
                             </div>
                             <?php endforeach; ?>
                         <?php endif; ?>
@@ -2499,14 +2514,29 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                     <?php foreach ($schema as $field => $def):
                                         $default = $def['default'] ?? '';
                                         $fieldVal = is_array($default) ? implode(', ', $default) : $default;
+                                        $showWhen = $def['show_when'] ?? null;
+                                        $showWhenAttr = '';
+                                        if ($showWhen) {
+                                            $swField = array_key_first($showWhen);
+                                            $swValue = $showWhen[$swField];
+                                            $showWhenAttr = ' class="plugin-show-when" data-show-field="' . htmlspecialchars($swField) . '" data-show-value="' . htmlspecialchars($swValue) . '"';
+                                        }
                                     ?>
-                                    <div class="mb-2">
+                                    <div class="mb-2"<?= $showWhenAttr ?>>
                                         <?php if ($def['type'] === 'checkbox'): ?>
                                             <div class="form-check"><input class="form-check-input" type="checkbox" name="plugin_config[<?= $field ?>]" value="1" id="newCfg<?= $plugin['id'] ?>_<?= $field ?>" <?= $default ? 'checked' : '' ?>><label class="form-check-label small" for="newCfg<?= $plugin['id'] ?>_<?= $field ?>"><?= htmlspecialchars($def['label']) ?></label></div>
+                                        <?php elseif ($def['type'] === 'select'): ?>
+                                            <label class="form-label small fw-semibold mb-1"><?= htmlspecialchars($def['label']) ?></label>
+                                            <select class="form-select form-select-sm plugin-select-trigger" name="plugin_config[<?= $field ?>]" data-field="<?= $field ?>">
+                                                <?php foreach ($def['options'] as $optVal => $optLabel): ?>
+                                                <option value="<?= htmlspecialchars($optVal) ?>" <?= $default === $optVal ? 'selected' : '' ?>><?= htmlspecialchars($optLabel) ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
                                         <?php else: ?>
                                             <label class="form-label small fw-semibold mb-1"><?= htmlspecialchars($def['label']) ?></label>
                                             <input type="<?= $def['type'] === 'number' ? 'number' : 'text' ?>" class="form-control form-control-sm" name="plugin_config[<?= $field ?>]" value="<?= htmlspecialchars($fieldVal) ?>">
                                         <?php endif; ?>
+                                        <?php if (!empty($def['help'])): ?><div class="form-text small"><?= htmlspecialchars($def['help']) ?></div><?php endif; ?>
                                     </div>
                                     <?php endforeach; ?>
                                 <?php endif; ?>
