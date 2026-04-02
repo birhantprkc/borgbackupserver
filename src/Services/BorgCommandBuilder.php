@@ -238,8 +238,9 @@ class BorgCommandBuilder
         // Relative paths: /./reponame -> reponame
         // Absolute paths: //var/bbs/home/27/reponame -> /var/bbs/home/27/reponame
         if (str_starts_with($parsedPath, '//')) {
-            // Absolute path embedded in SSH URL — return as-is (strip leading extra slash)
-            return substr($parsedPath, 1);
+            // Absolute path embedded in SSH URL — strip extra leading slashes
+            // parse_url returns ///path for ssh://host//path, so trim down to one /
+            return '/' . ltrim($parsedPath, '/');
         }
 
         // Relative path (e.g. /./reponame) — need to resolve against a base dir
