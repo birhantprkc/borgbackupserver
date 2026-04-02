@@ -2256,6 +2256,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
         'mysql_dump' => '/images/mysql.png',
         'pg_dump' => '/images/postgresql.svg',
         'mongo_dump' => '/images/mongodb.svg',
+        'interworx' => '/images/interworx.svg',
     ];
     $randomPass = substr(str_shuffle('abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'), 0, 20);
 

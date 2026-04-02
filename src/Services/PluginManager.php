@@ -546,6 +546,71 @@ class PluginManager
                     'help' => 'Additional command-line flags for mongodump (e.g. --oplog for replica sets).',
                 ],
             ],
+            'interworx' => [
+                'backup_type' => [
+                    'type' => 'select',
+                    'label' => 'Backup Type',
+                    'options' => [
+                        'full' => 'Full Backup (all data)',
+                        'partial' => 'Partial Backup (select components)',
+                        'structure_only' => 'Structure Only (manifest XML, no data files)',
+                    ],
+                    'default' => 'full',
+                ],
+                'partial_options' => [
+                    'type' => 'tags',
+                    'label' => 'Partial Backup Components',
+                    'default' => ['web', 'db', 'mail'],
+                    'help' => 'Select which components to include: web, db, mail. Only used when Backup Type is "Partial".',
+                ],
+                'extra_options' => [
+                    'type' => 'tags',
+                    'label' => 'Extra Options',
+                    'default' => [],
+                    'help' => 'Optional flags: no-logs, no-stats, no-mail-contents.',
+                ],
+                'domains' => [
+                    'type' => 'text',
+                    'label' => 'Domains',
+                    'default' => 'all',
+                    'help' => 'Use "all" for all domains, or space/comma-separated list. Supports regex (e.g. ^example\.(.*)$).',
+                ],
+                'output_dir' => [
+                    'type' => 'text',
+                    'label' => 'Output Directory',
+                    'default' => '/chroot/home/backup/interworx',
+                    'required' => true,
+                    'help' => 'Directory where InterWorx backup archives are saved. Automatically included in backup directories.',
+                ],
+                'no_disabled' => [
+                    'type' => 'checkbox',
+                    'label' => 'Skip disabled/inactive domains',
+                    'default' => true,
+                ],
+                'compression' => [
+                    'type' => 'number',
+                    'label' => 'Compression Level',
+                    'default' => 6,
+                    'help' => 'Compression level 1-9 (default 6). Higher = smaller files but slower.',
+                ],
+                'exclude_dirs' => [
+                    'type' => 'text',
+                    'label' => 'Exclude Directories',
+                    'default' => '',
+                    'help' => 'Comma-separated directories to exclude, relative to webroot (e.g. html/cache, html/tmp).',
+                ],
+                'exclude_exts' => [
+                    'type' => 'text',
+                    'label' => 'Exclude Extensions',
+                    'default' => '',
+                    'help' => 'Comma-separated file extensions to exclude (e.g. jpg, gif, mp4).',
+                ],
+                'cleanup_after' => [
+                    'type' => 'checkbox',
+                    'label' => 'Delete backup files after borg archive completes',
+                    'default' => true,
+                ],
+            ],
             's3_sync' => [
                 'credential_source' => [
                     'type' => 'select',
@@ -674,6 +739,16 @@ class PluginManager
                 . "])\n\n"
                 . "-- Note: Authentication is optional. Leave username/password\n"
                 . "-- empty if your MongoDB instance does not require auth.",
+            'interworx' => "InterWorx control panel backup plugin.\n\n"
+                . "Requires InterWorx to be installed at the default location\n"
+                . "(~iworx/bin/backup.pex must be accessible).\n\n"
+                . "Backup types:\n"
+                . "  Full    - All website files, databases, and email\n"
+                . "  Partial - Select components (web, db, mail)\n"
+                . "  Structure Only - Manifest XML only, no data files\n\n"
+                . "The output directory is automatically included in the\n"
+                . "backup plan's directory list. After borg archives the\n"
+                . "backup files, they can optionally be cleaned up.",
         ];
 
         return $help[$slug] ?? '';

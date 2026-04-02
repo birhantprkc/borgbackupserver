@@ -44,7 +44,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.19.1"
+AGENT_VERSION = "2.20.1"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -1115,6 +1115,7 @@ PLUGIN_DISPLAY_NAMES = {
     "mysql_dump": "MySQL Dump",
     "pg_dump": "PostgreSQL Dump",
     "mongo_dump": "MongoDB Dump",
+    "interworx": "InterWorx Backup",
     "shell_hook": "Shell Script Hook",
 }
 
@@ -1179,6 +1180,15 @@ def _plugin_summary(slug, config, result):
                         total_size += os.path.getsize(fp)
         size_str = _format_size(total_size)
         return "MongoDB dump: {} database(s) ({}) dumped to {} ({})".format(len(databases), ', '.join(databases), dump_dir, size_str)
+    if slug == "interworx":
+        dump_dir = result.get("dump_dir", "")
+        backup_type = result.get("backup_type", "full")
+        file_count = result.get("file_count", 0)
+        dump_files = result.get("dump_files", [])
+        total_size = sum(os.path.getsize(f) for f in dump_files if os.path.exists(f))
+        size_str = _format_size(total_size)
+        type_label = {"full": "Full", "partial": "Partial", "structure_only": "Structure only"}.get(backup_type, backup_type)
+        return "InterWorx {}: {} file(s) in {} ({})".format(type_label, file_count, dump_dir, size_str)
     if slug == "shell_hook":
         parts = []
         pre = result.get("pre_script", "")
@@ -1691,6 +1701,130 @@ def test_plugin_mongo_dump(config):
     raw_output = result.stdout.decode("utf-8", errors="replace").strip()
     dbs = _parse_mongo_db_list(raw_output)
     return "Connection successful. Found {} database(s): {}".format(len(dbs), ', '.join(dbs[:10]))
+
+
+def execute_plugin_interworx(config):
+    """Run InterWorx control panel backup before borg archive."""
+    output_dir = config.get("output_dir", "/chroot/home/backup/interworx")
+    os.makedirs(output_dir, exist_ok=True)
+
+    backup_type = config.get("backup_type", "full")
+    domains = config.get("domains", "all")
+    compression = str(config.get("compression", 6))
+    no_disabled = config.get("no_disabled", True)
+    exclude_dirs = config.get("exclude_dirs", "")
+    exclude_exts = config.get("exclude_exts", "")
+    partial_options = config.get("partial_options", ["web", "db", "mail"])
+    extra_options = config.get("extra_options", [])
+
+    if isinstance(partial_options, str):
+        partial_options = [x.strip() for x in partial_options.split(",") if x.strip()]
+    if isinstance(extra_options, str):
+        extra_options = [x.strip() for x in extra_options.split(",") if x.strip()]
+
+    # Build command
+    cmd = [os.path.expanduser("~iworx/bin/backup.pex")]
+    cmd.extend(["--output-dir", output_dir])
+    cmd.extend(["--tmp-dir", output_dir])
+    cmd.extend(["--compression", compression])
+
+    # Domains
+    if isinstance(domains, str):
+        domain_list = [d.strip() for d in domains.replace(",", " ").split() if d.strip()]
+    else:
+        domain_list = domains
+    cmd.extend(["--domains"] + domain_list)
+
+    # Backup type
+    if backup_type == "structure_only":
+        cmd.append("--structure-only")
+    elif backup_type == "partial":
+        opts = list(partial_options) + list(extra_options)
+        if opts:
+            cmd.extend(["--backup-options"] + opts)
+    else:
+        # Full backup
+        opts = ["all"] + list(extra_options)
+        cmd.extend(["--backup-options"] + opts)
+
+    if no_disabled:
+        cmd.append("--no-disabled")
+
+    # Exclude dirs
+    if exclude_dirs:
+        dirs = [d.strip() for d in exclude_dirs.split(",") if d.strip()]
+        if dirs:
+            cmd.extend(["--exclude-dirs"] + dirs)
+
+    # Exclude extensions
+    if exclude_exts:
+        exts = [e.strip() for e in exclude_exts.split(",") if e.strip()]
+        if exts:
+            cmd.extend(["--exclude-exts"] + exts)
+
+    logger.info("Running InterWorx backup: {}".format(" ".join(cmd)))
+
+    r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=7200)
+    if r.returncode != 0:
+        stderr = r.stderr.decode("utf-8", errors="replace")
+        stdout = r.stdout.decode("utf-8", errors="replace")
+        raise Exception("InterWorx backup failed (exit {}): {}".format(r.returncode, (stderr or stdout)[:2000]))
+
+    # Count backup files created
+    backup_files = []
+    if os.path.isdir(output_dir):
+        for f in os.listdir(output_dir):
+            fp = os.path.join(output_dir, f)
+            if os.path.isfile(fp):
+                backup_files.append(fp)
+
+    logger.info("InterWorx backup complete: {} file(s) in {}".format(len(backup_files), output_dir))
+    return {
+        "dump_dir": output_dir,
+        "dump_files": backup_files,
+        "backup_type": backup_type,
+        "file_count": len(backup_files),
+    }
+
+
+def cleanup_plugin_interworx(config, plugin_result):
+    """Delete InterWorx backup files after borg archive completes."""
+    if not config.get("cleanup_after", True):
+        return
+    dump_dir = plugin_result.get("dump_dir")
+    if not dump_dir or not os.path.exists(dump_dir):
+        return
+    logger.info("Cleaning up InterWorx backups in {}".format(dump_dir))
+    for f in os.listdir(dump_dir):
+        fp = os.path.join(dump_dir, f)
+        if os.path.isfile(fp):
+            try:
+                os.unlink(fp)
+            except Exception:
+                pass
+        elif os.path.isdir(fp):
+            import shutil
+            shutil.rmtree(fp, ignore_errors=True)
+
+
+def test_plugin_interworx(config):
+    """Test InterWorx availability."""
+    backup_pex = os.path.expanduser("~iworx/bin/backup.pex")
+    if not os.path.exists(backup_pex):
+        raise Exception("InterWorx backup tool not found at {}".format(backup_pex))
+
+    # Check it's executable
+    if not os.access(backup_pex, os.X_OK):
+        raise Exception("{} exists but is not executable".format(backup_pex))
+
+    output_dir = config.get("output_dir", "/chroot/home/backup/interworx")
+    if not os.path.isdir(output_dir):
+        try:
+            os.makedirs(output_dir, exist_ok=True)
+        except Exception as e:
+            raise Exception("Cannot create output directory {}: {}".format(output_dir, e))
+
+    return "InterWorx backup tool found at {}. Output directory {} is ready.".format(backup_pex, output_dir)
 
 
 def execute_plugin_shell_hook(config):
