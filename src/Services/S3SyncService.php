@@ -50,7 +50,10 @@ class S3SyncService
                 'access_key' => $settings['access_key'] ?? '',
                 'secret_key' => $settings['secret_key'] ?? '',
                 'path_prefix' => $config['path_prefix'] ?? $settings['path_prefix'] ?? '',
-                'bandwidth_limit' => $config['bandwidth_limit'] ?? '',
+                'bandwidth_limit' => $config['bandwidth_limit'] ?? $settings['bandwidth_limit'] ?? '',
+                'storage_class' => $settings['storage_class'] ?? '',
+                'sse_mode' => $settings['sse_mode'] ?? '',
+                'sse_kms_key_id' => $settings['sse_kms_key_id'] ?? '',
             ];
         }
 
@@ -81,6 +84,9 @@ class S3SyncService
             'secret_key' => $secretKey,
             'path_prefix' => $config['path_prefix'] ?? '',
             'bandwidth_limit' => $config['bandwidth_limit'] ?? '',
+            'storage_class' => $config['storage_class'] ?? '',
+            'sse_mode' => $config['sse_mode'] ?? '',
+            'sse_kms_key_id' => $config['sse_kms_key_id'] ?? '',
         ];
     }
 
@@ -97,6 +103,16 @@ class S3SyncService
             'RCLONE_CONFIG_S3_ENDPOINT' => $creds['endpoint'],
             'RCLONE_CONFIG_S3_REGION' => $creds['region'],
         ];
+
+        if (!empty($creds['storage_class'])) {
+            $env['RCLONE_CONFIG_S3_STORAGE_CLASS'] = $creds['storage_class'];
+        }
+        if (!empty($creds['sse_mode'])) {
+            $env['RCLONE_CONFIG_S3_SERVER_SIDE_ENCRYPTION'] = $creds['sse_mode'];
+            if ($creds['sse_mode'] === 'aws:kms' && !empty($creds['sse_kms_key_id'])) {
+                $env['RCLONE_CONFIG_S3_SSE_KMS_KEY_ID'] = $creds['sse_kms_key_id'];
+            }
+        }
 
         return $env;
     }

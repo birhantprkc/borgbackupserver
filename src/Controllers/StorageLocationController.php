@@ -206,7 +206,7 @@ class StorageLocationController extends Controller
             }
         }
 
-        $fields = ['s3_endpoint', 's3_region', 's3_bucket', 's3_path_prefix', 's3_sync_server_backups'];
+        $fields = ['s3_endpoint', 's3_region', 's3_bucket', 's3_path_prefix', 's3_storage_class', 's3_sse_mode', 's3_sse_kms_key_id', 's3_bandwidth_limit', 's3_sync_server_backups'];
         foreach ($fields as $key) {
             if (isset($_POST[$key])) {
                 $existing = $this->db->fetchOne("SELECT `key` FROM settings WHERE `key` = ?", [$key]);
