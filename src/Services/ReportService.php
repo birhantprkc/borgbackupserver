@@ -93,7 +93,9 @@ class ReportService
             ];
         }
 
-        // Day's errors
+        // Day's errors (from the report period)
+        $dayStart = $reportDate . ' 00:00:00';
+        $dayEnd = $reportDate . ' 23:59:59';
         $errors = $this->db->fetchAll("
             SELECT sl.agent_id, sl.message, sl.created_at, a.name as agent_name
             FROM server_log sl

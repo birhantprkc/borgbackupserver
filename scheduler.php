@@ -155,7 +155,7 @@ try {
         // Skip archives created in the last 30 minutes — the normal post-backup
         // catalog indexing handles those; triggering a rebuild too early causes loops
         $repos = $db->fetchAll(
-            "SELECT r.id, r.agent_id, r.path as repo_path, r.storage_type, a.id AS archive_id
+            "SELECT r.id, r.agent_id, r.path, r.name, r.storage_type, r.storage_location_id, a.id AS archive_id
              FROM repositories r
              JOIN archives a ON a.repository_id = r.id
              WHERE a.created_at < DATE_SUB(NOW(), INTERVAL 30 MINUTE)"
@@ -163,7 +163,7 @@ try {
         $needsRebuild = [];
         foreach ($repos as $row) {
             if (!isset($indexedIds[$row['archive_id']])) {
-                $needsRebuild[$row['id']] = ['agent_id' => $row['agent_id'], 'repo_path' => $row['repo_path'], 'storage_type' => $row['storage_type']];
+                $needsRebuild[$row['id']] = $row;
             }
         }
         foreach ($needsRebuild as $repoId => $info) {
@@ -171,7 +171,8 @@ try {
 
             // Skip repos whose data doesn't exist on disk (e.g. after restore to a new server)
             if ($info['storage_type'] === 'local' || empty($info['storage_type'])) {
-                if (!empty($info['repo_path']) && !is_dir($info['repo_path'])) {
+                $checkPath = \BBS\Services\BorgCommandBuilder::getLocalRepoPath($info);
+                if (!empty($checkPath) && !is_dir($checkPath)) {
                     continue;
                 }
             }
