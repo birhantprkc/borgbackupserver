@@ -551,11 +551,11 @@ class PluginManager
                     'type' => 'select',
                     'label' => 'Backup Type',
                     'options' => [
+                        'structure_only' => 'Structure Only (manifest XML, no data files)',
                         'full' => 'Full Backup (all data)',
                         'partial' => 'Partial Backup (select components)',
-                        'structure_only' => 'Structure Only (manifest XML, no data files)',
                     ],
-                    'default' => 'full',
+                    'default' => 'structure_only',
                 ],
                 'include_web' => [
                     'type' => 'checkbox',
