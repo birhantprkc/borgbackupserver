@@ -2519,10 +2519,10 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                         if ($showWhen) {
                                             $swField = array_key_first($showWhen);
                                             $swValue = $showWhen[$swField];
-                                            $showWhenAttr = ' class="plugin-show-when" data-show-field="' . htmlspecialchars($swField) . '" data-show-value="' . htmlspecialchars($swValue) . '"';
+                                            $showWhenAttr = ' data-show-field="' . htmlspecialchars($swField) . '" data-show-value="' . htmlspecialchars($swValue) . '"';
                                         }
                                     ?>
-                                    <div class="mb-2"<?= $showWhenAttr ?>>
+                                    <div class="mb-2<?= $showWhen ? ' plugin-show-when' : '' ?>"<?= $showWhenAttr ?>>
                                         <?php if ($def['type'] === 'checkbox'): ?>
                                             <div class="form-check"><input class="form-check-input" type="checkbox" name="plugin_config[<?= $field ?>]" value="1" id="newCfg<?= $plugin['id'] ?>_<?= $field ?>" <?= $default ? 'checked' : '' ?>><label class="form-check-label small" for="newCfg<?= $plugin['id'] ?>_<?= $field ?>"><?= htmlspecialchars($def['label']) ?></label></div>
                                         <?php elseif ($def['type'] === 'select'): ?>
