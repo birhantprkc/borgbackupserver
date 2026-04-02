@@ -1,5 +1,6 @@
 #!/usr/bin/env php
 <?php
+date_default_timezone_set('UTC');
 /**
  * Scheduler CLI - Run via cron every minute:
  *   * * * * * php /path/to/borgbackupserver/scheduler.php

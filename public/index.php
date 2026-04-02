@@ -1,5 +1,9 @@
 <?php
 
+// Force PHP to use UTC for all date/time functions — matches MySQL and prevents
+// timezone mismatches when writing timestamps to the database with date().
+date_default_timezone_set('UTC');
+
 require_once dirname(__DIR__) . '/vendor/autoload.php';
 
 // Security headers — safe for both HTTP (LAN) and HTTPS deployments
