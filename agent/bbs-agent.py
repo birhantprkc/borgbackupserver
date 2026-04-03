@@ -44,7 +44,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.20.1"
+AGENT_VERSION = "2.21.2"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -1220,22 +1220,42 @@ def _format_size(bytes_val):
     return "{:.1f} PB".format(bytes_val)
 
 
-def cleanup_plugins(plugins, plugin_results, config=None, job_id=None):
-    """Run post-backup cleanup for plugins."""
+def cleanup_plugins(plugins, plugin_results, config=None, job_id=None, backup_result="completed"):
+    """Run post-backup cleanup for plugins.
+    Shell hook post-scripts always run (to restart services stopped by pre-scripts).
+    File cleanup (dump deletion) only runs on successful backups.
+    """
     for plugin in plugins:
         slug = plugin.get("slug", "")
         cfg = plugin.get("config", {})
+
+        # Shell hook post-scripts ALWAYS run regardless of backup result
+        if slug == "shell_hook":
+            func = globals().get("cleanup_plugin_shell_hook")
+            if func:
+                try:
+                    cleanup_result = func(cfg, plugin_results.get(slug, {}))
+                    if config and job_id and cleanup_result:
+                        log_to_server(config, job_id, "Shell hook post-script: {}".format(cleanup_result))
+                except Exception as e:
+                    logger.warning("Shell hook post-script failed: {}".format(e))
+                    if config and job_id:
+                        log_to_server(config, job_id, "Shell hook post-script failed: {}".format(e), "warning")
+            continue
+
+        # Other plugin cleanup (dump file deletion) only on success
+        if backup_result != "completed":
+            continue
+
         func = globals().get("cleanup_plugin_{}".format(slug))
         if func:
             try:
-                cleanup_result = func(cfg, plugin_results.get(slug, {}))
+                func(cfg, plugin_results.get(slug, {}))
                 if config and job_id:
                     if cfg.get("cleanup_after", True):
                         dump_dir = plugin_results.get(slug, {}).get("dump_dir", "")
                         if dump_dir:
                             log_to_server(config, job_id, "Plugin cleanup: removed dump files from {}".format(dump_dir))
-                    if slug == "shell_hook" and cleanup_result:
-                        log_to_server(config, job_id, "Shell hook post-script: {}".format(cleanup_result))
             except Exception as e:
                 logger.warning("Plugin cleanup for {} failed: {}".format(slug, e))
                 if config and job_id:
@@ -3040,9 +3060,10 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
     status_data["result"] = result
     report_status(config, status_data)
 
-    # Run post-backup plugin cleanup
-    if result == "completed" and task_type == "backup" and plugins and plugin_results:
-        cleanup_plugins(plugins, plugin_results, config, job_id)
+    # Run post-backup plugin cleanup (always run shell_hook post-scripts to
+    # restart services even if backup failed; other cleanup only on success)
+    if task_type == "backup" and plugins:
+        cleanup_plugins(plugins, plugin_results, config, job_id, backup_result=result)
 
     # Clean up temporary SSH key for remote repos
     if remote_ssh_key and os.path.exists(remote_key_path):

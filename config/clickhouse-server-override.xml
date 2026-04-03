@@ -2,6 +2,16 @@
     <!-- Reduce idle CPU: poll internal metrics every 60s instead of every 1s -->
     <asynchronous_metrics_update_period_s>60</asynchronous_metrics_update_period_s>
 
+    <!-- Limit ClickHouse's own file-based logging to prevent filling disk -->
+    <logger>
+        <level>warning</level>
+        <log>/var/log/clickhouse-server/clickhouse-server.log</log>
+        <errorlog>/var/log/clickhouse-server/clickhouse-server.err.log</errorlog>
+        <size>10M</size>
+        <count>2</count>
+        <stderr>/dev/null</stderr>
+    </logger>
+
     <!-- Disable system log tables that generate heavy disk I/O when idle -->
     <query_log remove="remove"/>
     <query_thread_log remove="remove"/>
