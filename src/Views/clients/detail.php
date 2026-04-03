@@ -2812,7 +2812,7 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
                         $dbLabel = " ({$n} " . ($n === 1 ? 'database' : 'databases') . ')';
                     ?>
                         <option value="<?= $ar['id'] ?>">
-                            <?= \BBS\Core\TimeHelper::format($ar['created_at'], 'l, M j, Y \a\t g:i A') ?><?= $dbLabel ?>
+                            <?= \BBS\Core\TimeHelper::format($ar['created_at'], 'l, M j, Y \a\t g:i A') ?><?= !empty($ar['plan_name']) ? ' — ' . htmlspecialchars($ar['plan_name']) : '' ?><?= $dbLabel ?>
                         </option>
                     <?php endforeach; ?>
                     <?php if ($currentRepo !== null) echo '</optgroup>'; ?>
@@ -2837,7 +2837,7 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
                         endif;
                     ?>
                         <option value="<?= $ar['id'] ?>">
-                            <?= \BBS\Core\TimeHelper::format($ar['created_at'], 'l, M j, Y \a\t g:i A') ?>
+                            <?= \BBS\Core\TimeHelper::format($ar['created_at'], 'l, M j, Y \a\t g:i A') ?><?= !empty($ar['plan_name']) ? ' — ' . htmlspecialchars($ar['plan_name']) : '' ?>
                         </option>
                     <?php endforeach; ?>
                     <?php if ($currentRepo !== null) echo '</optgroup>'; ?>
