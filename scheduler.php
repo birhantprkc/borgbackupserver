@@ -57,7 +57,7 @@ $staleJobs = $db->fetchAll("
     JOIN agents a ON a.id = bj.agent_id
     WHERE bj.status IN ('sent', 'running')
       AND a.status = 'offline'
-      AND bj.task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full')
+      AND bj.task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full', 'archive_delete')
 ");
 
 foreach ($staleJobs as $sj) {
@@ -100,7 +100,7 @@ $zombieJobs = $db->fetchAll("
     JOIN agents a ON a.id = bj.agent_id
     WHERE bj.status IN ('running', 'sent')
       AND a.status = 'online'
-      AND bj.task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full')
+      AND bj.task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full', 'archive_delete')
       AND bj.queued_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)
       AND (bj.last_progress_at IS NULL OR bj.last_progress_at < DATE_SUB(NOW(), INTERVAL 60 MINUTE))
 ");
@@ -1244,6 +1244,17 @@ foreach ($serverJobs as $sj) {
         $borgArgs = ['check', '--repair', $repoPath];
     } elseif ($sj['task_type'] === 'break_lock') {
         $borgArgs = ['break-lock', $repoPath];
+    } elseif ($sj['task_type'] === 'archive_delete') {
+        $archiveName = $sj['status_message'] ?? '';
+        if (empty($archiveName)) {
+            $db->update('backup_jobs', [
+                'status' => 'failed',
+                'completed_at' => date('Y-m-d H:i:s'),
+                'error_log' => 'No archive name specified for deletion',
+            ], 'id = ?', [$sj['id']]);
+            continue;
+        }
+        $borgArgs = ['delete', $repoPath . '::' . $archiveName];
     } else {
         // Unknown task type
         $db->update('backup_jobs', [
@@ -1479,6 +1490,28 @@ foreach ($serverJobs as $sj) {
                 ]);
             }
             } // end JSON validation else
+        }
+    }
+
+    // After successful archive_delete, remove the archive from the database
+    if ($result === 'completed' && $sj['task_type'] === 'archive_delete' && !empty($sj['status_message'])) {
+        $archiveName = $sj['status_message'];
+        $deletedArchive = $db->fetchOne(
+            "SELECT id FROM archives WHERE repository_id = ? AND archive_name = ?",
+            [$sj['repository_id'], $archiveName]
+        );
+        if ($deletedArchive) {
+            // Clean up catalog entries in ClickHouse
+            try {
+                $chDel = \BBS\Core\ClickHouse::getInstance();
+                $archiveIdInt = (int) $deletedArchive['id'];
+                $agentIdInt = (int) $sj['agent_id'];
+                $chDel->exec("ALTER TABLE file_catalog DELETE WHERE agent_id = {$agentIdInt} AND archive_id = {$archiveIdInt}");
+                $chDel->exec("ALTER TABLE catalog_dirs DELETE WHERE agent_id = {$agentIdInt} AND archive_id = {$archiveIdInt}");
+            } catch (\Exception $e) { /* ClickHouse may not be available */ }
+
+            $db->delete('archives', 'id = ?', [$deletedArchive['id']]);
+            echo date('Y-m-d H:i:s') . " Removed archive \"{$archiveName}\" from DB for repo #{$sj['repository_id']}\n";
         }
     }
 

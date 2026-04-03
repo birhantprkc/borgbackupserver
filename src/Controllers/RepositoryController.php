@@ -601,6 +601,54 @@ class RepositoryController extends Controller
     /**
      * Queue a repository maintenance task (check, compact, repair, break_lock).
      */
+    public function deleteArchive(int $agentId, int $id, int $archiveId): void
+    {
+        $this->requireAuth();
+        $this->verifyCsrf();
+
+        $repo = $this->db->fetchOne("SELECT r.* FROM repositories r WHERE r.id = ? AND r.agent_id = ?", [$id, $agentId]);
+        if (!$repo || !$this->canAccessAgent($agentId)) {
+            $this->flash('danger', 'Repository not found.');
+            $this->redirect('/clients');
+        }
+
+        $this->requirePermission(PermissionService::MANAGE_REPOS, $agentId);
+
+        $archive = $this->db->fetchOne("SELECT * FROM archives WHERE id = ? AND repository_id = ?", [$archiveId, $id]);
+        if (!$archive) {
+            $this->flash('danger', 'Archive not found.');
+            $this->redirect("/clients/{$agentId}/repo/{$id}");
+        }
+
+        // Check for existing delete job for this archive
+        $existing = $this->db->fetchOne(
+            "SELECT id FROM backup_jobs WHERE repository_id = ? AND task_type = 'archive_delete' AND status IN ('queued', 'sent', 'running') AND status_message = ?",
+            [$id, $archive['archive_name']]
+        );
+        if ($existing) {
+            $this->flash('warning', 'A delete job is already queued for this archive.');
+            $this->redirect("/clients/{$agentId}/repo/{$id}");
+        }
+
+        $jobId = $this->db->insert('backup_jobs', [
+            'agent_id' => $agentId,
+            'repository_id' => $id,
+            'task_type' => 'archive_delete',
+            'status' => 'queued',
+            'status_message' => $archive['archive_name'],
+        ]);
+
+        $this->db->insert('server_log', [
+            'agent_id' => $agentId,
+            'backup_job_id' => $jobId,
+            'level' => 'info',
+            'message' => "Archive delete queued: {$archive['archive_name']} from repo \"{$repo['name']}\"",
+        ]);
+
+        $this->flash('success', "Archive deletion queued for \"{$archive['archive_name']}\". It will run when a slot is available.");
+        $this->redirect("/clients/{$agentId}/repo/{$id}");
+    }
+
     public function maintenance(int $id): void
     {
         $this->requireAuth();
