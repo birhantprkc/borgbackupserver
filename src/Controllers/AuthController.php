@@ -66,7 +66,8 @@ class AuthController extends Controller
         $_SESSION['user_role'] = $user['role'];
         $_SESSION['timezone'] = $user['timezone'] ?? 'America/New_York';
         $_SESSION['time_format'] = $user['time_format'] ?? '12h';
-        $_SESSION['theme'] = $user['theme'] ?? 'dark';
+        $defaultTheme = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'default_theme'");
+        $_SESSION['theme'] = $user['theme'] ?? $defaultTheme['value'] ?? 'dark';
         $_SESSION['login_time'] = time();
         $_SESSION['last_activity'] = time();
 

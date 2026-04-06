@@ -150,6 +150,14 @@ $updateAvailable = $updateService->isUpdateAvailable();
                         <input type="number" class="form-control" name="session_timeout_hours" value="<?= htmlspecialchars($settings['session_timeout_hours'] ?? '8') ?>" min="1" max="720">
                         <div class="form-text">Log out after this many hours of inactivity.</div>
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Default Theme</label>
+                        <select class="form-select" name="default_theme">
+                            <option value="dark" <?= ($settings['default_theme'] ?? 'dark') === 'dark' ? 'selected' : '' ?>>Dark</option>
+                            <option value="light" <?= ($settings['default_theme'] ?? 'dark') === 'light' ? 'selected' : '' ?>>Light</option>
+                        </select>
+                        <div class="form-text">Default theme for the login page and new users. Users can override this in their profile.</div>
+                    </div>
                     <?php if (isset($_GET['debug']) && $_GET['debug'] === '1'): ?>
                     <div class="mb-0">
                         <div class="form-check">

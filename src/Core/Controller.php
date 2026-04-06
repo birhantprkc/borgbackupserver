@@ -20,6 +20,10 @@ class Controller
 
     protected function authView(string $template, array $data = []): void
     {
+        if (!isset($data['defaultTheme'])) {
+            $row = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'default_theme'");
+            $data['defaultTheme'] = $row['value'] ?? 'dark';
+        }
         extract($data);
         $viewPath = dirname(__DIR__) . '/Views/';
         require $viewPath . 'layouts/auth.php';
