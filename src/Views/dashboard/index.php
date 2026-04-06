@@ -741,11 +741,15 @@ function fmtCountdown(diffSec) {
 }
 
 // Helper: format date like "Jan 30, 4:15 PM" or "Jan 30, 16:15"
+// Uses BBS profile timezone, not browser timezone
 function fmtDate(str) {
     if (!str) return '--';
     const d = new Date(str.replace(' ', 'T') + 'Z');
-    const timeOpts = window.BBS_TIME_24H ? { hour: '2-digit', minute: '2-digit', hour12: false } : { hour: 'numeric', minute: '2-digit' };
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' +
+    const tz = window.BBS_TIMEZONE || 'UTC';
+    const timeOpts = window.BBS_TIME_24H
+        ? { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }
+        : { hour: 'numeric', minute: '2-digit', timeZone: tz };
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: tz }) + ', ' +
            d.toLocaleTimeString('en-US', timeOpts);
 }
 
