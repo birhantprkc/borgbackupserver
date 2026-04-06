@@ -7,6 +7,7 @@
             <i class="bi bi-person me-1"></i><span class="tab-label">Account</span>
         </a>
     </li>
+    <?php if (($user['auth_provider'] ?? 'local') === 'local'): ?>
     <li class="nav-item">
         <a class="nav-link <?= $tab === 'password' ? 'active' : '' ?>" href="/profile?tab=password">
             <i class="bi bi-key me-1"></i><span class="tab-label">Password</span>
@@ -20,6 +21,7 @@
             <?php endif; ?>
         </a>
     </li>
+    <?php endif; ?>
     <li class="nav-item">
         <a class="nav-link <?= $tab === 'reports' ? 'active' : '' ?>" href="/profile?tab=reports">
             <i class="bi bi-file-earmark-bar-graph me-1"></i><span class="tab-label">Reports</span>

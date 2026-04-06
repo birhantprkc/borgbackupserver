@@ -18,6 +18,8 @@ class SettingsController extends Controller
 
         $templates = $this->db->fetchAll("SELECT * FROM backup_templates ORDER BY name");
 
+        $oidcUsers = $this->db->fetchAll("SELECT id, username, email, role FROM users ORDER BY username");
+
         $apiTokens = $this->db->fetchAll("
             SELECT t.id, t.name, t.created_at, t.last_used_at, u.username
             FROM api_tokens t
@@ -30,6 +32,7 @@ class SettingsController extends Controller
             'settings' => $settings,
             'templates' => $templates,
             'apiTokens' => $apiTokens,
+            'oidcUsers' => $oidcUsers,
         ]);
     }
 
@@ -194,6 +197,33 @@ class SettingsController extends Controller
         $this->db->delete('backup_templates', 'id = ?', [$id]);
         $this->flash('success', 'Template deleted.');
         $this->redirect('/settings?tab=templates');
+    }
+
+    public function saveOidc(): void
+    {
+        $this->requireAdmin();
+        $this->verifyCsrf();
+
+        // Plain text settings
+        $fields = ['oidc_provider_url', 'oidc_client_id', 'oidc_button_label', 'oidc_scopes', 'oidc_new_user_policy', 'oidc_template_user_id'];
+        foreach ($fields as $key) {
+            if (isset($_POST[$key])) {
+                $this->saveSetting($key, trim($_POST[$key]));
+            }
+        }
+
+        // Checkboxes (default to 0 if not in POST)
+        $this->saveSetting('oidc_enabled', !empty($_POST['oidc_enabled']) ? '1' : '0');
+        $this->saveSetting('oidc_logout_enabled', !empty($_POST['oidc_logout_enabled']) ? '1' : '0');
+
+        // Encrypted client secret (only update if non-empty)
+        $secret = $_POST['oidc_client_secret'] ?? '';
+        if (!empty($secret)) {
+            $this->saveSetting('oidc_client_secret', \BBS\Services\Encryption::encrypt($secret));
+        }
+
+        $this->flash('success', 'Authentication settings saved.');
+        $this->redirect('/settings?tab=auth');
     }
 
     public function saveBranding(): void

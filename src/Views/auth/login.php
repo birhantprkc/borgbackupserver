@@ -5,6 +5,17 @@
 </div>
 <?php endif; ?>
 
+<?php if (!empty($oidcEnabled)): ?>
+<div class="card shadow-sm mb-3">
+    <div class="card-body p-4 text-center">
+        <a href="/login/oidc" class="btn btn-primary btn-lg w-100">
+            <i class="bi bi-box-arrow-in-right me-2"></i><?= htmlspecialchars($oidcButtonLabel ?? 'Login with SSO') ?>
+        </a>
+    </div>
+</div>
+<div class="text-center text-muted small mb-3">— or sign in with username —</div>
+<?php endif; ?>
+
 <div class="card shadow-sm">
     <div class="card-body p-4">
         <h5 class="text-muted mb-4">Please login:</h5>

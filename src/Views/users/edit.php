@@ -43,9 +43,15 @@ $columnLabels = [
                     </select>
                 </div>
                 <div class="col-md-6">
+                    <?php if (($user['auth_provider'] ?? 'local') === 'oidc'): ?>
+                    <label class="form-label fw-semibold">Authentication</label>
+                    <div><span class="badge bg-info"><i class="bi bi-box-arrow-in-right me-1"></i>SSO (OIDC)</span></div>
+                    <div class="form-text">This user authenticates via Single Sign-On. No password required.</div>
+                    <?php else: ?>
                     <label class="form-label fw-semibold">New Password</label>
                     <input type="password" class="form-control" name="password" placeholder="Leave blank to keep current">
                     <div class="form-text">Only fill this if you want to change the password</div>
+                    <?php endif; ?>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">Two-Factor Authentication</label>

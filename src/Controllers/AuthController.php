@@ -4,6 +4,7 @@ namespace BBS\Controllers;
 
 use BBS\Core\Controller;
 use BBS\Services\Mailer;
+use BBS\Services\OidcService;
 use BBS\Services\TwoFactorService;
 
 class AuthController extends Controller
@@ -15,7 +16,12 @@ class AuthController extends Controller
         }
 
         $flash = $this->getFlash();
-        $this->authView('auth/login', ['flash' => $flash]);
+        $oidcService = new OidcService();
+        $this->authView('auth/login', [
+            'flash' => $flash,
+            'oidcEnabled' => $oidcService->isEnabled(),
+            'oidcButtonLabel' => $oidcService->getButtonLabel(),
+        ]);
     }
 
     public function login(): void
@@ -68,12 +74,87 @@ class AuthController extends Controller
         $_SESSION['time_format'] = $user['time_format'] ?? '12h';
         $defaultTheme = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'default_theme'");
         $_SESSION['theme'] = $user['theme'] ?? $defaultTheme['value'] ?? 'dark';
+        $_SESSION['auth_provider'] = $user['auth_provider'] ?? 'local';
         $_SESSION['login_time'] = time();
         $_SESSION['last_activity'] = time();
 
         unset($_SESSION['2fa_user_id'], $_SESSION['2fa_username'], $_SESSION['2fa_timestamp']);
 
         $this->redirect('/');
+    }
+
+    /**
+     * GET /login/oidc — Redirect to OIDC identity provider.
+     */
+    public function oidcLogin(): void
+    {
+        if (!empty($_SESSION['user_id'])) {
+            $this->redirect('/');
+        }
+
+        if (!$this->checkRateLimit('oidc_login', 10, 300)) {
+            $this->flash('danger', 'Too many login attempts. Please wait a few minutes.');
+            $this->redirect('/login');
+        }
+
+        $oidcService = new OidcService();
+        if (!$oidcService->isEnabled()) {
+            $this->flash('danger', 'SSO is not configured.');
+            $this->redirect('/login');
+        }
+
+        $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
+        $host = $serverHost['value'] ?? $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $redirectUri = "{$scheme}://{$host}/login/oidc/callback";
+
+        try {
+            $oidcService->redirectToProvider($redirectUri);
+        } catch (\Exception $e) {
+            $this->flash('danger', 'SSO error: ' . $e->getMessage());
+            $this->redirect('/login');
+        }
+    }
+
+    /**
+     * GET /login/oidc/callback — Handle OIDC provider callback.
+     */
+    public function oidcCallback(): void
+    {
+        $oidcService = new OidcService();
+        if (!$oidcService->isEnabled()) {
+            $this->flash('danger', 'SSO is not configured.');
+            $this->redirect('/login');
+        }
+
+        $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
+        $host = $serverHost['value'] ?? $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $redirectUri = "{$scheme}://{$host}/login/oidc/callback";
+
+        try {
+            $result = $oidcService->handleCallback($redirectUri);
+
+            if ($result['status'] === 'pending') {
+                $this->flash('warning', $result['message']);
+                $this->redirect('/login');
+            }
+
+            if ($result['status'] === 'denied') {
+                $this->flash('danger', $result['message']);
+                $this->redirect('/login');
+            }
+
+            if ($result['user']) {
+                $this->completeLogin($result['user']);
+            } else {
+                $this->flash('danger', 'SSO login failed.');
+                $this->redirect('/login');
+            }
+        } catch (\Exception $e) {
+            $this->flash('danger', 'SSO error: ' . $e->getMessage());
+            $this->redirect('/login');
+        }
     }
 
     public function twoFactorForm(): void
@@ -146,7 +227,22 @@ class AuthController extends Controller
 
     public function logout(): void
     {
+        $oidcLogoutUrl = null;
+        if (($_SESSION['auth_provider'] ?? 'local') === 'oidc') {
+            $oidcService = new OidcService();
+            $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
+            $host = $serverHost['value'] ?? $_SERVER['HTTP_HOST'] ?? 'localhost';
+            $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $oidcLogoutUrl = $oidcService->getLogoutUrl("{$scheme}://{$host}/login");
+        }
+
         session_destroy();
+
+        if ($oidcLogoutUrl) {
+            header("Location: {$oidcLogoutUrl}");
+            exit;
+        }
+
         $this->redirect('/login');
     }
 

@@ -39,6 +39,11 @@ $updateAvailable = $updateService->isUpdateAvailable();
         </a>
     </li>
     <li class="nav-item">
+        <a class="nav-link <?= $activeTab === 'auth' ? 'active' : '' ?>" href="/settings?tab=auth">
+            <i class="bi bi-shield-lock me-1"></i><span class="tab-label">Authentication</span>
+        </a>
+    </li>
+    <li class="nav-item">
         <a class="nav-link <?= $activeTab === 'branding' ? 'active' : '' ?>" href="/settings?tab=branding">
             <i class="bi bi-palette me-1"></i><span class="tab-label">Branding</span>
         </a>
@@ -1361,6 +1366,106 @@ function updateBuiltUrl(containerId, schema, prefix) {
         syncTplForm(form);
     });
 })();
+</script>
+<?php endif; ?>
+
+<!-- Authentication Tab -->
+<?php if ($activeTab === 'auth'): ?>
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+        <i class="bi bi-shield-lock me-1"></i> Single Sign-On (OIDC)
+    </div>
+    <div class="card-body">
+        <p class="text-muted small mb-3">Configure OpenID Connect (OIDC) to allow users to sign in with an external identity provider (Keycloak, Authentik, Azure AD, Google, Okta, etc.).</p>
+
+        <form method="POST" action="/settings/oidc">
+            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+
+            <div class="form-check form-switch mb-4">
+                <input class="form-check-input" type="checkbox" name="oidc_enabled" id="oidcEnabled" value="1" <?= ($settings['oidc_enabled'] ?? '0') === '1' ? 'checked' : '' ?>>
+                <label class="form-check-label fw-semibold" for="oidcEnabled">Enable OIDC Single Sign-On</label>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-12">
+                    <label class="form-label fw-semibold">Provider URL</label>
+                    <input type="url" class="form-control" name="oidc_provider_url" value="<?= htmlspecialchars($settings['oidc_provider_url'] ?? '') ?>" placeholder="https://idp.example.com/realms/myrealm">
+                    <div class="form-text">The base URL for OpenID Connect discovery. BBS appends <code>/.well-known/openid-configuration</code> automatically.</div>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Client ID</label>
+                    <input type="text" class="form-control" name="oidc_client_id" value="<?= htmlspecialchars($settings['oidc_client_id'] ?? '') ?>" placeholder="bbs">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Client Secret</label>
+                    <input type="password" class="form-control" name="oidc_client_secret" placeholder="<?= !empty($settings['oidc_client_secret']) ? '(unchanged if empty)' : '' ?>">
+                    <?php if (!empty($settings['oidc_client_secret'])): ?>
+                    <div class="form-text">A value is saved. Leave empty to keep unchanged.</div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Button Label</label>
+                    <input type="text" class="form-control" name="oidc_button_label" value="<?= htmlspecialchars($settings['oidc_button_label'] ?? 'Login with SSO') ?>">
+                    <div class="form-text">Text shown on the SSO button on the login page.</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Scopes</label>
+                    <input type="text" class="form-control" name="oidc_scopes" value="<?= htmlspecialchars($settings['oidc_scopes'] ?? 'openid email profile') ?>">
+                    <div class="form-text">Space-separated OIDC scopes. Must include <code>openid</code> and <code>email</code>.</div>
+                </div>
+            </div>
+
+            <hr>
+
+            <h6 class="mb-3">New User Handling</h6>
+            <p class="text-muted small">When an unknown user authenticates via SSO for the first time:</p>
+
+            <div class="mb-3">
+                <select class="form-select" name="oidc_new_user_policy" id="oidcNewUserPolicy">
+                    <?php $policy = $settings['oidc_new_user_policy'] ?? 'deny'; ?>
+                    <option value="deny" <?= $policy === 'deny' ? 'selected' : '' ?>>Deny access (user must already exist with matching email)</option>
+                    <option value="pending" <?= $policy === 'pending' ? 'selected' : '' ?>>Create user, pending admin approval</option>
+                    <option value="copy" <?= $policy === 'copy' ? 'selected' : '' ?>>Create user with permissions copied from a template user</option>
+                </select>
+            </div>
+
+            <div class="mb-3" id="oidcTemplateUserWrap" style="<?= $policy === 'copy' ? '' : 'display:none;' ?>">
+                <label class="form-label fw-semibold">Template User</label>
+                <select class="form-select" name="oidc_template_user_id">
+                    <option value="">-- Select a user --</option>
+                    <?php foreach ($oidcUsers ?? [] as $u): ?>
+                    <option value="<?= $u['id'] ?>" <?= ($settings['oidc_template_user_id'] ?? '') == $u['id'] ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($u['username']) ?> (<?= htmlspecialchars($u['email']) ?>) — <?= $u['role'] ?>
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+                <div class="form-text">New SSO users will receive the same client access and permissions as this user.</div>
+            </div>
+
+            <hr>
+
+            <div class="form-check form-switch mb-3">
+                <input class="form-check-input" type="checkbox" name="oidc_logout_enabled" id="oidcLogout" value="1" <?= ($settings['oidc_logout_enabled'] ?? '0') === '1' ? 'checked' : '' ?>>
+                <label class="form-check-label" for="oidcLogout">Enable OIDC Logout</label>
+                <div class="form-text">When enabled, logging out of BBS also logs the user out of the identity provider.</div>
+            </div>
+
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check-lg me-1"></i> Save Authentication Settings
+            </button>
+        </form>
+    </div>
+</div>
+<script>
+document.getElementById('oidcNewUserPolicy').addEventListener('change', function() {
+    document.getElementById('oidcTemplateUserWrap').style.display = this.value === 'copy' ? '' : 'none';
+});
 </script>
 <?php endif; ?>
 

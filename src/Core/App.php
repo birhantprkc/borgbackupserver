@@ -21,7 +21,7 @@ class App
             'lifetime' => 30 * 86400,
             'path' => '/',
             'httponly' => true,
-            'samesite' => 'Strict',
+            'samesite' => 'Lax',
             'secure' => $isHttps,
         ]);
         session_start();
@@ -66,6 +66,8 @@ class App
         $this->router->map('POST', '/login', 'AuthController@login');
         $this->router->map('GET', '/login/2fa', 'AuthController@twoFactorForm');
         $this->router->map('POST', '/login/2fa', 'AuthController@twoFactorVerify');
+        $this->router->map('GET', '/login/oidc', 'AuthController@oidcLogin');
+        $this->router->map('GET', '/login/oidc/callback', 'AuthController@oidcCallback');
         $this->router->map('GET', '/logout', 'AuthController@logout');
         $this->router->map('GET', '/forgot-password', 'AuthController@forgotPasswordForm');
         $this->router->map('POST', '/forgot-password', 'AuthController@forgotPassword');
@@ -150,6 +152,7 @@ class App
         $this->router->map('POST', '/settings/templates/[i:id]/edit', 'SettingsController@editTemplate');
         $this->router->map('POST', '/settings/templates/[i:id]/delete', 'SettingsController@deleteTemplate');
         $this->router->map('POST', '/settings/branding', 'SettingsController@saveBranding');
+        $this->router->map('POST', '/settings/oidc', 'SettingsController@saveOidc');
         $this->router->map('POST', '/settings/api/tokens/create', 'SettingsController@createApiToken');
         $this->router->map('POST', '/settings/api/tokens/[i:id]/revoke', 'SettingsController@revokeApiToken');
         $this->router->map('POST', '/settings/docker-setup', 'SettingsController@dockerSetup');
@@ -205,6 +208,7 @@ class App
         $this->router->map('POST', '/users/[i:id]/edit', 'UserController@update');
         $this->router->map('POST', '/users/[i:id]/reset-2fa', 'UserController@reset2fa');
         $this->router->map('POST', '/users/[i:id]/delete', 'UserController@delete');
+        $this->router->map('POST', '/users/[i:id]/approve-oidc', 'UserController@approveOidc');
 
         // Profile
         $this->router->map('GET', '/profile', 'ProfileController@index');

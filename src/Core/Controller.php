@@ -74,8 +74,10 @@ class Controller
         $_SESSION['last_activity'] = time();
 
         // Force 2FA: redirect users without 2FA to profile setup
+        // Skip for OIDC users — they rely on their identity provider for auth strength
         $currentUri = $_SERVER['REQUEST_URI'] ?? '';
-        if (!str_starts_with($currentUri, '/profile') && !str_starts_with($currentUri, '/logout')) {
+        if (($_SESSION['auth_provider'] ?? 'local') !== 'oidc'
+            && !str_starts_with($currentUri, '/profile') && !str_starts_with($currentUri, '/logout')) {
             $force2fa = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'force_2fa'");
             if ($force2fa && $force2fa['value'] === '1') {
                 $user = $this->db->fetchOne("SELECT totp_enabled FROM users WHERE id = ?", [$_SESSION['user_id']]);

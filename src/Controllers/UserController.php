@@ -211,6 +211,22 @@ class UserController extends Controller
         $this->redirect('/users');
     }
 
+    public function approveOidc(int $id): void
+    {
+        $this->requireAdmin();
+        $this->verifyCsrf();
+
+        $user = $this->db->fetchOne("SELECT * FROM users WHERE id = ?", [$id]);
+        if (!$user || $user['oidc_status'] !== 'pending') {
+            $this->flash('danger', 'User not found or not pending.');
+            $this->redirect('/users');
+        }
+
+        $this->db->update('users', ['oidc_status' => 'active'], 'id = ?', [$id]);
+        $this->flash('success', "User \"{$user['username']}\" approved for SSO access.");
+        $this->redirect('/users');
+    }
+
     public function delete(int $id): void
     {
         $this->requireAdmin();

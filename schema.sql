@@ -18,6 +18,8 @@ CREATE TABLE users (
     totp_secret VARCHAR(255) DEFAULT NULL,
     totp_enabled TINYINT(1) NOT NULL DEFAULT 0,
     totp_enabled_at DATETIME DEFAULT NULL,
+    auth_provider ENUM('local', 'oidc') NOT NULL DEFAULT 'local',
+    oidc_status ENUM('active', 'pending') NOT NULL DEFAULT 'active',
     daily_report_email TINYINT(1) NOT NULL DEFAULT 0,
     daily_report_hour TINYINT NOT NULL DEFAULT 6,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

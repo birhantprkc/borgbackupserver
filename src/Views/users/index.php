@@ -60,6 +60,12 @@
                     <?php if ($user['totp_enabled']): ?>
                     <span class="badge bg-success" title="2FA Enabled"><i class="bi bi-shield-check"></i></span>
                     <?php endif; ?>
+                    <?php if (($user['auth_provider'] ?? 'local') === 'oidc'): ?>
+                    <span class="badge bg-info" title="SSO User"><i class="bi bi-box-arrow-in-right me-1"></i>SSO</span>
+                    <?php endif; ?>
+                    <?php if (($user['oidc_status'] ?? 'active') === 'pending'): ?>
+                    <span class="badge bg-warning text-dark" title="Pending SSO Approval">Pending</span>
+                    <?php endif; ?>
                 </div>
                 <div class="text-muted small"><?= htmlspecialchars($user['email']) ?></div>
                 <div class="text-muted small mb-2">
@@ -83,6 +89,14 @@
                         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                         <button type="submit" class="btn btn-sm btn-outline-warning" title="Reset 2FA">
                             <i class="bi bi-shield-x"></i>
+                        </button>
+                    </form>
+                    <?php endif; ?>
+                    <?php if (($user['oidc_status'] ?? 'active') === 'pending'): ?>
+                    <form method="POST" action="/users/<?= $user['id'] ?>/approve-oidc" class="d-inline" data-confirm="Approve SSO access for <?= htmlspecialchars($user['username']) ?>?">
+                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                        <button type="submit" class="btn btn-sm btn-success" title="Approve SSO">
+                            <i class="bi bi-check-lg"></i> Approve
                         </button>
                     </form>
                     <?php endif; ?>
