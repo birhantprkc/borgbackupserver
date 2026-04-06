@@ -1043,9 +1043,11 @@ class AgentApiController extends Controller
             return;
         }
 
-        // Don't queue if there's already a pending/running borg update
+        // Don't queue if there's already a pending/running borg update,
+        // or if one failed in the last 24 hours (avoid retry loops on persistent failures like full disk)
         $existing = $this->db->fetchOne(
-            "SELECT id FROM backup_jobs WHERE agent_id = ? AND task_type = 'update_borg' AND status IN ('queued', 'sent', 'running')",
+            "SELECT id FROM backup_jobs WHERE agent_id = ? AND task_type = 'update_borg'
+             AND (status IN ('queued', 'sent', 'running') OR (status = 'failed' AND completed_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)))",
             [$agent['id']]
         );
         if ($existing) {
