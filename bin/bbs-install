@@ -283,11 +283,8 @@ else
     info "Installing ClickHouse server and client..."
     DEBIAN_FRONTEND=noninteractive apt-get install -y clickhouse-server clickhouse-client > /dev/null 2>&1
 
-    # Disable system log tables (reduces idle disk I/O and CPU)
+    # Config override will be installed by bbs-update after BBS code is downloaded
     mkdir -p /etc/clickhouse-server/config.d
-    if [ -f "$BBS_DIR/config/clickhouse-server-override.xml" ]; then
-        cp "$BBS_DIR/config/clickhouse-server-override.xml" /etc/clickhouse-server/config.d/bbs-override.xml
-    fi
 
     systemctl enable --now clickhouse-server > /dev/null 2>&1
 
@@ -300,11 +297,7 @@ else
     ok "ClickHouse installed and started"
 fi
 
-# Create ClickHouse database and tables
-info "Creating ClickHouse catalog tables..."
-clickhouse-client --query "CREATE DATABASE IF NOT EXISTS bbs" 2>/dev/null
-clickhouse-client -d bbs --multiquery < "$BBS_DIR/schema-clickhouse.sql" 2>/dev/null
-ok "ClickHouse catalog tables ready"
+# ClickHouse catalog tables are created after BBS code is downloaded (needs schema-clickhouse.sql)
 
 # ─── Step 4: Create database ────────────────────────────────────────────────
 step "4/11" "Create database"
@@ -361,6 +354,19 @@ ok "Composer dependencies installed"
 
 chown -R www-data:www-data "$BBS_DIR"
 ok "Ownership set to www-data"
+
+# Create ClickHouse catalog tables (deferred from step 3 — needs BBS code for schema file)
+if command -v clickhouse-client &>/dev/null; then
+    if [ -f "$BBS_DIR/config/clickhouse-server-override.xml" ]; then
+        cp "$BBS_DIR/config/clickhouse-server-override.xml" /etc/clickhouse-server/config.d/bbs-override.xml
+        systemctl restart clickhouse-server 2>/dev/null || true
+        sleep 2
+    fi
+    info "Creating ClickHouse catalog tables..."
+    clickhouse-client --query "CREATE DATABASE IF NOT EXISTS bbs" 2>/dev/null
+    clickhouse-client -d bbs --multiquery < "$BBS_DIR/schema-clickhouse.sql" 2>/dev/null
+    ok "ClickHouse catalog tables ready"
+fi
 
 # ─── Step 5: Create system directories ───────────────────────────────────────
 step "6/11" "Create system directories"
