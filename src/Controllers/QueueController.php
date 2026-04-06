@@ -264,6 +264,16 @@ class QueueController extends Controller
             'message' => "Job #{$id} cancelled by user",
         ]);
 
+        // Auto-queue a break-lock to clean up any stale borg lock
+        if ($job['repository_id'] && in_array($job['task_type'], ['backup', 'restore', 'restore_mysql', 'restore_pg', 'restore_mongo'])) {
+            $this->db->insert('backup_jobs', [
+                'agent_id' => $job['agent_id'],
+                'repository_id' => $job['repository_id'],
+                'task_type' => 'break_lock',
+                'status' => 'queued',
+            ]);
+        }
+
         $this->flash('success', "Job #{$id} cancelled.");
         $this->redirect('/queue');
     }
