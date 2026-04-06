@@ -9,18 +9,7 @@
         <errorlog>/var/log/clickhouse-server/clickhouse-server.err.log</errorlog>
         <size>10M</size>
         <count>2</count>
-        <stderr>/dev/null</stderr>
     </logger>
-
-    <!-- Limit thread pools — BBS uses ClickHouse lightly (catalog storage) -->
-    <max_thread_pool_size>32</max_thread_pool_size>
-    <max_thread_pool_free_size>4</max_thread_pool_free_size>
-    <background_pool_size>2</background_pool_size>
-    <background_merges_mutations_concurrency_ratio>1</background_merges_mutations_concurrency_ratio>
-    <background_move_pool_size>1</background_move_pool_size>
-    <background_schedule_pool_size>2</background_schedule_pool_size>
-    <background_common_pool_size>2</background_common_pool_size>
-    <background_fetches_pool_size>1</background_fetches_pool_size>
 
     <!-- Disable system log tables that generate heavy disk I/O when idle -->
     <query_log remove="remove"/>
