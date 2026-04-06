@@ -252,7 +252,7 @@ class QueueController extends Controller
         $this->requirePermission(PermissionService::TRIGGER_BACKUP, $job['agent_id']);
 
         $this->db->update('backup_jobs', [
-            'status' => 'failed',
+            'status' => 'cancelled',
             'error_log' => 'Cancelled by user',
             'completed_at' => date('Y-m-d H:i:s'),
         ], 'id = ?', [$id]);

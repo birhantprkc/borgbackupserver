@@ -44,7 +44,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.21.2"
+AGENT_VERSION = "2.23.0"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -2872,13 +2872,30 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
                             "files_processed": files_processed,
                             "bytes_processed": original_size,
                         }
-                        api_request(
+                        progress_resp = api_request(
                             config,
                             "/api/agent/progress",
                             method="POST",
                             data=progress_data,
                         )
                         last_progress_time = now
+
+                        # Check for server-side cancellation
+                        if isinstance(progress_resp, dict) and progress_resp.get("cancel"):
+                            logger.warning("Job #{} cancelled by server — killing borg process".format(job_id))
+                            proc.kill()
+                            proc.wait()
+                            result = "failed"
+                            error_output = "Cancelled by user"
+                            # Close catalog SSH pipe if open
+                            if catalog_ssh:
+                                try:
+                                    catalog_ssh.stdin.close()
+                                    catalog_ssh.terminate()
+                                except Exception:
+                                    pass
+                                catalog_ssh = None
+                            break
 
                 elif msg_type in ("file_status", "file_item") and task_type == "backup" and catalog_ssh:
                     # Stream file entry to server via SSH pipe
@@ -2929,8 +2946,12 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
                     error_output += line + "\n"
                 logger.debug("borg: {}".format(line))
 
-        # Wait for process to complete
-        proc.wait(timeout=86400)  # 24h timeout
+        # Wait for process to complete (skip if already killed by cancellation)
+        job_cancelled = (error_output == "Cancelled by user")
+        if not job_cancelled:
+            proc.wait(timeout=86400)  # 24h timeout
+        else:
+            proc.wait(timeout=10)  # Brief wait for cleanup
         stdout_output = proc.stdout.read().decode("utf-8", errors="replace")
 
         # Parse borg info from stdout if available
@@ -2951,6 +2972,8 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
                 "Job #{} completed: {} files, "
                 "{} bytes original, {} bytes dedup".format(job_id, files_processed, original_size, deduplicated_size)
             )
+        elif job_cancelled:
+            pass  # Already set result='failed', error_output='Cancelled by user'
         elif proc.returncode == 1:
             # borg returns 1 for warnings (still successful)
             result = "completed"

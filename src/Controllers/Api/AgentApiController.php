@@ -208,7 +208,7 @@ class AgentApiController extends Controller
 
         // Don't overwrite terminal statuses (completed/failed) with 'running'
         if (in_array($job['status'], ['completed', 'failed', 'cancelled'])) {
-            $this->json(['status' => 'ok']);
+            $this->json(['status' => 'ok', 'cancel' => ($job['status'] === 'cancelled')]);
         }
 
         $data = ['status' => 'running', 'last_progress_at' => $this->db->now()];
@@ -247,7 +247,7 @@ class AgentApiController extends Controller
             ]);
         }
 
-        $this->json(['status' => 'ok']);
+        $this->json(['status' => 'ok', 'cancel' => false]);
     }
 
     /**
