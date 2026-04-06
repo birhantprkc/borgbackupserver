@@ -203,61 +203,37 @@ class SettingsController extends Controller
 
         $saved = [];
 
-        // Handle navbar icon upload
+        // Handle navbar icon
         if (!empty($_POST['remove_branding_icon'])) {
             $this->db->query("DELETE FROM settings WHERE `key` = 'branding_icon'");
             $saved[] = 'Navbar icon removed';
-        } elseif (!empty($_FILES['branding_icon']['tmp_name']) && $_FILES['branding_icon']['error'] === UPLOAD_ERR_OK) {
-            $tmp = $_FILES['branding_icon']['tmp_name'];
-            $info = @getimagesize($tmp);
-            if (!$info || $info[2] !== IMAGETYPE_PNG) {
-                $this->flash('danger', 'Navbar icon must be a PNG image.');
-                $this->redirect('/settings?tab=branding');
+        } elseif (!empty($_POST['branding_icon_data'])) {
+            $data = $_POST['branding_icon_data'];
+            // Validate it's valid base64 PNG
+            $decoded = base64_decode($data, true);
+            if ($decoded && substr($decoded, 0, 4) === "\x89PNG") {
+                $this->saveSetting('branding_icon', $data);
+                $saved[] = 'Navbar icon updated';
             }
-            $data = base64_encode(file_get_contents($tmp));
-            $existing = $this->db->fetchOne("SELECT `key` FROM settings WHERE `key` = 'branding_icon'");
-            if ($existing) {
-                $this->db->update('settings', ['value' => $data], "`key` = ?", ['branding_icon']);
-            } else {
-                $this->db->insert('settings', ['key' => 'branding_icon', 'value' => $data]);
-            }
-            $saved[] = 'Navbar icon updated';
         }
 
-        // Handle login logo upload
+        // Handle login logo
         if (!empty($_POST['remove_branding_login_logo'])) {
             $this->db->query("DELETE FROM settings WHERE `key` = 'branding_login_logo'");
             $saved[] = 'Login logo removed';
-        } elseif (!empty($_FILES['branding_login_logo']['tmp_name']) && $_FILES['branding_login_logo']['error'] === UPLOAD_ERR_OK) {
-            $tmp = $_FILES['branding_login_logo']['tmp_name'];
-            $info = @getimagesize($tmp);
-            if (!$info || $info[2] !== IMAGETYPE_PNG) {
-                $this->flash('danger', 'Login logo must be a PNG image.');
-                $this->redirect('/settings?tab=branding');
+        } elseif (!empty($_POST['branding_login_logo_data'])) {
+            $data = $_POST['branding_login_logo_data'];
+            $decoded = base64_decode($data, true);
+            if ($decoded && substr($decoded, 0, 4) === "\x89PNG") {
+                $this->saveSetting('branding_login_logo', $data);
+                $saved[] = 'Login logo updated';
             }
-            if ($info[0] > 475 || $info[1] > 100) {
-                $this->flash('danger', "Login logo exceeds maximum dimensions (475x100). Uploaded image is {$info[0]}x{$info[1]}.");
-                $this->redirect('/settings?tab=branding');
-            }
-            $data = base64_encode(file_get_contents($tmp));
-            $existing = $this->db->fetchOne("SELECT `key` FROM settings WHERE `key` = 'branding_login_logo'");
-            if ($existing) {
-                $this->db->update('settings', ['value' => $data], "`key` = ?", ['branding_login_logo']);
-            } else {
-                $this->db->insert('settings', ['key' => 'branding_login_logo', 'value' => $data]);
-            }
-            $saved[] = 'Login logo updated';
         }
 
         // Login page theme override
         $loginTheme = $_POST['branding_login_theme'] ?? 'default';
         if (in_array($loginTheme, ['default', 'dark', 'light'])) {
-            $existing = $this->db->fetchOne("SELECT `key` FROM settings WHERE `key` = 'branding_login_theme'");
-            if ($existing) {
-                $this->db->update('settings', ['value' => $loginTheme], "`key` = ?", ['branding_login_theme']);
-            } else {
-                $this->db->insert('settings', ['key' => 'branding_login_theme', 'value' => $loginTheme]);
-            }
+            $this->saveSetting('branding_login_theme', $loginTheme);
             $saved[] = 'Login theme updated';
         }
 
@@ -305,6 +281,16 @@ class SettingsController extends Controller
         $this->db->delete('api_tokens', 'id = ?', [$id]);
         $this->flash('success', 'API token revoked.');
         $this->redirect('/settings?tab=api');
+    }
+
+    private function saveSetting(string $key, string $value): void
+    {
+        $existing = $this->db->fetchOne("SELECT `key` FROM settings WHERE `key` = ?", [$key]);
+        if ($existing) {
+            $this->db->update('settings', ['value' => $value], "`key` = ?", [$key]);
+        } else {
+            $this->db->insert('settings', ['key' => $key, 'value' => $value]);
+        }
     }
 
     public function agentUpdatesJson(): void

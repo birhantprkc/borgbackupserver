@@ -1373,15 +1373,18 @@ function updateBuiltUrl(containerId, schema, prefix) {
     <div class="card-body">
         <p class="text-muted small mb-4">Customize the BBS interface with your own logos. Images are stored in the database and persist across updates.</p>
 
-        <form method="POST" action="/settings/branding" enctype="multipart/form-data">
+        <form method="POST" action="/settings/branding" enctype="multipart/form-data" id="brandingForm">
             <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+            <input type="hidden" name="branding_icon_data" id="brandingIconData">
+            <input type="hidden" name="branding_login_logo_data" id="brandingLoginLogoData">
 
             <!-- Navbar Icon -->
             <div class="row mb-4">
                 <div class="col-md-8">
                     <h6><i class="bi bi-image me-1"></i> Navbar Icon</h6>
-                    <p class="text-muted small">Square transparent PNG shown in the top-left corner of the interface. Displayed at 36px height.</p>
-                    <input type="file" class="form-control form-control-sm" name="branding_icon" accept="image/png">
+                    <p class="text-muted small">Square transparent PNG shown in the top-left corner. Will be resized to 120x120px max.</p>
+                    <input type="file" class="form-control form-control-sm" id="iconFileInput" accept="image/png">
+                    <div class="small text-muted mt-1" id="iconDimensions"></div>
                     <?php if (!empty($settings['branding_icon'])): ?>
                     <div class="form-check mt-2">
                         <input class="form-check-input" type="checkbox" name="remove_branding_icon" value="1" id="removeBrandingIcon">
@@ -1392,11 +1395,9 @@ function updateBuiltUrl(containerId, schema, prefix) {
                 <div class="col-md-4 text-center">
                     <label class="form-label small text-muted">Preview</label>
                     <div class="p-3 rounded <?= ($_SESSION['theme'] ?? 'dark') === 'dark' ? 'bg-dark' : 'bg-body-secondary' ?>">
-                        <?php if (!empty($settings['branding_icon'])): ?>
-                        <img src="data:image/png;base64,<?= $settings['branding_icon'] ?>" alt="Custom icon" style="height: 36px;">
-                        <?php else: ?>
-                        <img src="/images/borg_icon_dark.png" alt="Default icon" style="height: 36px;">
-                        <div class="text-muted small mt-1">Default</div>
+                        <img id="iconPreview" src="<?= !empty($settings['branding_icon']) ? 'data:image/png;base64,' . $settings['branding_icon'] : '/images/borg_icon_dark.png' ?>" alt="Icon preview" style="height: 36px;">
+                        <?php if (empty($settings['branding_icon'])): ?>
+                        <div class="text-muted small mt-1" id="iconDefaultLabel">Default</div>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -1408,8 +1409,9 @@ function updateBuiltUrl(containerId, schema, prefix) {
             <div class="row mb-4">
                 <div class="col-md-8">
                     <h6><i class="bi bi-card-image me-1"></i> Login Page Logo</h6>
-                    <p class="text-muted small">Transparent PNG displayed on the login page. Maximum dimensions: 475 x 100 pixels.</p>
-                    <input type="file" class="form-control form-control-sm" name="branding_login_logo" accept="image/png">
+                    <p class="text-muted small">Transparent PNG displayed on the login page. Will be resized to fit within 475 x 100 pixels.</p>
+                    <input type="file" class="form-control form-control-sm" id="loginLogoFileInput" accept="image/png">
+                    <div class="small text-muted mt-1" id="loginLogoDimensions"></div>
                     <?php if (!empty($settings['branding_login_logo'])): ?>
                     <div class="form-check mt-2">
                         <input class="form-check-input" type="checkbox" name="remove_branding_login_logo" value="1" id="removeLoginLogo">
@@ -1420,11 +1422,9 @@ function updateBuiltUrl(containerId, schema, prefix) {
                 <div class="col-md-4 text-center">
                     <label class="form-label small text-muted">Preview</label>
                     <div class="p-3 rounded <?= ($_SESSION['theme'] ?? 'dark') === 'dark' ? 'bg-dark' : 'bg-body-secondary' ?>">
-                        <?php if (!empty($settings['branding_login_logo'])): ?>
-                        <img src="data:image/png;base64,<?= $settings['branding_login_logo'] ?>" alt="Custom login logo" style="max-width: 200px; max-height: 60px;">
-                        <?php else: ?>
-                        <img src="/images/borg_icon_dark.png" alt="Default login logo" style="max-width: 80px;">
-                        <div class="text-muted small mt-1">Default</div>
+                        <img id="loginLogoPreview" src="<?= !empty($settings['branding_login_logo']) ? 'data:image/png;base64,' . $settings['branding_login_logo'] : '/images/borg_icon_dark.png' ?>" alt="Login logo preview" style="<?= !empty($settings['branding_login_logo']) ? 'max-width:300px;max-height:80px;' : 'max-width:80px;' ?>">
+                        <?php if (empty($settings['branding_login_logo'])): ?>
+                        <div class="text-muted small mt-1" id="loginLogoDefaultLabel">Default</div>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -1450,6 +1450,58 @@ function updateBuiltUrl(containerId, schema, prefix) {
         </form>
     </div>
 </div>
+<script>
+function resizeImage(file, maxW, maxH, callback) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        var img = new Image();
+        img.onload = function() {
+            var w = img.width, h = img.height;
+            if (w <= maxW && h <= maxH) {
+                // Already within limits, use original
+                callback(e.target.result, w, h);
+                return;
+            }
+            var ratio = Math.min(maxW / w, maxH / h);
+            var nw = Math.round(w * ratio), nh = Math.round(h * ratio);
+            var canvas = document.createElement('canvas');
+            canvas.width = nw;
+            canvas.height = nh;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, nw, nh);
+            callback(canvas.toDataURL('image/png'), nw, nh);
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+document.getElementById('iconFileInput').addEventListener('change', function() {
+    if (!this.files[0]) return;
+    resizeImage(this.files[0], 120, 120, function(dataUrl, w, h) {
+        document.getElementById('iconPreview').src = dataUrl;
+        document.getElementById('iconPreview').style.height = '36px';
+        document.getElementById('brandingIconData').value = dataUrl.split(',')[1];
+        document.getElementById('iconDimensions').textContent = 'Resized to ' + w + 'x' + h + 'px';
+        var lbl = document.getElementById('iconDefaultLabel');
+        if (lbl) lbl.style.display = 'none';
+    });
+});
+
+document.getElementById('loginLogoFileInput').addEventListener('change', function() {
+    if (!this.files[0]) return;
+    resizeImage(this.files[0], 475, 100, function(dataUrl, w, h) {
+        var preview = document.getElementById('loginLogoPreview');
+        preview.src = dataUrl;
+        preview.style.maxWidth = '300px';
+        preview.style.maxHeight = '80px';
+        document.getElementById('brandingLoginLogoData').value = dataUrl.split(',')[1];
+        document.getElementById('loginLogoDimensions').textContent = 'Resized to ' + w + 'x' + h + 'px';
+        var lbl = document.getElementById('loginLogoDefaultLabel');
+        if (lbl) lbl.style.display = 'none';
+    });
+});
+</script>
 <?php endif; ?>
 
 <!-- API Tab -->
