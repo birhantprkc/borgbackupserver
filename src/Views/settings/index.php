@@ -39,6 +39,11 @@ $updateAvailable = $updateService->isUpdateAvailable();
         </a>
     </li>
     <li class="nav-item">
+        <a class="nav-link <?= $activeTab === 'branding' ? 'active' : '' ?>" href="/settings?tab=branding">
+            <i class="bi bi-palette me-1"></i><span class="tab-label">Branding</span>
+        </a>
+    </li>
+    <li class="nav-item">
         <a class="nav-link <?= $activeTab === 'api' ? 'active' : '' ?>" href="/settings?tab=api">
             <i class="bi bi-key me-1"></i><span class="tab-label">API</span>
         </a>
@@ -1357,6 +1362,94 @@ function updateBuiltUrl(containerId, schema, prefix) {
     });
 })();
 </script>
+<?php endif; ?>
+
+<!-- Branding Tab -->
+<?php if ($activeTab === 'branding'): ?>
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+        <i class="bi bi-palette me-1"></i> Branding
+    </div>
+    <div class="card-body">
+        <p class="text-muted small mb-4">Customize the BBS interface with your own logos. Images are stored in the database and persist across updates.</p>
+
+        <form method="POST" action="/settings/branding" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+
+            <!-- Navbar Icon -->
+            <div class="row mb-4">
+                <div class="col-md-8">
+                    <h6><i class="bi bi-image me-1"></i> Navbar Icon</h6>
+                    <p class="text-muted small">Square transparent PNG shown in the top-left corner of the interface. Displayed at 36px height.</p>
+                    <input type="file" class="form-control form-control-sm" name="branding_icon" accept="image/png">
+                    <?php if (!empty($settings['branding_icon'])): ?>
+                    <div class="form-check mt-2">
+                        <input class="form-check-input" type="checkbox" name="remove_branding_icon" value="1" id="removeBrandingIcon">
+                        <label class="form-check-label small" for="removeBrandingIcon">Remove custom icon (revert to default)</label>
+                    </div>
+                    <?php endif; ?>
+                </div>
+                <div class="col-md-4 text-center">
+                    <label class="form-label small text-muted">Preview</label>
+                    <div class="p-3 rounded <?= ($_SESSION['theme'] ?? 'dark') === 'dark' ? 'bg-dark' : 'bg-body-secondary' ?>">
+                        <?php if (!empty($settings['branding_icon'])): ?>
+                        <img src="data:image/png;base64,<?= $settings['branding_icon'] ?>" alt="Custom icon" style="height: 36px;">
+                        <?php else: ?>
+                        <img src="/images/borg_icon_dark.png" alt="Default icon" style="height: 36px;">
+                        <div class="text-muted small mt-1">Default</div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+            <hr>
+
+            <!-- Login Logo -->
+            <div class="row mb-4">
+                <div class="col-md-8">
+                    <h6><i class="bi bi-card-image me-1"></i> Login Page Logo</h6>
+                    <p class="text-muted small">Transparent PNG displayed on the login page. Maximum dimensions: 475 x 100 pixels.</p>
+                    <input type="file" class="form-control form-control-sm" name="branding_login_logo" accept="image/png">
+                    <?php if (!empty($settings['branding_login_logo'])): ?>
+                    <div class="form-check mt-2">
+                        <input class="form-check-input" type="checkbox" name="remove_branding_login_logo" value="1" id="removeLoginLogo">
+                        <label class="form-check-label small" for="removeLoginLogo">Remove custom logo (revert to default)</label>
+                    </div>
+                    <?php endif; ?>
+                </div>
+                <div class="col-md-4 text-center">
+                    <label class="form-label small text-muted">Preview</label>
+                    <div class="p-3 rounded <?= ($_SESSION['theme'] ?? 'dark') === 'dark' ? 'bg-dark' : 'bg-body-secondary' ?>">
+                        <?php if (!empty($settings['branding_login_logo'])): ?>
+                        <img src="data:image/png;base64,<?= $settings['branding_login_logo'] ?>" alt="Custom login logo" style="max-width: 200px; max-height: 60px;">
+                        <?php else: ?>
+                        <img src="/images/borg_icon_dark.png" alt="Default login logo" style="max-width: 80px;">
+                        <div class="text-muted small mt-1">Default</div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+            <hr>
+
+            <!-- Login Page Theme -->
+            <div class="mb-4">
+                <h6><i class="bi bi-moon-stars me-1"></i> Login Page Theme</h6>
+                <p class="text-muted small">Override the login page theme independently. Useful when your logo only works well on a specific background.</p>
+                <select class="form-select" name="branding_login_theme" style="max-width: 300px;">
+                    <?php $loginTheme = $settings['branding_login_theme'] ?? 'default'; ?>
+                    <option value="default" <?= $loginTheme === 'default' ? 'selected' : '' ?>>Use Default Theme</option>
+                    <option value="dark" <?= $loginTheme === 'dark' ? 'selected' : '' ?>>Always Dark</option>
+                    <option value="light" <?= $loginTheme === 'light' ? 'selected' : '' ?>>Always Light</option>
+                </select>
+            </div>
+
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check-lg me-1"></i> Save Branding
+            </button>
+        </form>
+    </div>
+</div>
 <?php endif; ?>
 
 <!-- API Tab -->

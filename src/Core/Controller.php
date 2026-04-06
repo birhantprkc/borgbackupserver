@@ -20,9 +20,20 @@ class Controller
 
     protected function authView(string $template, array $data = []): void
     {
+        // Load branding and theme settings for auth pages
+        $brandingRows = $this->db->fetchAll("SELECT `key`, `value` FROM settings WHERE `key` IN ('default_theme', 'branding_login_logo', 'branding_login_theme')");
+        $brandSettings = [];
+        foreach ($brandingRows as $row) {
+            $brandSettings[$row['key']] = $row['value'];
+        }
         if (!isset($data['defaultTheme'])) {
-            $row = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'default_theme'");
-            $data['defaultTheme'] = $row['value'] ?? 'dark';
+            // Login theme override takes priority, then system default
+            $loginTheme = $brandSettings['branding_login_theme'] ?? 'default';
+            $data['defaultTheme'] = ($loginTheme !== 'default') ? $loginTheme : ($brandSettings['default_theme'] ?? 'dark');
+            $data['loginThemeForced'] = ($loginTheme !== 'default');
+        }
+        if (!isset($data['loginLogo'])) {
+            $data['loginLogo'] = $brandSettings['branding_login_logo'] ?? null;
         }
         extract($data);
         $viewPath = dirname(__DIR__) . '/Views/';

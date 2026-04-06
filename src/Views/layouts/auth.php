@@ -1,7 +1,9 @@
 <!DOCTYPE html>
 <html lang="en" data-bs-theme="<?= htmlspecialchars($defaultTheme ?? 'dark') ?>">
 <head>
+    <?php if (empty($loginThemeForced)): ?>
     <script>(function(){var t=localStorage.getItem('bbs-theme');if(t)document.documentElement.setAttribute('data-bs-theme',t);})()</script>
+    <?php endif; ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($pageTitle ?? 'Login') ?> - Borg Backup Server</title>
@@ -15,7 +17,11 @@
         <div class="row justify-content-center mt-5">
             <div class="<?= $authColClass ?? 'col-md-5' ?>">
                 <div class="text-center mb-4">
+                    <?php if (!empty($loginLogo)): ?>
+                    <img src="data:image/png;base64,<?= $loginLogo ?>" alt="Logo" class="img-fluid" style="max-width: 475px; max-height: 100px;">
+                    <?php else: ?>
                     <img src="/images/borg_icon_dark.png" alt="Borg Backup Server" class="img-fluid" style="max-width: 120px;">
+                    <?php endif; ?>
                 </div>
                 <?php require $viewPath . $template . '.php'; ?>
             </div>
