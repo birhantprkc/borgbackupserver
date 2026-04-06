@@ -79,7 +79,7 @@ if command -v clickhouse-server &>/dev/null; then
 </clickhouse>
 CHXML
     TMPDIR=/var/bbs/tmp sudo -u clickhouse clickhouse-server --daemon --config-file=/etc/clickhouse-server/config.xml 2>/dev/null || true
-    for i in {1..15}; do
+    for i in {1..30}; do
         curl -sf http://localhost:8123/ping >/dev/null 2>&1 && break
         sleep 1
     done
