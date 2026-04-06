@@ -21,8 +21,6 @@
     <background_schedule_pool_size>2</background_schedule_pool_size>
     <background_common_pool_size>2</background_common_pool_size>
     <background_fetches_pool_size>1</background_fetches_pool_size>
-    <mark_cache_size>134217728</mark_cache_size>
-    <max_server_memory_usage_to_ram_ratio>0.5</max_server_memory_usage_to_ram_ratio>
 
     <!-- Disable system log tables that generate heavy disk I/O when idle -->
     <query_log remove="remove"/>
