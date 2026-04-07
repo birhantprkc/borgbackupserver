@@ -62,13 +62,11 @@ class OidcService
         $oidc = new OpenIDConnectClient($providerUrl, $clientId, $clientSecret);
         $oidc->setRedirectURL($redirectUri);
 
-        // Set scopes
+        // Set scopes (jumbojett library expects an array)
         $scopes = $this->settings['oidc_scopes'] ?? 'openid email profile';
-        foreach (explode(' ', $scopes) as $scope) {
-            $scope = trim($scope);
-            if ($scope) {
-                $oidc->addScope($scope);
-            }
+        $scopeList = array_filter(array_map('trim', explode(' ', $scopes)));
+        if (!empty($scopeList)) {
+            $oidc->addScope($scopeList);
         }
 
         // Allow insecure for development (auto-detect based on provider URL)
