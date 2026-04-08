@@ -147,7 +147,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                         <i class="bi bi-<?= $lastBackupIcon ?>"></i>
                     </div>
                     <div>
-                        <div class="fw-bold" style="font-size: 0.85rem;" id="stat-lastbackup"><?= $lastBackupLabel ?></div>
+                        <div class="fw-bold" id="stat-lastbackup"><?= $lastBackupLabel ?></div>
                         <div class="text-muted" style="font-size: 0.7rem;">Last Backup</div>
                     </div>
                 </div>
