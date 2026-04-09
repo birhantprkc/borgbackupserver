@@ -1225,7 +1225,13 @@ foreach ($serverJobs as $sj) {
     // Build borg command arguments — use repo path (remote SSH or local)
     $repoPath = $isRemoteSsh ? $repo['path'] : $localPath;
     if ($sj['task_type'] === 'prune') {
-        $archivePrefix = $sj['backup_plan_id'] ? 'plan' . $sj['backup_plan_id'] : null;
+        // Only scope prune to this plan's archives if the repo has multiple plans.
+        // Single-plan repos prune everything (including imported/orphaned archives).
+        $planCount = (int) ($db->fetchOne(
+            "SELECT COUNT(*) as cnt FROM backup_plans WHERE repository_id = ? AND enabled = 1",
+            [$sj['repository_id']]
+        )['cnt'] ?? 0);
+        $archivePrefix = ($planCount > 1 && $sj['backup_plan_id']) ? 'plan' . $sj['backup_plan_id'] : null;
         $borgArgs = \BBS\Services\BorgCommandBuilder::buildPruneCommand($plan, $localRepo, $archivePrefix);
         // Remove 'borg' from the front since we'll add it back
         if ($borgArgs[0] === 'borg') {
