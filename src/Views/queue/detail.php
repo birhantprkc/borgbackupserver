@@ -33,6 +33,26 @@ $isServerSide = in_array($job['task_type'], ['prune', 'compact', 's3_sync', 's3_
 $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
 ?>
 
+<style>
+    /* Force long paths and command lines to wrap inside table cells / log entries */
+    .job-detail-wrap {
+        word-break: break-all;
+        overflow-wrap: anywhere;
+        white-space: normal;
+        display: inline-block;
+        max-width: 100%;
+    }
+    #log-section .list-group-item .small {
+        word-break: break-all;
+        overflow-wrap: anywhere;
+        min-width: 0;
+    }
+    #log-section .list-group-item .flex-grow-1,
+    #log-section .list-group-item .flex-grow-1 > .d-flex {
+        min-width: 0;
+    }
+</style>
+
 <div class="d-flex align-items-center mb-4">
     <a href="/queue" class="btn btn-sm btn-outline-secondary me-3"><i class="bi bi-arrow-left"></i> Queue</a>
     <h4 class="mb-0">
@@ -295,13 +315,13 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
                         <?php if ($job['directories']): ?>
                         <tr>
                             <td class="text-muted fw-semibold ps-3">Directories</td>
-                            <td><code class="small"><?= htmlspecialchars(str_replace("\n", ', ', $job['directories'])) ?></code></td>
+                            <td><code class="small job-detail-wrap"><?= htmlspecialchars(str_replace("\n", ', ', $job['directories'])) ?></code></td>
                         </tr>
                         <?php endif; ?>
                         <?php if ($job['advanced_options']): ?>
                         <tr>
                             <td class="text-muted fw-semibold ps-3">Borg Options</td>
-                            <td><code class="small"><?= htmlspecialchars($job['advanced_options']) ?></code></td>
+                            <td><code class="small job-detail-wrap"><?= htmlspecialchars($job['advanced_options']) ?></code></td>
                         </tr>
                         <?php endif; ?>
                     </tbody>
@@ -318,7 +338,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
         <i class="bi bi-exclamation-triangle me-1"></i> Error Log
     </div>
     <div class="card-body">
-        <pre class="mb-0 small text-danger" style="white-space: pre-wrap;"><?= htmlspecialchars($job['error_log']) ?></pre>
+        <pre class="mb-0 small text-danger" style="white-space: pre-wrap; word-break: break-all; overflow-wrap: anywhere;"><?= htmlspecialchars($job['error_log']) ?></pre>
     </div>
 </div>
 <?php endif; ?>
@@ -556,7 +576,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
                         const logEl = document.getElementById('log-section');
                         if (logEl) logEl.parentNode.insertBefore(errSection, logEl);
                     }
-                    errSection.innerHTML = '<div class="card border-0 shadow-sm mb-4 border-danger"><div class="card-header bg-body fw-semibold text-danger"><i class="bi bi-exclamation-triangle me-1"></i> Error Log</div><div class="card-body"><pre class="mb-0 small text-danger" style="white-space:pre-wrap;">' + esc(job.error_log) + '</pre></div></div>';
+                    errSection.innerHTML = '<div class="card border-0 shadow-sm mb-4 border-danger"><div class="card-header bg-body fw-semibold text-danger"><i class="bi bi-exclamation-triangle me-1"></i> Error Log</div><div class="card-body"><pre class="mb-0 small text-danger" style="white-space:pre-wrap;word-break:break-all;overflow-wrap:anywhere;">' + esc(job.error_log) + '</pre></div></div>';
                 }
 
                 // Decide whether to keep polling
