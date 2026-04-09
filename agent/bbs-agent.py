@@ -45,7 +45,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.24.0"
+AGENT_VERSION = "2.24.1"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -1836,6 +1836,57 @@ def test_plugin_interworx(config):
     return "InterWorx backup tool found at {}. Output directory {} is ready.".format(backup_pex, output_dir)
 
 
+def _popen_new_group_kwargs():
+    """Return Popen kwargs that put the child into its own process group/session.
+
+    This is required so we can kill the entire borg subtree (including the
+    orphaned ssh transport child borg spawns for ssh:// repos) on cancel,
+    instead of just killing borg and leaving ssh holding our stdout pipe.
+    """
+    if IS_WINDOWS:
+        flags = 0
+        for attr in ("CREATE_NEW_PROCESS_GROUP", "CREATE_NEW_CONSOLE"):
+            flags |= getattr(subprocess, attr, 0)
+        return {"creationflags": flags} if flags else {}
+    return {"start_new_session": True}
+
+
+def _kill_process_tree(proc):
+    """Force-kill a child process and any descendants.
+
+    Linux/macOS: kill the whole process group via SIGKILL.
+    Windows: terminate via TerminateProcess (CREATE_NEW_PROCESS_GROUP keeps the
+    tree together so child handles get cleaned up).
+    """
+    if proc is None or proc.poll() is not None:
+        return
+    try:
+        if IS_WINDOWS:
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+            try:
+                proc.kill()
+            except Exception:
+                pass
+        else:
+            try:
+                pgid = os.getpgid(proc.pid)
+            except (ProcessLookupError, OSError):
+                pgid = proc.pid
+            try:
+                os.killpg(pgid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError, OSError):
+                # Fall back to killing just the immediate child
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+    except Exception as e:
+        logger.warning("Failed to kill process tree for pid {}: {}".format(proc.pid, e))
+
+
 def _parse_script_command(value):
     """Split a script field into [executable, *args] using shell-style parsing.
 
@@ -2872,6 +2923,7 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
             stderr=subprocess.PIPE,
             env=env,
             cwd=cwd,
+            **_popen_new_group_kwargs(),
         )
 
         # Read stderr for JSON log output (borg writes progress to stderr)
@@ -2909,18 +2961,25 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
 
                         # Check for server-side cancellation
                         if isinstance(progress_resp, dict) and progress_resp.get("cancel"):
-                            logger.warning("Job #{} cancelled by server — killing borg process".format(job_id))
-                            proc.kill()
-                            proc.wait()
+                            logger.warning("Job #{} cancelled by server — killing borg process tree".format(job_id))
+                            # Kill the whole process group so borg's ssh transport
+                            # child gets reaped too — otherwise it stays alive
+                            # holding our stdout pipe and the next read() blocks
+                            # the agent main loop indefinitely.
+                            _kill_process_tree(proc)
+                            try:
+                                proc.wait(timeout=10)
+                            except subprocess.TimeoutExpired:
+                                logger.warning("borg did not exit after kill, continuing anyway")
                             result = "failed"
                             error_output = "Cancelled by user"
                             # Close catalog SSH pipe if open
                             if catalog_ssh:
                                 try:
                                     catalog_ssh.stdin.close()
-                                    catalog_ssh.terminate()
                                 except Exception:
                                     pass
+                                _kill_process_tree(catalog_ssh)
                                 catalog_ssh = None
                             break
 
@@ -2977,9 +3036,35 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
         job_cancelled = (error_output == "Cancelled by user")
         if not job_cancelled:
             proc.wait(timeout=86400)  # 24h timeout
+            # Safe to read here — borg exited normally so all pipe writers are gone.
+            stdout_output = proc.stdout.read().decode("utf-8", errors="replace")
         else:
-            proc.wait(timeout=10)  # Brief wait for cleanup
-        stdout_output = proc.stdout.read().decode("utf-8", errors="replace")
+            # After a cancel kill, never block on stdout.read(): if borg's ssh
+            # transport child somehow survived the group kill it would still
+            # hold the pipe writer end and read() would hang the agent forever
+            # (hangs were observed pre-2.24.1 leaving the agent stuck until
+            # service restart). Drain via communicate() with a hard timeout.
+            try:
+                drained_stdout, _ = proc.communicate(timeout=10)
+                if isinstance(drained_stdout, bytes):
+                    stdout_output = drained_stdout.decode("utf-8", errors="replace")
+                else:
+                    stdout_output = drained_stdout or ""
+            except subprocess.TimeoutExpired:
+                logger.warning("Job #{}: stdout drain timed out after cancel — re-killing tree".format(job_id))
+                _kill_process_tree(proc)
+                try:
+                    proc.wait(timeout=5)
+                except Exception:
+                    pass
+                # Close pipes manually so the agent loop doesn't get stuck
+                for pipe in (proc.stdout, proc.stderr, proc.stdin):
+                    try:
+                        if pipe is not None:
+                            pipe.close()
+                    except Exception:
+                        pass
+                stdout_output = ""
 
         # Parse borg info from stdout if available
         if stdout_output:
