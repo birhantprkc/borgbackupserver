@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import platform
+import shlex
 import signal
 import socket
 import subprocess
@@ -44,7 +45,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.23.0"
+AGENT_VERSION = "2.24.0"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -1835,6 +1836,27 @@ def test_plugin_interworx(config):
     return "InterWorx backup tool found at {}. Output directory {} is ready.".format(backup_pex, output_dir)
 
 
+def _parse_script_command(value):
+    """Split a script field into [executable, *args] using shell-style parsing.
+
+    Allows users to pass arguments in the script path field, e.g.:
+        /path/to/script.sh before
+        /path/with\\ spaces/script.sh "arg with spaces"
+    Returns ([], "") if value is empty. Returns (argv, executable_path).
+    """
+    value = (value or "").strip()
+    if not value:
+        return [], ""
+    try:
+        argv = shlex.split(value, posix=(os.name != "nt"))
+    except ValueError:
+        # Unbalanced quotes — fall back to treating the whole string as a path
+        argv = [value]
+    if not argv:
+        return [], ""
+    return argv, argv[0]
+
+
 def execute_plugin_shell_hook(config):
     """Run pre-backup shell script hook."""
     pre_script = config.get("pre_script", "").strip()
@@ -1853,15 +1875,17 @@ def execute_plugin_shell_hook(config):
         logger.info("Shell hook: no pre-script configured, skipping")
         return result
 
-    if not os.path.isfile(pre_script):
-        msg = "Pre-script not found: {}".format(pre_script)
+    pre_argv, pre_exe = _parse_script_command(pre_script)
+
+    if not os.path.isfile(pre_exe):
+        msg = "Pre-script not found: {}".format(pre_exe)
         if abort_on_failure:
             raise Exception(msg)
         logger.warning(msg)
         return result
 
-    if not os.access(pre_script, os.X_OK):
-        msg = "Pre-script not executable: {}".format(pre_script)
+    if not os.access(pre_exe, os.X_OK):
+        msg = "Pre-script not executable: {}".format(pre_exe)
         if abort_on_failure:
             raise Exception(msg)
         logger.warning(msg)
@@ -1870,7 +1894,7 @@ def execute_plugin_shell_hook(config):
     logger.info("Shell hook: running pre-script {}".format(pre_script))
     try:
         proc = subprocess.run(
-            [pre_script],
+            pre_argv,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             timeout=timeout,
@@ -1904,18 +1928,20 @@ def cleanup_plugin_shell_hook(config, plugin_result):
     if not post_script:
         return None
 
-    if not os.path.isfile(post_script):
-        logger.warning("Post-script not found: {}".format(post_script))
-        return "{} not found".format(post_script)
+    post_argv, post_exe = _parse_script_command(post_script)
 
-    if not os.access(post_script, os.X_OK):
-        logger.warning("Post-script not executable: {}".format(post_script))
-        return "{} not executable".format(post_script)
+    if not os.path.isfile(post_exe):
+        logger.warning("Post-script not found: {}".format(post_exe))
+        return "{} not found".format(post_exe)
+
+    if not os.access(post_exe, os.X_OK):
+        logger.warning("Post-script not executable: {}".format(post_exe))
+        return "{} not executable".format(post_exe)
 
     logger.info("Shell hook: running post-script {}".format(post_script))
     try:
         proc = subprocess.run(
-            [post_script],
+            post_argv,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             timeout=timeout,
@@ -1943,18 +1969,19 @@ def test_plugin_shell_hook(config):
     if not pre_script and not post_script:
         raise Exception("No scripts configured. Set at least a pre-script or post-script path.")
 
-    for label, path in [("Pre-script", pre_script), ("Post-script", post_script)]:
-        if not path:
+    for label, value in [("Pre-script", pre_script), ("Post-script", post_script)]:
+        if not value:
             results.append("{}: not configured (skipped)".format(label))
             continue
-        if not os.path.isfile(path):
-            raise Exception("{} not found: {}".format(label, path))
-        if not os.access(path, os.X_OK):
-            raise Exception("{} not executable: {} - run: chmod +x {}".format(label, path, path))
+        argv, exe = _parse_script_command(value)
+        if not os.path.isfile(exe):
+            raise Exception("{} not found: {}".format(label, exe))
+        if not os.access(exe, os.X_OK):
+            raise Exception("{} not executable: {} - run: chmod +x {}".format(label, exe, exe))
         # Actually run the script to verify it works under the agent's context
         try:
             proc = subprocess.run(
-                [path],
+                argv,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 timeout=timeout,
@@ -1963,9 +1990,9 @@ def test_plugin_shell_hook(config):
             output = (proc.stdout or "").strip()[:500]
             if proc.returncode != 0:
                 raise Exception("{} exited with code {}: {}".format(label, proc.returncode, output))
-            results.append("{}: {} exit 0{}".format(label, path, " — {}".format(output) if output else ""))
+            results.append("{}: {} exit 0{}".format(label, value, " — {}".format(output) if output else ""))
         except subprocess.TimeoutExpired:
-            raise Exception("{} timed out after {}s: {}".format(label, timeout, path))
+            raise Exception("{} timed out after {}s: {}".format(label, timeout, value))
 
     return " | ".join(results)
 

@@ -699,12 +699,12 @@ class PluginManager
                 'pre_script' => [
                     'type' => 'text',
                     'label' => 'Pre-Backup Script Path',
-                    'help' => 'Absolute path to script on the client (e.g. /home/bbs/hooks/pre-backup.sh). Runs before borg starts. Leave empty to skip.',
+                    'help' => 'Absolute path to script on the client (e.g. /home/bbs/hooks/pre-backup.sh). Arguments are supported, e.g. /path/script.sh before. Runs before borg starts. Leave empty to skip.',
                 ],
                 'post_script' => [
                     'type' => 'text',
                     'label' => 'Post-Backup Script Path',
-                    'help' => 'Absolute path to script on the client (e.g. /home/bbs/hooks/post-backup.sh). Runs after borg completes. Leave empty to skip.',
+                    'help' => 'Absolute path to script on the client (e.g. /home/bbs/hooks/post-backup.sh). Arguments are supported, e.g. /path/script.sh after. Runs after borg completes. Leave empty to skip.',
                 ],
                 'abort_on_failure' => [
                     'type' => 'checkbox',
