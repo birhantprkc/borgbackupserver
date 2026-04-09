@@ -217,12 +217,17 @@ case "$ACTION" in
 
         mkdir -p /tmp/bbs-verify
 
+        # Do NOT use 2>&1 here — borg's first-run cache initialization and
+        # security info messages on stderr corrupt the JSON output, causing
+        # json_decode in PHP to fail and the import button to "not find" the
+        # repo on the first click. The PHP caller captures stdout and stderr
+        # on separate pipes, so leave them separated.
         BORG_PASSPHRASE="$PASSPHRASE" \
         BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes \
         BORG_RELOCATED_REPO_ACCESS_IS_OK=yes \
         BORG_BASE_DIR="/tmp/bbs-verify" \
         HOME="/tmp/bbs-verify" \
-            borg list --json "$REPO_PATH" 2>&1
+            borg list --json "$REPO_PATH"
 
         exit $?
         ;;

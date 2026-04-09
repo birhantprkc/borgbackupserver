@@ -1299,7 +1299,10 @@ class RepositoryController extends Controller
             }
 
             if ($exitCode !== 0) {
-                $errorMsg = trim($output ?: $stderr);
+                // Prefer stderr — borg writes real errors there and only emits
+                // info/cache messages on stdout. Falling back to stdout keeps
+                // the path reasonable if stderr happens to be empty.
+                $errorMsg = trim($stderr ?: $output);
                 if (str_contains($errorMsg, 'passphrase') || str_contains($errorMsg, 'Passphrase')) {
                     $errorMsg = 'Incorrect passphrase for this repository.';
                 } elseif (str_contains($errorMsg, 'not a valid repository') || str_contains($errorMsg, 'does not exist') || str_contains($errorMsg, 'Failed to create/acquire')) {
