@@ -53,7 +53,27 @@ case "${SSH_ORIGINAL_COMMAND:-}" in
 
         TARGET="$LOG_DIR/catalog-${JOB_ID}.jsonl"
         cat > "$TARGET"
-        chmod 640 "$TARGET" 2>/dev/null || true
+
+        # Make sure www-data (the web server user that imports the catalog)
+        # can read the file. We can't rely on the parent directory's setgid
+        # bit alone — FUSE filesystems like Unraid's shfs don't always honor
+        # setgid for new files, leaving the file in the bbs-* user's primary
+        # group which www-data has no access to. Explicitly chgrp to
+        # www-data; the bbs-* user is added to the www-data supplementary
+        # group at create time so this is allowed without root.
+        if chgrp www-data "$TARGET" 2>/dev/null; then
+            chmod 640 "$TARGET" 2>/dev/null || true
+        else
+            # Fallback for setups where chgrp to www-data failed (existing
+            # users created before the supplementary-group fix, or filesystems
+            # that map ownership through a translation layer): make the file
+            # world-readable so www-data can import it via "other" permissions.
+            # The catalog contains file listings only — not file contents —
+            # and the parent directory remains 2770 so the file is still only
+            # reachable by processes that can already traverse into the bbs-*
+            # home. In practice that's root and www-data.
+            chmod 644 "$TARGET" 2>/dev/null || true
+        fi
         ;;
 
     "ping")

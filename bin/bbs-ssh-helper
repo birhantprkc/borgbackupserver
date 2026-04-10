@@ -68,6 +68,10 @@ case "$ACTION" in
         fi
         chmod 750 "$HOME_DIR"
 
+        # Add user to www-data group so catalog files can be chgrp'd to www-data
+        # (needed on FUSE/shfs filesystems like Unraid where setgid is not honored)
+        usermod -a -G www-data "$USERNAME" 2>/dev/null || true
+
         # Configure SSH authorized_keys with gate dispatcher
         SSH_DIR="$HOME_DIR/.ssh"
         mkdir -p "$SSH_DIR"

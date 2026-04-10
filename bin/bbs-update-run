@@ -75,6 +75,11 @@ for user in $(getent passwd | grep '^bbs-' | cut -d: -f1); do
     mkdir -p "$borgdir"
     chown "$user":"$user" "$borgdir"
 
+    # Ensure user is in www-data supplementary group (needed so chgrp in
+    # bbs-ssh-gate's catalog-write works on FUSE/shfs where setgid is not
+    # honored — without this, catalog files are unreadable by the web server)
+    usermod -a -G www-data "$user" 2>/dev/null || true
+
     # Home dir: 750 for sshd compatibility, owned by user with www-data group
     if [ -d "$home" ]; then
         chown "$user":www-data "$home"
