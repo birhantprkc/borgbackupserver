@@ -1160,6 +1160,19 @@ foreach ($serverJobs as $sj) {
                     } catch (\Exception $e) { /* non-fatal */ }
                     @unlink($dirsTsv);
                 }
+            } else {
+                // Archive genuinely has 0 indexable files (only directories or
+                // truly empty). Insert a sentinel row so the auto-rebuild check
+                // in step 3b sees this archive_id in ClickHouse and stops
+                // re-triggering a rebuild every 24 hours.
+                try {
+                    $sentinelTsv = sys_get_temp_dir() . "/catalog_sentinel_{$agentId}_{$crArchive['id']}_" . getmypid() . '.tsv';
+                    file_put_contents($sentinelTsv, "{$agentId}\t{$crArchive['id']}\t\t\t\t0\tE\t\\N\n");
+                    $ch->insertTsv('file_catalog', $sentinelTsv, [
+                        'agent_id', 'archive_id', 'path', 'file_name', 'parent_dir', 'file_size', 'status', 'mtime'
+                    ]);
+                    @unlink($sentinelTsv);
+                } catch (\Exception $e) { /* non-fatal — worst case is a repeat rebuild */ }
             }
             @unlink($tsvFile);
 
