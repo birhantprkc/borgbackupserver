@@ -1451,8 +1451,16 @@ class ClientController extends Controller
             fclose($pipes[2]);
             $exitCode = proc_close($proc);
 
+            $borgOutput = trim($stdout . "\n" . $stderr);
+
             if ($exitCode > 1) {
-                throw new \RuntimeException('borg extract failed: ' . trim($stdout . "\n" . $stderr));
+                // Log the full borg output so it's visible even after redirect
+                $this->db->insert('server_log', [
+                    'agent_id' => $id,
+                    'level' => 'error',
+                    'message' => "Download failed — borg extract exit {$exitCode}: " . substr($borgOutput, 0, 4000),
+                ]);
+                throw new \RuntimeException('borg extract failed (exit ' . $exitCode . '): ' . substr($borgOutput, 0, 500));
             }
 
             // Fix permissions so www-data can read extracted files
@@ -1461,15 +1469,71 @@ class ClientController extends Controller
 
             // Check if anything was extracted
             $extractedFiles = [];
-            $rii = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($tmpDir, \RecursiveDirectoryIterator::SKIP_DOTS));
-            foreach ($rii as $file) {
-                if ($file->isFile()) {
-                    $extractedFiles[] = $file->getPathname();
+            try {
+                $rii = new \RecursiveIteratorIterator(
+                    new \RecursiveDirectoryIterator($tmpDir, \RecursiveDirectoryIterator::SKIP_DOTS),
+                    \RecursiveIteratorIterator::SELF_FIRST,
+                    \RecursiveIteratorIterator::CATCH_GET_CHILD
+                );
+                foreach ($rii as $file) {
+                    if ($file->isFile()) {
+                        $extractedFiles[] = $file->getPathname();
+                    }
+                }
+            } catch (\Exception $iterErr) {
+                // Iteration itself failed — log and continue to the empty-check
+                $this->db->insert('server_log', [
+                    'agent_id' => $id,
+                    'level' => 'warning',
+                    'message' => "Download: failed to iterate tmp dir {$tmpDir}: " . $iterErr->getMessage(),
+                ]);
+            }
+
+            if (empty($extractedFiles)) {
+                // The helper may have extracted files but PHP (as www-data) can't
+                // see them due to a permission layer we don't control (FUSE/shfs,
+                // NFS ID mapping, etc). Ask the helper for a root-eye view of the
+                // tmp dir and include borg's output so users can see what happened.
+                $lsOutput = '';
+                exec('sudo /usr/local/bin/bbs-ssh-helper fix-download-perms ' . escapeshellarg($tmpDir) . ' 2>&1');
+                exec('sudo find ' . escapeshellarg($tmpDir) . ' -maxdepth 4 2>&1', $lsLines);
+                $lsOutput = implode("\n", array_slice($lsLines, 0, 50));
+
+                // Re-iterate after the second fix-download-perms pass
+                try {
+                    $rii = new \RecursiveIteratorIterator(
+                        new \RecursiveDirectoryIterator($tmpDir, \RecursiveDirectoryIterator::SKIP_DOTS),
+                        \RecursiveIteratorIterator::SELF_FIRST,
+                        \RecursiveIteratorIterator::CATCH_GET_CHILD
+                    );
+                    foreach ($rii as $file) {
+                        if ($file->isFile()) {
+                            $extractedFiles[] = $file->getPathname();
+                        }
+                    }
+                } catch (\Exception $iterErr2) {
+                    /* ignore */
                 }
             }
 
             if (empty($extractedFiles)) {
-                throw new \RuntimeException('No files were extracted');
+                // Log the full diagnostic picture before failing so users can
+                // see it in the server log (the flash message is truncated).
+                $diag = "borg exit={$exitCode}\n"
+                    . "borg output:\n" . substr($borgOutput, 0, 2000) . "\n"
+                    . "tmp dir contents (root view):\n" . substr($lsOutput ?? '(not captured)', 0, 1500);
+                $this->db->insert('server_log', [
+                    'agent_id' => $id,
+                    'level' => 'error',
+                    'message' => "Download failed — no files in {$tmpDir}. {$diag}",
+                ]);
+
+                $userMsg = 'No files were extracted. borg exit=' . $exitCode;
+                if ($borgOutput !== '') {
+                    $userMsg .= ' — ' . substr($borgOutput, 0, 300);
+                }
+                $userMsg .= ' (see server log for full output)';
+                throw new \RuntimeException($userMsg);
             }
 
             // Generate filename
