@@ -44,7 +44,7 @@ if ($stale->rowCount() > 0) {
         [$cutoff]
     );
     foreach ($offlineAgents as $offAgent) {
-        $notificationService->notify('agent_offline', $offAgent['id'], null, "Client \"{$offAgent['name']}\" is offline (no heartbeat in {$threshold}s)", 'critical');
+        $notificationService->notify('agent_offline', $offAgent['id'], null, "Client \"{$offAgent['name']}\" is offline (no heartbeat in {$threshold}s)", 'warning');
     }
 }
 
@@ -70,7 +70,7 @@ foreach ($staleJobs as $sj) {
     $db->insert('server_log', [
         'agent_id' => $sj['agent_id'],
         'backup_job_id' => $sj['id'],
-        'level' => 'error',
+        'level' => 'warning',
         'message' => "Job #{$sj['id']} ({$sj['task_type']}) failed — agent \"{$sj['agent_name']}\" went offline",
     ]);
 
