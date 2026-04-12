@@ -1955,7 +1955,7 @@ sudo /var/www/bbs/bin/bbs-token revoke "ansible"</code></pre>
                                         <?= htmlspecialchars($agent['name']) ?>
                                     </a>
                                     <?php if ($updateMode === 'server' && !$isCompatible): ?>
-                                        <span class="badge bg-danger ms-1" title="No compatible binary for glibc <?= htmlspecialchars($glibcDisplay ?: 'unknown') ?>">
+                                        <span class="badge bg-danger ms-1" title="No compatible borg binary on this server for <?= htmlspecialchars($osDisplay ?: 'this OS') ?> (glibc <?= htmlspecialchars($glibcDisplay ?: 'unknown') ?>). Upload a matching binary or switch to Official updates.">
                                             <i class="bi bi-exclamation-triangle"></i>
                                         </span>
                                     <?php endif; ?>
@@ -2050,7 +2050,7 @@ sudo /var/www/bbs/bin/bbs-token revoke "ansible"</code></pre>
                         html += '<td><i class="bi bi-pc-display me-1 text-muted"></i>';
                         html += '<a href="/clients/' + agent.id + '" class="text-decoration-none fw-semibold">' + agent.name.replace(/</g, '&lt;') + '</a>';
                         if (data.update_mode === 'server' && !agent.is_compatible) {
-                            html += ' <span class="badge bg-danger ms-1" title="No compatible binary"><i class="bi bi-exclamation-triangle"></i></span>';
+                            html += ' <span class="badge bg-danger ms-1" title="No compatible borg binary on this server for ' + agent.os_display.replace(/"/g, '&quot;') + ' (glibc ' + agent.glibc_display + '). Upload a matching binary or switch to Official updates."><i class="bi bi-exclamation-triangle"></i></span>';
                         }
                         html += '</td>';
                         html += '<td class="text-muted">' + agent.os_display.replace(/</g, '&lt;') + '</td>';

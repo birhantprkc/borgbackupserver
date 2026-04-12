@@ -470,6 +470,12 @@ class BorgVersionService
         $arch = $agent['architecture'] ?? 'x86_64';
         $glibc = $agent['glibc_version'] ?? null;
 
+        // Windows and macOS agents have their own borg installation paths
+        // (borg-windows.zip / Homebrew) — glibc compatibility doesn't apply
+        if (in_array($platform, ['windows', 'darwin'], true)) {
+            return true;
+        }
+
         // Extract numeric glibc for comparison (e.g., 'glibc217' -> '217')
         $agentGlibcNum = $glibc ? preg_replace('/[^0-9]/', '', $glibc) : null;
 
