@@ -1508,6 +1508,14 @@ foreach ($serverJobs as $sj) {
                     'message' => "Prune completed — all " . count($borgArchives) . " recovery point(s) retained, none removed",
                 ]);
             }
+            // Refresh cached repo stats so the dashboard shows correct values
+            $db->query("
+                UPDATE repositories SET
+                    archive_count = (SELECT COUNT(*) FROM archives WHERE repository_id = ?),
+                    size_bytes = COALESCE((SELECT SUM(deduplicated_size) FROM archives WHERE repository_id = ?), 0)
+                WHERE id = ?
+            ", [$repoId, $repoId, $repoId]);
+
             } // end JSON validation else
         }
     }
@@ -1530,6 +1538,15 @@ foreach ($serverJobs as $sj) {
             } catch (\Exception $e) { /* ClickHouse may not be available */ }
 
             $db->delete('archives', 'id = ?', [$deletedArchive['id']]);
+
+            // Refresh cached repo stats
+            $db->query("
+                UPDATE repositories SET
+                    archive_count = (SELECT COUNT(*) FROM archives WHERE repository_id = ?),
+                    size_bytes = COALESCE((SELECT SUM(deduplicated_size) FROM archives WHERE repository_id = ?), 0)
+                WHERE id = ?
+            ", [$sj['repository_id'], $sj['repository_id'], $sj['repository_id']]);
+
             echo date('Y-m-d H:i:s') . " Removed archive \"{$archiveName}\" from DB for repo #{$sj['repository_id']}\n";
         }
     }
