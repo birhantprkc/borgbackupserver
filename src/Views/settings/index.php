@@ -133,6 +133,11 @@ $updateAvailable = $updateService->isUpdateAvailable();
                         <input type="number" class="form-control" name="agent_poll_interval" value="<?= htmlspecialchars($settings['agent_poll_interval'] ?? '30') ?>" min="5" max="300">
                         <div class="form-text">How often agents check for new tasks.</div>
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Stall Detection Timeout (minutes)</label>
+                        <input type="number" class="form-control" name="stall_timeout_minutes" value="<?= htmlspecialchars($settings['stall_timeout_minutes'] ?? '120') ?>" min="10" max="1440">
+                        <div class="form-text">Kill backup jobs with no progress after this many minutes. Set higher for large files. Default: 120 (2 hours).</div>
+                    </div>
                 </div>
             </div>
         </div>

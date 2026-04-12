@@ -905,14 +905,17 @@ class AgentApiController extends Controller
         // Check for stalled jobs on this agent. The main poll loop is blocked
         // during task execution so the stall check in tasks() never fires.
         // The heartbeat is the only channel active during a running task.
+        $stallSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'stall_timeout_minutes'");
+        $stallMinutes = max(10, (int) ($stallSetting['value'] ?? 120));
+
         $stalledJobs = $this->db->fetchAll("
             SELECT bj.id FROM backup_jobs bj
             WHERE bj.agent_id = ?
               AND bj.status = 'running'
               AND bj.task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full', 'archive_delete')
               AND bj.last_progress_at IS NOT NULL
-              AND bj.last_progress_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)
-        ", [$agent['id']]);
+              AND bj.last_progress_at < DATE_SUB(NOW(), INTERVAL ? MINUTE)
+        ", [$agent['id'], $stallMinutes]);
 
         if (!empty($stalledJobs)) {
             $response['check_jobs'] = array_map(fn($j) => (int) $j['id'], $stalledJobs);
