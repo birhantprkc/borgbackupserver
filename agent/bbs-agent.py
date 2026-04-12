@@ -1057,6 +1057,19 @@ def execute_update_agent(config, task):
             error_output = "Downloaded script failed validation"
             logger.error(error_output)
         else:
+            # Syntax-check the new script BEFORE replacing — a SyntaxError
+            # here (e.g. from Python version incompatibility) would brick the
+            # agent with no auto-recovery path.
+            try:
+                import ast
+                ast.parse(new_script)
+            except SyntaxError as syn_err:
+                error_output = "Downloaded script has syntax error on line {}: {} — keeping current version".format(
+                    syn_err.lineno, syn_err.msg)
+                logger.error(error_output)
+                report_status(config, {"job_id": job_id, "result": "failed", "error_log": error_output})
+                return
+
             # On Windows (launcher pattern): update bbs-agent-run.py in the agent dir
             # On Unix: replace the running script in-place
             if IS_WINDOWS:
@@ -1064,6 +1077,14 @@ def execute_update_agent(config, task):
             else:
                 script_path = os.path.abspath(__file__)
             logger.info("Replacing agent at: {}".format(script_path))
+
+            # Save a backup of the current working script before replacing
+            backup_path = script_path + ".bak"
+            try:
+                import shutil
+                shutil.copy2(script_path, backup_path)
+            except Exception as bak_err:
+                logger.warning("Could not create backup: {}".format(bak_err))
 
             # Write new script to temp file first, then move
             tmp_path = script_path + ".tmp"
@@ -1084,6 +1105,24 @@ def execute_update_agent(config, task):
             result = "completed"
             update_output = "Agent updated to v{}".format(new_version)
             logger.info(update_output)
+
+            # Also download the startup wrapper (provides auto-recovery from
+            # bad updates). Non-fatal if it fails — the wrapper is a safety
+            # net, not required for normal operation.
+            if not IS_WINDOWS:
+                try:
+                    wrapper_url = "{}/api/agent/download?file=bbs-agent-start.sh".format(config['server_url'])
+                    wrapper_req = urllib.request.Request(wrapper_url, headers=headers, method="GET")
+                    with urllib.request.urlopen(wrapper_req, timeout=30) as wresp:
+                        wrapper_script = wresp.read()
+                    wrapper_dir = os.path.dirname(script_path)
+                    wrapper_path = os.path.join(wrapper_dir, "bbs-agent-start.sh")
+                    with open(wrapper_path, "wb") as wf:
+                        wf.write(wrapper_script)
+                    os.chmod(wrapper_path, 0o755)
+                    logger.info("Updated startup wrapper at {}".format(wrapper_path))
+                except Exception as we:
+                    logger.debug("Could not update startup wrapper: {}".format(we))
 
     except urllib.error.HTTPError as e:
         error_output = "Download failed: HTTP {}".format(e.code)

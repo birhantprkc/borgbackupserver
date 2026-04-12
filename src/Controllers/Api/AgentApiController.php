@@ -974,6 +974,7 @@ class AgentApiController extends Controller
         $allowed = [
             'install.sh' => 'agent/install.sh',
             'bbs-agent.py' => 'agent/bbs-agent.py',
+            'bbs-agent-start.sh' => 'agent/bbs-agent-start.sh',
             'com.borgbackupserver.agent.plist' => 'agent/com.borgbackupserver.agent.plist',
             'install-windows.ps1' => 'agent/install-windows.ps1',
             'uninstall-windows.ps1' => 'agent/uninstall-windows.ps1',

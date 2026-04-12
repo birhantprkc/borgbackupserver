@@ -353,6 +353,16 @@ install_agent() {
 
     chmod +x "$INSTALL_DIR/bbs-agent.py"
 
+    # Download the startup wrapper (provides auto-recovery from bad updates)
+    if command -v curl &>/dev/null; then
+        curl -sf -o "$INSTALL_DIR/bbs-agent-start.sh" "$SERVER_URL/api/agent/download?file=bbs-agent-start.sh" 2>/dev/null || true
+    elif command -v wget &>/dev/null; then
+        wget -q -O "$INSTALL_DIR/bbs-agent-start.sh" "$SERVER_URL/api/agent/download?file=bbs-agent-start.sh" 2>/dev/null || true
+    elif command -v fetch &>/dev/null; then
+        fetch -q -o "$INSTALL_DIR/bbs-agent-start.sh" "$SERVER_URL/api/agent/download?file=bbs-agent-start.sh" 2>/dev/null || true
+    fi
+    chmod +x "$INSTALL_DIR/bbs-agent-start.sh" 2>/dev/null || true
+
     # Download uninstaller
     if command -v curl &>/dev/null; then
         curl -sf -o "$INSTALL_DIR/uninstall.sh" "$SERVER_URL/api/agent/download?file=uninstall.sh" 2>/dev/null || true
@@ -572,8 +582,8 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=root
-Environment=LC_ALL=C.UTF-8 LANG=C.UTF-8
-ExecStart=$PYTHON3 $INSTALL_DIR/bbs-agent.py
+Environment=LC_ALL=C.UTF-8 LANG=C.UTF-8 BBS_AGENT_DIR=$INSTALL_DIR BBS_PYTHON=$PYTHON3
+ExecStart=/bin/bash $INSTALL_DIR/bbs-agent-start.sh
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -612,7 +622,8 @@ INITEOF
         # Append the runtime parts with variable expansion
         cat >> /etc/init.d/bbs-agent <<EOF
 PYTHON="$PYTHON3"
-AGENT="$INSTALL_DIR/bbs-agent.py"
+AGENT_DIR="$INSTALL_DIR"
+WRAPPER="$INSTALL_DIR/bbs-agent-start.sh"
 EOF
         cat >> /etc/init.d/bbs-agent <<'INITEOF'
 PIDFILE="/var/run/bbs-agent.pid"
@@ -627,13 +638,17 @@ elif locale -a 2>/dev/null | grep -qi 'en_us\.utf'; then
     export LANG=en_US.UTF-8
 fi
 
+export BBS_AGENT_DIR="$AGENT_DIR"
+export BBS_PYTHON="$PYTHON"
+export BBS_AGENT_LOG="$LOGFILE"
+
 start() {
     if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
         echo "bbs-agent is already running (PID $(cat "$PIDFILE"))"
         return 0
     fi
     echo -n "Starting bbs-agent: "
-    nohup "$PYTHON" "$AGENT" >> "$LOGFILE" 2>&1 &
+    nohup bash "$WRAPPER" >> "$LOGFILE" 2>&1 &
     echo $! > "$PIDFILE"
     echo "OK"
 }
