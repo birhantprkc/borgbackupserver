@@ -648,6 +648,7 @@ foreach ($serverJobs as $sj) {
                 $createdAt = isset($ar['start']) ? date('Y-m-d H:i:s', strtotime($ar['start'])) : $csNow;
                 $originalSize = 0;
                 $deduplicatedSize = 0;
+                $fileCount = 0;
 
                 // Run borg info to get archive sizes
                 if ($isRemoteSsh && isset($remoteConfig)) {
@@ -658,6 +659,7 @@ foreach ($serverJobs as $sj) {
                         $stats = $archiveInfo['stats'] ?? [];
                         $originalSize = (int) ($stats['original_size'] ?? 0);
                         $deduplicatedSize = (int) ($stats['deduplicated_size'] ?? 0);
+                        $fileCount = (int) ($stats['nfiles'] ?? 0);
                     }
                 } else {
                     $archivePath = "{$csArchivePath}::{$archiveName}";
@@ -700,6 +702,7 @@ foreach ($serverJobs as $sj) {
                             $stats = $archiveInfo['stats'] ?? [];
                             $originalSize = (int) ($stats['original_size'] ?? 0);
                             $deduplicatedSize = (int) ($stats['deduplicated_size'] ?? 0);
+                            $fileCount = (int) ($stats['nfiles'] ?? 0);
                         }
                     }
                 }
@@ -708,6 +711,7 @@ foreach ($serverJobs as $sj) {
                     'repository_id' => $csRepo['id'],
                     'archive_name' => $archiveName,
                     'created_at' => $createdAt,
+                    'file_count' => $fileCount,
                     'original_size' => $originalSize,
                     'deduplicated_size' => $deduplicatedSize,
                 ]);
