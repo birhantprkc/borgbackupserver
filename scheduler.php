@@ -36,16 +36,6 @@ $stale = $db->query(
 
 if ($stale->rowCount() > 0) {
     echo date('Y-m-d H:i:s') . " Marked {$stale->rowCount()} agent(s) offline (no heartbeat in {$threshold}s)\n";
-
-    // Notify for each agent that just went offline
-    $notificationService = new NotificationService();
-    $offlineAgents = $db->fetchAll(
-        "SELECT id, name FROM agents WHERE status = 'offline' AND last_heartbeat IS NOT NULL AND last_heartbeat < ?",
-        [$cutoff]
-    );
-    foreach ($offlineAgents as $offAgent) {
-        $notificationService->notify('agent_offline', $offAgent['id'], null, "Client \"{$offAgent['name']}\" is offline (no heartbeat in {$threshold}s)", 'warning');
-    }
 }
 
 // Step 2: Fail jobs for agents that are offline (sent or running only)
