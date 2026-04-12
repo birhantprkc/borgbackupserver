@@ -1363,7 +1363,7 @@ class ClientController extends Controller
         $env = \BBS\Services\BorgCommandBuilder::buildEnv($repo, false);
 
         // Create temp directory for extraction
-        $tmpDir = sys_get_temp_dir() . '/bbs-download-' . bin2hex(random_bytes(8));
+        $tmpDir = '/tmp/bbs-download-' . bin2hex(random_bytes(8));
         mkdir($tmpDir, 0700, true);
 
         $remoteSshKeyFile = null; // Track temp SSH key for cleanup
