@@ -895,11 +895,42 @@ class AgentApiController extends Controller
     public function heartbeat(): void
     {
         $agent = $this->authenticateAgent();
-        $this->json([
+
+        $response = [
             'status' => 'ok',
             'agent_id' => $agent['id'],
             'server_time' => date('Y-m-d H:i:s'),
-        ]);
+        ];
+
+        // Check for stalled jobs on this agent. The main poll loop is blocked
+        // during task execution so the stall check in tasks() never fires.
+        // The heartbeat is the only channel active during a running task.
+        $stalledJobs = $this->db->fetchAll("
+            SELECT bj.id FROM backup_jobs bj
+            WHERE bj.agent_id = ?
+              AND bj.status = 'running'
+              AND bj.task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full', 'archive_delete')
+              AND bj.last_progress_at IS NOT NULL
+              AND bj.last_progress_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)
+        ", [$agent['id']]);
+
+        if (!empty($stalledJobs)) {
+            $response['check_jobs'] = array_map(fn($j) => (int) $j['id'], $stalledJobs);
+        }
+
+        // Also relay cancel signals for the currently running job
+        $cancelledJob = $this->db->fetchOne("
+            SELECT id FROM backup_jobs
+            WHERE agent_id = ? AND status = 'cancelled'
+              AND task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full', 'archive_delete')
+              AND completed_at IS NULL
+            LIMIT 1
+        ", [$agent['id']]);
+        if ($cancelledJob) {
+            $response['cancel_job'] = (int) $cancelledJob['id'];
+        }
+
+        $this->json($response);
     }
 
     /**

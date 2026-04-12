@@ -45,7 +45,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.24.2"
+AGENT_VERSION = "2.24.3"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -95,6 +95,7 @@ logger = logging.getLogger("bbs-agent")
 running = True
 task_running = False  # Set True while executing a task, enables heartbeat thread
 current_job_id = None  # Job ID of currently executing task (for stall check response)
+current_borg_proc = None  # The running borg subprocess, set by execute_task for stall-kill
 
 # Resolve the SSH executable for Windows. The built-in Windows OpenSSH client
 # has a stdin forwarding bug that hangs borg over ssh:// repos. The installer
@@ -2982,6 +2983,8 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
         }
         popen_kwargs.update(_popen_new_group_kwargs())
         proc = subprocess.Popen(command, **popen_kwargs)
+        global current_borg_proc
+        current_borg_proc = proc
 
         # Read stderr for JSON log output (borg writes progress to stderr)
         for raw_line in proc.stderr:
@@ -3169,6 +3172,8 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
         error_output = str(e)
         logger.error("Job #{} error: {}".format(job_id, e))
     finally:
+        current_borg_proc = None
+
         # Close the catalog SSH pipe
         catalog_ssh_error = ""
         if catalog_ssh:
@@ -3300,15 +3305,33 @@ def heartbeat_thread(config):
     This prevents the agent from appearing offline during long-running
     backup operations. The thread only sends heartbeats when task_running
     is True, and exits when running becomes False.
+
+    Also processes stall-detection signals from the server: if the server
+    sees a job with no progress for >10 minutes, the heartbeat response
+    includes a check_jobs list. If the stalled job matches the currently
+    running borg process, we kill it so the agent can recover.
     """
-    global running, task_running
+    global running, task_running, current_job_id, current_borg_proc
     heartbeat_interval = max(config.get("poll_interval", 30), 10)
 
     while running:
         if task_running:
             try:
-                # Send a lightweight heartbeat ping
-                api_request(config, "/api/agent/heartbeat", method="POST", data={})
+                resp = api_request(config, "/api/agent/heartbeat", method="POST", data={})
+
+                if isinstance(resp, dict):
+                    # Handle stall check — server says these jobs have no progress
+                    stalled_ids = resp.get("check_jobs", [])
+                    if stalled_ids and current_job_id in stalled_ids and current_borg_proc is not None:
+                        logger.warning("Server reports job #{} stalled (no progress >10min) — killing borg".format(current_job_id))
+                        _kill_process_tree(current_borg_proc)
+
+                    # Handle cancel signal relayed through heartbeat
+                    cancel_id = resp.get("cancel_job")
+                    if cancel_id and cancel_id == current_job_id and current_borg_proc is not None:
+                        logger.warning("Job #{} cancelled by server (via heartbeat) — killing borg".format(current_job_id))
+                        _kill_process_tree(current_borg_proc)
+
             except Exception as e:
                 logger.debug("Heartbeat failed: {}".format(e))
 
