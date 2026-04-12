@@ -11,6 +11,7 @@ class LogController extends Controller
         $this->requireAuth();
 
         $level = $_GET['level'] ?? '';
+        $clientId = !empty($_GET['client']) ? (int) $_GET['client'] : 0;
         $page = max(1, (int) ($_GET['page'] ?? 1));
         $perPage = 50;
         $offset = ($page - 1) * $perPage;
@@ -25,6 +26,17 @@ class LogController extends Controller
             $where .= ' AND sl.level = ?';
             $params[] = $level;
         }
+
+        if ($clientId > 0) {
+            $where .= ' AND sl.agent_id = ?';
+            $params[] = $clientId;
+        }
+
+        // Get agents list for the client filter dropdown
+        [$agentListWhere, $agentListParams] = $this->getAgentWhereClause('a');
+        $agents = $this->db->fetchAll("
+            SELECT a.id, a.name FROM agents a WHERE {$agentListWhere} ORDER BY a.name
+        ", $agentListParams);
 
         // Get total count for pagination
         $countRow = $this->db->fetchOne("
@@ -48,7 +60,9 @@ class LogController extends Controller
         $this->view('log/index', [
             'pageTitle' => 'Log',
             'logs' => $logs,
+            'agents' => $agents,
             'currentLevel' => $level,
+            'currentClient' => $clientId,
             'page' => $page,
             'pages' => $pages,
             'total' => $total,

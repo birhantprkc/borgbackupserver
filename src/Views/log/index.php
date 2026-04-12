@@ -1,9 +1,18 @@
-<div class="d-flex justify-content-end mb-3">
+<?php $clientParam = $currentClient ? "&client={$currentClient}" : ''; ?>
+<div class="d-flex justify-content-between align-items-center mb-3">
     <div>
-        <a href="/log" class="btn btn-sm <?= empty($currentLevel) ? 'btn-primary' : 'btn-outline-secondary' ?>">All</a>
-        <a href="/log?level=info" class="btn btn-sm <?= $currentLevel === 'info' ? 'btn-info' : 'btn-outline-secondary' ?>">Info</a>
-        <a href="/log?level=warning" class="btn btn-sm <?= $currentLevel === 'warning' ? 'btn-warning' : 'btn-outline-secondary' ?>">Warning</a>
-        <a href="/log?level=error" class="btn btn-sm <?= $currentLevel === 'error' ? 'btn-danger' : 'btn-outline-secondary' ?>">Error</a>
+        <select class="form-select form-select-sm d-inline-block" style="width: auto;" onchange="window.location='/log?client='+this.value<?= $currentLevel ? "+'&level={$currentLevel}'" : '' ?>">
+            <option value="">All Clients</option>
+            <?php foreach ($agents as $a): ?>
+            <option value="<?= $a['id'] ?>" <?= $currentClient == $a['id'] ? 'selected' : '' ?>><?= htmlspecialchars($a['name']) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+    <div>
+        <a href="/log<?= $clientParam ? '?' . ltrim($clientParam, '&') : '' ?>" class="btn btn-sm <?= empty($currentLevel) ? 'btn-primary' : 'btn-outline-secondary' ?>">All</a>
+        <a href="/log?level=info<?= $clientParam ?>" class="btn btn-sm <?= $currentLevel === 'info' ? 'btn-info' : 'btn-outline-secondary' ?>">Info</a>
+        <a href="/log?level=warning<?= $clientParam ?>" class="btn btn-sm <?= $currentLevel === 'warning' ? 'btn-warning' : 'btn-outline-secondary' ?>">Warning</a>
+        <a href="/log?level=error<?= $clientParam ?>" class="btn btn-sm <?= $currentLevel === 'error' ? 'btn-danger' : 'btn-outline-secondary' ?>">Error</a>
     </div>
 </div>
 
@@ -88,7 +97,7 @@
 <nav class="mt-3">
     <ul class="pagination pagination-sm justify-content-center mb-0">
         <?php
-        $levelParam = $currentLevel ? "&level={$currentLevel}" : '';
+        $filterParams = ($currentLevel ? "&level={$currentLevel}" : '') . ($currentClient ? "&client={$currentClient}" : '');
         $maxVisible = 5;
         $start = max(1, $page - 2);
         $end = min($pages, $start + $maxVisible - 1);
@@ -97,23 +106,23 @@
         }
         ?>
         <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
-            <a class="page-link" href="/log?page=<?= $page - 1 ?><?= $levelParam ?>">«</a>
+            <a class="page-link" href="/log?page=<?= $page - 1 ?><?= $filterParams ?>">«</a>
         </li>
         <?php if ($start > 1): ?>
-        <li class="page-item"><a class="page-link" href="/log?page=1<?= $levelParam ?>">1</a></li>
+        <li class="page-item"><a class="page-link" href="/log?page=1<?= $filterParams ?>">1</a></li>
         <?php if ($start > 2): ?><li class="page-item disabled"><span class="page-link">…</span></li><?php endif; ?>
         <?php endif; ?>
         <?php for ($p = $start; $p <= $end; $p++): ?>
         <li class="page-item <?= $p === $page ? 'active' : '' ?>">
-            <a class="page-link" href="/log?page=<?= $p ?><?= $levelParam ?>"><?= $p ?></a>
+            <a class="page-link" href="/log?page=<?= $p ?><?= $filterParams ?>"><?= $p ?></a>
         </li>
         <?php endfor; ?>
         <?php if ($end < $pages): ?>
         <?php if ($end < $pages - 1): ?><li class="page-item disabled"><span class="page-link">…</span></li><?php endif; ?>
-        <li class="page-item"><a class="page-link" href="/log?page=<?= $pages ?><?= $levelParam ?>"><?= $pages ?></a></li>
+        <li class="page-item"><a class="page-link" href="/log?page=<?= $pages ?><?= $filterParams ?>"><?= $pages ?></a></li>
         <?php endif; ?>
         <li class="page-item <?= $page >= $pages ? 'disabled' : '' ?>">
-            <a class="page-link" href="/log?page=<?= $page + 1 ?><?= $levelParam ?>">»</a>
+            <a class="page-link" href="/log?page=<?= $page + 1 ?><?= $filterParams ?>">»</a>
         </li>
     </ul>
 </nav>
