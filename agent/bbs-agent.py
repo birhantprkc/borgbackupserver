@@ -2935,14 +2935,14 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
             return
 
     try:
-        proc = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=env,
-            cwd=cwd,
-            **_popen_new_group_kwargs(),
-        )
+        popen_kwargs = {
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.PIPE,
+            "env": env,
+            "cwd": cwd,
+        }
+        popen_kwargs.update(_popen_new_group_kwargs())
+        proc = subprocess.Popen(command, **popen_kwargs)
 
         # Read stderr for JSON log output (borg writes progress to stderr)
         for raw_line in proc.stderr:
