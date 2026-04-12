@@ -1955,9 +1955,7 @@ sudo /var/www/bbs/bin/bbs-token revoke "ansible"</code></pre>
                                         <?= htmlspecialchars($agent['name']) ?>
                                     </a>
                                     <?php if ($updateMode === 'server' && !$isCompatible): ?>
-                                        <span class="badge bg-danger ms-1" title="No compatible borg binary on this server for <?= htmlspecialchars($osDisplay ?: 'this OS') ?> (glibc <?= htmlspecialchars($glibcDisplay ?: 'unknown') ?>). Upload a matching binary or switch to Official updates.">
-                                            <i class="bi bi-exclamation-triangle"></i>
-                                        </span>
+                                        <small class="text-muted ms-1" title="No server binary available for this agent's platform. The current borg version works fine — this agent just can't be updated via server push."><i class="bi bi-info-circle"></i></small>
                                     <?php endif; ?>
                                 </td>
                                 <td class="text-muted"><?= htmlspecialchars($osDisplay ?: '-') ?></td>
@@ -2050,7 +2048,7 @@ sudo /var/www/bbs/bin/bbs-token revoke "ansible"</code></pre>
                         html += '<td><i class="bi bi-pc-display me-1 text-muted"></i>';
                         html += '<a href="/clients/' + agent.id + '" class="text-decoration-none fw-semibold">' + agent.name.replace(/</g, '&lt;') + '</a>';
                         if (data.update_mode === 'server' && !agent.is_compatible) {
-                            html += ' <span class="badge bg-danger ms-1" title="No compatible borg binary on this server for ' + agent.os_display.replace(/"/g, '&quot;') + ' (glibc ' + agent.glibc_display + '). Upload a matching binary or switch to Official updates."><i class="bi bi-exclamation-triangle"></i></span>';
+                            html += ' <small class="text-muted ms-1" title="No server binary available for this agent\'s platform. The current borg version works fine — this agent just can\'t be updated via server push."><i class="bi bi-info-circle"></i></small>';
                         }
                         html += '</td>';
                         html += '<td class="text-muted">' + agent.os_display.replace(/</g, '&lt;') + '</td>';
