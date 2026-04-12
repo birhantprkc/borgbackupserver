@@ -2128,3 +2128,17 @@ foreach ($agentHomeDirs as $ahd) {
 if ($catalogCleaned > 0) {
     echo date('Y-m-d H:i:s') . " Cleaned up {$catalogCleaned} imported catalog log file(s)\n";
 }
+
+// Step 10: Prune old server_log and backup_jobs entries
+// Run once per hour (minute 30) to avoid running on every scheduler tick
+if ((int) date('i') === 30) {
+    $logDeleted = $db->delete('server_log', 'created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)');
+    if ($logDeleted > 0) {
+        echo date('Y-m-d H:i:s') . " Pruned {$logDeleted} server_log entries older than 30 days\n";
+    }
+
+    $jobsDeleted = $db->delete('backup_jobs', "status IN ('completed', 'failed', 'cancelled') AND completed_at < DATE_SUB(NOW(), INTERVAL 90 DAY)");
+    if ($jobsDeleted > 0) {
+        echo date('Y-m-d H:i:s') . " Pruned {$jobsDeleted} backup_jobs older than 90 days\n";
+    }
+}
