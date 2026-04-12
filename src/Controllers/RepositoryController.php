@@ -465,55 +465,61 @@ class RepositoryController extends Controller
             $this->redirect("/clients/{$agentId}/repo/{$id}");
         }
 
-        // Rename on disk
+        // Rename on disk (skip if paths resolve to the same directory, e.g.
+        // fixing a display name like "/home" → "home" where the filesystem
+        // path is already correct)
         $oldLocalPath = BorgCommandBuilder::getLocalRepoPath($repo);
         if (!empty($oldLocalPath) && is_dir($oldLocalPath)) {
             $newLocalPath = dirname($oldLocalPath) . '/' . $safeName;
 
-            // Safety: validate paths are within allowed storage locations
-            $allowedPaths = array_column(
-                $this->db->fetchAll("SELECT path FROM storage_locations"),
-                'path'
-            );
-            $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
-            if (!empty($storageSetting['value'])) {
-                $allowedPaths[] = $storageSetting['value'];
-            }
-
-            $pathAllowed = false;
-            $realLocal = realpath($oldLocalPath);
-            foreach ($allowedPaths as $ap) {
-                if (!empty($ap) && $realLocal && str_starts_with($realLocal, realpath($ap) ?: '')) {
-                    $pathAllowed = true;
-                    break;
+            if (realpath($oldLocalPath) === realpath($newLocalPath) || $oldLocalPath === $newLocalPath) {
+                // Same directory — just update the DB name below, no disk rename needed
+            } else {
+                // Safety: validate paths are within allowed storage locations
+                $allowedPaths = array_column(
+                    $this->db->fetchAll("SELECT path FROM storage_locations"),
+                    'path'
+                );
+                $storageSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
+                if (!empty($storageSetting['value'])) {
+                    $allowedPaths[] = $storageSetting['value'];
                 }
-            }
 
-            if (!$pathAllowed) {
-                $this->db->insert('server_log', [
-                    'agent_id' => $agentId,
-                    'level' => 'warning',
-                    'message' => "Rename blocked for repo \"{$repo['name']}\" — path outside known storage location.",
-                ]);
-                $this->flash('danger', 'Cannot rename — repository path is outside known storage locations.');
-                $this->redirect("/clients/{$agentId}/repo/{$id}");
-            }
+                $pathAllowed = false;
+                $realLocal = realpath($oldLocalPath);
+                foreach ($allowedPaths as $ap) {
+                    if (!empty($ap) && $realLocal && str_starts_with($realLocal, realpath($ap) ?: '')) {
+                        $pathAllowed = true;
+                        break;
+                    }
+                }
 
-            $output = [];
-            $retval = 0;
-            $cmd = 'sudo /usr/local/bin/bbs-ssh-helper rename-repo-dir '
-                 . escapeshellarg($oldLocalPath) . ' '
-                 . escapeshellarg($newLocalPath) . ' 2>&1';
-            exec($cmd, $output, $retval);
+                if (!$pathAllowed) {
+                    $this->db->insert('server_log', [
+                        'agent_id' => $agentId,
+                        'level' => 'warning',
+                        'message' => "Rename blocked for repo \"{$repo['name']}\" — path outside known storage location.",
+                    ]);
+                    $this->flash('danger', 'Cannot rename — repository path is outside known storage locations.');
+                    $this->redirect("/clients/{$agentId}/repo/{$id}");
+                }
 
-            if ($retval !== 0) {
-                $this->db->insert('server_log', [
-                    'agent_id' => $agentId,
-                    'level' => 'error',
-                    'message' => "Failed to rename repo directory: " . implode(' ', $output),
-                ]);
-                $this->flash('danger', 'Rename failed: ' . implode(' ', $output));
-                $this->redirect("/clients/{$agentId}/repo/{$id}");
+                $output = [];
+                $retval = 0;
+                $cmd = 'sudo /usr/local/bin/bbs-ssh-helper rename-repo-dir '
+                     . escapeshellarg($oldLocalPath) . ' '
+                     . escapeshellarg($newLocalPath) . ' 2>&1';
+                exec($cmd, $output, $retval);
+
+                if ($retval !== 0) {
+                    $this->db->insert('server_log', [
+                        'agent_id' => $agentId,
+                        'level' => 'error',
+                        'message' => "Failed to rename repo directory: " . implode(' ', $output),
+                    ]);
+                    $this->flash('danger', 'Rename failed: ' . implode(' ', $output));
+                    $this->redirect("/clients/{$agentId}/repo/{$id}");
+                }
             }
         }
 
@@ -1208,13 +1214,13 @@ class RepositoryController extends Controller
 
         $agentId = (int) ($_POST['agent_id'] ?? 0);
         $storageType = $_POST['storage_type'] ?? 'local';
-        $name = trim($_POST['name'] ?? '');
+        $name = $this->sanitizePathName(trim($_POST['name'] ?? ''));
         $passphrase = $_POST['passphrase'] ?? '';
         $storageLocationId = !empty($_POST['storage_location_id']) ? (int) $_POST['storage_location_id'] : null;
         $remoteSshConfigId = !empty($_POST['remote_ssh_config_id']) ? (int) $_POST['remote_ssh_config_id'] : null;
 
         if (empty($name) || empty($agentId)) {
-            $this->json(['status' => 'error', 'error' => 'Repository name and client are required.']);
+            $this->json(['status' => 'error', 'error' => 'Repository name and client are required. Names can only contain letters, numbers, hyphens, and underscores.']);
             return;
         }
 
@@ -1372,10 +1378,18 @@ class RepositoryController extends Controller
             return;
         }
 
+        // Sanitize the name — import uses this for both the directory lookup
+        // and the DB record. Leading slashes, special characters, etc. get
+        // stripped to match how new repos are created.
+        $name = $this->sanitizePathName($name);
+        if (empty($name)) {
+            $this->flash('danger', 'Repository name must contain at least one alphanumeric character.');
+            $this->redirect("/clients/{$agentId}?tab=repos");
+            return;
+        }
+
         if ($storageType === 'remote_ssh') {
             $this->importRemoteSsh($agentId, $name, $encryption, $passphrase, $remoteSshConfigId);
-        } else {
-            $this->importLocal($agentId, $agent, $name, $encryption, $passphrase, $storageLocationId);
         }
     }
 
