@@ -677,11 +677,30 @@ class AgentApiController extends Controller
                     'message' => "File catalog imported: " . number_format($count) . " entries in {$elapsed}s",
                 ]);
             } catch (\Exception $e) {
+                $diagInfo = '';
+                $catPath = $catalogImport['path'];
+                if (file_exists($catPath)) {
+                    $perms = substr(sprintf('%o', fileperms($catPath)), -4);
+                    $owner = function_exists('posix_getpwuid') ? (posix_getpwuid(fileowner($catPath))['name'] ?? fileowner($catPath)) : fileowner($catPath);
+                    $group = function_exists('posix_getgrgid') ? (posix_getgrgid(filegroup($catPath))['name'] ?? filegroup($catPath)) : filegroup($catPath);
+                    $size = filesize($catPath);
+                    $diagInfo = " [file: {$perms} {$owner}:{$group} {$size}b, www-data readable: " . (is_readable($catPath) ? 'yes' : 'NO') . ']';
+                } else {
+                    $diagInfo = ' [file does not exist at import time]';
+                }
+                // Check if the gate's diagnostic log exists
+                $diagLog = dirname($catPath) . '/.catalog-diag.log';
+                $gateDiag = '';
+                if (file_exists($diagLog)) {
+                    $tail = file_get_contents($diagLog);
+                    $lines = explode("\n", trim($tail));
+                    $gateDiag = ' | gate-diag: ' . implode(' / ', array_slice($lines, -6));
+                }
                 $this->db->insert('server_log', [
                     'agent_id' => $catalogImport['agent_id'],
                     'backup_job_id' => $catalogImport['job_id'],
                     'level' => 'error',
-                    'message' => "Catalog import failed: " . $e->getMessage(),
+                    'message' => "Catalog import failed: " . $e->getMessage() . $diagInfo . $gateDiag,
                 ]);
             }
             @unlink($catalogImport['path']);

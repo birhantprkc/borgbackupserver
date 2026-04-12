@@ -52,7 +52,23 @@ case "${SSH_ORIGINAL_COMMAND:-}" in
         mkdir -p "$LOG_DIR" 2>/dev/null || true
 
         TARGET="$LOG_DIR/catalog-${JOB_ID}.jsonl"
+
+        # Diagnostic log for troubleshooting FUSE/shfs permission issues (#84)
+        DIAG_LOG="$LOG_DIR/.catalog-diag.log"
+        {
+            echo "=== catalog-write job=$JOB_ID $(date -Iseconds) ==="
+            echo "user=$(id)"
+            echo "target=$TARGET"
+            echo "dir_perms=$(stat -c '%A %U:%G' "$LOG_DIR" 2>&1)"
+            echo "mount=$(stat -f -c '%T' "$LOG_DIR" 2>/dev/null || mount | grep "$(df "$LOG_DIR" --output=source 2>/dev/null | tail -1)" 2>/dev/null | head -1 || echo 'unknown')"
+        } >> "$DIAG_LOG" 2>&1 || true
+
         cat > "$TARGET"
+
+        # Log file state immediately after creation (before any chmod/chgrp)
+        {
+            echo "created: $(stat -c '%A %U:%G %s bytes' "$TARGET" 2>&1)"
+        } >> "$DIAG_LOG" 2>&1 || true
 
         # Make sure www-data (the web server user that imports the catalog)
         # can read the file. We can't rely on the parent directory's setgid
@@ -63,16 +79,14 @@ case "${SSH_ORIGINAL_COMMAND:-}" in
         # group at create time so this is allowed without root.
         if chgrp www-data "$TARGET" 2>/dev/null; then
             chmod 640 "$TARGET" 2>/dev/null || true
+            echo "chgrp=ok final=$(stat -c '%A %U:%G' "$TARGET" 2>&1)" >> "$DIAG_LOG" 2>&1 || true
         else
             # Fallback for setups where chgrp to www-data failed (existing
             # users created before the supplementary-group fix, or filesystems
             # that map ownership through a translation layer): make the file
             # world-readable so www-data can import it via "other" permissions.
-            # The catalog contains file listings only — not file contents —
-            # and the parent directory remains 2770 so the file is still only
-            # reachable by processes that can already traverse into the bbs-*
-            # home. In practice that's root and www-data.
             chmod 644 "$TARGET" 2>/dev/null || true
+            echo "chgrp=FAILED fallback=644 final=$(stat -c '%A %U:%G' "$TARGET" 2>&1)" >> "$DIAG_LOG" 2>&1 || true
         fi
         ;;
 
