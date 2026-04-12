@@ -105,7 +105,9 @@ class AuthController extends Controller
 
         $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
         $host = $serverHost['value'] ?? $_SERVER['HTTP_HOST'] ?? 'localhost';
-        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')
+            ? 'https' : 'http';
         $redirectUri = "{$scheme}://{$host}/login/oidc/callback";
 
         try {
@@ -129,7 +131,9 @@ class AuthController extends Controller
 
         $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
         $host = $serverHost['value'] ?? $_SERVER['HTTP_HOST'] ?? 'localhost';
-        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')
+            ? 'https' : 'http';
         $redirectUri = "{$scheme}://{$host}/login/oidc/callback";
 
         try {
