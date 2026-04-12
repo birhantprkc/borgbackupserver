@@ -266,11 +266,16 @@ class ProfileController extends Controller
 
         $enabled = isset($_POST['daily_report_email']) ? 1 : 0;
         $hour = max(0, min(23, (int) ($_POST['daily_report_hour'] ?? 6)));
+        $frequency = in_array($_POST['report_frequency'] ?? '', ['daily', 'weekly']) ? $_POST['report_frequency'] : 'daily';
+        $day = max(0, min(6, (int) ($_POST['report_day'] ?? 1)));
         $this->db->update('users', [
             'daily_report_email' => $enabled,
             'daily_report_hour' => $hour,
+            'report_frequency' => $frequency,
+            'report_day' => $day,
         ], 'id = ?', [$_SESSION['user_id']]);
-        $this->flash('success', $enabled ? 'Daily report email enabled.' : 'Daily report email disabled.');
+        $label = $frequency === 'weekly' ? 'Weekly' : 'Daily';
+        $this->flash('success', $enabled ? "{$label} report email enabled." : 'Report email disabled.');
         $this->redirect('/profile?tab=reports');
     }
 

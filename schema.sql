@@ -22,6 +22,8 @@ CREATE TABLE users (
     oidc_status ENUM('active', 'pending') NOT NULL DEFAULT 'active',
     daily_report_email TINYINT(1) NOT NULL DEFAULT 0,
     daily_report_hour TINYINT NOT NULL DEFAULT 6,
+    report_frequency ENUM('daily', 'weekly') NOT NULL DEFAULT 'daily',
+    report_day TINYINT NOT NULL DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );

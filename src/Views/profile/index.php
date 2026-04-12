@@ -353,8 +353,27 @@
                                 <input class="form-check-input" type="checkbox" name="daily_report_email" id="dailyReportEmail" value="1"
                                     <?= ($user['daily_report_email'] ?? 0) ? 'checked' : '' ?>>
                                 <label class="form-check-label" for="dailyReportEmail">
-                                    Email me a daily backup report
+                                    Email me a backup report
                                 </label>
+                            </div>
+                            <div class="mb-2 ms-4">
+                                <label class="form-label small mb-1" for="reportFrequency">Frequency</label>
+                                <select class="form-select form-select-sm" name="report_frequency" id="reportFrequency" style="max-width:160px;" onchange="document.getElementById('reportDayRow').style.display = this.value === 'weekly' ? '' : 'none'">
+                                    <option value="daily" <?= ($user['report_frequency'] ?? 'daily') === 'daily' ? 'selected' : '' ?>>Daily</option>
+                                    <option value="weekly" <?= ($user['report_frequency'] ?? 'daily') === 'weekly' ? 'selected' : '' ?>>Weekly</option>
+                                </select>
+                            </div>
+                            <div class="mb-2 ms-4" id="reportDayRow" style="<?= ($user['report_frequency'] ?? 'daily') === 'weekly' ? '' : 'display:none' ?>">
+                                <label class="form-label small mb-1" for="reportDay">Day of week</label>
+                                <select class="form-select form-select-sm" name="report_day" id="reportDay" style="max-width:160px;">
+                                    <?php
+                                    $days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                                    $currentDay = (int) ($user['report_day'] ?? 1);
+                                    for ($d = 0; $d < 7; $d++):
+                                    ?>
+                                    <option value="<?= $d ?>" <?= $currentDay === $d ? 'selected' : '' ?>><?= $days[$d] ?></option>
+                                    <?php endfor; ?>
+                                </select>
                             </div>
                             <div class="mb-3 ms-4">
                                 <label class="form-label small mb-1" for="dailyReportHour">Delivery time (your timezone)</label>

@@ -1748,9 +1748,9 @@ try {
     echo date('Y-m-d H:i:s') . " Daily report error: {$e->getMessage()}\n";
 }
 
-// Step 10b: Email daily report to subscribers at their preferred local hour
+// Step 10b: Email report to subscribers at their preferred local hour/frequency
 $subscribers = $db->fetchAll(
-    "SELECT id, email, timezone, daily_report_hour FROM users WHERE daily_report_email = 1 AND email != ''"
+    "SELECT id, email, timezone, daily_report_hour, report_frequency, report_day FROM users WHERE daily_report_email = 1 AND email != ''"
 );
 if (!empty($subscribers)) {
     $todayReport = $db->fetchOne("SELECT id FROM daily_reports WHERE report_date = CURDATE() ORDER BY created_at DESC LIMIT 1");
@@ -1767,6 +1767,16 @@ if (!empty($subscribers)) {
             if ($userHour !== (int) $sub['daily_report_hour']) {
                 continue;
             }
+
+            // Weekly subscribers only receive on their chosen day (0=Sun, 6=Sat)
+            $frequency = $sub['report_frequency'] ?? 'daily';
+            if ($frequency === 'weekly') {
+                $userDow = (int) $userNow->format('w'); // 0=Sunday
+                if ($userDow !== (int) ($sub['report_day'] ?? 1)) {
+                    continue;
+                }
+            }
+
             // Dedup: only email once per user per calendar day (in their timezone)
             $userDate = $userNow->format('Y-m-d');
             $dedupKey = 'last_report_email_user_' . $sub['id'];
@@ -1776,7 +1786,8 @@ if (!empty($subscribers)) {
             }
             try {
                 $reportService->emailReport((int) $todayReport['id'], (int) $sub['id']);
-                echo date('Y-m-d H:i:s') . " Emailed daily report to {$sub['email']}\n";
+                $freqLabel = $frequency === 'weekly' ? 'weekly' : 'daily';
+                echo date('Y-m-d H:i:s') . " Emailed {$freqLabel} report to {$sub['email']}\n";
                 $db->query(
                     "INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = ?",
                     [$dedupKey, $userDate, $userDate]
