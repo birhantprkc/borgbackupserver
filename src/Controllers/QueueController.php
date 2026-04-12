@@ -213,7 +213,7 @@ class QueueController extends Controller
                     if ($lastLine) {
                         $entry = json_decode($lastLine, true);
                         if ($entry && !empty($entry['path'])) {
-                            $currentFile = $entry['path'];
+                            $currentFile = rtrim($entry['path'], '/');
                         }
                     }
                 }
