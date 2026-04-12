@@ -93,17 +93,18 @@ if ($existingSvc) {
 $borgExe = "$BorgDir\borg\borg.exe"
 $borgZip = "$env:TEMP\borg-windows.zip"
 
-# Remove old borg installation to avoid locked-file errors during extraction
-if (Test-Path $BorgDir) {
+# Remove old borg installation to avoid locked-file errors during extraction.
+# Preserve the ssh/ subdir — MinGit doesn't need to be re-downloaded every time.
+if (Test-Path "$BorgDir\borg") {
     Write-Step "Removing old Borg installation..."
     for ($i = 1; $i -le 5; $i++) {
         try {
-            Remove-Item -Path $BorgDir -Recurse -Force -ErrorAction Stop
-            Write-Ok "Old installation removed"
+            Remove-Item -Path "$BorgDir\borg" -Recurse -Force -ErrorAction Stop
+            Write-Ok "Old borg binaries removed"
             break
         } catch {
             if ($i -eq 5) {
-                Write-Fail "Cannot remove $BorgDir - files may be locked by another process"
+                Write-Fail "Cannot remove $BorgDir\borg - files may be locked by another process"
                 Write-Fail "Close any open terminals or Explorer windows in that folder and try again"
                 exit 1
             }
@@ -160,6 +161,77 @@ if ($machinePath -notlike "*$borgBinDir*") {
     Write-Ok "Added $borgBinDir to system PATH"
 } else {
     Write-Ok "Already in PATH"
+}
+
+# -----------------------------------------------------------------------------
+# Install SSH client (Git for Windows bundled ssh avoids Windows built-in bugs)
+# -----------------------------------------------------------------------------
+$sshDir = "$BorgDir\ssh"
+$sshExe = "$sshDir\usr\bin\ssh.exe"
+$sshPathFile = "$AgentDir\ssh-path"
+
+# Check if Git for Windows is already installed
+$gitSshPaths = @(
+    "$env:ProgramFiles\Git\usr\bin\ssh.exe",
+    "${env:ProgramFiles(x86)}\Git\usr\bin\ssh.exe"
+)
+$existingGitSsh = $gitSshPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+if ($existingGitSsh) {
+    Write-Ok "Found Git for Windows SSH: $existingGitSsh"
+    [System.IO.File]::WriteAllText($sshPathFile, $existingGitSsh, (New-Object System.Text.UTF8Encoding $false))
+} else {
+    # Download MinGit (minimal Git for Windows distribution with bundled ssh)
+    Write-Step "Finding latest MinGit release for bundled SSH..."
+    try {
+        $gitRelease = Invoke-WebRequest -Uri "https://api.github.com/repos/git-for-windows/git/releases/latest" `
+            -UseBasicParsing -TimeoutSec 15 | ConvertFrom-Json
+        $minGitUrl = ($gitRelease.assets | Where-Object {
+            $_.name -match "MinGit-.*-busybox-64-bit\.zip$"
+        }).browser_download_url | Select-Object -First 1
+
+        if (-not $minGitUrl) {
+            # Fall back to non-busybox MinGit if busybox variant isn't available
+            $minGitUrl = ($gitRelease.assets | Where-Object {
+                $_.name -match "MinGit-.*64-bit\.zip$" -and $_.name -notmatch "portable"
+            }).browser_download_url | Select-Object -First 1
+        }
+
+        if ($minGitUrl) {
+            Write-Ok "Latest MinGit: $($gitRelease.tag_name)"
+            $minGitZip = "$env:TEMP\mingit.zip"
+
+            Write-Step "Downloading MinGit (bundled SSH client)..."
+            Invoke-WebRequest -Uri $minGitUrl -OutFile $minGitZip -UseBasicParsing
+            Write-Ok "Downloaded MinGit"
+
+            Write-Step "Installing MinGit SSH to $sshDir..."
+            if (Test-Path $sshDir) {
+                Remove-Item -Path $sshDir -Recurse -Force -ErrorAction SilentlyContinue
+            }
+            New-Item -ItemType Directory -Path $sshDir -Force | Out-Null
+            Expand-Archive -Path $minGitZip -DestinationPath $sshDir -Force
+            Remove-Item $minGitZip -Force -ErrorAction SilentlyContinue
+
+            if (Test-Path $sshExe) {
+                Write-Ok "Installed bundled SSH: $sshExe"
+                [System.IO.File]::WriteAllText($sshPathFile, $sshExe, (New-Object System.Text.UTF8Encoding $false))
+            } else {
+                # MinGit layout might differ — search for ssh.exe
+                $foundSsh = Get-ChildItem -Path $sshDir -Recurse -Filter "ssh.exe" | Select-Object -First 1
+                if ($foundSsh) {
+                    Write-Ok "Installed bundled SSH: $($foundSsh.FullName)"
+                    [System.IO.File]::WriteAllText($sshPathFile, $foundSsh.FullName, (New-Object System.Text.UTF8Encoding $false))
+                } else {
+                    Write-Warn "MinGit extracted but ssh.exe not found — will use system SSH"
+                }
+            }
+        } else {
+            Write-Warn "Could not find MinGit download URL — will use system SSH"
+        }
+    } catch {
+        Write-Warn "Failed to install MinGit SSH: $_ — will use system SSH"
+    }
 }
 
 # -----------------------------------------------------------------------------
@@ -310,7 +382,9 @@ Write-Host "  ================================================================" 
 Write-Host "    Installation Complete!" -ForegroundColor Green
 Write-Host "  ================================================================" -ForegroundColor Green
 Write-Host ""
+$installedSshPath = if (Test-Path $sshPathFile) { Get-Content $sshPathFile -Raw } else { "(system default)" }
 Write-Host "  Borg:      $borgExe" -ForegroundColor White
+Write-Host "  SSH:       $($installedSshPath.Trim())" -ForegroundColor White
 Write-Host "  Agent:     $agentExe" -ForegroundColor White
 Write-Host "  Config:    $ConfigPath" -ForegroundColor White
 Write-Host "  Logs:      $AgentDir\bbs-agent.log" -ForegroundColor White

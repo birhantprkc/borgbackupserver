@@ -45,7 +45,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.24.1"
+AGENT_VERSION = "2.24.2"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -76,6 +76,7 @@ if IS_WINDOWS:
     BORG_SOURCE_PATH = os.path.join(_AGENT_DIR, "borg_source")
     SSH_INFO_PATH    = os.path.join(_AGENT_DIR, "ssh_info.json")
     REMOTE_KEY_PATH  = os.path.join(os.environ.get("TEMP", "."), "bbs-remote-ssh-key")
+    _SSH_PATH_FILE   = os.path.join(_AGENT_DIR, "ssh-path")
 else:
     CONFIG_PATH      = "/etc/bbs-agent/config.ini"
     LOG_PATH         = "/var/log/bbs-agent.log"
@@ -94,6 +95,19 @@ logger = logging.getLogger("bbs-agent")
 running = True
 task_running = False  # Set True while executing a task, enables heartbeat thread
 current_job_id = None  # Job ID of currently executing task (for stall check response)
+
+# Resolve the SSH executable for Windows. The built-in Windows OpenSSH client
+# has a stdin forwarding bug that hangs borg over ssh:// repos. The installer
+# writes the path to a known-good ssh.exe (Git for Windows or bundled MinGit)
+# to a file; we read it once at import time.
+SSH_CMD = "ssh"
+if IS_WINDOWS:
+    try:
+        _ssh_path = open(_SSH_PATH_FILE).read().strip()
+        if _ssh_path and os.path.isfile(_ssh_path):
+            SSH_CMD = _ssh_path.replace("\\", "/")
+    except (FileNotFoundError, OSError):
+        pass
 
 
 def _lockdown_key_windows(path):
@@ -519,7 +533,7 @@ def test_ssh_connection(config):
             known_hosts_null = "NUL" if IS_WINDOWS else "/dev/null"
             proc = subprocess.Popen(
                 [
-                    "ssh",
+                    SSH_CMD,
                     "-i", SSH_KEY_PATH,
                     "-p", ssh_port,
                     "-o", "StrictHostKeyChecking=no",
@@ -2839,6 +2853,10 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
         ).replace(
             "/dev/null", "NUL"
         )
+        # Replace bare "ssh" command with our bundled ssh.exe to avoid the
+        # Windows built-in OpenSSH stdin forwarding bug that hangs borg.
+        if SSH_CMD != "ssh" and env["BORG_RSH"].startswith("ssh "):
+            env["BORG_RSH"] = '"' + SSH_CMD + '"' + env["BORG_RSH"][3:]
 
     # Always allow relocated repos - common after S3 restore or copying repositories
     # This prevents "repository was previously located at X" interactive prompts
@@ -2870,7 +2888,7 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
                 known_hosts_null = "NUL" if IS_WINDOWS else "/dev/null"
                 catalog_ssh = subprocess.Popen(
                     [
-                        "ssh",
+                        SSH_CMD,
                         "-i", SSH_KEY_PATH,
                         "-p", str(ssh_info.get("ssh_port", 22)),
                         "-o", "StrictHostKeyChecking=no",
@@ -3267,6 +3285,8 @@ def main():
 
     setup_logging()
     logger.info("BBS Agent v{} starting".format(AGENT_VERSION))
+    if IS_WINDOWS and SSH_CMD != "ssh":
+        logger.info("Using bundled SSH: {}".format(SSH_CMD))
 
     signal.signal(signal.SIGINT, signal_handler)
     if IS_WINDOWS:
