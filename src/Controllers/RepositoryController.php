@@ -760,6 +760,35 @@ class RepositoryController extends Controller
             SELECT * FROM archives WHERE repository_id = ? ORDER BY created_at DESC
         ", [$id]);
 
+        // Backfill file_count from ClickHouse for archives that show 0
+        // (imported repos before the nfiles fix)
+        $zeroCountIds = array_filter(array_column($archives, 'id', 'id'), function ($aid) use ($archives) {
+            foreach ($archives as $a) {
+                if ($a['id'] == $aid && (int) $a['file_count'] === 0) return true;
+            }
+            return false;
+        });
+        if (!empty($zeroCountIds)) {
+            try {
+                $ch = \BBS\Core\ClickHouse::getInstance();
+                if ($ch->isAvailable()) {
+                    $idList = implode(',', array_map('intval', array_keys($zeroCountIds)));
+                    $chCounts = $ch->fetchAll("SELECT archive_id, count() as cnt FROM file_catalog WHERE archive_id IN ({$idList}) AND path != '' GROUP BY archive_id");
+                    $countMap = [];
+                    foreach ($chCounts as $row) {
+                        $countMap[(int) $row['archive_id']] = (int) $row['cnt'];
+                    }
+                    foreach ($archives as &$ar) {
+                        if ((int) $ar['file_count'] === 0 && isset($countMap[(int) $ar['id']]) && $countMap[(int) $ar['id']] > 0) {
+                            $ar['file_count'] = $countMap[(int) $ar['id']];
+                            $this->db->update('archives', ['file_count' => $ar['file_count']], 'id = ?', [$ar['id']]);
+                        }
+                    }
+                    unset($ar);
+                }
+            } catch (\Exception $e) { /* ClickHouse unavailable — leave as 0 */ }
+        }
+
         // Get plans using this repo
         $plans = $this->db->fetchAll("
             SELECT bp.*, s.enabled as schedule_enabled
