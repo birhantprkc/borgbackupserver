@@ -634,7 +634,7 @@ class RepositoryController extends Controller
         $jobInfo = null;
         if (!empty($archive['backup_job_id'])) {
             $jobInfo = $this->db->fetchOne("
-                SELECT bj.started_at, bj.completed_at, bj.duration_seconds, bj.directories, bp.name AS plan_name
+                SELECT bj.started_at, bj.completed_at, bj.duration_seconds, bp.directories, bp.name AS plan_name
                 FROM backup_jobs bj
                 LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
                 WHERE bj.id = ?
