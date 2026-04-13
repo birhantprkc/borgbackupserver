@@ -9,10 +9,20 @@ function fmtSize($bytes) {
 $statusLabels = [
     'A' => ['Added', 'success'],
     'M' => ['Modified', 'warning'],
-    'C' => ['Changed', 'info'],
+    'C' => ['Metadata Changed', 'info'],
     'U' => ['Unchanged', 'secondary'],
+    'D' => ['Directory', 'light'],
+    'S' => ['Symlink', 'light'],
+    'H' => ['Hardlink', 'light'],
+    'X' => ['Excluded', 'light'],
+    'B' => ['Block Device', 'light'],
+    'F' => ['FIFO', 'light'],
     'E' => ['Empty', 'light'],
 ];
+
+// Non-file entry types — exclude from file counts and size totals
+// (symlinks report bogus sizes from os.stat following the target)
+$nonFileStatuses = ['D', 'S', 'H', 'X', 'B', 'F', 'E'];
 
 $durLabel = '--';
 if ($archive['created_at'] && !empty($jobInfo['duration_seconds'])) {
@@ -21,19 +31,19 @@ if ($archive['created_at'] && !empty($jobInfo['duration_seconds'])) {
         : ($d >= 60 ? floor($d / 60) . 'm ' . ($d % 60) . 's' : $d . 's');
 }
 
-// Calculate totals from status breakdown
+// Separate file entries from non-file entries (dirs, symlinks, etc.)
+$fileRows = [];
+$otherRows = [];
 $totalFiles = 0;
 $totalSize = 0;
-$addedFiles = 0;
-$modifiedFiles = 0;
-$unchangedFiles = 0;
 foreach ($statusBreakdown as $row) {
-    if ($row['status'] === 'E') continue;
-    $totalFiles += (int) $row['cnt'];
-    $totalSize += (int) $row['total_size'];
-    if ($row['status'] === 'A') $addedFiles = (int) $row['cnt'];
-    if (in_array($row['status'], ['M', 'C'])) $modifiedFiles += (int) $row['cnt'];
-    if ($row['status'] === 'U') $unchangedFiles = (int) $row['cnt'];
+    if (in_array($row['status'], $nonFileStatuses)) {
+        $otherRows[] = $row;
+    } else {
+        $fileRows[] = $row;
+        $totalFiles += (int) $row['cnt'];
+        $totalSize += (int) $row['total_size'];
+    }
 }
 ?>
 
@@ -125,10 +135,9 @@ foreach ($statusBreakdown as $row) {
             </div>
             <div class="card-body">
                 <?php if ($totalFiles > 0): ?>
-                <!-- Progress bar visualization -->
+                <!-- Progress bar visualization (files only, no dirs/symlinks) -->
                 <div class="progress mb-3" style="height: 24px;">
-                    <?php foreach ($statusBreakdown as $row):
-                        if ($row['status'] === 'E') continue;
+                    <?php foreach ($fileRows as $row):
                         $pct = round(((int) $row['cnt'] / $totalFiles) * 100, 1);
                         if ($pct < 0.5) continue;
                         [$label, $color] = $statusLabels[$row['status']] ?? [$row['status'], 'secondary'];
@@ -147,8 +156,7 @@ foreach ($statusBreakdown as $row) {
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($statusBreakdown as $row):
-                            if ($row['status'] === 'E') continue;
+                        <?php foreach ($fileRows as $row):
                             [$label, $color] = $statusLabels[$row['status']] ?? [$row['status'], 'secondary'];
                         ?>
                         <tr>
@@ -163,6 +171,18 @@ foreach ($statusBreakdown as $row) {
                             <td class="text-end"><?= number_format($deletedCount) ?></td>
                             <td class="text-end"><?= fmtSize($deletedSize) ?></td>
                         </tr>
+                        <?php endif; ?>
+                        <?php if (!empty($otherRows)): ?>
+                        <tr><td colspan="3" class="text-muted pt-2" style="border:none;">Other Entries</td></tr>
+                        <?php foreach ($otherRows as $row):
+                            [$label, $color] = $statusLabels[$row['status']] ?? [$row['status'], 'secondary'];
+                        ?>
+                        <tr>
+                            <td><span class="badge bg-<?= $color ?> text-dark"><?= $label ?></span></td>
+                            <td class="text-end text-muted"><?= number_format($row['cnt']) ?></td>
+                            <td class="text-end text-muted">--</td>
+                        </tr>
+                        <?php endforeach; ?>
                         <?php endif; ?>
                     </tbody>
                     <tfoot class="table-light">
@@ -197,8 +217,8 @@ foreach ($statusBreakdown as $row) {
                                 [$label, $color] = $statusLabels[$f['status']] ?? [$f['status'], 'secondary'];
                             ?>
                             <tr>
-                                <td class="text-truncate" style="max-width: 300px;" title="<?= htmlspecialchars($f['path']) ?>">
-                                    <?= htmlspecialchars($f['file_name']) ?>
+                                <td style="max-width: 400px; word-break: break-all;" title="<?= htmlspecialchars($f['path']) ?>">
+                                    <span class="small"><?= htmlspecialchars($f['path']) ?></span>
                                 </td>
                                 <td class="text-end text-nowrap"><?= fmtSize($f['file_size']) ?></td>
                                 <td><span class="badge bg-<?= $color ?>"><?= $label ?></span></td>
