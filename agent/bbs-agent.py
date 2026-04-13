@@ -907,7 +907,7 @@ def _install_borg_pip(target_version):
         return "failed", "", "pip3 --version timed out"
     except Exception as e:
         return "failed", "", "pip3 check failed: {}".format(e)
-    cmd = [pip_cmd, "install", "--upgrade", version_spec]
+    cmd = [pip_cmd, "install", "--upgrade", "--break-system-packages", version_spec]
     logger.info("Installing borg via pip: {}".format(' '.join(cmd)))
 
     try:
