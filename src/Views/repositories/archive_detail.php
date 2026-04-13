@@ -247,13 +247,13 @@ foreach ($statusBreakdown as $row) {
     </div>
     <div class="card-body pb-0">
         <ul class="nav nav-tabs" id="fileBrowserTabs">
-            <li class="nav-item"><a class="nav-link active" href="#" data-status="">All</a></li>
-            <li class="nav-item"><a class="nav-link" href="#" data-status="A">Added <span class="badge bg-success" id="tab-count-A"></span></a></li>
-            <li class="nav-item"><a class="nav-link" href="#" data-status="M">Modified <span class="badge bg-warning" id="tab-count-M"></span></a></li>
-            <?php if ($deletedCount > 0): ?>
-            <li class="nav-item"><a class="nav-link" href="#" data-status="deleted">Deleted <span class="badge bg-danger"><?= number_format($deletedCount) ?></span></a></li>
+            <li class="nav-item"><a class="nav-link active" href="javascript:void(0)" data-status="">All</a></li>
+            <li class="nav-item"><a class="nav-link" href="javascript:void(0)" data-status="A">Added <span class="badge bg-success" id="tab-count-A"></span></a></li>
+            <li class="nav-item"><a class="nav-link" href="javascript:void(0)" data-status="M">Modified <span class="badge bg-warning" id="tab-count-M"></span></a></li>
+            <?php if ($prevArchive): ?>
+            <li class="nav-item"><a class="nav-link" href="javascript:void(0)" data-status="deleted">Deleted <span class="badge bg-danger" id="tab-count-deleted"><?= $deletedCount > 0 ? number_format($deletedCount) : '' ?></span></a></li>
             <?php endif; ?>
-            <li class="nav-item"><a class="nav-link" href="#" data-status="U">Unchanged <span class="badge bg-secondary" id="tab-count-U"></span></a></li>
+            <li class="nav-item"><a class="nav-link" href="javascript:void(0)" data-status="U">Unchanged <span class="badge bg-secondary" id="tab-count-U"></span></a></li>
         </ul>
     </div>
     <div class="card-body p-0">
@@ -334,8 +334,12 @@ foreach ($statusBreakdown as $row) {
         if (currentStatus === 'deleted' && prevArchiveId) url += '&prev_archive_id=' + prevArchiveId;
 
         fetch(url, { credentials: 'same-origin' })
-            .then(function(r) { return r.json(); })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
             .then(function(data) {
+                if (data.error) { throw new Error(data.error); }
                 var html = '';
                 if (data.files && data.files.length > 0) {
                     data.files.forEach(function(f) {

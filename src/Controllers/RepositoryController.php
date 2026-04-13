@@ -736,11 +736,13 @@ class RepositoryController extends Controller
         $repo = $this->db->fetchOne("SELECT r.* FROM repositories r WHERE r.id = ? AND r.agent_id = ?", [$id, $agentId]);
         if (!$repo || !$this->canAccessAgent($agentId)) {
             $this->json(['error' => 'Not found'], 404);
+            return;
         }
 
         $archive = $this->db->fetchOne("SELECT id FROM archives WHERE id = ? AND repository_id = ?", [$archiveId, $id]);
         if (!$archive) {
             $this->json(['error' => 'Archive not found'], 404);
+            return;
         }
 
         $status = $_GET['status'] ?? '';
