@@ -895,9 +895,18 @@ def _install_borg_pip(target_version):
     # Use pip3 if available, fall back to pip (FreeBSD uses pip, not pip3)
     pip_cmd = "pip3"
     try:
-        subprocess.run(["pip3", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        pip_check = subprocess.run(["pip3", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+        if pip_check.returncode != 0:
+            pip_stderr = pip_check.stderr.decode("utf-8", errors="replace").strip()
+            # pip3 exists but is broken (e.g. Python library issue)
+            return "failed", "", "pip3 is installed but broken (exit {}): {}".format(
+                pip_check.returncode, pip_stderr[:500] if pip_stderr else "unknown error")
     except FileNotFoundError:
         pip_cmd = "pip"
+    except subprocess.TimeoutExpired:
+        return "failed", "", "pip3 --version timed out"
+    except Exception as e:
+        return "failed", "", "pip3 check failed: {}".format(e)
     cmd = [pip_cmd, "install", "--upgrade", version_spec]
     logger.info("Installing borg via pip: {}".format(' '.join(cmd)))
 
@@ -935,8 +944,16 @@ def _install_borg_pip(target_version):
                     logger.info("Restored backup binary after pip failure")
                 except Exception:
                     pass
-            error = stderr_text or stdout_text or "Exit code {}".format(proc.returncode)
-            logger.error("pip install failed: {}".format(error))
+            combined = (stderr_text + "\n" + stdout_text).strip()
+            # Extract the most useful line instead of dumping a full traceback
+            last_error = ""
+            for line in reversed(combined.split("\n")):
+                line = line.strip()
+                if line and not line.startswith("File ") and not line.startswith("from ") and not line.startswith("import "):
+                    last_error = line
+                    break
+            error = "pip install failed (exit {}): {}".format(proc.returncode, last_error or combined[:500])
+            logger.error(error)
             return "failed", "", error
     except subprocess.TimeoutExpired:
         return "failed", "", "pip install timed out"
