@@ -725,6 +725,81 @@ class RepositoryController extends Controller
         ]);
     }
 
+    /**
+     * GET /clients/{agentId}/repo/{id}/archive/{archiveId}/files
+     * AJAX endpoint: paginated file list from ClickHouse with status filter + search.
+     */
+    public function archiveFiles(int $agentId, int $id, int $archiveId): void
+    {
+        $this->requireAuth();
+
+        $repo = $this->db->fetchOne("SELECT r.* FROM repositories r WHERE r.id = ? AND r.agent_id = ?", [$id, $agentId]);
+        if (!$repo || !$this->canAccessAgent($agentId)) {
+            $this->json(['error' => 'Not found'], 404);
+        }
+
+        $archive = $this->db->fetchOne("SELECT id FROM archives WHERE id = ? AND repository_id = ?", [$archiveId, $id]);
+        if (!$archive) {
+            $this->json(['error' => 'Archive not found'], 404);
+        }
+
+        $status = $_GET['status'] ?? '';
+        $search = trim($_GET['search'] ?? '');
+        $page = max(1, (int) ($_GET['page'] ?? 1));
+        $perPage = min(100, max(10, (int) ($_GET['per_page'] ?? 50)));
+        $offset = ($page - 1) * $perPage;
+        $prevArchiveId = !empty($_GET['prev_archive_id']) ? (int) $_GET['prev_archive_id'] : 0;
+
+        $aid = (int) $agentId;
+        $arid = (int) $archiveId;
+
+        try {
+            $ch = \BBS\Core\ClickHouse::getInstance();
+            if (!$ch->isAvailable()) {
+                $this->json(['files' => [], 'total' => 0]);
+            }
+
+            // Deleted files = present in previous archive but not in current
+            if ($status === 'deleted' && $prevArchiveId > 0) {
+                $where = "agent_id = {$aid} AND archive_id = {$prevArchiveId} AND path != ''
+                          AND path NOT IN (SELECT path FROM file_catalog WHERE agent_id = {$aid} AND archive_id = {$arid})";
+                if ($search !== '') {
+                    $searchEsc = addslashes($search);
+                    $where .= " AND path LIKE '%{$searchEsc}%'";
+                }
+
+                $countRow = $ch->fetchOne("SELECT count() as cnt FROM file_catalog WHERE {$where}");
+                $total = (int) ($countRow['cnt'] ?? 0);
+
+                $files = $ch->fetchAll("SELECT path, file_name, file_size, 'deleted' as status FROM file_catalog WHERE {$where} ORDER BY path LIMIT {$perPage} OFFSET {$offset}");
+            } else {
+                $where = "agent_id = {$aid} AND archive_id = {$arid} AND path != ''";
+                // Filter out non-file statuses unless specifically requested
+                $nonFileStatuses = ['D', 'S', 'H', 'X', 'B', 'F', 'E'];
+                if ($status !== '' && !in_array($status, $nonFileStatuses)) {
+                    $statusEsc = addslashes($status);
+                    $where .= " AND status = '{$statusEsc}'";
+                } elseif ($status === '') {
+                    // "All" tab: only show real files
+                    $where .= " AND status NOT IN ('D','S','H','X','B','F','E')";
+                }
+                if ($search !== '') {
+                    $searchEsc = addslashes($search);
+                    $where .= " AND path LIKE '%{$searchEsc}%'";
+                }
+
+                $countRow = $ch->fetchOne("SELECT count() as cnt FROM file_catalog WHERE {$where}");
+                $total = (int) ($countRow['cnt'] ?? 0);
+
+                $files = $ch->fetchAll("SELECT path, file_name, file_size, status FROM file_catalog WHERE {$where} ORDER BY path LIMIT {$perPage} OFFSET {$offset}");
+            }
+
+            $this->json(['files' => $files, 'total' => $total, 'page' => $page]);
+        } catch (\Exception $e) {
+            $this->json(['files' => [], 'total' => 0, 'error' => $e->getMessage()]);
+        }
+    }
+
     public function deleteArchive(int $agentId, int $id, int $archiveId): void
     {
         $this->requireAuth();

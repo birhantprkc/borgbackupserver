@@ -128,7 +128,7 @@ foreach ($statusBreakdown as $row) {
 <?php if ($clickhouseAvailable && !empty($statusBreakdown)): ?>
 <!-- File Changes -->
 <div class="row g-3 mb-4">
-    <div class="col-lg-6">
+    <div class="col-lg-4">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-header bg-body fw-semibold">
                 <i class="bi bi-bar-chart me-1"></i> File Changes
@@ -197,7 +197,7 @@ foreach ($statusBreakdown as $row) {
         </div>
     </div>
 
-    <div class="col-lg-6">
+    <div class="col-lg-8">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-header bg-body fw-semibold">
                 <i class="bi bi-file-earmark-arrow-up me-1"></i> Largest Files
@@ -235,40 +235,169 @@ foreach ($statusBreakdown as $row) {
     </div>
 </div>
 
-<?php if ($deletedCount > 0 && !empty($deletedFiles)): ?>
-<!-- Deleted Files -->
+<!-- File Browser -->
 <div class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-body fw-semibold">
-        <i class="bi bi-trash me-1 text-danger"></i> Deleted Files
-        <span class="text-muted fw-normal ms-2"><?= number_format($deletedCount) ?> files (<?= fmtSize($deletedSize) ?>) removed since previous backup</span>
+    <div class="card-header bg-body fw-semibold d-flex justify-content-between align-items-center">
+        <div>
+            <i class="bi bi-files me-1"></i> File Browser
+        </div>
+        <div style="width: 280px;">
+            <input type="text" class="form-control form-control-sm" id="fileBrowserSearch" placeholder="Search files...">
+        </div>
+    </div>
+    <div class="card-body pb-0">
+        <ul class="nav nav-tabs" id="fileBrowserTabs">
+            <li class="nav-item"><a class="nav-link active" href="#" data-status="">All</a></li>
+            <li class="nav-item"><a class="nav-link" href="#" data-status="A">Added <span class="badge bg-success" id="tab-count-A"></span></a></li>
+            <li class="nav-item"><a class="nav-link" href="#" data-status="M">Modified <span class="badge bg-warning" id="tab-count-M"></span></a></li>
+            <?php if ($deletedCount > 0): ?>
+            <li class="nav-item"><a class="nav-link" href="#" data-status="deleted">Deleted <span class="badge bg-danger"><?= number_format($deletedCount) ?></span></a></li>
+            <?php endif; ?>
+            <li class="nav-item"><a class="nav-link" href="#" data-status="U">Unchanged <span class="badge bg-secondary" id="tab-count-U"></span></a></li>
+        </ul>
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-sm small mb-0">
+            <table class="table table-sm table-hover small mb-0">
                 <thead class="table-light">
                     <tr>
                         <th>Path</th>
-                        <th class="text-end">Size</th>
+                        <th class="text-end" style="width:100px;">Size</th>
+                        <th style="width:80px;">Status</th>
                     </tr>
                 </thead>
-                <tbody>
-                    <?php foreach ($deletedFiles as $f): ?>
-                    <tr>
-                        <td class="text-truncate" style="max-width: 500px;" title="<?= htmlspecialchars($f['path']) ?>">
-                            <?= htmlspecialchars($f['path']) ?>
-                        </td>
-                        <td class="text-end text-nowrap"><?= fmtSize($f['file_size']) ?></td>
-                    </tr>
-                    <?php endforeach; ?>
-                    <?php if ($deletedCount > 50): ?>
-                    <tr><td colspan="2" class="text-muted text-center py-2">Showing top 50 of <?= number_format($deletedCount) ?> deleted files</td></tr>
-                    <?php endif; ?>
+                <tbody id="fileBrowserBody">
+                    <tr><td colspan="3" class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-1"></span> Loading...</td></tr>
                 </tbody>
             </table>
         </div>
+        <div class="d-flex justify-content-between align-items-center px-3 py-2 border-top">
+            <small class="text-muted" id="fileBrowserInfo">--</small>
+            <div>
+                <button class="btn btn-sm btn-outline-secondary" id="fileBrowserPrev" disabled>&laquo; Prev</button>
+                <button class="btn btn-sm btn-outline-secondary" id="fileBrowserNext" disabled>Next &raquo;</button>
+            </div>
+        </div>
     </div>
 </div>
-<?php endif; ?>
+
+<script>
+(function() {
+    var agentId = <?= $agentId ?>;
+    var repoId = <?= $repo['id'] ?>;
+    var archiveId = <?= $archiveId ?>;
+    var prevArchiveId = <?= $prevArchive ? (int) $prevArchive['id'] : 'null' ?>;
+    var currentStatus = '';
+    var currentSearch = '';
+    var currentPage = 1;
+    var perPage = 50;
+    var searchTimeout = null;
+
+    var statusLabels = {
+        'A': ['Added', 'success'],
+        'M': ['Modified', 'warning'],
+        'C': ['Metadata Changed', 'info'],
+        'U': ['Unchanged', 'secondary'],
+        'D': ['Directory', 'light'],
+        'S': ['Symlink', 'light'],
+        'H': ['Hardlink', 'light'],
+        'deleted': ['Deleted', 'danger']
+    };
+
+    // Set tab counts from the status breakdown data
+    <?php foreach ($statusBreakdown as $row): ?>
+    <?php if (!in_array($row['status'], $nonFileStatuses)): ?>
+    var el = document.getElementById('tab-count-<?= $row['status'] ?>');
+    if (el) el.textContent = '<?= number_format($row['cnt']) ?>';
+    <?php endif; ?>
+    <?php endforeach; ?>
+
+    function esc(s) { return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : ''; }
+
+    function fmtSize(b) {
+        if (!b || b == 0) return '--';
+        b = parseInt(b);
+        if (b >= 1073741824) return (b / 1073741824).toFixed(1) + ' GB';
+        if (b >= 1048576) return (b / 1048576).toFixed(1) + ' MB';
+        if (b >= 1024) return (b / 1024).toFixed(1) + ' KB';
+        return b + ' B';
+    }
+
+    function loadFiles() {
+        var tbody = document.getElementById('fileBrowserBody');
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-1"></span> Loading...</td></tr>';
+
+        var url = '/clients/' + agentId + '/repo/' + repoId + '/archive/' + archiveId + '/files'
+            + '?page=' + currentPage + '&per_page=' + perPage;
+        if (currentStatus) url += '&status=' + encodeURIComponent(currentStatus);
+        if (currentSearch) url += '&search=' + encodeURIComponent(currentSearch);
+        if (currentStatus === 'deleted' && prevArchiveId) url += '&prev_archive_id=' + prevArchiveId;
+
+        fetch(url, { credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var html = '';
+                if (data.files && data.files.length > 0) {
+                    data.files.forEach(function(f) {
+                        var st = statusLabels[f.status] || [f.status, 'secondary'];
+                        html += '<tr>';
+                        html += '<td style="word-break:break-all;">' + esc(f.path) + '</td>';
+                        html += '<td class="text-end text-nowrap">' + fmtSize(f.file_size) + '</td>';
+                        html += '<td><span class="badge bg-' + st[1] + '">' + st[0] + '</span></td>';
+                        html += '</tr>';
+                    });
+                } else {
+                    html = '<tr><td colspan="3" class="text-center text-muted py-4">No files found</td></tr>';
+                }
+                tbody.innerHTML = html;
+
+                var total = data.total || 0;
+                var pages = Math.ceil(total / perPage);
+                document.getElementById('fileBrowserInfo').textContent =
+                    'Showing ' + ((currentPage - 1) * perPage + 1) + '–' + Math.min(currentPage * perPage, total) + ' of ' + total.toLocaleString();
+                document.getElementById('fileBrowserPrev').disabled = currentPage <= 1;
+                document.getElementById('fileBrowserNext').disabled = currentPage >= pages;
+            })
+            .catch(function() {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center text-danger py-4">Failed to load files</td></tr>';
+            });
+    }
+
+    // Tab clicks
+    document.getElementById('fileBrowserTabs').addEventListener('click', function(e) {
+        var link = e.target.closest('a[data-status]');
+        if (!link) return;
+        e.preventDefault();
+        document.querySelectorAll('#fileBrowserTabs .nav-link').forEach(function(a) { a.classList.remove('active'); });
+        link.classList.add('active');
+        currentStatus = link.dataset.status;
+        currentPage = 1;
+        loadFiles();
+    });
+
+    // Search
+    document.getElementById('fileBrowserSearch').addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        var val = this.value;
+        searchTimeout = setTimeout(function() {
+            currentSearch = val;
+            currentPage = 1;
+            loadFiles();
+        }, 300);
+    });
+
+    // Pagination
+    document.getElementById('fileBrowserPrev').addEventListener('click', function() {
+        if (currentPage > 1) { currentPage--; loadFiles(); }
+    });
+    document.getElementById('fileBrowserNext').addEventListener('click', function() {
+        currentPage++; loadFiles();
+    });
+
+    // Initial load
+    loadFiles();
+})();
+</script>
 
 <?php elseif (!$clickhouseAvailable): ?>
 <div class="alert alert-info">
