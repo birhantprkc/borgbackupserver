@@ -913,9 +913,12 @@ class AgentApiController extends Controller
             WHERE bj.agent_id = ?
               AND bj.status = 'running'
               AND bj.task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full', 'archive_delete')
-              AND bj.last_progress_at IS NOT NULL
-              AND bj.last_progress_at < DATE_SUB(NOW(), INTERVAL ? MINUTE)
-        ", [$agent['id'], $stallMinutes]);
+              AND (
+                  (bj.last_progress_at IS NOT NULL AND bj.last_progress_at < DATE_SUB(NOW(), INTERVAL {$stallMinutes} MINUTE))
+                  OR
+                  (bj.last_progress_at IS NULL AND bj.started_at IS NOT NULL AND bj.started_at < DATE_SUB(NOW(), INTERVAL {$stallMinutes} MINUTE))
+              )
+        ", [$agent['id']]);
 
         if (!empty($stalledJobs)) {
             $response['check_jobs'] = array_map(fn($j) => (int) $j['id'], $stalledJobs);
