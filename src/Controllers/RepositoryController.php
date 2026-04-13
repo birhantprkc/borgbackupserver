@@ -713,6 +713,7 @@ class RepositoryController extends Controller
             'agent' => $agent,
             'agentId' => $agentId,
             'archive' => $archive,
+            'archiveId' => $archiveId,
             'planName' => $planName,
             'jobInfo' => $jobInfo,
             'prevArchive' => $prevArchive,
