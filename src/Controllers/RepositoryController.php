@@ -607,6 +607,124 @@ class RepositoryController extends Controller
     /**
      * Queue a repository maintenance task (check, compact, repair, break_lock).
      */
+    /**
+     * GET /clients/{agentId}/repo/{id}/archive/{archiveId}
+     * Show detailed stats for a single recovery point.
+     */
+    public function archiveDetail(int $agentId, int $id, int $archiveId): void
+    {
+        $this->requireAuth();
+
+        $repo = $this->db->fetchOne("SELECT r.* FROM repositories r WHERE r.id = ? AND r.agent_id = ?", [$id, $agentId]);
+        if (!$repo || !$this->canAccessAgent($agentId)) {
+            $this->flash('danger', 'Repository not found.');
+            $this->redirect('/clients');
+        }
+
+        $agent = $this->db->fetchOne("SELECT * FROM agents WHERE id = ?", [$agentId]);
+
+        $archive = $this->db->fetchOne("SELECT * FROM archives WHERE id = ? AND repository_id = ?", [$archiveId, $id]);
+        if (!$archive) {
+            $this->flash('danger', 'Archive not found.');
+            $this->redirect("/clients/{$agentId}/repo/{$id}");
+        }
+
+        // Resolve plan name and job info
+        $planName = null;
+        $jobInfo = null;
+        if (!empty($archive['backup_job_id'])) {
+            $jobInfo = $this->db->fetchOne("
+                SELECT bj.started_at, bj.completed_at, bj.duration_seconds, bj.directories, bp.name AS plan_name
+                FROM backup_jobs bj
+                LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
+                WHERE bj.id = ?
+            ", [$archive['backup_job_id']]);
+            $planName = $jobInfo['plan_name'] ?? null;
+        }
+
+        // Previous archive for deleted-files comparison
+        $prevArchive = $this->db->fetchOne("
+            SELECT id, archive_name, created_at FROM archives
+            WHERE repository_id = ? AND created_at < ?
+            ORDER BY created_at DESC LIMIT 1
+        ", [$id, $archive['created_at']]);
+
+        // ClickHouse stats
+        $statusBreakdown = [];
+        $largestFiles = [];
+        $deletedCount = 0;
+        $deletedSize = 0;
+        $deletedFiles = [];
+        $clickhouseAvailable = false;
+
+        try {
+            $ch = \BBS\Core\ClickHouse::getInstance();
+            if ($ch->isAvailable()) {
+                $clickhouseAvailable = true;
+                $aid = (int) $agentId;
+                $arid = (int) $archiveId;
+
+                // Files by status
+                $statusBreakdown = $ch->fetchAll(
+                    "SELECT status, count() as cnt, sum(file_size) as total_size
+                     FROM file_catalog
+                     WHERE agent_id = {$aid} AND archive_id = {$arid} AND path != ''
+                     GROUP BY status ORDER BY cnt DESC"
+                );
+
+                // Largest files
+                $largestFiles = $ch->fetchAll(
+                    "SELECT path, file_name, file_size, status
+                     FROM file_catalog
+                     WHERE agent_id = {$aid} AND archive_id = {$arid} AND path != ''
+                     ORDER BY file_size DESC LIMIT 20"
+                );
+
+                // Deleted files (compared to previous archive)
+                if ($prevArchive) {
+                    $prevId = (int) $prevArchive['id'];
+                    $delSummary = $ch->fetchOne(
+                        "SELECT count() as cnt, sum(file_size) as total_size
+                         FROM file_catalog
+                         WHERE agent_id = {$aid} AND archive_id = {$prevId} AND path != ''
+                           AND path NOT IN (SELECT path FROM file_catalog WHERE agent_id = {$aid} AND archive_id = {$arid})"
+                    );
+                    $deletedCount = (int) ($delSummary['cnt'] ?? 0);
+                    $deletedSize = (int) ($delSummary['total_size'] ?? 0);
+
+                    if ($deletedCount > 0 && $deletedCount <= 10000) {
+                        $deletedFiles = $ch->fetchAll(
+                            "SELECT path, file_name, file_size
+                             FROM file_catalog
+                             WHERE agent_id = {$aid} AND archive_id = {$prevId} AND path != ''
+                               AND path NOT IN (SELECT path FROM file_catalog WHERE agent_id = {$aid} AND archive_id = {$arid})
+                             ORDER BY file_size DESC LIMIT 50"
+                        );
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            // ClickHouse unavailable
+        }
+
+        $this->view('repositories/archive_detail', [
+            'pageTitle' => $planName ? $planName . ' — ' . $archive['archive_name'] : $archive['archive_name'],
+            'repo' => $repo,
+            'agent' => $agent,
+            'agentId' => $agentId,
+            'archive' => $archive,
+            'planName' => $planName,
+            'jobInfo' => $jobInfo,
+            'prevArchive' => $prevArchive,
+            'statusBreakdown' => $statusBreakdown,
+            'largestFiles' => $largestFiles,
+            'deletedCount' => $deletedCount,
+            'deletedSize' => $deletedSize,
+            'deletedFiles' => $deletedFiles,
+            'clickhouseAvailable' => $clickhouseAvailable,
+        ]);
+    }
+
     public function deleteArchive(int $agentId, int $id, int $archiveId): void
     {
         $this->requireAuth();
@@ -755,9 +873,14 @@ class RepositoryController extends Controller
             $this->redirect('/clients');
         }
 
-        // Get archives for this repo
+        // Get archives for this repo, with plan name resolved through backup_jobs
         $archives = $this->db->fetchAll("
-            SELECT * FROM archives WHERE repository_id = ? ORDER BY created_at DESC
+            SELECT ar.*, bp.name AS plan_name
+            FROM archives ar
+            LEFT JOIN backup_jobs bj ON bj.id = ar.backup_job_id
+            LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
+            WHERE ar.repository_id = ?
+            ORDER BY ar.created_at DESC
         ", [$id]);
 
         // Backfill file_count from ClickHouse for archives that show 0

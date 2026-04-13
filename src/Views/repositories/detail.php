@@ -500,9 +500,16 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                             : ($ar['deduplicated_size'] >= 1048576 ? round($ar['deduplicated_size'] / 1048576, 1) . ' MB'
                             : round($ar['deduplicated_size'] / 1024, 1) . ' KB');
                     ?>
-                    <tr>
+                    <tr style="cursor:pointer" onclick="window.location='/clients/<?= $repo['agent_id'] ?>/repo/<?= $repo['id'] ?>/archive/<?= $ar['id'] ?>'">
                         <td>
-                            <code class="small"><?= htmlspecialchars($ar['archive_name']) ?></code>
+                            <a href="/clients/<?= $repo['agent_id'] ?>/repo/<?= $repo['id'] ?>/archive/<?= $ar['id'] ?>" class="text-decoration-none">
+                            <?php if (!empty($ar['plan_name'])): ?>
+                                <span class="fw-semibold"><?= htmlspecialchars($ar['plan_name']) ?></span>
+                                <br><code class="small text-muted"><?= htmlspecialchars($ar['archive_name']) ?></code>
+                            <?php else: ?>
+                                <code class="small"><?= htmlspecialchars($ar['archive_name']) ?></code>
+                            <?php endif; ?>
+                            </a>
                             <?php if (!empty($ar['databases_backed_up'])): ?>
                             <i class="bi bi-database text-info ms-1" title="Contains database backup"></i>
                             <?php endif; ?>
