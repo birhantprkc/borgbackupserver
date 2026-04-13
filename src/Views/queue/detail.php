@@ -85,17 +85,17 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
             </div>
             <div class="text-white-50 small">This <?= $job['task_type'] ?> job runs server-side and will be picked up by the scheduler within 60 seconds</div>
         <?php elseif ($job['status'] === 'running' && $pct > 0): ?>
-            <div class="text-white fw-semibold mb-1"><?= $taskLabel ?>... <?= $pct ?>%</div>
+            <div class="d-flex justify-content-between text-white mb-1">
+                <span class="fw-semibold"><?= $taskLabel ?>... <?= $pct ?>%</span>
+                <span class="small text-white-50"><?= formatBytes($job['bytes_processed']) ?><?= ($job['bytes_total'] ?? 0) > 0 ? ' of ' . formatBytes($job['bytes_total']) : '' ?> processed</span>
+            </div>
             <div class="progress mb-1" style="height: 22px; background-color: rgba(255,255,255,0.15);">
                 <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"
                      style="width: <?= $pct ?>%; background-color: #5b9bd5;" aria-valuenow="<?= $pct ?>" aria-valuemin="0" aria-valuemax="100">
                     <?= number_format($job['files_processed']) ?> / <?= number_format($job['files_total']) ?> files
                 </div>
             </div>
-            <div class="d-flex justify-content-between text-white-50 small">
-                <span><?= formatBytes($job['bytes_processed']) ?><?= ($job['bytes_total'] ?? 0) > 0 ? ' of ' . formatBytes($job['bytes_total']) : '' ?> processed</span>
-                <span class="text-truncate ms-3" style="max-width: 60%; direction: rtl; text-align: right;" id="currentFile"></span>
-            </div>
+            <div class="text-white-50 small text-truncate" id="currentFile" style="max-width: 100%;"></div>
         <?php elseif ($job['status'] === 'running'): ?>
             <div class="text-white fw-semibold mb-1"><?= !empty($job['status_message']) ? htmlspecialchars($job['status_message']) : $taskLabel . ' in progress...' ?></div>
             <div class="progress mb-1" style="height: 22px; background-color: rgba(255,255,255,0.15);">
@@ -463,21 +463,26 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
         } else if (isJobActive && job.status === 'running' && pct > 0) {
             var taskLabel = (job.task_type || 'backup').replace('_',' ').replace(/^\w/, c => c.toUpperCase());
             var bytesText = fmtBytes(job.bytes_processed) + (job.bytes_total > 0 ? ' of ' + fmtBytes(job.bytes_total) : '') + ' processed';
-            var fileText = data.currentFile ? '<span class="text-truncate ms-3" style="max-width:60%;direction:rtl;text-align:right;" title="' + esc(data.currentFile) + '">' + esc(data.currentFile) + '</span>' : '';
-            var subRow = container.querySelector('.d-flex.justify-content-between');
-            if (subRow) {
+            var currentFile = data.currentFile ? data.currentFile.replace(/\/+$/, '') : '';
+            var fileHtml = currentFile ? '<div class="text-white-50 small text-truncate" style="max-width:100%;" title="' + esc(currentFile) + '">' + esc(currentFile) + '</div>' : '';
+            var headerRow = container.querySelector('.d-flex.justify-content-between');
+            if (headerRow) {
                 // In-place update
                 const bar = container.querySelector('.progress-bar');
-                const label = container.querySelector('.fw-semibold');
+                const label = headerRow.querySelector('.fw-semibold');
+                const bytesEl = headerRow.querySelector('.text-white-50');
                 if (bar) { bar.style.width = pct + '%'; bar.textContent = Number(job.files_processed).toLocaleString() + ' / ' + Number(job.files_total).toLocaleString() + ' files'; }
                 if (label) label.textContent = taskLabel + '... ' + pct + '%';
-                subRow.innerHTML = '<span>' + bytesText + '</span>' + fileText;
+                if (bytesEl) bytesEl.textContent = bytesText;
+                var fileEl = container.querySelector('.text-truncate');
+                if (fileEl && currentFile) { fileEl.textContent = currentFile; fileEl.title = currentFile; }
+                else if (fileEl && !currentFile) { fileEl.textContent = ''; }
             } else {
                 // Full replace (transitioning from pre-progress state)
                 container.innerHTML = '<div class="card border-0 shadow-sm mb-4" style="background-color:#2c3e50"><div class="card-body py-3">' +
-                    '<div class="text-white fw-semibold mb-1">' + esc(taskLabel) + '... ' + pct + '%</div>' +
+                    '<div class="d-flex justify-content-between text-white mb-1"><span class="fw-semibold">' + esc(taskLabel) + '... ' + pct + '%</span><span class="small text-white-50">' + bytesText + '</span></div>' +
                     '<div class="progress mb-1" style="height:22px;background-color:rgba(255,255,255,0.15)"><div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width:' + pct + '%;background-color:#5b9bd5">' + Number(job.files_processed).toLocaleString() + ' / ' + Number(job.files_total).toLocaleString() + ' files</div></div>' +
-                    '<div class="d-flex justify-content-between text-white-50 small"><span>' + bytesText + '</span>' + fileText + '</div></div></div>';
+                    fileHtml + '</div></div>';
             }
         } else if (isJobActive && job.status === 'running') {
             // Full replace when transitioning from queued/sent to running (pre-progress phase)
