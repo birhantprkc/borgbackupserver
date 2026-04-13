@@ -593,17 +593,34 @@ def test_ssh_connection(config):
         logger.error("SSH connectivity test still failing after key re-download: {}".format(err))
 
 
-def count_files(directories):
-    """Pre-count files in directories for progress tracking."""
+def count_files(directories, one_file_system=False):
+    """Pre-count files in directories for progress tracking.
+
+    When one_file_system is True, stays on the same filesystem as the
+    top-level directory (mirrors borg's --one-file-system behavior).
+    This prevents descending into /proc, /sys, NFS mounts, etc. when
+    backing up /.
+    """
     total = 0
     for dir_path in directories.splitlines():
         dir_path = dir_path.strip()
-        if not os.path.exists(dir_path):
+        if not dir_path or not os.path.exists(dir_path):
             continue
         try:
-            for root, dirs, files in os.walk(dir_path):
+            root_dev = os.lstat(dir_path).st_dev if one_file_system else None
+            for root, dirs, files in os.walk(dir_path, followlinks=False):
+                if one_file_system:
+                    # Remove subdirs on different filesystems so os.walk skips them
+                    kept = []
+                    for d in dirs:
+                        try:
+                            if os.lstat(os.path.join(root, d)).st_dev == root_dev:
+                                kept.append(d)
+                        except OSError:
+                            pass
+                    dirs[:] = kept
                 total += len(files)
-        except PermissionError:
+        except (PermissionError, OSError):
             continue
     return total
 
@@ -2884,7 +2901,8 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
             "job_id": job_id,
             "status_message": "Counting files...",
         })
-        files_total = count_files(directories)
+        one_fs = "--one-file-system" in command
+        files_total = count_files(directories, one_file_system=one_fs)
         logger.info("Pre-counted {} files to backup".format(files_total))
 
     # Report initial progress with file count
