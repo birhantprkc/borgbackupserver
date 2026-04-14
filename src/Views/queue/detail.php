@@ -290,6 +290,61 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
 
     <div class="col-lg-5">
         <div class="card border-0 shadow-sm h-100">
+            <?php if ($job['task_type'] === 'prune' && !empty($pruneStats)): ?>
+            <div class="card-header bg-body fw-semibold">
+                <i class="bi bi-scissors me-1"></i> Prune Stats
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-borderless mb-0">
+                    <tbody>
+                        <tr>
+                            <td class="text-muted fw-semibold ps-3" style="width: 160px;">Recovery Points Before</td>
+                            <td><?= $pruneStats['existing'] !== null ? number_format($pruneStats['existing']) : '--' ?></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted fw-semibold ps-3">Kept</td>
+                            <td class="text-success fw-semibold"><?= $pruneStats['kept'] !== null ? number_format($pruneStats['kept']) : '--' ?></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted fw-semibold ps-3">Deleted</td>
+                            <td class="<?= ($pruneStats['deleted'] ?? 0) > 0 ? 'text-danger fw-semibold' : '' ?>">
+                                <?= $pruneStats['deleted'] !== null ? number_format($pruneStats['deleted']) : '--' ?>
+                            </td>
+                        </tr>
+                        <?php if (!empty($pruneStats['keep_rules'])): ?>
+                        <tr>
+                            <td class="text-muted fw-semibold ps-3">Keep Rules</td>
+                            <td>
+                                <?php foreach ($pruneStats['keep_rules'] as $rule => $n): ?>
+                                    <?php $short = ['hourly'=>'h','daily'=>'d','weekly'=>'w','monthly'=>'m','yearly'=>'y','minutely'=>'min','secondly'=>'s'][$rule] ?? $rule; ?>
+                                    <span class="badge bg-body-secondary text-body border me-1" title="<?= $n ?> <?= $rule ?>"><?= $n ?><?= $short ?></span>
+                                <?php endforeach; ?>
+                            </td>
+                        </tr>
+                        <?php endif; ?>
+                        <?php if (!empty($pruneStats['deleted_names'])): ?>
+                        <tr>
+                            <td class="text-muted fw-semibold ps-3 align-top pt-3">Pruned Archives</td>
+                            <td class="small">
+                                <?php foreach (array_slice($pruneStats['deleted_names'], 0, 20) as $name): ?>
+                                <div><code class="small text-danger"><?= htmlspecialchars($name) ?></code></div>
+                                <?php endforeach; ?>
+                                <?php if (count($pruneStats['deleted_names']) > 20): ?>
+                                <div class="text-muted">(and <?= count($pruneStats['deleted_names']) - 20 ?> more)</div>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                        <?php endif; ?>
+                        <?php if ($job['advanced_options']): ?>
+                        <tr>
+                            <td class="text-muted fw-semibold ps-3">Borg Options</td>
+                            <td><code class="small job-detail-wrap"><?= htmlspecialchars($job['advanced_options']) ?></code></td>
+                        </tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php else: ?>
             <div class="card-header bg-body fw-semibold">
                 <i class="bi bi-bar-chart me-1"></i> Stats
             </div>
@@ -327,6 +382,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
                     </tbody>
                 </table>
             </div>
+            <?php endif; ?>
         </div>
     </div>
 </div>

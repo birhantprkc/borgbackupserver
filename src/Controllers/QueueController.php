@@ -153,6 +153,12 @@ class QueueController extends Controller
         }
         $pollInterval = (int) ($this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'agent_poll_interval'")['value'] ?? 30);
 
+        // For prune jobs, parse the log entries for keep rules and per-rule counts
+        $pruneStats = null;
+        if ($job['task_type'] === 'prune') {
+            $pruneStats = $this->parsePruneStats($logs);
+        }
+
         $this->view('queue/detail', [
             'pageTitle' => 'Job #' . $id,
             'job' => $job,
@@ -161,6 +167,7 @@ class QueueController extends Controller
             'maxQueue' => $maxQueue,
             'queuePosition' => $queuePosition,
             'pollInterval' => $pollInterval,
+            'pruneStats' => $pruneStats,
         ]);
     }
 
@@ -229,6 +236,71 @@ class QueueController extends Controller
             'queuePosition' => $queuePosition,
             'currentFile' => $currentFile,
         ]);
+    }
+
+    /**
+     * Parse prune-specific stats from server_log entries for a job.
+     * Returns keep rules (from command), kept/deleted counts, and per-rule counts where available.
+     */
+    private function parsePruneStats(array $logs): array
+    {
+        $stats = [
+            'keep_rules' => [],       // ['hourly' => 6, 'daily' => 14, ...]
+            'per_rule_counts' => [],  // ['hourly' => 6, 'daily' => 14, ...] — from "Keeping archive (rule: X #N)"
+            'kept' => null,
+            'deleted' => null,
+            'existing' => null,
+            'deleted_names' => [],
+        ];
+
+        foreach ($logs as $log) {
+            $msg = $log['message'] ?? '';
+
+            // Parse keep rules from the Prune command line
+            if (str_starts_with($msg, 'Prune command:')) {
+                foreach (['hourly', 'daily', 'weekly', 'monthly', 'yearly', 'minutely', 'secondly'] as $rule) {
+                    if (preg_match("/--keep-{$rule}=?'?(\d+)'?/", $msg, $m)) {
+                        $stats['keep_rules'][$rule] = (int) $m[1];
+                    }
+                }
+            }
+
+            // Parse per-rule counts from Prune output (truncated, so may be partial)
+            if (str_starts_with($msg, 'Prune output:')) {
+                if (preg_match_all('/rule:\s*(\w+)\s+#(\d+)/', $msg, $matches, PREG_SET_ORDER)) {
+                    foreach ($matches as $m) {
+                        $rule = $m[1];
+                        $num = (int) $m[2];
+                        // Track the highest # seen per rule = count kept for that rule
+                        if (!isset($stats['per_rule_counts'][$rule]) || $num > $stats['per_rule_counts'][$rule]) {
+                            $stats['per_rule_counts'][$rule] = $num;
+                        }
+                    }
+                }
+            }
+
+            // Parse the summary message: "Removed N pruned recovery point(s) from database — X remaining: name1, name2..."
+            if (preg_match('/Removed (\d+) pruned recovery point\(s\) from database — (\d+) remaining(?:: (.+?))?$/', $msg, $m)) {
+                $stats['deleted'] = (int) $m[1];
+                $stats['kept'] = (int) $m[2];
+                $stats['existing'] = $stats['deleted'] + $stats['kept'];
+                if (!empty($m[3])) {
+                    $names = explode(', ', trim($m[3]));
+                    // Strip trailing "(and N more)" entry
+                    $names = array_filter($names, fn($n) => !str_starts_with($n, '(and '));
+                    $stats['deleted_names'] = array_values($names);
+                }
+            }
+
+            // "Prune completed — all N recovery point(s) retained, none removed"
+            if (preg_match('/Prune completed — all (\d+) recovery point\(s\) retained, none removed/', $msg, $m)) {
+                $stats['deleted'] = 0;
+                $stats['kept'] = (int) $m[1];
+                $stats['existing'] = (int) $m[1];
+            }
+        }
+
+        return $stats;
     }
 
     public function cancel(int $id): void
