@@ -101,8 +101,19 @@ $savings = $archive['original_size'] > 0
                         <i class="bi bi-hdd"></i>
                     </div>
                     <div>
+                        <div class="fw-bold"><?= fmtSize($archive['original_size']) ?></div>
+                        <div class="text-muted" style="font-size: 0.7rem;">Total Size</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="d-flex align-items-center p-2 rounded bg-body-secondary">
+                    <div class="stat-icon-sm bg-success bg-opacity-10 text-success rounded-2 p-2 me-2">
+                        <i class="bi bi-archive"></i>
+                    </div>
+                    <div>
                         <div class="fw-bold"><?= fmtSize($archive['deduplicated_size']) ?></div>
-                        <div class="text-muted" style="font-size: 0.7rem;">Dedup Size</div>
+                        <div class="text-muted" style="font-size: 0.7rem;"><?= $savings ?>% dedup savings</div>
                     </div>
                 </div>
             </div>
@@ -119,23 +130,12 @@ $savings = $archive['original_size'] > 0
             </div>
             <div class="col-6 col-md-3">
                 <div class="d-flex align-items-center p-2 rounded bg-body-secondary">
-                    <div class="stat-icon-sm bg-success bg-opacity-10 text-success rounded-2 p-2 me-2">
-                        <i class="bi bi-percent"></i>
-                    </div>
-                    <div>
-                        <div class="fw-bold"><?= $savings ?>%</div>
-                        <div class="text-muted" style="font-size: 0.7rem;">Dedup Savings</div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="d-flex align-items-center p-2 rounded bg-body-secondary">
                     <div class="stat-icon-sm bg-warning bg-opacity-10 text-warning rounded-2 p-2 me-2">
                         <i class="bi bi-clock-history"></i>
                     </div>
                     <div>
-                        <div class="fw-bold"><?= \BBS\Core\TimeHelper::format($archive['created_at'], 'M j, Y g:i A') ?></div>
-                        <div class="text-muted" style="font-size: 0.7rem;">Created<?= $durLabel !== '--' ? ' · ' . htmlspecialchars($durLabel) : '' ?></div>
+                        <div class="fw-bold"><?= htmlspecialchars($durLabel) ?></div>
+                        <div class="text-muted" style="font-size: 0.7rem;">Duration</div>
                     </div>
                 </div>
             </div>
