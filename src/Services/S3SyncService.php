@@ -553,46 +553,45 @@ class S3SyncService
         fwrite($fp, '  "file_catalog": [' . "\n");
 
         $batchSize = 10000;
-        $chOffset = 0;
         $firstFile = true;
         $fileCount = 0;
 
-        // Get archive IDs for this repo
-        $archiveIdList = array_keys($archiveNameById);
-        if (!empty($archiveIdList)) {
-            $idListStr = implode(',', array_map('intval', $archiveIdList));
-
+        // Keyset pagination: iterate one archive at a time, paging on path > last.
+        // OFFSET-based pagination is O(N^2) in ClickHouse because every batch
+        // re-sorts and skips all previous rows — catastrophic for catalogs
+        // with tens of millions of entries.
+        foreach ($archiveNameById as $aid => $archiveName) {
+            $aid = (int) $aid;
+            $lastPath = '';
             do {
+                $lastPathEsc = addslashes($lastPath);
                 $files = $ch->fetchAll(
-                    "SELECT archive_id, path, file_size,
+                    "SELECT path, file_size,
                             formatDateTime(mtime, '%Y-%m-%d %H:%i:%S') as mtime
                      FROM file_catalog
                      WHERE agent_id = {$agentId}
-                       AND archive_id IN ({$idListStr})
-                     ORDER BY archive_id, path
-                     LIMIT {$batchSize} OFFSET {$chOffset}"
+                       AND archive_id = {$aid}
+                       AND path > '{$lastPathEsc}'
+                     ORDER BY path
+                     LIMIT {$batchSize}"
                 );
 
                 foreach ($files as $file) {
-                    $archiveName = $archiveNameById[$file['archive_id']] ?? null;
-                    if ($archiveName) {
-                        $fileJson = json_encode([
-                            'archive' => $archiveName,
-                            'path' => $file['path'],
-                            'size' => (int) $file['file_size'],
-                            'mtime' => $file['mtime'],
-                        ], JSON_UNESCAPED_SLASHES);
+                    $fileJson = json_encode([
+                        'archive' => $archiveName,
+                        'path' => $file['path'],
+                        'size' => (int) $file['file_size'],
+                        'mtime' => $file['mtime'],
+                    ], JSON_UNESCAPED_SLASHES);
 
-                        if (!$firstFile) {
-                            fwrite($fp, ",\n");
-                        }
-                        fwrite($fp, "    {$fileJson}");
-                        $firstFile = false;
-                        $fileCount++;
+                    if (!$firstFile) {
+                        fwrite($fp, ",\n");
                     }
+                    fwrite($fp, "    {$fileJson}");
+                    $firstFile = false;
+                    $fileCount++;
+                    $lastPath = $file['path'];
                 }
-
-                $chOffset += $batchSize;
             } while (count($files) === $batchSize);
         }
 
