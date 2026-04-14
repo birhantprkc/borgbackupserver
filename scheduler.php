@@ -2183,4 +2183,27 @@ if ((int) date('i') === 30) {
     if ($jobsDeleted > 0) {
         echo date('Y-m-d H:i:s') . " Pruned {$jobsDeleted} backup_jobs older than 90 days\n";
     }
+
+    // Prune orphaned PHP session files. On Docker installs where PHP writes
+    // sessions into $TMPDIR (/var/bbs/tmp), there's no systemd timer or cron
+    // to clean them up, so files accumulate unboundedly.
+    $sessionDirs = array_unique(array_filter([
+        ini_get('session.save_path') ?: null,
+        sys_get_temp_dir(),
+        '/var/bbs/tmp',
+        '/var/lib/php/sessions',
+    ]));
+    $cutoff = time() - (30 * 86400);
+    $sessionDeleted = 0;
+    foreach ($sessionDirs as $dir) {
+        if (!is_dir($dir)) continue;
+        foreach (glob($dir . '/sess_*') ?: [] as $file) {
+            if (is_file($file) && @filemtime($file) < $cutoff) {
+                if (@unlink($file)) $sessionDeleted++;
+            }
+        }
+    }
+    if ($sessionDeleted > 0) {
+        echo date('Y-m-d H:i:s') . " Pruned {$sessionDeleted} PHP session files older than 30 days\n";
+    }
 }
