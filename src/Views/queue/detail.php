@@ -335,12 +335,6 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
                             </td>
                         </tr>
                         <?php endif; ?>
-                        <?php if ($job['advanced_options']): ?>
-                        <tr>
-                            <td class="text-muted fw-semibold ps-3">Borg Options</td>
-                            <td><code class="small job-detail-wrap"><?= htmlspecialchars($job['advanced_options']) ?></code></td>
-                        </tr>
-                        <?php endif; ?>
                     </tbody>
                 </table>
             </div>
