@@ -518,7 +518,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                         <td><?= number_format($ar['file_count']) ?></td>
                         <td><?= $origLabel ?></td>
                         <td><?= $dedupLabel ?></td>
-                        <td class="text-end">
+                        <td class="text-end" onclick="event.stopPropagation()">
                             <button type="button" class="btn btn-sm btn-outline-danger"
                                     data-bs-toggle="modal" data-bs-target="#deleteArchiveModal<?= $ar['id'] ?>">
                                 <i class="bi bi-trash"></i>
