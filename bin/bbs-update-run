@@ -22,13 +22,13 @@ else
 fi
 
 # 3. Fix web file ownership
-echo "[3/9] Setting web file permissions..."
+echo "[3/9] Checking web file permissions..."
 chown -R www-data:www-data "$BBS_DIR"
 chmod 755 "$BBS_DIR/config"
 [ -f "$BBS_DIR/config/.env" ] && chmod 600 "$BBS_DIR/config/.env"
 
 # 4. Update SSH helper and gate
-echo "[4/9] Updating SSH helper..."
+echo "[4/9] Checking SSH helper..."
 cp "$BBS_DIR/bin/bbs-ssh-helper" /usr/local/bin/bbs-ssh-helper
 chmod 755 /usr/local/bin/bbs-ssh-helper
 /usr/local/bin/bbs-ssh-helper install-gate
@@ -60,7 +60,7 @@ else
 fi
 
 # 6. Fix runtime directories and SSH permissions
-echo "[6/9] Fixing permissions..."
+echo "[6/9] Checking permissions..."
 
 # Borg cache dir for www-data
 mkdir -p /var/bbs/cache/www-data
@@ -118,7 +118,7 @@ echo "[8/9] Running database migrations..."
 sudo -u www-data php "$BBS_DIR/migrate.php" 2>&1 || echo "  Warning: migration runner returned an error (migrations may run on next page load)"
 
 # 9. Fix storage path permissions
-echo "[9/9] Fixing storage path permissions..."
+echo "[9/9] Checking storage path permissions..."
 ENV_FILE="$BBS_DIR/config/.env"
 if [ -f "$ENV_FILE" ]; then
     DB_HOST=$(grep '^DB_HOST=' "$ENV_FILE" | cut -d= -f2-)
@@ -137,7 +137,7 @@ if [ -f "$ENV_FILE" ]; then
             fi
             chown root:www-data "$STORAGE_PATH"
             chmod 775 "$STORAGE_PATH"
-            echo "  Fixed $STORAGE_PATH"
+            echo "  OK $STORAGE_PATH"
         else
             echo "  No storage path configured"
         fi
