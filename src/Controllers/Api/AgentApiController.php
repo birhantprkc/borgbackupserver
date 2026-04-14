@@ -400,12 +400,20 @@ class AgentApiController extends Controller
                 'message' => "Archive created: \"{$input['archive_name']}\" — {$origSize} original, {$dedupSize} deduplicated",
             ]);
 
-            // Update repo stats + borg version
+            // Update repo stats + borg version.
+            // size_bytes is only set from SUM(deduplicated_size) for remote SSH
+            // repos (where we can't du) OR when currently 0 (fresh repo). For
+            // local repos the scheduler's du scan is the source of truth — it
+            // includes repo metadata and uncompacted chunks that SUM misses.
             $borgVer = !empty($agent['borg_version']) ? preg_replace('/^borg\s+/', '', $agent['borg_version']) : null;
             $this->db->query("
                 UPDATE repositories SET
                     archive_count = (SELECT COUNT(*) FROM archives WHERE repository_id = ?),
-                    size_bytes = COALESCE((SELECT SUM(deduplicated_size) FROM archives WHERE repository_id = ?), 0)
+                    size_bytes = CASE
+                        WHEN storage_type = 'remote_ssh' OR size_bytes = 0
+                        THEN COALESCE((SELECT SUM(deduplicated_size) FROM archives WHERE repository_id = ?), 0)
+                        ELSE size_bytes
+                    END
                     " . ($borgVer ? ", borg_version_last = ?" : "") . "
                 WHERE id = ?
             ", $borgVer
@@ -582,12 +590,16 @@ class AgentApiController extends Controller
                     'message' => "Archive created: \"{$input['archive_name']}\" — {$origSize} original, {$dedupSize} deduplicated",
                 ]);
 
-                // Update repo stats + borg version
+                // Update repo stats + borg version (see comment above on size_bytes)
                 $borgVer2 = !empty($agent['borg_version']) ? preg_replace('/^borg\s+/', '', $agent['borg_version']) : null;
                 $this->db->query("
                     UPDATE repositories SET
                         archive_count = (SELECT COUNT(*) FROM archives WHERE repository_id = ?),
-                        size_bytes = COALESCE((SELECT SUM(deduplicated_size) FROM archives WHERE repository_id = ?), 0)
+                        size_bytes = CASE
+                            WHEN storage_type = 'remote_ssh' OR size_bytes = 0
+                            THEN COALESCE((SELECT SUM(deduplicated_size) FROM archives WHERE repository_id = ?), 0)
+                            ELSE size_bytes
+                        END
                         " . ($borgVer2 ? ", borg_version_last = ?" : "") . "
                     WHERE id = ?
                 ", $borgVer2

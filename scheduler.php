@@ -1512,11 +1512,17 @@ foreach ($serverJobs as $sj) {
                     'message' => "Prune completed — all " . count($borgArchives) . " recovery point(s) retained, none removed",
                 ]);
             }
-            // Refresh cached repo stats so the dashboard shows correct values
+            // Refresh cached repo stats. size_bytes only updated from SUM for
+            // remote SSH repos (no du possible) or when currently 0 — for
+            // local repos the 5-min du scan is the source of truth.
             $db->query("
                 UPDATE repositories SET
                     archive_count = (SELECT COUNT(*) FROM archives WHERE repository_id = ?),
-                    size_bytes = COALESCE((SELECT SUM(deduplicated_size) FROM archives WHERE repository_id = ?), 0)
+                    size_bytes = CASE
+                        WHEN storage_type = 'remote_ssh' OR size_bytes = 0
+                        THEN COALESCE((SELECT SUM(deduplicated_size) FROM archives WHERE repository_id = ?), 0)
+                        ELSE size_bytes
+                    END
                 WHERE id = ?
             ", [$repoId, $repoId, $repoId]);
 
@@ -1543,11 +1549,15 @@ foreach ($serverJobs as $sj) {
 
             $db->delete('archives', 'id = ?', [$deletedArchive['id']]);
 
-            // Refresh cached repo stats
+            // Refresh cached repo stats (see note above on size_bytes rules)
             $db->query("
                 UPDATE repositories SET
                     archive_count = (SELECT COUNT(*) FROM archives WHERE repository_id = ?),
-                    size_bytes = COALESCE((SELECT SUM(deduplicated_size) FROM archives WHERE repository_id = ?), 0)
+                    size_bytes = CASE
+                        WHEN storage_type = 'remote_ssh' OR size_bytes = 0
+                        THEN COALESCE((SELECT SUM(deduplicated_size) FROM archives WHERE repository_id = ?), 0)
+                        ELSE size_bytes
+                    END
                 WHERE id = ?
             ", [$sj['repository_id'], $sj['repository_id'], $sj['repository_id']]);
 
