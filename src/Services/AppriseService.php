@@ -38,7 +38,7 @@ class AppriseService
     /**
      * Send notification to a specific service by ID.
      */
-    public function sendToService(int $serviceId, string $title, string $body): bool
+    public function sendToService(int $serviceId, string $title, string $body, ?int $agentId = null): bool
     {
         $service = $this->db->fetchOne("SELECT * FROM notification_services WHERE id = ?", [$serviceId]);
         if (!$service || !$service['enabled']) {
@@ -61,20 +61,19 @@ class AppriseService
             // Update last_used_at
             $this->db->update('notification_services', ['last_used_at' => date('Y-m-d H:i:s')], 'id = ?', [$serviceId]);
 
-            // Log the send attempt
+            // Log the send attempt (with agent_id so it shows up in per-client log filter)
             $serviceName = $service['name'];
+            $logRow = [
+                'level' => $exitCode === 0 ? 'info' : 'error',
+            ];
+            if ($agentId !== null) $logRow['agent_id'] = $agentId;
             if ($exitCode === 0) {
-                $this->db->insert('server_log', [
-                    'level' => 'info',
-                    'message' => "Push notification sent via \"{$serviceName}\": {$title}",
-                ]);
+                $logRow['message'] = "Push notification sent via \"{$serviceName}\": {$title}";
             } else {
                 $outputStr = implode("\n", $output);
-                $this->db->insert('server_log', [
-                    'level' => 'error',
-                    'message' => "Push notification failed via \"{$serviceName}\": {$title} — " . substr($outputStr, 0, 500),
-                ]);
+                $logRow['message'] = "Push notification failed via \"{$serviceName}\": {$title} — " . substr($outputStr, 0, 500);
             }
+            $this->db->insert('server_log', $logRow);
 
             return $exitCode === 0;
         } catch (\Exception $e) {
@@ -86,7 +85,7 @@ class AppriseService
     /**
      * Send notification to all enabled services for a given event type.
      */
-    public function sendForEvent(string $eventType, string $title, string $body): int
+    public function sendForEvent(string $eventType, string $title, string $body, ?int $agentId = null): int
     {
         if (!$this->isAppriseInstalled()) {
             return 0;
@@ -96,7 +95,7 @@ class AppriseService
         $sent = 0;
 
         foreach ($services as $service) {
-            if ($this->sendToService($service['id'], $title, $body)) {
+            if ($this->sendToService($service['id'], $title, $body, $agentId)) {
                 $sent++;
             }
         }

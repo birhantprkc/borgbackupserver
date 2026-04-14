@@ -67,7 +67,7 @@ class NotificationService
         // success events always create a new record so they always send)
         if ($isNew) {
             $this->sendEmailIfEnabled($type, $message);
-            $this->sendAppriseIfEnabled($type, $message);
+            $this->sendAppriseIfEnabled($type, $message, $agentId);
         }
     }
 
@@ -127,7 +127,7 @@ class NotificationService
         }
     }
 
-    private function sendAppriseIfEnabled(string $type, string $message): void
+    private function sendAppriseIfEnabled(string $type, string $message, ?int $agentId = null): void
     {
         try {
             $apprise = new AppriseService();
@@ -135,7 +135,7 @@ class NotificationService
             $title = '[BBS] ' . ($labels[$type] ?? ucfirst($type));
 
             // Use the new per-service event filtering
-            $apprise->sendForEvent($type, $title, $message);
+            $apprise->sendForEvent($type, $title, $message, $agentId);
         } catch (\Exception $e) {
             // Don't let Apprise failures break notification flow
         }
