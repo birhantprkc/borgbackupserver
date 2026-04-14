@@ -103,12 +103,20 @@ class AuthController extends Controller
             $this->redirect('/login');
         }
 
-        $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
-        $host = $serverHost['value'] ?? $_SERVER['HTTP_HOST'] ?? 'localhost';
-        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-            || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')
-            ? 'https' : 'http';
-        $redirectUri = "{$scheme}://{$host}/login/oidc/callback";
+        // Explicit override from settings takes priority — needed when BBS is
+        // reached via one hostname internally (e.g. agents use http://internal-ip)
+        // but OIDC must use a different public hostname.
+        $redirectOverride = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'oidc_redirect_url'");
+        if (!empty($redirectOverride['value'])) {
+            $redirectUri = trim($redirectOverride['value']);
+        } else {
+            $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
+            $host = $serverHost['value'] ?? $_SERVER['HTTP_HOST'] ?? 'localhost';
+            $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+                || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')
+                ? 'https' : 'http';
+            $redirectUri = "{$scheme}://{$host}/login/oidc/callback";
+        }
 
         try {
             $oidcService->redirectToProvider($redirectUri);
@@ -129,12 +137,20 @@ class AuthController extends Controller
             $this->redirect('/login');
         }
 
-        $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
-        $host = $serverHost['value'] ?? $_SERVER['HTTP_HOST'] ?? 'localhost';
-        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-            || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')
-            ? 'https' : 'http';
-        $redirectUri = "{$scheme}://{$host}/login/oidc/callback";
+        // Explicit override from settings takes priority — needed when BBS is
+        // reached via one hostname internally (e.g. agents use http://internal-ip)
+        // but OIDC must use a different public hostname.
+        $redirectOverride = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'oidc_redirect_url'");
+        if (!empty($redirectOverride['value'])) {
+            $redirectUri = trim($redirectOverride['value']);
+        } else {
+            $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
+            $host = $serverHost['value'] ?? $_SERVER['HTTP_HOST'] ?? 'localhost';
+            $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+                || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')
+                ? 'https' : 'http';
+            $redirectUri = "{$scheme}://{$host}/login/oidc/callback";
+        }
 
         try {
             $result = $oidcService->handleCallback($redirectUri);

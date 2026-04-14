@@ -205,7 +205,7 @@ class SettingsController extends Controller
         $this->verifyCsrf();
 
         // Plain text settings
-        $fields = ['oidc_provider_url', 'oidc_client_id', 'oidc_button_label', 'oidc_scopes', 'oidc_new_user_policy', 'oidc_template_user_id'];
+        $fields = ['oidc_provider_url', 'oidc_client_id', 'oidc_button_label', 'oidc_scopes', 'oidc_new_user_policy', 'oidc_template_user_id', 'oidc_redirect_url'];
         foreach ($fields as $key) {
             if (isset($_POST[$key])) {
                 $this->saveSetting($key, trim($_POST[$key]));

@@ -1426,6 +1426,14 @@ function updateBuiltUrl(containerId, schema, prefix) {
                 </div>
             </div>
 
+            <div class="row g-3 mb-3">
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Redirect URL Override <span class="text-muted fw-normal small">(optional)</span></label>
+                    <input type="url" class="form-control" name="oidc_redirect_url" value="<?= htmlspecialchars($settings['oidc_redirect_url'] ?? '') ?>" placeholder="https://bbs.example.com/login/oidc/callback">
+                    <div class="form-text">Leave blank to auto-detect from the request. Set this if BBS sits behind a reverse proxy but your OIDC provider needs a different URL than what the request headers show (e.g. your agents use an internal URL but SSO must use the public hostname).</div>
+                </div>
+            </div>
+
             <hr>
 
             <h6 class="mb-3">New User Handling</h6>
