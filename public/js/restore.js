@@ -4,6 +4,12 @@
 
     const clickhouseAvailable = !!window.CLICKHOUSE_AVAILABLE;
 
+    // Read URL params so other pages can deep-link to a specific archive
+    // and restore mode (e.g. the archive detail page's "Restore" buttons)
+    const urlParams = new URLSearchParams(window.location.search);
+    const preselectArchive = urlParams.get('archive') || '';
+    const preselectMode = urlParams.get('mode') || '';  // 'files' | 'database'
+
     // DOM refs
     const archiveSelect = document.getElementById('archive-select');
     const searchInput = document.getElementById('restore-search');
@@ -875,5 +881,22 @@
                 form.submit();
             }, { danger: true });
         });
+    }
+
+    // Handle deep-link params from other pages (?archive=N&mode=files|database)
+    if (preselectArchive) {
+        // Switch to database mode first if requested
+        if (preselectMode === 'database' && window.DB_PLUGIN_ENABLED) {
+            const dbBtn = document.querySelector('[data-restore-mode="database"]');
+            if (dbBtn) dbBtn.click();
+            const dbSelect = document.getElementById('db-archive-select');
+            if (dbSelect && [...dbSelect.options].some(o => o.value === preselectArchive)) {
+                dbSelect.value = preselectArchive;
+                dbSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        } else if ([...archiveSelect.options].some(o => o.value === preselectArchive)) {
+            archiveSelect.value = preselectArchive;
+            archiveSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        }
     }
 })();

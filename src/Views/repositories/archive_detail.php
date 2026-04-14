@@ -6,32 +6,32 @@ function fmtSize($bytes) {
     return $bytes . ' B';
 }
 
+// Status codes from borg + their display label and theme-aware badge color
 $statusLabels = [
     'A' => ['Added', 'success'],
     'M' => ['Modified', 'warning'],
     'C' => ['Metadata Changed', 'info'],
     'U' => ['Unchanged', 'secondary'],
-    'D' => ['Directory', 'light'],
-    'S' => ['Symlink', 'light'],
-    'H' => ['Hardlink', 'light'],
-    'X' => ['Excluded', 'light'],
-    'B' => ['Block Device', 'light'],
-    'F' => ['FIFO', 'light'],
-    'E' => ['Empty', 'light'],
+    'D' => ['Directory', 'body-secondary'],
+    'S' => ['Symlink', 'body-secondary'],
+    'H' => ['Hardlink', 'body-secondary'],
+    'X' => ['Excluded', 'body-secondary'],
+    'B' => ['Block Device', 'body-secondary'],
+    'F' => ['FIFO', 'body-secondary'],
+    'E' => ['Empty', 'body-secondary'],
 ];
 
 // Non-file entry types — exclude from file counts and size totals
-// (symlinks report bogus sizes from os.stat following the target)
 $nonFileStatuses = ['D', 'S', 'H', 'X', 'B', 'F', 'E'];
 
 $durLabel = '--';
-if ($archive['created_at'] && !empty($jobInfo['duration_seconds'])) {
+if (!empty($jobInfo['duration_seconds'])) {
     $d = (int) $jobInfo['duration_seconds'];
     $durLabel = $d >= 3600 ? floor($d / 3600) . 'h ' . floor(($d % 3600) / 60) . 'm'
         : ($d >= 60 ? floor($d / 60) . 'm ' . ($d % 60) . 's' : $d . 's');
 }
 
-// Separate file entries from non-file entries (dirs, symlinks, etc.)
+// Separate file entries from non-file entries
 $fileRows = [];
 $otherRows = [];
 $totalFiles = 0;
@@ -45,80 +45,98 @@ foreach ($statusBreakdown as $row) {
         $totalSize += (int) $row['total_size'];
     }
 }
+
+$hasDatabases = !empty($archive['databases_backed_up']);
+$dbInfo = $hasDatabases ? json_decode($archive['databases_backed_up'], true) : null;
+
+$savings = $archive['original_size'] > 0
+    ? round((1 - $archive['deduplicated_size'] / $archive['original_size']) * 100, 1)
+    : 0;
 ?>
 
 <!-- Breadcrumb -->
-<div class="d-flex align-items-center mb-4">
-    <a href="/clients/<?= $agentId ?>" class="btn btn-sm btn-outline-secondary me-2"><i class="bi bi-arrow-left"></i></a>
-    <nav aria-label="breadcrumb">
-        <ol class="breadcrumb mb-0 small">
-            <li class="breadcrumb-item"><a href="/clients/<?= $agentId ?>"><?= htmlspecialchars($agent['name']) ?></a></li>
-            <li class="breadcrumb-item"><a href="/clients/<?= $agentId ?>/repo/<?= $repo['id'] ?>"><?= htmlspecialchars($repo['name']) ?></a></li>
-            <li class="breadcrumb-item active"><?= $planName ? htmlspecialchars($planName) : htmlspecialchars($archive['archive_name']) ?></li>
-        </ol>
-    </nav>
-</div>
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="/clients" class="text-decoration-none">Clients</a></li>
+        <li class="breadcrumb-item"><a href="/clients/<?= $agentId ?>" class="text-decoration-none"><?= htmlspecialchars($agent['name']) ?></a></li>
+        <li class="breadcrumb-item"><a href="/clients/<?= $agentId ?>?tab=repos" class="text-decoration-none">Repos</a></li>
+        <li class="breadcrumb-item"><a href="/clients/<?= $agentId ?>/repo/<?= $repo['id'] ?>" class="text-decoration-none"><?= htmlspecialchars($repo['name']) ?></a></li>
+        <li class="breadcrumb-item active"><?= htmlspecialchars($planName ?: $archive['archive_name']) ?></li>
+    </ol>
+</nav>
 
 <!-- Header -->
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body">
-        <div class="d-flex justify-content-between align-items-start">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
             <div>
-                <h5 class="mb-1">
-                    <i class="bi bi-archive me-2 text-primary"></i>
-                    <?php if ($planName): ?>
-                        <?= htmlspecialchars($planName) ?>
+                <h4 class="mb-1">
+                    <i class="bi bi-archive text-primary me-2"></i>
+                    <?= htmlspecialchars($planName ?: $archive['archive_name']) ?>
+                    <?php if ($hasDatabases): ?>
+                    <span class="badge bg-info ms-2" style="font-size: 0.6em; vertical-align: middle;"><i class="bi bi-database me-1"></i>Databases</span>
                     <?php endif; ?>
-                </h5>
-                <div class="text-muted small">
-                    <code><?= htmlspecialchars($archive['archive_name']) ?></code>
+                </h4>
+                <?php if ($planName): ?>
+                <div class="text-muted small"><code><?= htmlspecialchars($archive['archive_name']) ?></code></div>
+                <?php endif; ?>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+                <a href="/clients/<?= $agentId ?>?tab=restore&archive=<?= $archive['id'] ?>&mode=files" class="btn btn-sm btn-primary">
+                    <i class="bi bi-cloud-download me-1"></i>Restore Files
+                </a>
+                <?php if ($hasDatabases): ?>
+                <a href="/clients/<?= $agentId ?>?tab=restore&archive=<?= $archive['id'] ?>&mode=database" class="btn btn-sm btn-info">
+                    <i class="bi bi-database me-1"></i>Restore Databases
+                </a>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Stats Row -->
+        <div class="row g-3 mt-3">
+            <div class="col-6 col-md-3">
+                <div class="d-flex align-items-center p-2 rounded bg-body-secondary">
+                    <div class="stat-icon-sm bg-primary bg-opacity-10 text-primary rounded-2 p-2 me-2">
+                        <i class="bi bi-hdd"></i>
+                    </div>
+                    <div>
+                        <div class="fw-bold"><?= fmtSize($archive['deduplicated_size']) ?></div>
+                        <div class="text-muted" style="font-size: 0.7rem;">Dedup Size</div>
+                    </div>
                 </div>
             </div>
-            <div class="text-end text-muted small">
-                <div><i class="bi bi-calendar me-1"></i><?= \BBS\Core\TimeHelper::format($archive['created_at'], 'M j, Y g:i A') ?></div>
-                <div><i class="bi bi-clock me-1"></i>Duration: <?= $durLabel ?></div>
+            <div class="col-6 col-md-3">
+                <div class="d-flex align-items-center p-2 rounded bg-body-secondary">
+                    <div class="stat-icon-sm bg-info bg-opacity-10 text-info rounded-2 p-2 me-2">
+                        <i class="bi bi-files"></i>
+                    </div>
+                    <div>
+                        <div class="fw-bold"><?= number_format($archive['file_count'] ?: $totalFiles) ?></div>
+                        <div class="text-muted" style="font-size: 0.7rem;">Files</div>
+                    </div>
+                </div>
             </div>
-        </div>
-    </div>
-</div>
-
-<!-- Summary cards -->
-<div class="row g-3 mb-4">
-    <div class="col-6 col-md-3">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body text-center">
-                <div class="text-muted small">Files</div>
-                <div class="fs-4 fw-bold"><?= number_format($archive['file_count'] ?: $totalFiles) ?></div>
+            <div class="col-6 col-md-3">
+                <div class="d-flex align-items-center p-2 rounded bg-body-secondary">
+                    <div class="stat-icon-sm bg-success bg-opacity-10 text-success rounded-2 p-2 me-2">
+                        <i class="bi bi-percent"></i>
+                    </div>
+                    <div>
+                        <div class="fw-bold"><?= $savings ?>%</div>
+                        <div class="text-muted" style="font-size: 0.7rem;">Dedup Savings</div>
+                    </div>
+                </div>
             </div>
-        </div>
-    </div>
-    <div class="col-6 col-md-3">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body text-center">
-                <div class="text-muted small">Original Size</div>
-                <div class="fs-4 fw-bold"><?= fmtSize($archive['original_size']) ?></div>
-            </div>
-        </div>
-    </div>
-    <div class="col-6 col-md-3">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body text-center">
-                <div class="text-muted small">Dedup Size</div>
-                <div class="fs-4 fw-bold"><?= fmtSize($archive['deduplicated_size']) ?></div>
-            </div>
-        </div>
-    </div>
-    <div class="col-6 col-md-3">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body text-center">
-                <div class="text-muted small">Dedup Savings</div>
-                <div class="fs-4 fw-bold">
-                    <?php
-                    $savings = $archive['original_size'] > 0
-                        ? round((1 - $archive['deduplicated_size'] / $archive['original_size']) * 100, 1)
-                        : 0;
-                    ?>
-                    <?= $savings ?>%
+            <div class="col-6 col-md-3">
+                <div class="d-flex align-items-center p-2 rounded bg-body-secondary">
+                    <div class="stat-icon-sm bg-warning bg-opacity-10 text-warning rounded-2 p-2 me-2">
+                        <i class="bi bi-clock-history"></i>
+                    </div>
+                    <div>
+                        <div class="fw-bold"><?= \BBS\Core\TimeHelper::format($archive['created_at'], 'M j, Y g:i A') ?></div>
+                        <div class="text-muted" style="font-size: 0.7rem;">Created<?= $durLabel !== '--' ? ' · ' . htmlspecialchars($durLabel) : '' ?></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -126,7 +144,7 @@ foreach ($statusBreakdown as $row) {
 </div>
 
 <?php if ($clickhouseAvailable && !empty($statusBreakdown)): ?>
-<!-- File Changes -->
+<!-- File Changes + Largest Files -->
 <div class="row g-3 mb-4">
     <div class="col-lg-4">
         <div class="card border-0 shadow-sm h-100">
@@ -135,7 +153,6 @@ foreach ($statusBreakdown as $row) {
             </div>
             <div class="card-body">
                 <?php if ($totalFiles > 0): ?>
-                <!-- Progress bar visualization (files only, no dirs/symlinks) -->
                 <div class="progress mb-3" style="height: 24px;">
                     <?php foreach ($fileRows as $row):
                         $pct = round(((int) $row['cnt'] / $totalFiles) * 100, 1);
@@ -148,7 +165,7 @@ foreach ($statusBreakdown as $row) {
                 <?php endif; ?>
 
                 <table class="table table-sm small mb-0">
-                    <thead class="table-light">
+                    <thead>
                         <tr>
                             <th>Status</th>
                             <th class="text-end">Files</th>
@@ -173,19 +190,19 @@ foreach ($statusBreakdown as $row) {
                         </tr>
                         <?php endif; ?>
                         <?php if (!empty($otherRows)): ?>
-                        <tr><td colspan="3" class="text-muted pt-2" style="border:none;">Other Entries</td></tr>
+                        <tr><td colspan="3" class="text-muted small pt-3 border-0">Other Entries</td></tr>
                         <?php foreach ($otherRows as $row):
                             [$label, $color] = $statusLabels[$row['status']] ?? [$row['status'], 'secondary'];
                         ?>
                         <tr>
-                            <td><span class="badge bg-<?= $color ?> text-dark"><?= $label ?></span></td>
+                            <td><span class="badge bg-<?= $color ?>"><?= $label ?></span></td>
                             <td class="text-end text-muted"><?= number_format($row['cnt']) ?></td>
                             <td class="text-end text-muted">--</td>
                         </tr>
                         <?php endforeach; ?>
                         <?php endif; ?>
                     </tbody>
-                    <tfoot class="table-light">
+                    <tfoot class="border-top">
                         <tr>
                             <td class="fw-semibold">Total</td>
                             <td class="text-end fw-semibold"><?= number_format($totalFiles) ?></td>
@@ -205,11 +222,11 @@ foreach ($statusBreakdown as $row) {
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-sm small mb-0">
-                        <thead class="table-light">
+                        <thead>
                             <tr>
                                 <th>File</th>
-                                <th class="text-end">Size</th>
-                                <th>Status</th>
+                                <th class="text-end" style="width: 100px;">Size</th>
+                                <th style="width: 90px;">Status</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -217,7 +234,7 @@ foreach ($statusBreakdown as $row) {
                                 [$label, $color] = $statusLabels[$f['status']] ?? [$f['status'], 'secondary'];
                             ?>
                             <tr>
-                                <td style="max-width: 400px; word-break: break-all;" title="<?= htmlspecialchars($f['path']) ?>">
+                                <td style="word-break: break-all;" title="<?= htmlspecialchars($f['path']) ?>">
                                     <span class="small"><?= htmlspecialchars($f['path']) ?></span>
                                 </td>
                                 <td class="text-end text-nowrap"><?= fmtSize($f['file_size']) ?></td>
@@ -259,11 +276,11 @@ foreach ($statusBreakdown as $row) {
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-sm table-hover small mb-0">
-                <thead class="table-light">
+                <thead>
                     <tr>
                         <th>Path</th>
                         <th class="text-end" style="width:100px;">Size</th>
-                        <th style="width:80px;">Status</th>
+                        <th style="width:90px;">Status</th>
                     </tr>
                 </thead>
                 <tbody id="fileBrowserBody">
@@ -298,13 +315,12 @@ foreach ($statusBreakdown as $row) {
         'M': ['Modified', 'warning'],
         'C': ['Metadata Changed', 'info'],
         'U': ['Unchanged', 'secondary'],
-        'D': ['Directory', 'light'],
-        'S': ['Symlink', 'light'],
-        'H': ['Hardlink', 'light'],
+        'D': ['Directory', 'body-secondary'],
+        'S': ['Symlink', 'body-secondary'],
+        'H': ['Hardlink', 'body-secondary'],
         'deleted': ['Deleted', 'danger']
     };
 
-    // Set tab counts from the status breakdown data
     <?php foreach ($statusBreakdown as $row): ?>
     <?php if (!in_array($row['status'], $nonFileStatuses)): ?>
     var el = document.getElementById('tab-count-<?= $row['status'] ?>');
@@ -367,7 +383,6 @@ foreach ($statusBreakdown as $row) {
             });
     }
 
-    // Tab clicks
     document.getElementById('fileBrowserTabs').addEventListener('click', function(e) {
         var link = e.target.closest('a[data-status]');
         if (!link) return;
@@ -379,7 +394,6 @@ foreach ($statusBreakdown as $row) {
         loadFiles();
     });
 
-    // Search
     document.getElementById('fileBrowserSearch').addEventListener('input', function() {
         clearTimeout(searchTimeout);
         var val = this.value;
@@ -390,7 +404,6 @@ foreach ($statusBreakdown as $row) {
         }, 300);
     });
 
-    // Pagination
     document.getElementById('fileBrowserPrev').addEventListener('click', function() {
         if (currentPage > 1) { currentPage--; loadFiles(); }
     });
@@ -398,7 +411,6 @@ foreach ($statusBreakdown as $row) {
         currentPage++; loadFiles();
     });
 
-    // Initial load
     loadFiles();
 })();
 </script>
@@ -413,25 +425,10 @@ foreach ($statusBreakdown as $row) {
 </div>
 <?php endif; ?>
 
-<?php if (!empty($jobInfo['directories'])): ?>
-<!-- Backup Directories -->
+<?php if ($hasDatabases && $dbInfo && !empty($dbInfo['databases'])): ?>
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-header bg-body fw-semibold">
-        <i class="bi bi-folder me-1"></i> Backup Directories
-    </div>
-    <div class="card-body">
-        <code class="small"><?= nl2br(htmlspecialchars($jobInfo['directories'])) ?></code>
-    </div>
-</div>
-<?php endif; ?>
-
-<?php if (!empty($archive['databases_backed_up'])): ?>
-<!-- Database Backups -->
-<?php $dbInfo = json_decode($archive['databases_backed_up'], true); ?>
-<?php if ($dbInfo && !empty($dbInfo['databases'])): ?>
-<div class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-body fw-semibold">
-        <i class="bi bi-database me-1 text-info"></i> Database Backups
+        <i class="bi bi-database text-info me-1"></i> Database Backups
     </div>
     <div class="card-body">
         <?php foreach ($dbInfo['databases'] as $db): ?>
@@ -440,4 +437,14 @@ foreach ($statusBreakdown as $row) {
     </div>
 </div>
 <?php endif; ?>
+
+<?php if (!empty($jobInfo['directories'])): ?>
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-body fw-semibold">
+        <i class="bi bi-folder me-1"></i> Backup Directories
+    </div>
+    <div class="card-body">
+        <code class="small"><?= nl2br(htmlspecialchars($jobInfo['directories'])) ?></code>
+    </div>
+</div>
 <?php endif; ?>
