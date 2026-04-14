@@ -277,10 +277,30 @@ class UpdateService
 
         // Check for completion marker
         $completed = str_contains($log, '=== Update complete ===');
-        $failed = !$processRunning && !$completed && !empty($log);
 
-        if ($completed || $failed) {
-            $resultStr = $completed ? 'success' : 'failed';
+        // Fallback success detection: PHP-FPM restart during the update can drop
+        // the final "=== Update complete ===" line. If the process exited AND
+        // we reached the final step marker (N/N) AND there are no obvious error
+        // indicators, treat as success. The upgrade work is already finished by
+        // that point — only the echo line got eaten.
+        $fallbackSuccess = false;
+        if (!$completed && !$processRunning && !empty($log)
+            && preg_match('/\[(\d+)\/(\d+)\]/', $log, $stepMatch)) {
+            // Find the last step number seen and compare to the total
+            if (preg_match_all('/\[(\d+)\/(\d+)\]/', $log, $allSteps)) {
+                $lastStepNum = (int) end($allSteps[1]);
+                $totalSteps = (int) end($allSteps[2]);
+                if ($lastStepNum === $totalSteps
+                    && !preg_match('/^(error|fatal|exception)/mi', $log)) {
+                    $fallbackSuccess = true;
+                }
+            }
+        }
+
+        $failed = !$processRunning && !$completed && !$fallbackSuccess && !empty($log);
+
+        if ($completed || $fallbackSuccess || $failed) {
+            $resultStr = ($completed || $fallbackSuccess) ? 'success' : 'failed';
             $now = date('Y-m-d H:i:s');
 
             $this->setSetting('upgrade_in_progress', '0');
@@ -291,7 +311,7 @@ class UpdateService
 
             return [
                 'in_progress' => false,
-                'progress' => $completed ? 100 : $progress,
+                'progress' => ($completed || $fallbackSuccess) ? 100 : $progress,
                 'log' => $log,
                 'last_line' => $this->extractLastMeaningfulLine($log),
                 'result' => $resultStr,
