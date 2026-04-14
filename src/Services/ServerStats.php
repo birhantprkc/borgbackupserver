@@ -362,18 +362,20 @@ class ServerStats
             $ch = \BBS\Core\ClickHouse::getInstance();
             if (!$ch->isAvailable()) return null;
 
-            // Aggregate stats from file_catalog
-            $totals = $ch->fetchOne("
-                SELECT count() AS total_rows,
-                       uniqExact(agent_id) AS agent_count,
-                       uniqExact(archive_id) AS archive_count
-                FROM file_catalog
+            // Total row count from system.parts (sum of rows across active parts)
+            // — avoids a full-table scan. With hundreds of millions of rows,
+            // uniqExact() on the whole file_catalog pegs ClickHouse at 100% CPU.
+            $rowsRow = $ch->fetchOne("
+                SELECT sum(rows) AS total_rows
+                FROM system.parts
+                WHERE database = 'bbs' AND table = 'file_catalog' AND active = 1
             ");
-            if (!$totals) return null;
+            $totalRows = (int) ($rowsRow['total_rows'] ?? 0);
 
-            $totalRows = (int) ($totals['total_rows'] ?? 0);
-            $agentCount = (int) ($totals['agent_count'] ?? 0);
-            $archiveCount = (int) ($totals['archive_count'] ?? 0);
+            // Agent/archive counts come from MySQL (authoritative and cheap)
+            $db = \BBS\Core\Database::getInstance();
+            $agentCount = (int) ($db->fetchOne("SELECT COUNT(DISTINCT a.id) AS cnt FROM agents a JOIN repositories r ON r.agent_id = a.id JOIN archives ar ON ar.repository_id = r.id")['cnt'] ?? 0);
+            $archiveCount = (int) ($db->fetchOne("SELECT COUNT(*) AS cnt FROM archives")['cnt'] ?? 0);
             $avgPerArchive = $archiveCount > 0 ? round($totalRows / $archiveCount) : 0;
 
             // Disk usage from system.parts (active parts only)
@@ -398,19 +400,18 @@ class ServerStats
                 ORDER BY rows DESC
             ");
 
-            // Get archive counts per agent from ClickHouse
-            $archivesPerAgent = $ch->fetchAll("
-                SELECT agent_id, uniqExact(archive_id) AS archives
-                FROM file_catalog
-                GROUP BY agent_id
+            // Get archive counts per agent from MySQL — same data, zero scan cost
+            $archivesPerAgent = $db->fetchAll("
+                SELECT r.agent_id, COUNT(ar.id) AS archives
+                FROM archives ar
+                JOIN repositories r ON r.id = ar.repository_id
+                GROUP BY r.agent_id
             ");
             $archiveMap = [];
             foreach ($archivesPerAgent as $a) {
                 $archiveMap[(int) $a['agent_id']] = (int) $a['archives'];
             }
 
-            // Get agent names from MySQL
-            $db = \BBS\Core\Database::getInstance();
             $agentIds = array_map(fn($r) => (int) $r['agent_id'], $perAgent);
             $agentNames = [];
             if (!empty($agentIds)) {
