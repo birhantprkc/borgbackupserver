@@ -73,10 +73,11 @@ function bbs_histogram_ticks(int $max): array
 <style>
 .hist-container {
     position: relative;
-    height: 160px;
+    height: 170px;
     display: grid;
     column-gap: 1px;
     align-items: end;
+    padding-bottom: 4px;
 }
 .hist-gridlines {
     position: absolute;
@@ -132,17 +133,25 @@ function bbs_histogram_ticks(int $max): array
     transform: scaleX(1.4);
     z-index: 5;
 }
-.hist-hour-label {
+.hist-xaxis {
     position: absolute;
+    left: 56px;
+    right: 0;
     bottom: 0;
-    left: -50%;
-    right: -50%;
-    text-align: center;
+    height: 16px;
+    pointer-events: none;
+}
+.hist-xaxis .xl {
+    position: absolute;
+    transform: translateX(-50%);
     font-size: 0.62rem;
     color: var(--bs-secondary-color);
     white-space: nowrap;
+    line-height: 1;
 }
-.hist-hour-label.major { font-weight: 600; color: var(--bs-body-color); }
+.hist-xaxis .xl.major { font-weight: 600; color: var(--bs-body-color); }
+.hist-xaxis .xl.edge-left { transform: translateX(0); }
+.hist-xaxis .xl.edge-right { transform: translateX(-100%); }
 .hist-yaxis {
     position: relative;
     font-size: 0.65rem;
@@ -213,6 +222,8 @@ function bbs_histogram_ticks(int $max): array
     padding: 2px 0;
     background: var(--bs-body-bg);
 }
+.day-hours .hour-label.edge-top { transform: translateY(0); }
+.day-hours .hour-label.edge-bottom { transform: translateY(-100%); }
 .day-col {
     position: relative;
     border-left: 1px solid var(--bs-border-color);
@@ -447,10 +458,6 @@ function bbs_histogram_ticks(int $max): array
                     $total = $bar['total'];
                     $barHeightPct = $histMax > 0 ? ($total / $histMax) * 100 : 0;
                     $hour = (int) ($b / 2);
-                    $isTopOfHour = ($b % 2) === 0;
-                    $isXLabeled = $isTopOfHour && ($hour % $xLabelStep === 0);
-                    $isMajor = $isTopOfHour && ($hour % 6 === 0);
-                    $label = $isXLabeled ? $formatHourLabel($hour) : '';
                     $minOffset = ($b % 2) * 30;
                 ?>
                 <div class="hist-bar-wrap" data-bucket="<?= $b ?>" data-minute="<?= $hour * 60 + $minOffset ?>">
@@ -466,11 +473,25 @@ function bbs_histogram_ticks(int $max): array
                              style="background: <?= bbs_agent_color((int) $sch['agent_id']) ?>;"></div>
                         <?php endforeach; ?>
                     </div>
-                    <?php if ($isXLabeled): ?>
-                    <div class="hist-hour-label <?= $isMajor ? 'major' : '' ?>"><?= $label ?></div>
-                    <?php endif; ?>
                 </div>
                 <?php endfor; ?>
+
+                <!-- Dedicated x-axis row below bars, spans the full bar area
+                     so edge labels can be aligned flush without clipping. -->
+                <div class="hist-xaxis">
+                    <?php for ($h = 0; $h <= 24; $h += $xLabelStep): ?>
+                        <?php
+                        $leftPct = ($h / 24) * 100;
+                        $isMajor = $h % 6 === 0;
+                        $edge = $h === 0 ? 'edge-left' : ($h === 24 ? 'edge-right' : '');
+                        $label = $formatHourLabel($h === 24 ? 23 : $h);
+                        // Skip 24 label if it overlaps with last major (23)
+                        if ($h === 24) continue;
+                        ?>
+                        <span class="xl <?= $isMajor ? 'major' : '' ?> <?= $edge ?>"
+                              style="left: <?= $leftPct ?>%;"><?= $label ?></span>
+                    <?php endfor; ?>
+                </div>
             </div>
             <?php endfor; ?>
         </div>
@@ -486,7 +507,7 @@ function bbs_histogram_ticks(int $max): array
             <div class="day-timeline">
                 <div class="day-hours" style="height: <?= $gridHeight ?>px;">
                     <?php for ($h = 0; $h < 24; $h++): ?>
-                    <div class="hour-label" style="top: <?= $h * $pxPerHour ?>px;">
+                    <div class="hour-label <?= $h === 0 ? 'edge-top' : ($h === 23 ? 'edge-bottom' : '') ?>" style="top: <?= $h * $pxPerHour ?>px;">
                         <?= $formatHourLabel($h) ?>
                     </div>
                     <?php endfor; ?>
