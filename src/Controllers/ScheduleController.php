@@ -309,11 +309,10 @@ class ScheduleController extends Controller
             $shownAgents[(int) $o['agent_id']] = $o['agent_name'];
         }
 
-        // Per-day histograms with 30-minute buckets (48 per day). Hour-level
-        // granularity merged 6:00 and 6:30 schedules into the same bar,
-        // making them indistinguishable visually.
-        $histBucketMin = 30;
-        $histBucketCount = 1440 / $histBucketMin; // 48
+        // Per-day histograms with 60-minute buckets. The day-view timeline
+        // handles 30-minute resolution where it actually matters.
+        $histBucketMin = 60;
+        $histBucketCount = 1440 / $histBucketMin; // 24
         $histograms = [];
         for ($d = 0; $d < 7; $d++) {
             $histograms[$d] = [];

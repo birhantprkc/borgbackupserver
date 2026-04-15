@@ -224,6 +224,16 @@ function bbs_histogram_ticks(int $max): array
 }
 .day-hours .hour-label.edge-top { transform: translateY(0); }
 .day-hours .hour-label.edge-bottom { transform: translateY(-100%); }
+.day-hours .hour-label.half {
+    font-size: 0.65rem;
+    opacity: 0.55;
+}
+.day-col .hour-line.half {
+    opacity: 0.2;
+    border-top: 1px dashed var(--bs-border-color);
+    background: transparent;
+    height: 0;
+}
 .day-col {
     position: relative;
     border-left: 1px solid var(--bs-border-color);
@@ -476,10 +486,9 @@ function bbs_histogram_ticks(int $max): array
                     $bar = $histograms[$dIdx][$b];
                     $total = $bar['total'];
                     $barHeightPct = $histMax > 0 ? ($total / $histMax) * 100 : 0;
-                    $hour = (int) ($b / 2);
-                    $minOffset = ($b % 2) * 30;
+                    $hour = $b; // 60-minute buckets — bucket index equals hour
                 ?>
-                <div class="hist-bar-wrap" data-bucket="<?= $b ?>" data-minute="<?= $hour * 60 + $minOffset ?>">
+                <div class="hist-bar-wrap" data-bucket="<?= $b ?>" data-minute="<?= $hour * 60 ?>">
                     <div class="hist-bar" style="height: <?= $barHeightPct ?>%;">
                         <?php foreach ($bar['schedules'] as $sch): ?>
                         <div class="hist-seg"
@@ -527,14 +536,27 @@ function bbs_histogram_ticks(int $max): array
             <div class="day-timeline">
                 <div class="day-hours" style="height: <?= $gridHeight ?>px;">
                     <?php for ($h = 0; $h < 24; $h++): ?>
-                    <div class="hour-label <?= $h === 0 ? 'edge-top' : ($h === 23 ? 'edge-bottom' : '') ?>" style="top: <?= $h * $pxPerHour ?>px;">
+                    <div class="hour-label <?= $h === 0 ? 'edge-top' : '' ?>" style="top: <?= $h * $pxPerHour ?>px;">
                         <?= $formatHourLabel($h) ?>
+                    </div>
+                    <div class="hour-label half <?= $h === 23 ? 'edge-bottom' : '' ?>" style="top: <?= $h * $pxPerHour + $pxPerHour / 2 ?>px;">
+                        <?php
+                            if ($is24h) {
+                                echo sprintf('%02d:30', $h);
+                            } else {
+                                $suffix = $h < 12 ? 'AM' : 'PM';
+                                $h12 = $h % 12;
+                                if ($h12 === 0) $h12 = 12;
+                                echo "{$h12}:30 {$suffix}";
+                            }
+                        ?>
                     </div>
                     <?php endfor; ?>
                 </div>
                 <div class="day-col" id="day-col" style="height: <?= $gridHeight ?>px;">
                     <?php for ($h = 0; $h < 24; $h++): ?>
                     <div class="hour-line <?= $h % 6 === 0 ? 'major' : '' ?>" style="top: <?= $h * $pxPerHour ?>px;"></div>
+                    <div class="hour-line half" style="top: <?= $h * $pxPerHour + $pxPerHour / 2 ?>px;"></div>
                     <?php endfor; ?>
 
                     <?php for ($dIdx = 0; $dIdx < 7; $dIdx++): ?>
