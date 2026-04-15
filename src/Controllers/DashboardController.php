@@ -20,6 +20,141 @@ class DashboardController extends Controller
     }
 
     /**
+     * Preview of a redesigned dashboard — #146. Rendered at /v2 so it can be
+     * iterated on before replacing the default view. Reuses the same fast+slow
+     * data methods and layers on a storage-location-per-card layout plus
+     * version/host info.
+     */
+    public function v2(): void
+    {
+        $this->requireAuth();
+
+        $data = $this->getDashboardData();
+        $data = array_merge($data, $this->getSlowStats());
+        $data = array_merge($data, $this->getV2Extras());
+        $data['pageTitle'] = 'Dashboard';
+        $data['isV2'] = true;
+
+        $this->view('dashboard/v2', $data);
+    }
+
+    /** Data unique to the v2 dashboard — per-location storage, server identity, global totals. */
+    private function getV2Extras(): array
+    {
+        // --- Storage locations: per-location df + repo/archive counts ---
+        $locations = $this->db->fetchAll("
+            SELECT sl.id, sl.label, sl.path, sl.is_default,
+                   (SELECT COUNT(*) FROM repositories r
+                     WHERE (r.storage_location_id = sl.id)
+                        OR (sl.is_default = 1 AND r.storage_location_id IS NULL
+                            AND (r.storage_type = 'local' OR r.storage_type IS NULL))) AS repo_count,
+                   (SELECT COALESCE(SUM(size_bytes), 0) FROM repositories r
+                     WHERE (r.storage_location_id = sl.id)
+                        OR (sl.is_default = 1 AND r.storage_location_id IS NULL
+                            AND (r.storage_type = 'local' OR r.storage_type IS NULL))) AS repo_bytes
+            FROM storage_locations sl
+            ORDER BY sl.is_default DESC, sl.label
+        ");
+        $storageLocations = [];
+        foreach ($locations as $loc) {
+            $disk = ServerStats::getDiskUsage($loc['path']);
+            $storageLocations[] = [
+                'kind' => 'local',
+                'id' => (int) $loc['id'],
+                'label' => $loc['label'] ?: $loc['path'],
+                'path' => $loc['path'],
+                'is_default' => (bool) $loc['is_default'],
+                'repo_count' => (int) $loc['repo_count'],
+                'repo_bytes' => (int) $loc['repo_bytes'],
+                'disk_total' => $disk['total'] ?? null,
+                'disk_used' => $disk['used'] ?? null,
+                'disk_free' => $disk['free'] ?? null,
+                'disk_percent' => $disk['percent'] ?? null,
+            ];
+        }
+
+        // --- Remote SSH storage ---
+        $remotes = $this->db->fetchAll("
+            SELECT id, name, remote_host, remote_user, disk_total_bytes, disk_used_bytes, disk_free_bytes, disk_checked_at,
+                   (SELECT COUNT(*) FROM repositories r WHERE r.remote_ssh_config_id = remote_ssh_configs.id) AS repo_count,
+                   (SELECT COALESCE(SUM(size_bytes), 0) FROM repositories r WHERE r.remote_ssh_config_id = remote_ssh_configs.id) AS repo_bytes
+            FROM remote_ssh_configs
+            ORDER BY name
+        ");
+        foreach ($remotes as $rc) {
+            $total = $rc['disk_total_bytes'] !== null ? (int) $rc['disk_total_bytes'] : null;
+            $used  = $rc['disk_used_bytes']  !== null ? (int) $rc['disk_used_bytes']  : null;
+            $free  = $rc['disk_free_bytes']  !== null ? (int) $rc['disk_free_bytes']  : null;
+            $pct   = ($total && $used !== null) ? round(($used / $total) * 100, 1) : null;
+            $storageLocations[] = [
+                'kind' => 'remote',
+                'id' => (int) $rc['id'],
+                'label' => $rc['name'],
+                'path' => $rc['remote_user'] . '@' . $rc['remote_host'],
+                'is_default' => false,
+                'repo_count' => (int) $rc['repo_count'],
+                'repo_bytes' => (int) $rc['repo_bytes'],
+                'disk_total' => $total,
+                'disk_used' => $used,
+                'disk_free' => $free,
+                'disk_percent' => $pct,
+            ];
+        }
+
+        // --- Global totals (for the summary tile) ---
+        [$agentWhere, $agentParams] = $this->getAgentWhereClause('a');
+        $archiveCountRow = $this->db->fetchOne("
+            SELECT COUNT(*) AS c
+            FROM archives ar
+            JOIN repositories r ON r.id = ar.repository_id
+            JOIN agents a ON a.id = r.agent_id
+            WHERE {$agentWhere}
+        ", $agentParams);
+        $dedupRow = $this->db->fetchOne("
+            SELECT COALESCE(SUM(ar.original_size), 0) AS orig,
+                   COALESCE(SUM(ar.deduplicated_size), 0) AS dedup
+            FROM archives ar
+            JOIN repositories r ON r.id = ar.repository_id
+            JOIN agents a ON a.id = r.agent_id
+            WHERE {$agentWhere}
+        ", $agentParams);
+        $lastBackup = $this->db->fetchOne("
+            SELECT bj.completed_at, a.name AS agent_name
+            FROM backup_jobs bj
+            JOIN agents a ON a.id = bj.agent_id
+            WHERE bj.task_type = 'backup' AND bj.status = 'completed' AND {$agentWhere}
+            ORDER BY bj.completed_at DESC LIMIT 1
+        ", $agentParams);
+
+        // --- Server identity ---
+        $bbsVersion = (new \BBS\Services\UpdateService())->getCurrentVersion();
+        $osName = 'Linux';
+        if (is_readable('/etc/os-release')) {
+            $info = @parse_ini_file('/etc/os-release');
+            if ($info && !empty($info['PRETTY_NAME'])) $osName = $info['PRETTY_NAME'];
+        }
+        $uptimeSec = null;
+        if (is_readable('/proc/uptime')) {
+            $u = @file_get_contents('/proc/uptime');
+            if ($u) $uptimeSec = (int) explode(' ', trim($u))[0];
+        }
+        $hostnameSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
+        $serverHost = $hostnameSetting['value'] ?? gethostname();
+
+        return [
+            'storageLocations' => $storageLocations,
+            'totalArchiveCount' => (int) ($archiveCountRow['c'] ?? 0),
+            'totalOriginalBytes' => (int) ($dedupRow['orig'] ?? 0),
+            'totalDedupBytes' => (int) ($dedupRow['dedup'] ?? 0),
+            'lastBackup' => $lastBackup ?: null,
+            'bbsVersion' => $bbsVersion,
+            'osName' => $osName,
+            'uptimeSec' => $uptimeSec,
+            'serverHost' => $serverHost,
+        ];
+    }
+
+    /**
      * GET /dashboard/json — AJAX endpoint for live refresh (fast, no ClickHouse).
      */
     public function apiJson(): void

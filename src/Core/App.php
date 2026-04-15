@@ -87,6 +87,7 @@ class App
 
         // Dashboard
         $this->router->map('GET', '/', 'DashboardController@index');
+        $this->router->map('GET', '/v2', 'DashboardController@v2');
         $this->router->map('GET', '/dashboard', 'DashboardController@index');
         $this->router->map('GET', '/dashboard/json', 'DashboardController@apiJson');
         $this->router->map('GET', '/dashboard/stats-json', 'DashboardController@apiStatsJson');
