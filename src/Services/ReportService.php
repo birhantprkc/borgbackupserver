@@ -398,8 +398,8 @@ class ReportService
             HTML;
         }
 
-        // Remote storage section
-        if (!empty($data['remote_storage'])) {
+        // Remote storage section — admin-only infrastructure detail
+        if ($isAdmin && !empty($data['remote_storage'])) {
             $html .= '<div style="padding:0 24px 16px;">';
             $html .= '<h3 style="font-size:16px;margin:0 0 12px 0;color:#333;">Remote Storage</h3>';
             $html .= '<table style="font-size:13px;border-collapse:collapse;">';
