@@ -28,20 +28,28 @@ $dedupSavingsPct = $totalOriginalBytes > 0
 
 <style>
 .v2 .metric-tile {
-    background: var(--bs-body-bg);
     border: 1px solid var(--bs-border-color);
     border-radius: 10px;
     padding: 14px 16px;
     transition: border-color 0.12s, transform 0.12s;
 }
-.v2 a.metric-tile:hover { border-color: var(--bs-primary); transform: translateY(-1px); }
+.v2 a.metric-tile:hover { transform: translateY(-1px); filter: brightness(1.1); }
 .v2 .metric-tile .value { font-size: 1.75rem; font-weight: 700; line-height: 1.1; }
 .v2 .metric-tile .label { font-size: 0.75rem; color: var(--bs-secondary-color); text-transform: uppercase; letter-spacing: 0.04em; }
 .v2 .metric-tile .sub { font-size: 0.8rem; color: var(--bs-secondary-color); margin-top: 2px; }
-.v2 .metric-tile.danger .value { color: var(--bs-danger); }
-.v2 .metric-tile.warning .value { color: var(--bs-warning); }
-.v2 .metric-tile.success .value { color: var(--bs-success); }
+/* Colored tile backgrounds matching the original dashboard */
+.v2 .metric-tile.primary { background-color: rgba(13,110,253,0.05); border-color: rgba(13,110,253,0.2); }
 .v2 .metric-tile.primary .value { color: var(--bs-primary); }
+.v2 .metric-tile.success { background-color: rgba(25,135,84,0.05); border-color: rgba(25,135,84,0.2); }
+.v2 .metric-tile.success .value { color: var(--bs-success); }
+.v2 .metric-tile.warning { background-color: rgba(255,193,7,0.05); border-color: rgba(255,193,7,0.2); }
+.v2 .metric-tile.warning .value { color: var(--bs-warning); }
+.v2 .metric-tile.danger { background-color: rgba(220,53,69,0.05); border-color: rgba(220,53,69,0.2); }
+.v2 .metric-tile.danger .value { color: var(--bs-danger); }
+[data-bs-theme="dark"] .v2 .metric-tile.primary { background-color: rgba(13,110,253,0.08); }
+[data-bs-theme="dark"] .v2 .metric-tile.success { background-color: rgba(25,135,84,0.08); }
+[data-bs-theme="dark"] .v2 .metric-tile.warning { background-color: rgba(255,193,7,0.08); }
+[data-bs-theme="dark"] .v2 .metric-tile.danger { background-color: rgba(220,53,69,0.08); }
 
 .v2 .card-head-gradient {
     background: linear-gradient(135deg, #1e293b 0%, #243a6b 50%, #2b4d8c 100%);
@@ -136,7 +144,7 @@ $dedupSavingsPct = $totalOriginalBytes > 0
             </a>
         </div>
         <div class="col-xl-3 col-md-6">
-            <a href="#recovery-points" class="text-decoration-none metric-tile primary d-block">
+            <a href="#recovery-points" class="text-decoration-none metric-tile warning d-block">
                 <div class="label"><i class="bi bi-archive me-1"></i>Recovery Points</div>
                 <div class="value"><?= $compact($totalArchiveCount) ?></div>
                 <div class="sub"><?= ServerStats::formatBytes($totalDedupBytes) ?> protected</div>
