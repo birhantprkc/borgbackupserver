@@ -73,8 +73,10 @@
             <div class="card-header bg-body fw-semibold">
                 <i class="bi bi-bar-chart me-1"></i> Jobs (24h)
             </div>
-            <div class="card-body py-2">
-                <canvas id="backupsChart" height="160"></canvas>
+            <div class="card-body py-2 d-flex">
+                <div style="position: relative; width: 100%; min-height: 200px;">
+                    <canvas id="backupsChart"></canvas>
+                </div>
             </div>
         </div>
     </div>
