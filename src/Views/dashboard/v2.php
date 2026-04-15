@@ -379,10 +379,10 @@ $dedupSavingsPct = $totalOriginalBytes > 0
                     <i class="bi bi-database me-1"></i>MySQL
                 </div>
                 <div class="card-body py-2">
-                    <div class="mini-stat"><span class="k">Queries / sec</span><span class="v"><?= $mysqlStats['qps'] ?></span></div>
-                    <div class="mini-stat"><span class="k">Connections</span><span class="v"><?= $mysqlStats['threads_connected'] ?></span></div>
-                    <div class="mini-stat"><span class="k">Buffer pool hit rate</span><span class="v"><?= $mysqlStats['hit_rate'] ?>%</span></div>
-                    <div class="mini-stat"><span class="k">Slow queries</span><span class="v"><?= $compact((int) $mysqlStats['slow_queries']) ?></span></div>
+                    <div class="mini-stat"><span class="k">Queries / sec</span><span class="v"><?= $mysqlStats['qps'] ?? 0 ?></span></div>
+                    <div class="mini-stat"><span class="k">Connections</span><span class="v"><?= $mysqlStats['threads_connected'] ?? 0 ?></span></div>
+                    <div class="mini-stat"><span class="k">Buffer pool hit rate</span><span class="v"><?= $mysqlStats['hit_rate'] ?? 0 ?>%</span></div>
+                    <div class="mini-stat"><span class="k">Slow queries</span><span class="v"><?= $compact((int) ($mysqlStats['slow_queries'] ?? 0)) ?></span></div>
                 </div>
             </div>
         </div>
@@ -394,10 +394,10 @@ $dedupSavingsPct = $totalOriginalBytes > 0
                     <i class="bi bi-list-columns-reverse me-1"></i>File Catalog
                 </div>
                 <div class="card-body py-2">
-                    <div class="mini-stat"><span class="k">Files indexed</span><span class="v"><?= $compact((int) $clickhouseStats['catalog_files']) ?></span></div>
-                    <div class="mini-stat"><span class="k">Index size</span><span class="v"><?= ServerStats::formatBytes((int) $clickhouseStats['disk_bytes']) ?></span></div>
-                    <div class="mini-stat"><span class="k">Compression ratio</span><span class="v"><?= $clickhouseStats['compression_ratio'] ?>×</span></div>
-                    <div class="mini-stat"><span class="k">Indexed clients</span><span class="v"><?= (int) $clickhouseStats['agent_count'] ?></span></div>
+                    <div class="mini-stat"><span class="k">Catalog rows</span><span class="v"><?= $compact((int) ($clickhouseStats['total_rows'] ?? 0)) ?></span></div>
+                    <div class="mini-stat"><span class="k">Index size</span><span class="v"><?= ServerStats::formatBytes((int) ($clickhouseStats['disk_bytes'] ?? 0)) ?></span></div>
+                    <div class="mini-stat"><span class="k">Compression ratio</span><span class="v"><?= $clickhouseStats['compression_ratio'] ?? 0 ?>×</span></div>
+                    <div class="mini-stat"><span class="k">Indexed clients</span><span class="v"><?= (int) ($clickhouseStats['agent_count'] ?? 0) ?></span></div>
                 </div>
             </div>
         </div>
