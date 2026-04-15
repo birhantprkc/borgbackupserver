@@ -6,7 +6,7 @@ $gridHeight = 24 * $pxPerHour;
 // A block is at least $minBlockPx tall so its text is readable. For the
 // lane algorithm we need to reserve at least this many minutes of vertical
 // space so short back-to-back blocks don't visually overlap.
-$minBlockPx = 28;
+$minBlockPx = 36;
 $minBlockMin = max(1, (int) ceil($minBlockPx * 60 / $pxPerHour));
 
 // Group blocks by day so we can render just one day at a time, and compute
@@ -224,8 +224,8 @@ foreach ($histogram as $h) {
 }
 .day-block .agent {
     font-weight: 600;
-    font-size: 0.9rem;
-    line-height: 1.2;
+    font-size: 0.78rem;
+    line-height: 1.15;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -237,13 +237,13 @@ foreach ($histogram as $h) {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
+    justify-content: center;
     text-align: right;
-    font-size: 0.62rem;
-    line-height: 1.15;
-    opacity: 0.9;
+    line-height: 1.1;
     flex: 0 0 auto;
-    max-width: 55%;
+    max-width: 60%;
     min-width: 0;
+    gap: 1px;
 }
 .day-block .side > div {
     white-space: nowrap;
@@ -251,9 +251,8 @@ foreach ($histogram as $h) {
     text-overflow: ellipsis;
     max-width: 100%;
 }
-.day-block .side .plan { font-weight: 500; font-size: 0.65rem; }
-.day-block .side .time { opacity: 0.85; }
-.day-block .side .dur { opacity: 0.75; }
+.day-block .side .plan { font-weight: 500; font-size: 0.62rem; opacity: 0.95; }
+.day-block .side .when { font-size: 0.6rem; opacity: 0.8; font-variant-numeric: tabular-nums; }
 .dim {
     opacity: 0.12 !important;
     pointer-events: none;
@@ -388,12 +387,7 @@ foreach ($histogram as $h) {
                             <div class="agent"><?= htmlspecialchars($b['agent_name']) ?></div>
                             <div class="side">
                                 <div class="plan"><?= htmlspecialchars($b['plan_name']) ?></div>
-                                <?php if ($height >= 38): ?>
-                                <div class="time"><?= htmlspecialchars($b['time_label']) ?></div>
-                                <?php endif; ?>
-                                <?php if ($height >= 52): ?>
-                                <div class="dur"><?= htmlspecialchars($durLabel) ?></div>
-                                <?php endif; ?>
+                                <div class="when"><?= htmlspecialchars($b['time_label']) ?> · <?= htmlspecialchars($durLabel) ?><?= $b['estimated'] ? ' est' : '' ?></div>
                             </div>
                         </a>
                         <?php endforeach; ?>
