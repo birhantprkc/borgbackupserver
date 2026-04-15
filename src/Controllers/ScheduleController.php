@@ -212,6 +212,7 @@ class ScheduleController extends Controller
 
         // User timezone for displaying schedules in the viewer's local time
         $userTz = $_SESSION['timezone'] ?? 'America/New_York';
+        $is24h  = \BBS\Core\TimeHelper::is24h();
 
         // Expand each schedule into concrete blocks for each day-of-week (0=Mon..6=Sun) it fires on
         $intervalFreqs = ['10min', '15min', '30min', 'hourly'];
@@ -290,7 +291,7 @@ class ScheduleController extends Controller
                         'duration_min' => $durMin,
                         'estimated' => $estimated,
                         'frequency' => $s['frequency'],
-                        'time_label' => $schedDate->format('g:i A'),
+                        'time_label' => $is24h ? $schedDate->format('H:i') : $schedDate->format('g:i A'),
                     ];
                 }
             }
@@ -308,27 +309,29 @@ class ScheduleController extends Controller
             $shownAgents[(int) $o['agent_id']] = $o['agent_name'];
         }
 
-        // Per-day histograms. For each day-of-week 0..6 we build a 24-bucket
-        // array. Each bucket carries the list of schedule entries firing in
-        // that hour so the tooltip/click handler can reference them.
+        // Per-day histograms with 30-minute buckets (48 per day). Hour-level
+        // granularity merged 6:00 and 6:30 schedules into the same bar,
+        // making them indistinguishable visually.
+        $histBucketMin = 30;
+        $histBucketCount = 1440 / $histBucketMin; // 48
         $histograms = [];
         for ($d = 0; $d < 7; $d++) {
             $histograms[$d] = [];
-            for ($h = 0; $h < 24; $h++) {
-                $histograms[$d][$h] = ['total' => 0, 'schedules' => []];
+            for ($b = 0; $b < $histBucketCount; $b++) {
+                $histograms[$d][$b] = ['total' => 0, 'schedules' => []];
             }
         }
-        foreach ($blocks as $b) {
-            $d = $b['day_idx'];
-            $h = (int) floor($b['start_min'] / 60);
-            $histograms[$d][$h]['total']++;
-            $histograms[$d][$h]['schedules'][] = [
-                'schedule_id' => $b['schedule_id'],
-                'agent_id' => $b['agent_id'],
-                'agent_name' => $b['agent_name'],
-                'plan_name' => $b['plan_name'],
-                'time' => $b['time_label'],
-                'frequency' => $b['frequency'],
+        foreach ($blocks as $blk) {
+            $d = $blk['day_idx'];
+            $bIdx = (int) floor($blk['start_min'] / $histBucketMin);
+            $histograms[$d][$bIdx]['total']++;
+            $histograms[$d][$bIdx]['schedules'][] = [
+                'schedule_id' => $blk['schedule_id'],
+                'agent_id' => $blk['agent_id'],
+                'agent_name' => $blk['agent_name'],
+                'plan_name' => $blk['plan_name'],
+                'time' => $blk['time_label'],
+                'frequency' => $blk['frequency'],
             ];
         }
         // Compute global max across all days so the y-axis scale is consistent
@@ -359,7 +362,10 @@ class ScheduleController extends Controller
             'pageTitle' => 'Schedules',
             'blocks' => $blocks,
             'histograms' => $histograms,
+            'histBucketCount' => $histBucketCount,
+            'histBucketMin' => $histBucketMin,
             'histMax' => $histMax,
+            'is24h' => \BBS\Core\TimeHelper::is24h(),
             'scheduleMap' => $scheduleMap,
             'continuous' => $continuous,
             'otherSchedules' => $other,

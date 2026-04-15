@@ -348,30 +348,50 @@ function bbs_agent_color(int $id): string
     </div>
     <?php else: ?>
 
-    <!-- Histogram: hour-of-day load for the selected day. Each bar is
-         divided into 1-unit segments, one per schedule, so individual
-         schedules are hoverable and clickable. -->
+    <!-- Histogram: hour-of-day load for the selected day. 30-minute buckets
+         so 6:00 and 6:30 are distinguishable. Each 1-unit segment = one
+         schedule, hoverable and clickable. -->
     <div class="card border-0 shadow-sm mb-3">
         <div class="card-header bg-body fw-semibold d-flex justify-content-between align-items-center">
             <span><i class="bi bi-bar-chart me-1"></i>Load by hour</span>
-            <span class="text-muted small">peak: <?= $histMax ?> <?= $histMax === 1 ? 'schedule' : 'schedules' ?></span>
+            <span class="text-muted small">Peak: <?= $histMax ?> <?= $histMax === 1 ? 'schedule' : 'schedules' ?></span>
         </div>
         <div class="card-body py-3">
+            <?php
+                // Hour labels appear at the top-of-hour bucket (every 2 buckets).
+                // "Major" labels (printed) at every 6 hours.
+                $formatHourLabel = function (int $hour) use ($is24h): string {
+                    if ($is24h) {
+                        return sprintf('%02d:00', $hour);
+                    }
+                    if ($hour === 0) return '12 AM';
+                    if ($hour === 12) return '12 PM';
+                    return $hour < 12 ? "{$hour} AM" : ($hour - 12) . ' PM';
+                };
+            ?>
             <?php for ($dIdx = 0; $dIdx < 7; $dIdx++): ?>
-            <div class="hist-container" data-day-idx="<?= $dIdx ?>" style="<?= $dIdx === $todayIdx ? '' : 'display: none;' ?>">
+            <div class="hist-container"
+                 data-day-idx="<?= $dIdx ?>"
+                 style="<?= $dIdx === $todayIdx ? '' : 'display: none;' ?> grid-template-columns: 56px repeat(<?= $histBucketCount ?>, 1fr);">
                 <div class="hist-yaxis">
                     <span><?= $histMax ?></span>
                     <span>0</span>
                 </div>
-                <?php for ($h = 0; $h < 24; $h++): ?>
+                <?php for ($b = 0; $b < $histBucketCount; $b++): ?>
                 <?php
-                    $bar = $histograms[$dIdx][$h];
+                    $bar = $histograms[$dIdx][$b];
                     $total = $bar['total'];
                     $barHeightPct = $histMax > 0 ? ($total / $histMax) * 100 : 0;
-                    $isMajor = ($h % 6 === 0) || $h === 23;
-                    $hourLabel = $h === 0 ? '12a' : ($h < 12 ? "{$h}a" : ($h === 12 ? '12p' : ($h - 12) . 'p'));
+                    // Bucket spans 30 min, so bucket b covers minutes [b*30, b*30+30).
+                    // Top-of-hour buckets are even indices (0, 2, 4, ...).
+                    $hour = (int) ($b / 2);
+                    $isTopOfHour = ($b % 2) === 0;
+                    $isMajor = $isTopOfHour && ($hour % 6 === 0);
+                    $label = ($isMajor) ? $formatHourLabel($hour) : '';
+                    // Minute offset inside the hour for tooltip metadata
+                    $minOffset = ($b % 2) * 30;
                 ?>
-                <div class="hist-bar-wrap" data-hour="<?= $h ?>">
+                <div class="hist-bar-wrap" data-bucket="<?= $b ?>" data-minute="<?= $hour * 60 + $minOffset ?>">
                     <div class="hist-bar" style="height: <?= $barHeightPct ?>%;">
                         <?php foreach ($bar['schedules'] as $sch): ?>
                         <div class="hist-seg"
@@ -384,7 +404,7 @@ function bbs_agent_color(int $id): string
                              style="background: <?= bbs_agent_color((int) $sch['agent_id']) ?>;"></div>
                         <?php endforeach; ?>
                     </div>
-                    <div class="hist-hour-label <?= $isMajor ? 'major' : '' ?>"><?= $isMajor ? $hourLabel : '' ?></div>
+                    <div class="hist-hour-label <?= $isMajor ? 'major' : '' ?>"><?= $label ?></div>
                 </div>
                 <?php endfor; ?>
             </div>
@@ -403,7 +423,7 @@ function bbs_agent_color(int $id): string
                 <div class="day-hours" style="height: <?= $gridHeight ?>px;">
                     <?php for ($h = 0; $h < 24; $h++): ?>
                     <div class="hour-label" style="top: <?= $h * $pxPerHour ?>px;">
-                        <?= $h === 0 ? '12 AM' : ($h < 12 ? "{$h} AM" : ($h === 12 ? '12 PM' : ($h - 12) . ' PM')) ?>
+                        <?= $formatHourLabel($h) ?>
                     </div>
                     <?php endfor; ?>
                 </div>
