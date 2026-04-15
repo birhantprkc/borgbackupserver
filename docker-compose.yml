@@ -22,11 +22,17 @@ services:
     environment:
       - APP_URL=${APP_URL:-http://localhost:8080}
       - SSH_PORT=${SSH_PORT:-2222}
-      # Map container user to your host user's UID/GID. Fixes permission issues
-      # with bind mounts, especially on btrfs filesystems (e.g. Synology NAS).
+      # Map the app user (www-data) to your host user's UID/GID. Fixes permission
+      # issues with bind mounts, especially on btrfs filesystems (e.g. Synology).
+      # Changing these after first run triggers an automatic ownership migration.
       # Find your values with: id -u && id -g
       # - PUID=${PUID:-33}
       # - PGID=${PGID:-33}
+      # Advanced: remap MariaDB / ClickHouse UIDs too (see .env.example)
+      # - MYSQL_PUID=${MYSQL_PUID:-100}
+      # - MYSQL_PGID=${MYSQL_PGID:-100}
+      # - CH_PUID=${CH_PUID:-999}
+      # - CH_PGID=${CH_PGID:-999}
       # Admin password — only used on first run. Omit to auto-generate (shown in logs).
       # - ADMIN_PASS=${ADMIN_PASS}
     volumes:

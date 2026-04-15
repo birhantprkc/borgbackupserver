@@ -12,32 +12,234 @@ ensure_dir() {
     chmod "$mode" "$dir"
 }
 
-# --- UID/GID remapping for bind mount compatibility ---
-PUID=${PUID:-33}
-PGID=${PGID:-33}
+# ============================================================
+#  UID/GID migration — declarative, idempotent, logged.
+# ============================================================
+# Persistent volumes carry file ownership across container rebuilds.
+# If the user changes PUID/PGID/MYSQL_PUID/CH_PUID between runs, the
+# pre-existing files on the volume still reference the old UIDs, so
+# we remap the in-container users AND chown the data.
+#
+# Desired state comes from env vars. The last applied state is stored
+# in /var/bbs/config/.ownership (written atomically after success).
+# If env != state, we migrate; otherwise this section is a no-op.
+#
+# Every step is logged with a timestamp so users can see exactly what
+# happened and why a container start took longer than usual.
+#
+# Supported env vars:
+#   PUID / PGID              — app (www-data). Defaults: 33 / 33
+#   MYSQL_PUID / MYSQL_PGID  — MariaDB.        Defaults: 100 / 100
+#   CH_PUID / CH_PGID        — ClickHouse.     Defaults: 999 / 999
 
-if [ "$PGID" != "33" ]; then
-    echo "Remapping www-data group to GID $PGID..."
-    # Avoid conflict if GID is already in use by another group
-    EXISTING_GROUP=$(getent group "$PGID" 2>/dev/null | cut -d: -f1)
-    if [ -n "$EXISTING_GROUP" ] && [ "$EXISTING_GROUP" != "www-data" ]; then
-        groupmod -g 9999 "$EXISTING_GROUP"
+log_mig() { echo "[$(date '+%H:%M:%S')] $*"; }
+
+mkdir -p /var/bbs/config
+OWNERSHIP_FILE=/var/bbs/config/.ownership
+
+DEFAULT_APP_UID=33;    DEFAULT_APP_GID=33
+DEFAULT_MYSQL_UID=100; DEFAULT_MYSQL_GID=100
+DEFAULT_CH_UID=999;    DEFAULT_CH_GID=999
+
+# --- Load previously-applied state (if any) ---
+APP_UID=""; APP_GID=""
+MYSQL_UID=""; MYSQL_GID=""
+CH_UID=""; CH_GID=""
+if [ -f "$OWNERSHIP_FILE" ]; then
+    # shellcheck disable=SC1090
+    . "$OWNERSHIP_FILE"
+fi
+PREV_APP_UID="${APP_UID:-$DEFAULT_APP_UID}"
+PREV_APP_GID="${APP_GID:-$DEFAULT_APP_GID}"
+PREV_MYSQL_UID="${MYSQL_UID:-$DEFAULT_MYSQL_UID}"
+PREV_MYSQL_GID="${MYSQL_GID:-$DEFAULT_MYSQL_GID}"
+PREV_CH_UID="${CH_UID:-$DEFAULT_CH_UID}"
+PREV_CH_GID="${CH_GID:-$DEFAULT_CH_GID}"
+
+# --- Desired state from env (falls back to previous, which falls back to defaults) ---
+DESIRED_APP_UID="${PUID:-$PREV_APP_UID}"
+DESIRED_APP_GID="${PGID:-$PREV_APP_GID}"
+DESIRED_MYSQL_UID="${MYSQL_PUID:-$PREV_MYSQL_UID}"
+DESIRED_MYSQL_GID="${MYSQL_PGID:-$PREV_MYSQL_GID}"
+DESIRED_CH_UID="${CH_PUID:-$PREV_CH_UID}"
+DESIRED_CH_GID="${CH_PGID:-$PREV_CH_GID}"
+
+# --- Preflight guards ---
+abort_config() {
+    echo ""
+    echo "!!! FATAL: invalid UID/GID configuration !!!"
+    echo "  $1"
+    echo "  Fix the offending env var (e.g. in docker-compose.yml / .env) and restart."
+    exit 1
+}
+
+for pair in "PUID:$DESIRED_APP_UID" "PGID:$DESIRED_APP_GID" \
+            "MYSQL_PUID:$DESIRED_MYSQL_UID" "MYSQL_PGID:$DESIRED_MYSQL_GID" \
+            "CH_PUID:$DESIRED_CH_UID" "CH_PGID:$DESIRED_CH_GID"; do
+    name="${pair%%:*}"; val="${pair##*:}"
+    if [ "$val" = "0" ]; then
+        abort_config "$name = 0 (root) is not allowed. Services must not run as root."
     fi
-    groupmod -g "$PGID" www-data
+done
+
+if [ "$DESIRED_APP_UID" = "$DESIRED_MYSQL_UID" ]; then
+    abort_config "PUID ($DESIRED_APP_UID) collides with MYSQL_PUID. Pick distinct UIDs for each service."
+fi
+if [ "$DESIRED_APP_UID" = "$DESIRED_CH_UID" ]; then
+    abort_config "PUID ($DESIRED_APP_UID) collides with CH_PUID. Pick distinct UIDs for each service."
+fi
+if [ "$DESIRED_MYSQL_UID" = "$DESIRED_CH_UID" ]; then
+    abort_config "MYSQL_PUID ($DESIRED_MYSQL_UID) collides with CH_PUID. Pick distinct UIDs for each service."
 fi
 
-if [ "$PUID" != "33" ]; then
-    echo "Remapping www-data user to UID $PUID..."
-    EXISTING_USER=$(getent passwd "$PUID" 2>/dev/null | cut -d: -f1)
-    if [ -n "$EXISTING_USER" ] && [ "$EXISTING_USER" != "www-data" ]; then
-        usermod -u 9999 "$EXISTING_USER"
+# Check collision with existing SSH client UIDs (recorded in /var/bbs/home/*/.uid)
+for uidfile in /var/bbs/home/*/.uid; do
+    [ -f "$uidfile" ] || continue
+    ssh_uid=$(cat "$uidfile" 2>/dev/null | tr -d '[:space:]')
+    [ -z "$ssh_uid" ] && continue
+    for pair in "PUID:$DESIRED_APP_UID" "MYSQL_PUID:$DESIRED_MYSQL_UID" "CH_PUID:$DESIRED_CH_UID"; do
+        name="${pair%%:*}"; val="${pair##*:}"
+        if [ "$ssh_uid" = "$val" ]; then
+            client_dir=$(dirname "$uidfile")
+            abort_config "$name ($val) collides with an existing SSH client (UID stored in $uidfile, home $client_dir). Pick a different value."
+        fi
+    done
+done
+
+# --- Migration helper ---
+# Args: service_name display_name old_uid old_gid new_uid new_gid path1 path2 ...
+# Remaps the in-container user/group to the new IDs, then chowns files on the
+# given volume paths that still reference the old IDs. Only runs if IDs changed.
+migrate_service_uid() {
+    local service="$1" label="$2"
+    local old_uid="$3" old_gid="$4"
+    local new_uid="$5" new_gid="$6"
+    shift 6
+    local paths=("$@")
+
+    if [ "$old_uid" = "$new_uid" ] && [ "$old_gid" = "$new_gid" ]; then
+        return 0
     fi
-    usermod -u "$PUID" www-data
+
+    log_mig ""
+    log_mig "--- $label migration ---"
+    log_mig "  from: UID=$old_uid GID=$old_gid"
+    log_mig "  to:   UID=$new_uid GID=$new_gid"
+
+    # Remap in-container group (if GID changed)
+    if [ "$old_gid" != "$new_gid" ]; then
+        local clash
+        clash=$(getent group "$new_gid" 2>/dev/null | cut -d: -f1)
+        if [ -n "$clash" ] && [ "$clash" != "$service" ]; then
+            local tmp=$((new_gid + 10000))
+            log_mig "  note: GID $new_gid is taken by group '$clash' — moving it to GID $tmp to free the slot"
+            groupmod -g "$tmp" "$clash" || abort_config "Failed to move group '$clash' out of GID $new_gid"
+        fi
+        log_mig "  remapping group '$service' from GID $old_gid to $new_gid"
+        groupmod -g "$new_gid" "$service" || abort_config "Failed to set group '$service' to GID $new_gid"
+    fi
+
+    # Remap in-container user (if UID changed)
+    if [ "$old_uid" != "$new_uid" ]; then
+        local clash
+        clash=$(getent passwd "$new_uid" 2>/dev/null | cut -d: -f1)
+        if [ -n "$clash" ] && [ "$clash" != "$service" ]; then
+            local tmp=$((new_uid + 10000))
+            log_mig "  note: UID $new_uid is taken by user '$clash' — moving it to UID $tmp to free the slot"
+            usermod -u "$tmp" "$clash" || abort_config "Failed to move user '$clash' out of UID $new_uid"
+        fi
+        log_mig "  remapping user '$service' from UID $old_uid to $new_uid"
+        usermod -u "$new_uid" "$service" || abort_config "Failed to set user '$service' to UID $new_uid"
+    fi
+
+    # Chown files that still reference the old IDs
+    for path in "${paths[@]}"; do
+        if [ ! -e "$path" ]; then continue; fi
+        local uid_count gid_count total
+        uid_count=$(find "$path" -uid "$old_uid" 2>/dev/null | wc -l | tr -d ' ')
+        gid_count=$(find "$path" -gid "$old_gid" 2>/dev/null | wc -l | tr -d ' ')
+        total=$((uid_count > gid_count ? uid_count : gid_count))
+        if [ "$total" = "0" ]; then
+            log_mig "  [$path] nothing to chown (already correct)"
+            continue
+        fi
+        log_mig "  [$path] chowning $total entries (UID matches: $uid_count, GID matches: $gid_count)"
+        log_mig "          this can take several minutes on large repositories — do not cancel"
+        local start end elapsed
+        start=$(date +%s)
+        find "$path" -uid "$old_uid" -exec chown -h "$new_uid" {} + 2>/dev/null || true
+        find "$path" -gid "$old_gid" -exec chgrp -h "$new_gid" {} + 2>/dev/null || true
+        end=$(date +%s); elapsed=$((end - start))
+        log_mig "  [$path] completed in ${elapsed}s"
+    done
+}
+
+# --- Run migrations (if any) ---
+MIGRATION_NEEDED=0
+if [ "$PREV_APP_UID" != "$DESIRED_APP_UID" ] || [ "$PREV_APP_GID" != "$DESIRED_APP_GID" ] \
+    || [ "$PREV_MYSQL_UID" != "$DESIRED_MYSQL_UID" ] || [ "$PREV_MYSQL_GID" != "$DESIRED_MYSQL_GID" ] \
+    || [ "$PREV_CH_UID" != "$DESIRED_CH_UID" ] || [ "$PREV_CH_GID" != "$DESIRED_CH_GID" ]; then
+    MIGRATION_NEEDED=1
 fi
 
-# Update ownership on static app files (only needed when remapped)
+if [ "$MIGRATION_NEEDED" = "1" ]; then
+    log_mig ""
+    log_mig "=== UID/GID migration starting ==="
+    log_mig "Volume was configured as: app=${PREV_APP_UID}:${PREV_APP_GID}  mysql=${PREV_MYSQL_UID}:${PREV_MYSQL_GID}  clickhouse=${PREV_CH_UID}:${PREV_CH_GID}"
+    log_mig "Reconfiguring to:         app=${DESIRED_APP_UID}:${DESIRED_APP_GID}  mysql=${DESIRED_MYSQL_UID}:${DESIRED_MYSQL_GID}  clickhouse=${DESIRED_CH_UID}:${DESIRED_CH_GID}"
+
+    migrate_service_uid "www-data" "app (www-data)" \
+        "$PREV_APP_UID" "$PREV_APP_GID" "$DESIRED_APP_UID" "$DESIRED_APP_GID" \
+        /var/bbs/home /var/bbs/cache /var/bbs/backups /var/bbs/tmp /var/bbs/config
+
+    migrate_service_uid "mysql" "MariaDB" \
+        "$PREV_MYSQL_UID" "$PREV_MYSQL_GID" "$DESIRED_MYSQL_UID" "$DESIRED_MYSQL_GID" \
+        /var/bbs/mysql
+
+    migrate_service_uid "clickhouse" "ClickHouse" \
+        "$PREV_CH_UID" "$PREV_CH_GID" "$DESIRED_CH_UID" "$DESIRED_CH_GID" \
+        /var/bbs/clickhouse
+
+    # Write new state atomically so a crash mid-migration doesn't leave us
+    # thinking the new state is applied when it isn't.
+    cat > "${OWNERSHIP_FILE}.tmp" <<EOF
+# BBS UID/GID state — managed by entrypoint.sh. Do not edit manually.
+# Written after a successful migration on $(date '+%Y-%m-%d %H:%M:%S UTC').
+APP_UID=$DESIRED_APP_UID
+APP_GID=$DESIRED_APP_GID
+MYSQL_UID=$DESIRED_MYSQL_UID
+MYSQL_GID=$DESIRED_MYSQL_GID
+CH_UID=$DESIRED_CH_UID
+CH_GID=$DESIRED_CH_GID
+EOF
+    mv "${OWNERSHIP_FILE}.tmp" "$OWNERSHIP_FILE"
+    chmod 644 "$OWNERSHIP_FILE"
+    log_mig "=== UID/GID migration complete ==="
+    log_mig ""
+elif [ ! -f "$OWNERSHIP_FILE" ]; then
+    # First run on this volume — record baseline so future changes are detected.
+    cat > "$OWNERSHIP_FILE" <<EOF
+# BBS UID/GID state — managed by entrypoint.sh. Do not edit manually.
+# Written on $(date '+%Y-%m-%d %H:%M:%S UTC') (baseline).
+APP_UID=$DESIRED_APP_UID
+APP_GID=$DESIRED_APP_GID
+MYSQL_UID=$DESIRED_MYSQL_UID
+MYSQL_GID=$DESIRED_MYSQL_GID
+CH_UID=$DESIRED_CH_UID
+CH_GID=$DESIRED_CH_GID
+EOF
+    chmod 644 "$OWNERSHIP_FILE"
+fi
+
+# Expose PUID/PGID as numbers for any downstream references.
+PUID="$DESIRED_APP_UID"
+PGID="$DESIRED_APP_GID"
+
+# /var/www/bbs lives in the container filesystem (not the volume), so its
+# files come from the image baked with UID 33 on every container recreation.
+# Re-chown on each start when PUID/PGID differ from the image defaults.
 if [ "$PUID" != "33" ] || [ "$PGID" != "33" ]; then
-    echo "Updating file ownership for UID=$PUID GID=$PGID..."
+    log_mig "Applying app UID/GID to /var/www/bbs (container filesystem)..."
     chown -R www-data:www-data /var/www/bbs
 fi
 
@@ -51,8 +253,8 @@ ensure_dir /var/bbs/cache           www-data:www-data   755
 ensure_dir /var/bbs/backups         www-data:www-data   750
 ensure_dir /var/bbs/tmp             www-data:www-data   1777
 ensure_dir /var/bbs/config          www-data:www-data   755
-ensure_dir /var/bbs/clickhouse      clickhouse:clickhouse 755
-ensure_dir /var/bbs/mysql           mysql:mysql         755
+ensure_dir /var/bbs/clickhouse      clickhouse:clickhouse 750
+ensure_dir /var/bbs/mysql           mysql:mysql         750
 ensure_dir /run/mysqld              mysql:mysql         755
 ensure_dir /run/sshd                root:root           755
 ensure_dir /var/log/clickhouse-server clickhouse:clickhouse 755
