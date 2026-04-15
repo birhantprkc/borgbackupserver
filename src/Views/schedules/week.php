@@ -54,16 +54,53 @@ function bbs_agent_color(int $id): string
     return "hsl({$hue}, 55%, 45%)";
 }
 
+// Pick a set of "nice" y-axis tick values for the histogram, including 0 and
+// max. Tries to keep the count around 5–6 labels so the axis stays readable
+// regardless of whether max is 3 or 300.
+function bbs_histogram_ticks(int $max): array
+{
+    if ($max <= 0) return [0];
+    if ($max <= 5) return range(0, $max);
+    $step = max(1, (int) ceil($max / 5));
+    $ticks = [];
+    for ($i = 0; $i <= $max; $i += $step) $ticks[] = $i;
+    if (end($ticks) !== $max) $ticks[] = $max;
+    return $ticks;
+}
+
 ?>
 
 <style>
 .hist-container {
     position: relative;
-    height: 140px;
+    height: 160px;
     display: grid;
-    grid-template-columns: 40px repeat(24, 1fr);
-    column-gap: 2px;
+    column-gap: 1px;
     align-items: end;
+}
+.hist-gridlines {
+    position: absolute;
+    top: 0;
+    bottom: 18px; /* match bar-wrap padding-bottom so we don't draw over the x-labels */
+    left: 56px;   /* start after the yaxis column */
+    right: 0;
+    pointer-events: none;
+}
+.hist-gridlines .hline {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--bs-border-color);
+    opacity: 0.35;
+}
+.hist-gridlines .vline {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--bs-border-color);
+    opacity: 0.15;
 }
 .hist-bar-wrap {
     position: relative;
@@ -72,6 +109,7 @@ function bbs_agent_color(int $id): string
     justify-content: flex-end;
     height: 100%;
     padding-bottom: 18px;
+    z-index: 1;
 }
 .hist-bar {
     width: 100%;
@@ -97,11 +135,12 @@ function bbs_agent_color(int $id): string
 .hist-hour-label {
     position: absolute;
     bottom: 0;
-    left: 0;
-    right: 0;
+    left: -50%;
+    right: -50%;
     text-align: center;
-    font-size: 0.65rem;
+    font-size: 0.62rem;
     color: var(--bs-secondary-color);
+    white-space: nowrap;
 }
 .hist-hour-label.major { font-weight: 600; color: var(--bs-body-color); }
 .hist-yaxis {
@@ -118,8 +157,6 @@ function bbs_agent_color(int $id): string
     right: 6px;
     transform: translateY(-50%);
 }
-.hist-yaxis span:first-child { top: 0; }
-.hist-yaxis span:last-child { bottom: 18px; transform: translateY(50%); }
 
 .day-pills {
     display: flex;
@@ -369,26 +406,51 @@ function bbs_agent_color(int $id): string
                     return $hour < 12 ? "{$hour} AM" : ($hour - 12) . ' PM';
                 };
             ?>
+            <?php
+                $yTicks = bbs_histogram_ticks($histMax);
+                // Hour labels every 2 hours on the x-axis. Every 6 hours gets
+                // bold weight as a "major" reference.
+                $xLabelStep = 2;
+            ?>
             <?php for ($dIdx = 0; $dIdx < 7; $dIdx++): ?>
             <div class="hist-container"
                  data-day-idx="<?= $dIdx ?>"
                  style="<?= $dIdx === $todayIdx ? '' : 'display: none;' ?> grid-template-columns: 56px repeat(<?= $histBucketCount ?>, 1fr);">
-                <div class="hist-yaxis">
-                    <span><?= $histMax ?></span>
-                    <span>0</span>
+
+                <!-- Background grid: horizontal lines at y-tick positions, vertical lines at each hour -->
+                <div class="hist-gridlines">
+                    <?php foreach ($yTicks as $tick): ?>
+                        <?php if ($tick === 0) continue; // bottom is already the axis baseline ?>
+                        <?php $topPct = $histMax > 0 ? (1 - $tick / $histMax) * 100 : 100; ?>
+                        <div class="hline" style="top: <?= $topPct ?>%;"></div>
+                    <?php endforeach; ?>
+                    <?php for ($h = 1; $h < 24; $h++): ?>
+                        <?php $leftPct = ($h / 24) * 100; ?>
+                        <div class="vline" style="left: <?= $leftPct ?>%;"></div>
+                    <?php endfor; ?>
                 </div>
+
+                <div class="hist-yaxis">
+                    <?php foreach ($yTicks as $tick): ?>
+                        <?php
+                        $topPct = $histMax > 0 ? (1 - $tick / $histMax) * 100 : 100;
+                        // Slight nudge at extremes to keep labels inside the chart box
+                        $extraStyle = $tick === 0 ? 'transform: translateY(-100%);' : ($tick === $histMax ? 'transform: translateY(0);' : '');
+                        ?>
+                        <span style="top: <?= $topPct ?>%; <?= $extraStyle ?>"><?= $tick ?></span>
+                    <?php endforeach; ?>
+                </div>
+
                 <?php for ($b = 0; $b < $histBucketCount; $b++): ?>
                 <?php
                     $bar = $histograms[$dIdx][$b];
                     $total = $bar['total'];
                     $barHeightPct = $histMax > 0 ? ($total / $histMax) * 100 : 0;
-                    // Bucket spans 30 min, so bucket b covers minutes [b*30, b*30+30).
-                    // Top-of-hour buckets are even indices (0, 2, 4, ...).
                     $hour = (int) ($b / 2);
                     $isTopOfHour = ($b % 2) === 0;
+                    $isXLabeled = $isTopOfHour && ($hour % $xLabelStep === 0);
                     $isMajor = $isTopOfHour && ($hour % 6 === 0);
-                    $label = ($isMajor) ? $formatHourLabel($hour) : '';
-                    // Minute offset inside the hour for tooltip metadata
+                    $label = $isXLabeled ? $formatHourLabel($hour) : '';
                     $minOffset = ($b % 2) * 30;
                 ?>
                 <div class="hist-bar-wrap" data-bucket="<?= $b ?>" data-minute="<?= $hour * 60 + $minOffset ?>">
@@ -404,7 +466,9 @@ function bbs_agent_color(int $id): string
                              style="background: <?= bbs_agent_color((int) $sch['agent_id']) ?>;"></div>
                         <?php endforeach; ?>
                     </div>
+                    <?php if ($isXLabeled): ?>
                     <div class="hist-hour-label <?= $isMajor ? 'major' : '' ?>"><?= $label ?></div>
+                    <?php endif; ?>
                 </div>
                 <?php endfor; ?>
             </div>
