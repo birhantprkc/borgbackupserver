@@ -10,14 +10,16 @@ class App
     {
         Config::load();
 
-        // Skip session_start() for API endpoints — agents authenticate with a
-        // Bearer token (no cookie), so starting a session would just create
-        // an empty sess_* file per request. With agents polling every 30s,
-        // that adds up to hundreds of thousands of orphan files per month.
+        // Skip session_start() for agent API endpoints — agents authenticate
+        // with a Bearer token (no cookie), so starting a session would just
+        // create an empty sess_* file per request. With agents polling every
+        // 30s, that adds up to hundreds of thousands of orphan files per
+        // month. Browser-initiated API routes (e.g. /api/templates/{id}) still
+        // need their session for requireAuth().
         $reqPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/';
-        $isApiRequest = str_starts_with($reqPath, '/api/');
+        $isAgentApi = str_starts_with($reqPath, '/api/agent/');
 
-        if (!$isApiRequest) {
+        if (!$isAgentApi) {
             // Set gc_maxlifetime to 30 days so Ubuntu's sessionclean cron
             // doesn't delete session files before our app-level timeout
             ini_set('session.gc_maxlifetime', 30 * 86400);
