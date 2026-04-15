@@ -355,6 +355,15 @@ function bbs_histogram_ticks(int $max): array
 .sched-ctxmenu button:disabled { opacity: 0.4; cursor: not-allowed; }
 .sched-ctxmenu button i { width: 18px; text-align: center; }
 .sched-ctxmenu .divider { height: 1px; background: var(--bs-border-color); margin: 4px 0; }
+
+/* Accent header for the primary schedule cards — burnt orange gradient */
+.sched-accent-header {
+    background: linear-gradient(135deg, #7c2d12 0%, #c2410c 50%, #ea580c 100%) !important;
+    color: #fff !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.25);
+}
+.sched-accent-header .text-muted { color: rgba(255, 255, 255, 0.75) !important; }
+.sched-accent-header i { color: #fff; }
 </style>
 
 <div class="container-fluid py-3">
@@ -400,8 +409,8 @@ function bbs_histogram_ticks(int $max): array
          so 6:00 and 6:30 are distinguishable. Each 1-unit segment = one
          schedule, hoverable and clickable. -->
     <div class="card border-0 shadow-sm mb-3">
-        <div class="card-header bg-body fw-semibold d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-bar-chart me-1"></i>Load by hour</span>
+        <div class="card-header sched-accent-header fw-semibold d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-bar-chart me-2"></i>Load By Hour</span>
             <span class="text-muted small">Peak: <?= $histMax ?> <?= $histMax === 1 ? 'schedule' : 'schedules' ?></span>
         </div>
         <div class="card-body py-3">
@@ -499,8 +508,8 @@ function bbs_histogram_ticks(int $max): array
 
     <!-- Day timeline (day picker is in the page header, shared with histogram) -->
     <div class="card border-0 shadow-sm mb-3">
-        <div class="card-header bg-body fw-semibold">
-            <i class="bi bi-calendar-day me-1"></i>Day view
+        <div class="card-header sched-accent-header fw-semibold">
+            <i class="bi bi-calendar-day me-2"></i>Day View
             <span class="text-muted small ms-2" id="day-view-label"></span>
         </div>
         <div class="card-body p-2">
