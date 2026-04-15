@@ -1,4 +1,14 @@
 <?php
+$dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+$dayLabelsLong = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+$pxPerHour = 72;
+$gridHeight = 24 * $pxPerHour;
+// A block is at least $minBlockPx tall so its text is readable. For the
+// lane algorithm we need to reserve at least this many minutes of vertical
+// space so short back-to-back blocks don't visually overlap.
+$minBlockPx = 28;
+$minBlockMin = max(1, (int) ceil($minBlockPx * 60 / $pxPerHour));
+
 // Group blocks by day so we can render just one day at a time, and compute
 // per-day lane layout for overlapping blocks.
 $blocksByDay = [0 => [], 1 => [], 2 => [], 3 => [], 4 => [], 5 => [], 6 => []];
@@ -35,16 +45,6 @@ foreach ($blocksByDay as &$dayBlocks) {
     unset($blk);
 }
 unset($dayBlocks);
-
-$dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-$dayLabelsLong = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-$pxPerHour = 72;
-$gridHeight = 24 * $pxPerHour;
-// A block is at least $minBlockPx tall so its text is readable. For the
-// lane algorithm we need to reserve at least this many minutes of vertical
-// space so short back-to-back blocks don't visually overlap.
-$minBlockPx = 28;
-$minBlockMin = max(1, (int) ceil($minBlockPx * 60 / $pxPerHour));
 
 $todayIdx = ((int) (new \DateTime('now', new \DateTimeZone($userTz)))->format('N')) - 1;
 
