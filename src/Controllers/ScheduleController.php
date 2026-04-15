@@ -195,9 +195,23 @@ class ScheduleController extends Controller
             $shownAgents[(int) $o['agent_id']] = $o['agent_name'];
         }
 
+        // Histogram: 24 hour buckets, each bucket has per-agent counts so we can
+        // render it as a stacked bar by agent color.
+        $histogram = [];
+        for ($h = 0; $h < 24; $h++) {
+            $histogram[$h] = ['total' => 0, 'agents' => []];
+        }
+        foreach ($blocks as $b) {
+            $h = (int) floor($b['start_min'] / 60);
+            $histogram[$h]['total']++;
+            $aid = $b['agent_id'];
+            $histogram[$h]['agents'][$aid] = ($histogram[$h]['agents'][$aid] ?? 0) + 1;
+        }
+
         $this->view('schedules/week', [
             'pageTitle' => 'Schedules',
             'blocks' => $blocks,
+            'histogram' => $histogram,
             'continuous' => $continuous,
             'otherSchedules' => $other,
             'shownAgents' => $shownAgents,
