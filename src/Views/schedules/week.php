@@ -255,6 +255,57 @@ foreach ($histogram as $h) {
     opacity: 0.12 !important;
     pointer-events: none;
 }
+
+/* Custom tooltip for histogram + blocks */
+.sched-tooltip {
+    position: fixed;
+    z-index: 9999;
+    background: rgba(30, 33, 38, 0.97);
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    max-width: 280px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+    display: none;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.sched-tooltip .tt-title { font-weight: 600; margin-bottom: 4px; }
+.sched-tooltip .tt-meta { opacity: 0.7; font-size: 0.7rem; margin-bottom: 6px; }
+.sched-tooltip ul { margin: 0; padding-left: 16px; font-size: 0.72rem; }
+
+/* Context menu */
+.sched-ctxmenu {
+    position: fixed;
+    z-index: 10000;
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    min-width: 200px;
+    padding: 4px;
+    display: none;
+}
+.sched-ctxmenu button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    background: transparent;
+    border: none;
+    padding: 8px 12px;
+    text-align: left;
+    font-size: 0.85rem;
+    color: var(--bs-body-color);
+    border-radius: 5px;
+    cursor: pointer;
+}
+.sched-ctxmenu button:hover { background: var(--bs-tertiary-bg); }
+.sched-ctxmenu button:disabled { opacity: 0.4; cursor: not-allowed; }
+.sched-ctxmenu button i { width: 18px; text-align: center; }
+.sched-ctxmenu .divider { height: 1px; background: var(--bs-border-color); margin: 4px 0; }
 </style>
 
 <div class="container-fluid py-3">
@@ -377,17 +428,23 @@ foreach ($histogram as $h) {
                                 $b['estimated'] ? ' (no history)' : ''
                             );
                             ?>
-                        <a class="day-block <?= $b['estimated'] ? 'estimated' : '' ?>"
-                           data-agent-id="<?= $b['agent_id'] ?>"
-                           href="/clients/<?= $b['agent_id'] ?>?tab=schedules"
-                           style="top: <?= $top ?>px; height: <?= $height ?>px; left: calc(<?= $left ?>% + 4px); width: calc(<?= $laneWidth ?>% - 8px); background: <?= $color ?>;"
-                           title="<?= htmlspecialchars($title) ?>">
+                        <div class="day-block <?= $b['estimated'] ? 'estimated' : '' ?>"
+                             data-agent-id="<?= $b['agent_id'] ?>"
+                             data-schedule-id="<?= $b['schedule_id'] ?>"
+                             data-plan-id="<?= $b['plan_id'] ?>"
+                             data-plan-name="<?= htmlspecialchars($b['plan_name']) ?>"
+                             data-agent-name="<?= htmlspecialchars($b['agent_name']) ?>"
+                             data-frequency="<?= htmlspecialchars($b['frequency']) ?>"
+                             data-time="<?= htmlspecialchars($b['time_label']) ?>"
+                             data-duration="<?= htmlspecialchars($durLabel) ?>"
+                             data-estimated="<?= $b['estimated'] ? '1' : '0' ?>"
+                             style="top: <?= $top ?>px; height: <?= $height ?>px; left: calc(<?= $left ?>% + 4px); width: calc(<?= $laneWidth ?>% - 8px); background: <?= $color ?>;">
                             <div class="agent"><?= htmlspecialchars($b['agent_name']) ?></div>
                             <div class="side">
                                 <div class="plan"><?= htmlspecialchars($b['plan_name']) ?></div>
                                 <div class="when"><?= htmlspecialchars($b['time_label']) ?> · <?= htmlspecialchars($durLabel) ?><?= $b['estimated'] ? ' est' : '' ?></div>
                             </div>
-                        </a>
+                        </div>
                         <?php endforeach; ?>
                         <?php if (empty($blocksByDay[$dIdx])): ?>
                         <div class="d-flex align-items-center justify-content-center text-muted" style="height: <?= $gridHeight ?>px; font-style: italic;">
@@ -452,8 +509,80 @@ foreach ($histogram as $h) {
     <?php endif; ?>
 </div>
 
+<!-- Shared tooltip (used by histogram + blocks) -->
+<div id="sched-tooltip" class="sched-tooltip"></div>
+
+<!-- Block context menu -->
+<div id="sched-ctxmenu" class="sched-ctxmenu">
+    <button type="button" id="ctx-change-time">
+        <i class="bi bi-clock"></i><span>Change Time</span>
+    </button>
+    <button type="button" id="ctx-edit-plan">
+        <i class="bi bi-pencil-square"></i><span>Edit Plan</span>
+    </button>
+    <div class="divider"></div>
+    <button type="button" id="ctx-disable">
+        <i class="bi bi-pause-circle"></i><span>Disable Schedule</span>
+    </button>
+</div>
+
+<!-- Change Time modal -->
+<div class="modal fade" id="change-time-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-clock me-2"></i>Change Time
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3 small text-muted" id="ct-context"></div>
+
+                <div id="ct-dow-section" class="mb-3" style="display: none;">
+                    <label class="form-label small">
+                        <i class="bi bi-calendar-event me-1"></i>Day of week
+                    </label>
+                    <select id="ct-dow" class="form-select form-select-sm">
+                        <option value="1">Monday</option>
+                        <option value="2">Tuesday</option>
+                        <option value="3">Wednesday</option>
+                        <option value="4">Thursday</option>
+                        <option value="5">Friday</option>
+                        <option value="6">Saturday</option>
+                        <option value="0">Sunday</option>
+                    </select>
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label small">
+                        <i class="bi bi-clock me-1"></i>Times
+                        <span class="text-muted">(24-hour format, HH:MM)</span>
+                    </label>
+                    <div id="ct-times-list"></div>
+                    <button type="button" id="ct-add-time" class="btn btn-sm btn-outline-secondary mt-1">
+                        <i class="bi bi-plus-lg"></i> Add another time
+                    </button>
+                </div>
+                <div id="ct-error" class="alert alert-danger small py-2 mb-0" style="display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" id="ct-save" class="btn btn-primary">
+                    <i class="bi bi-check-lg me-1"></i>Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 (function () {
+    const scheduleMap = <?= json_encode($scheduleMap ?? []) ?>;
+    const csrfToken   = <?= json_encode($csrfToken ?? '') ?>;
+    const histBuckets = <?= json_encode($histogram ?? []) ?>;
+
+    // ----------------- Day picker + filter ----------------------------------
     const pills = document.querySelectorAll('.day-pill');
     const contents = document.querySelectorAll('.day-content');
     const filter = document.getElementById('agent-filter');
@@ -462,11 +591,7 @@ foreach ($histogram as $h) {
         pills.forEach(p => p.classList.toggle('active', Number(p.dataset.dayIdx) === idx));
         contents.forEach(c => c.style.display = (Number(c.dataset.dayIdx) === idx) ? '' : 'none');
     }
-
-    // Default active = today
-    const today = <?= $todayIdx ?>;
-    showDay(today);
-
+    showDay(<?= $todayIdx ?>);
     pills.forEach(p => p.addEventListener('click', () => showDay(Number(p.dataset.dayIdx))));
 
     if (filter) {
@@ -486,5 +611,205 @@ foreach ($histogram as $h) {
             });
         });
     }
+
+    // ----------------- Tooltip ---------------------------------------------
+    const tooltip = document.getElementById('sched-tooltip');
+    function showTooltip(html, ev) {
+        tooltip.innerHTML = html;
+        tooltip.style.display = 'block';
+        moveTooltip(ev);
+    }
+    function moveTooltip(ev) {
+        const pad = 12;
+        let x = ev.clientX + pad, y = ev.clientY + pad;
+        const rect = tooltip.getBoundingClientRect();
+        if (x + rect.width > window.innerWidth - 8) x = ev.clientX - rect.width - pad;
+        if (y + rect.height > window.innerHeight - 8) y = ev.clientY - rect.height - pad;
+        tooltip.style.left = x + 'px';
+        tooltip.style.top = y + 'px';
+    }
+    function hideTooltip() { tooltip.style.display = 'none'; }
+
+    function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+
+    // Day-block hover tooltip
+    document.querySelectorAll('.day-block').forEach(b => {
+        b.addEventListener('mouseenter', ev => {
+            const html = '<div class="tt-title">' + esc(b.dataset.planName) + '</div>' +
+                '<div class="tt-meta">' + esc(b.dataset.agentName) + ' · ' + esc(b.dataset.frequency) + '</div>' +
+                'Starts: <strong>' + esc(b.dataset.time) + '</strong><br>' +
+                'Est. duration: <strong>' + esc(b.dataset.duration) + '</strong>' +
+                (b.dataset.estimated === '1' ? ' <span style="opacity:.6">(no history — default)</span>' : '') +
+                '<div style="margin-top:6px;opacity:.6;font-size:.7rem;">Click for options</div>';
+            showTooltip(html, ev);
+        });
+        b.addEventListener('mousemove', moveTooltip);
+        b.addEventListener('mouseleave', hideTooltip);
+    });
+
+    // Histogram segment hover tooltip — lists plans in that hour
+    document.querySelectorAll('.hist-bar-wrap').forEach(bar => {
+        bar.addEventListener('mouseenter', ev => {
+            const hour = Number(bar.dataset.hour);
+            const bucket = histBuckets[hour];
+            if (!bucket || !bucket.total) return;
+            const hLabel = hour === 0 ? '12 AM' : hour < 12 ? hour + ' AM' : hour === 12 ? '12 PM' : (hour - 12) + ' PM';
+            let html = '<div class="tt-title">' + hLabel + ' — ' + bucket.total + ' backup' + (bucket.total > 1 ? 's' : '') + '</div><ul>';
+            (bucket.plans || []).forEach(p => {
+                html += '<li>' + esc(p.agent_name) + ' · ' + esc(p.plan_name) + ' <span style="opacity:.6">(' + esc(p.time) + ')</span></li>';
+            });
+            html += '</ul>';
+            showTooltip(html, ev);
+        });
+        bar.addEventListener('mousemove', moveTooltip);
+        bar.addEventListener('mouseleave', hideTooltip);
+    });
+
+    // ----------------- Context menu ----------------------------------------
+    const ctx = document.getElementById('sched-ctxmenu');
+    let ctxScheduleId = null;
+    let ctxAgentId = null;
+
+    document.querySelectorAll('.day-block').forEach(b => {
+        b.addEventListener('click', ev => {
+            ev.preventDefault();
+            ctxScheduleId = Number(b.dataset.scheduleId);
+            ctxAgentId = Number(b.dataset.agentId);
+            hideTooltip();
+            openCtxMenu(ev);
+        });
+    });
+
+    function openCtxMenu(ev) {
+        ctx.style.display = 'block';
+        let x = ev.clientX, y = ev.clientY;
+        const rect = ctx.getBoundingClientRect();
+        if (x + rect.width > window.innerWidth - 8) x = window.innerWidth - rect.width - 8;
+        if (y + rect.height > window.innerHeight - 8) y = window.innerHeight - rect.height - 8;
+        ctx.style.left = x + 'px';
+        ctx.style.top = y + 'px';
+    }
+    function closeCtxMenu() { ctx.style.display = 'none'; }
+    document.addEventListener('click', ev => {
+        if (!ctx.contains(ev.target) && !ev.target.closest('.day-block')) closeCtxMenu();
+    });
+    document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { closeCtxMenu(); hideTooltip(); } });
+
+    document.getElementById('ctx-edit-plan').addEventListener('click', () => {
+        if (ctxAgentId) window.location.href = '/clients/' + ctxAgentId + '?tab=schedules';
+    });
+
+    document.getElementById('ctx-change-time').addEventListener('click', () => {
+        closeCtxMenu();
+        openChangeTimeModal(ctxScheduleId);
+    });
+
+    document.getElementById('ctx-disable').addEventListener('click', () => {
+        if (!ctxScheduleId) return;
+        if (!confirm('Disable this schedule? It will stop running until re-enabled.')) return;
+        const f = document.createElement('form');
+        f.method = 'POST';
+        f.action = '/schedules/' + ctxScheduleId + '/toggle';
+        const c = document.createElement('input');
+        c.type = 'hidden'; c.name = 'csrf_token'; c.value = csrfToken;
+        f.appendChild(c);
+        document.body.appendChild(f);
+        f.submit();
+    });
+
+    // ----------------- Change Time modal -----------------------------------
+    const modalEl = document.getElementById('change-time-modal');
+    const modal = new bootstrap.Modal(modalEl);
+    const ctTimesList = document.getElementById('ct-times-list');
+    const ctDowSection = document.getElementById('ct-dow-section');
+    const ctDow = document.getElementById('ct-dow');
+    const ctContext = document.getElementById('ct-context');
+    const ctError = document.getElementById('ct-error');
+    let activeScheduleId = null;
+
+    function addTimeRow(value) {
+        const row = document.createElement('div');
+        row.className = 'input-group input-group-sm mb-1';
+        row.innerHTML =
+            '<span class="input-group-text"><i class="bi bi-clock"></i></span>' +
+            '<input type="time" class="form-control ct-time-input" value="' + (value || '') + '">' +
+            '<button type="button" class="btn btn-outline-danger remove-time" title="Remove">' +
+            '<i class="bi bi-trash"></i></button>';
+        row.querySelector('.remove-time').addEventListener('click', () => {
+            if (ctTimesList.querySelectorAll('.ct-time-input').length > 1) {
+                row.remove();
+            }
+        });
+        ctTimesList.appendChild(row);
+    }
+
+    function openChangeTimeModal(scheduleId) {
+        const s = scheduleMap[scheduleId];
+        if (!s) return;
+        activeScheduleId = scheduleId;
+        ctError.style.display = 'none';
+        ctTimesList.innerHTML = '';
+        ctContext.innerHTML =
+            '<i class="bi bi-hdd-network me-1"></i> <strong>' + esc(s.agent_name) + '</strong>' +
+            ' · <i class="bi bi-journal me-1"></i>' + esc(s.plan_name) +
+            ' · <span class="badge bg-secondary">' + esc(s.frequency) + '</span>';
+
+        // Weekly schedules get the day picker, else hide it
+        if (s.frequency === 'weekly') {
+            ctDowSection.style.display = '';
+            ctDow.value = String(s.day_of_week ?? 1);
+        } else {
+            ctDowSection.style.display = 'none';
+        }
+
+        // Populate current times (comma-separated)
+        const times = (s.times || '').split(',').map(t => t.trim()).filter(Boolean);
+        if (times.length === 0) addTimeRow('');
+        else times.forEach(t => addTimeRow(t));
+
+        modal.show();
+    }
+
+    document.getElementById('ct-add-time').addEventListener('click', () => addTimeRow(''));
+
+    document.getElementById('ct-save').addEventListener('click', async () => {
+        if (!activeScheduleId) return;
+        const inputs = ctTimesList.querySelectorAll('.ct-time-input');
+        const times = Array.from(inputs).map(i => i.value.trim()).filter(Boolean);
+        if (times.length === 0) {
+            ctError.textContent = 'At least one time is required.';
+            ctError.style.display = '';
+            return;
+        }
+        const body = { times: times };
+        const s = scheduleMap[activeScheduleId];
+        if (s && s.frequency === 'weekly') body.day_of_week = Number(ctDow.value);
+
+        try {
+            const resp = await fetch('/schedules/' + activeScheduleId + '/time', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify(Object.assign(body, { csrf_token: csrfToken }))
+            });
+            const data = await resp.json();
+            if (!resp.ok || data.error) {
+                ctError.textContent = data.error || ('HTTP ' + resp.status);
+                ctError.style.display = '';
+                return;
+            }
+            modal.hide();
+            // Reload the page so blocks reposition. A later iteration can
+            // mutate the DOM in place for a slicker feel.
+            window.location.reload();
+        } catch (e) {
+            ctError.textContent = 'Network error: ' + e.message;
+            ctError.style.display = '';
+        }
+    });
 })();
 </script>

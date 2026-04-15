@@ -142,6 +142,7 @@ class App
         $this->router->map('GET',  '/schedules', 'ScheduleController@week');
         $this->router->map('POST', '/schedules/[i:id]/toggle', 'ScheduleController@toggle');
         $this->router->map('POST', '/schedules/[i:id]/delete', 'ScheduleController@delete');
+        $this->router->map('POST', '/schedules/[i:id]/time',   'ScheduleController@updateTime');
 
         // Queue
         $this->router->map('GET', '/queue', 'QueueController@index');

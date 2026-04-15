@@ -29,6 +29,119 @@ class ScheduleController extends Controller
         $this->redirect("/clients/{$schedule['agent_id']}?tab=schedules");
     }
 
+    /**
+     * POST /schedules/{id}/time — quick-edit endpoint for the calendar's
+     * "Change Time" context menu. Accepts JSON body with times[] and
+     * optionally day_of_week. Keeps all other schedule fields untouched.
+     */
+    public function updateTime(int $id): void
+    {
+        $this->requireAuth();
+        $this->verifyCsrf();
+
+        $schedule = $this->getSchedule($id);
+        if (!$schedule) {
+            $this->json(['error' => 'Schedule not found'], 404);
+        }
+        $this->requirePermission(PermissionService::MANAGE_PLANS, $schedule['agent_id']);
+
+        $body = json_decode(file_get_contents('php://input') ?: '[]', true) ?: [];
+        $times = $body['times'] ?? null;
+        $dow   = array_key_exists('day_of_week', $body) ? $body['day_of_week'] : null;
+
+        if (!is_array($times) || empty($times)) {
+            $this->json(['error' => 'At least one time is required.'], 422);
+        }
+
+        // Validate HH:MM format, strip duplicates, sort
+        $clean = [];
+        foreach ($times as $t) {
+            if (!is_string($t)) continue;
+            if (!preg_match('/^([01]?\d|2[0-3]):[0-5]\d$/', trim($t))) {
+                $this->json(['error' => "Invalid time '" . htmlspecialchars($t) . "' — use HH:MM 24-hour format."], 422);
+            }
+            // Normalize to zero-padded HH:MM
+            $parts = explode(':', trim($t));
+            $clean[sprintf('%02d:%02d', (int) $parts[0], (int) $parts[1])] = true;
+        }
+        $clean = array_keys($clean);
+        sort($clean);
+        $timesStr = implode(',', $clean);
+
+        $update = ['times' => $timesStr];
+        if ($schedule['frequency'] === 'weekly' && $dow !== null) {
+            $dowInt = (int) $dow;
+            if ($dowInt < 0 || $dowInt > 6) {
+                $this->json(['error' => 'day_of_week must be 0..6 (Sunday=0).'], 422);
+            }
+            $update['day_of_week'] = $dowInt;
+        }
+
+        // Recompute next_run to reflect the new times immediately
+        $update['next_run'] = $this->calcNextRun(
+            $schedule['frequency'],
+            $timesStr,
+            $update['day_of_week'] ?? $schedule['day_of_week'],
+            $schedule['day_of_month'],
+            $schedule['timezone'] ?: 'UTC'
+        );
+
+        $this->db->update('schedules', $update, 'id = ?', [$id]);
+
+        $this->json([
+            'ok' => true,
+            'schedule' => array_merge($schedule, $update),
+        ]);
+    }
+
+    /**
+     * Next-run calculator — thin duplicate of AdminApiController's version so
+     * we don't have to require a Bearer token here. Takes a comma-separated
+     * times string and returns the next UTC run as Y-m-d H:i:s.
+     */
+    private function calcNextRun(string $frequency, string $times, $dayOfWeek, $dayOfMonth, string $timezone = 'UTC'): ?string
+    {
+        try {
+            $tz = new \DateTimeZone($timezone);
+        } catch (\Exception $e) {
+            $tz = new \DateTimeZone('UTC');
+        }
+        $utc = new \DateTimeZone('UTC');
+        $nowLocal = new \DateTime('now', $tz);
+
+        $timeList = array_filter(array_map('trim', explode(',', $times)));
+        if (empty($timeList)) return null;
+
+        if ($frequency === 'daily') {
+            $today = new \DateTime('today', $tz);
+            foreach ($timeList as $t) {
+                $parts = explode(':', $t);
+                $c = clone $today;
+                $c->setTime((int) $parts[0], (int) $parts[1]);
+                if ($c > $nowLocal) {
+                    $c->setTimezone($utc);
+                    return $c->format('Y-m-d H:i:s');
+                }
+            }
+            $tomorrow = new \DateTime('tomorrow', $tz);
+            $parts = explode(':', $timeList[0]);
+            $tomorrow->setTime((int) $parts[0], (int) $parts[1]);
+            $tomorrow->setTimezone($utc);
+            return $tomorrow->format('Y-m-d H:i:s');
+        }
+
+        if ($frequency === 'weekly') {
+            $days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            $dayName = $days[(int) ($dayOfWeek ?? 1)] ?? 'Monday';
+            $firstTime = $timeList[0];
+            $next = new \DateTime("next {$dayName} {$firstTime}", $tz);
+            $next->setTimezone($utc);
+            return $next->format('Y-m-d H:i:s');
+        }
+
+        return null; // Monthly/interval — caller can leave as-is
+    }
+
     public function delete(int $id): void
     {
         $this->requireAuth();
@@ -195,27 +308,50 @@ class ScheduleController extends Controller
             $shownAgents[(int) $o['agent_id']] = $o['agent_name'];
         }
 
-        // Histogram: 24 hour buckets, each bucket has per-agent counts so we can
-        // render it as a stacked bar by agent color.
+        // Histogram: 24 hour buckets, each bucket has per-agent counts and a
+        // list of (plan_id, plan_name, agent_name) tuples so we can render
+        // rich hover tooltips.
         $histogram = [];
         for ($h = 0; $h < 24; $h++) {
-            $histogram[$h] = ['total' => 0, 'agents' => []];
+            $histogram[$h] = ['total' => 0, 'agents' => [], 'plans' => []];
         }
         foreach ($blocks as $b) {
             $h = (int) floor($b['start_min'] / 60);
             $histogram[$h]['total']++;
             $aid = $b['agent_id'];
             $histogram[$h]['agents'][$aid] = ($histogram[$h]['agents'][$aid] ?? 0) + 1;
+            $histogram[$h]['plans'][] = [
+                'agent_name' => $b['agent_name'],
+                'plan_name' => $b['plan_name'],
+                'time' => $b['time_label'],
+            ];
+        }
+
+        // Raw schedule map for the "Change Time" modal. Keyed by schedule id.
+        $scheduleMap = [];
+        foreach ($schedules as $s) {
+            $scheduleMap[(int) $s['id']] = [
+                'id' => (int) $s['id'],
+                'plan_name' => $s['plan_name'],
+                'agent_name' => $s['agent_name'],
+                'agent_id' => (int) $s['agent_id'],
+                'frequency' => $s['frequency'],
+                'times' => $s['times'],
+                'day_of_week' => $s['day_of_week'] !== null ? (int) $s['day_of_week'] : null,
+                'timezone' => $s['timezone'],
+            ];
         }
 
         $this->view('schedules/week', [
             'pageTitle' => 'Schedules',
             'blocks' => $blocks,
             'histogram' => $histogram,
+            'scheduleMap' => $scheduleMap,
             'continuous' => $continuous,
             'otherSchedules' => $other,
             'shownAgents' => $shownAgents,
             'userTz' => $userTz,
+            'csrfToken' => $this->csrfToken(),
         ]);
     }
 

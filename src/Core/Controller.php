@@ -219,7 +219,10 @@ class Controller
 
     protected function verifyCsrf(): void
     {
-        $token = $_POST['csrf_token'] ?? '';
+        // Form posts put it in $_POST; JSON fetch calls send it as a header.
+        $token = $_POST['csrf_token']
+            ?? $_SERVER['HTTP_X_CSRF_TOKEN']
+            ?? '';
         if (!hash_equals($this->csrfToken(), $token)) {
             http_response_code(403);
             echo 'Invalid CSRF token';
