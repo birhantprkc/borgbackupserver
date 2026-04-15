@@ -9,18 +9,22 @@ foreach ($blocksByDay as &$dayBlocks) {
     usort($dayBlocks, fn($a, $b) => $a['start_min'] <=> $b['start_min']);
     $lanes = [];
     foreach ($dayBlocks as &$blk) {
+        // Use the RENDERED height (in minutes) for lane packing so that short
+        // blocks we've inflated to the min-height don't get another block
+        // drawn on top of them.
+        $renderedMin = max($blk['duration_min'], $minBlockMin);
         $placed = false;
         foreach ($lanes as $laneIdx => $laneEnd) {
             if ($blk['start_min'] >= $laneEnd) {
                 $blk['lane'] = $laneIdx;
-                $lanes[$laneIdx] = $blk['start_min'] + $blk['duration_min'];
+                $lanes[$laneIdx] = $blk['start_min'] + $renderedMin;
                 $placed = true;
                 break;
             }
         }
         if (!$placed) {
             $blk['lane'] = count($lanes);
-            $lanes[$blk['lane']] = $blk['start_min'] + $blk['duration_min'];
+            $lanes[$blk['lane']] = $blk['start_min'] + $renderedMin;
         }
     }
     unset($blk);
@@ -34,8 +38,13 @@ unset($dayBlocks);
 
 $dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 $dayLabelsLong = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-$pxPerHour = 44;
+$pxPerHour = 72;
 $gridHeight = 24 * $pxPerHour;
+// A block is at least $minBlockPx tall so its text is readable. For the
+// lane algorithm we need to reserve at least this many minutes of vertical
+// space so short back-to-back blocks don't visually overlap.
+$minBlockPx = 28;
+$minBlockMin = max(1, (int) ceil($minBlockPx * 60 / $pxPerHour));
 
 $todayIdx = ((int) (new \DateTime('now', new \DateTimeZone($userTz)))->format('N')) - 1;
 
@@ -333,7 +342,7 @@ foreach ($histogram as $h) {
                         <?php foreach ($blocksByDay[$dIdx] as $b): ?>
                             <?php
                             $top = $b['start_min'] * ($pxPerHour / 60);
-                            $height = max(26, $b['duration_min'] * ($pxPerHour / 60));
+                            $height = max($minBlockPx, $b['duration_min'] * ($pxPerHour / 60));
                             $laneWidth = 100 / $b['lane_count'];
                             $left = $b['lane'] * $laneWidth;
                             $color = bbs_agent_color($b['agent_id']);
