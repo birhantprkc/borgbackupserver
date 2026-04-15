@@ -364,6 +364,16 @@ function bbs_histogram_ticks(int $max): array
 }
 .sched-accent-header .text-muted { color: rgba(255, 255, 255, 0.7) !important; }
 .sched-accent-header i { color: #9ec5fe; }
+
+/* Mobile: thin the x-axis labels so they don't crash together, and drop
+   the per-block plan/time column so the client name can breathe. */
+@media (max-width: 767.98px) {
+    .hist-xaxis .xl[data-hour]:not([data-hour="0"]):not([data-hour="4"]):not([data-hour="8"]):not([data-hour="12"]):not([data-hour="16"]):not([data-hour="20"]) {
+        display: none;
+    }
+    .day-block .side { display: none; }
+    .day-block .agent { flex: 1 1 100%; text-align: left; }
+}
 </style>
 
 <div class="container-fluid py-3">
@@ -498,6 +508,7 @@ function bbs_histogram_ticks(int $max): array
                         if ($h === 24) continue;
                         ?>
                         <span class="xl <?= $isMajor ? 'major' : '' ?> <?= $edge ?>"
+                              data-hour="<?= $h ?>"
                               style="left: <?= $leftPct ?>%;"><?= $label ?></span>
                     <?php endfor; ?>
                 </div>
