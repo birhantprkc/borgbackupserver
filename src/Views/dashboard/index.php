@@ -688,7 +688,7 @@ new Chart(ctx, {
 // Catalog Pie Chart
 const pieColors = ['#36a2eb','#ff6384','#ffce56','#4bc0c0','#9966ff','#6c757d'];
 const fmtBytes = b => { b = Number(b); if (b >= 1099511627776) return (b/1099511627776).toFixed(1)+' TB'; if (b >= 1073741824) return (b/1073741824).toFixed(1)+' GB'; if (b >= 1048576) return (b/1048576).toFixed(1)+' MB'; return (b/1024).toFixed(1)+' KB'; };
-<?php if ($chStats && !empty($chStats['top_repos'])): ?>
+<?php if (!empty($chStats['top_repos'] ?? null)): ?>
 const pieCanvas = document.getElementById('catalogPieChart');
 let catalogPieChart = null;
 if (pieCanvas) {
