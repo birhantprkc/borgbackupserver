@@ -151,9 +151,13 @@ $dedupSavingsPct = $totalOriginalBytes > 0
         </div>
     </div>
 
-    <!-- Row 2: Activity chart | Backup summary | Server health -->
+    <!-- Row 2: Activity chart | Backup summary | Server health (admin only) -->
+    <?php
+        $row2JobsCol = $isAdmin ? 'col-xl-5 col-lg-6' : 'col-lg-7';
+        $row2SummaryCol = $isAdmin ? 'col-xl-4 col-lg-6' : 'col-lg-5';
+    ?>
     <div class="row g-3 mb-3">
-        <div class="col-xl-5 col-lg-6">
+        <div class="<?= $row2JobsCol ?>">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header card-head-gradient fw-semibold">
                     <i class="bi bi-bar-chart me-2"></i>Jobs (Last 24h)
@@ -166,7 +170,7 @@ $dedupSavingsPct = $totalOriginalBytes > 0
             </div>
         </div>
 
-        <div class="col-xl-4 col-lg-6" id="recovery-points">
+        <div class="<?= $row2SummaryCol ?>" id="recovery-points">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header card-head-gradient fw-semibold">
                     <i class="bi bi-shield-check me-2"></i>Backup Summary
@@ -225,8 +229,8 @@ $dedupSavingsPct = $totalOriginalBytes > 0
         <?php endif; ?>
     </div>
 
-    <!-- Row 3: Storage Locations — auto-fill grid adapts 1..N locations -->
-    <?php if (!empty($storageLocations)): ?>
+    <!-- Row 3: Storage Locations — admin only, infra detail -->
+    <?php if ($isAdmin && !empty($storageLocations)): ?>
     <div class="card border-0 shadow-sm mb-3">
         <div class="card-header card-head-gradient fw-semibold d-flex justify-content-between align-items-center">
             <span><i class="bi bi-hdd-stack me-2"></i>Storage Locations</span>
