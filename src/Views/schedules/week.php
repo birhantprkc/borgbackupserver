@@ -54,10 +54,6 @@ function bbs_agent_color(int $id): string
     return "hsl({$hue}, 55%, 45%)";
 }
 
-$maxHistCount = 0;
-foreach ($histogram as $h) {
-    if ($h['total'] > $maxHistCount) $maxHistCount = $h['total'];
-}
 ?>
 
 <style>
