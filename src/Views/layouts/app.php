@@ -136,6 +136,12 @@
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a href="/schedules" class="nav-link sidebar-link <?= ($pageTitle ?? '') === 'Schedules' ? 'active' : '' ?>">
+                        <i class="bi bi-calendar-week d-block mb-1 fs-4"></i>
+                        <span class="small">Schedules</span>
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a href="/log" class="nav-link sidebar-link <?= ($pageTitle ?? '') === 'Log' ? 'active' : '' ?>">
                         <i class="bi bi-journal-text d-block mb-1 fs-4"></i>
                         <span class="small">Log</span>

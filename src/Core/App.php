@@ -139,6 +139,7 @@ class App
         $this->router->map('POST', '/plans/[i:id]/duplicate', 'BackupPlanController@duplicate');
 
         // Schedules
+        $this->router->map('GET',  '/schedules', 'ScheduleController@week');
         $this->router->map('POST', '/schedules/[i:id]/toggle', 'ScheduleController@toggle');
         $this->router->map('POST', '/schedules/[i:id]/delete', 'ScheduleController@delete');
 
