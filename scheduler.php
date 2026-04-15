@@ -1512,22 +1512,22 @@ foreach ($serverJobs as $sj) {
                     'message' => "Prune completed — all " . count($borgArchives) . " recovery point(s) retained, none removed",
                 ]);
             }
-            // Refresh cached repo stats. size_bytes only updated from SUM for
-            // remote SSH repos (no du possible) or when currently 0 — for
-            // local repos the 5-min du scan is the source of truth.
-            $db->query("
-                UPDATE repositories SET
-                    archive_count = (SELECT COUNT(*) FROM archives WHERE repository_id = ?),
-                    size_bytes = CASE
-                        WHEN storage_type = 'remote_ssh' OR size_bytes = 0
-                        THEN COALESCE((SELECT SUM(deduplicated_size) FROM archives WHERE repository_id = ?), 0)
-                        ELSE size_bytes
-                    END
-                WHERE id = ?
-            ", [$repoId, $repoId, $repoId]);
+            // Refresh archive count + size. Prune just shrank the repo,
+            // so measure actual disk usage now (local) or re-sum archives
+            // (remote SSH) — see RepositorySizeService.
+            $db->query(
+                "UPDATE repositories SET archive_count = (SELECT COUNT(*) FROM archives WHERE repository_id = ?) WHERE id = ?",
+                [$repoId, $repoId]
+            );
+            \BBS\Services\RepositorySizeService::refresh((int) $repoId);
 
             } // end JSON validation else
         }
+    }
+
+    // After successful compact, repo shrank — refresh size.
+    if ($result === 'completed' && $sj['task_type'] === 'compact') {
+        \BBS\Services\RepositorySizeService::refresh((int) $sj['repository_id']);
     }
 
     // After successful archive_delete, remove the archive from the database
@@ -1549,17 +1549,11 @@ foreach ($serverJobs as $sj) {
 
             $db->delete('archives', 'id = ?', [$deletedArchive['id']]);
 
-            // Refresh cached repo stats (see note above on size_bytes rules)
-            $db->query("
-                UPDATE repositories SET
-                    archive_count = (SELECT COUNT(*) FROM archives WHERE repository_id = ?),
-                    size_bytes = CASE
-                        WHEN storage_type = 'remote_ssh' OR size_bytes = 0
-                        THEN COALESCE((SELECT SUM(deduplicated_size) FROM archives WHERE repository_id = ?), 0)
-                        ELSE size_bytes
-                    END
-                WHERE id = ?
-            ", [$sj['repository_id'], $sj['repository_id'], $sj['repository_id']]);
+            $db->query(
+                "UPDATE repositories SET archive_count = (SELECT COUNT(*) FROM archives WHERE repository_id = ?) WHERE id = ?",
+                [$sj['repository_id'], $sj['repository_id']]
+            );
+            \BBS\Services\RepositorySizeService::refresh((int) $sj['repository_id']);
 
             echo date('Y-m-d H:i:s') . " Removed archive \"{$archiveName}\" from DB for repo #{$sj['repository_id']}\n";
         }
@@ -1608,23 +1602,20 @@ foreach ($serverJobs as $sj) {
     }
 }
 
-// Step 5: Update repository sizes from actual disk usage (every 5 minutes)
-// Skips remote SSH repos — no local disk to measure; size comes from agent backup reports
-if ((int) date('i') % 5 === 0) {
-    $repos = $db->fetchAll("SELECT id, path, agent_id, name, storage_type, storage_location_id FROM repositories");
-    foreach ($repos as $repo) {
-        if (($repo['storage_type'] ?? 'local') === 'remote_ssh') continue;
-        $localPath = \BBS\Services\BorgCommandBuilder::getLocalRepoPath($repo);
-        if (!empty($localPath)) {
-            // Use SSH helper to get size (runs as root, can read all repos)
-            $output = [];
-            exec('sudo /usr/local/bin/bbs-ssh-helper get-size ' . escapeshellarg($localPath) . ' 2>/dev/null', $output);
-            if (!empty($output[0]) && is_numeric($output[0])) {
-                $sizeBytes = (int) $output[0];
-                $db->update('repositories', ['size_bytes' => $sizeBytes], 'id = ?', [$repo['id']]);
-            }
-        }
-    }
+// Step 5: Bootstrap size for any local repo whose size_bytes is still 0
+// (fresh install, newly added repo, or legacy migration). Runs every minute
+// but only touches disks once per repo, since the UPDATE makes size_bytes > 0.
+// After the bootstrap, size is maintained by event-driven refreshes in
+// RepositorySizeService — triggered after backup, prune, compact, and
+// archive_delete. No periodic rescan on idle disks.
+$zeroRepos = $db->fetchAll(
+    "SELECT id FROM repositories
+      WHERE size_bytes = 0
+        AND (storage_type = 'local' OR storage_type IS NULL)
+        AND id IN (SELECT DISTINCT repository_id FROM archives)"
+);
+foreach ($zeroRepos as $zr) {
+    \BBS\Services\RepositorySizeService::refresh((int) $zr['id']);
 }
 
 // Step 5b: Poll remote SSH host disk usage (every 15 minutes)

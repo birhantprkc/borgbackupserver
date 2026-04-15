@@ -288,10 +288,10 @@ class ClientController extends Controller
         }
 
         // Refresh archive_count from the archives table (cheap and always accurate).
-        // Do NOT touch size_bytes here — the scheduler updates it every 5 minutes
-        // from actual disk usage (du) which is the ground truth. Summing
-        // archives.deduplicated_size is always less than real on-disk size
-        // because it excludes borg repo metadata and uncompacted chunks.
+        // Do NOT touch size_bytes here — it's maintained by RepositorySizeService
+        // after backup/prune/compact/delete events. Summing archives.deduplicated_size
+        // is always less than real on-disk size because it excludes borg repo
+        // metadata and uncompacted chunks.
         $this->db->query("
             UPDATE repositories r SET
                 r.archive_count = (SELECT COUNT(*) FROM archives a WHERE a.repository_id = r.id)
@@ -502,9 +502,9 @@ class ClientController extends Controller
             ? \BBS\Core\TimeHelper::ago($agent['last_heartbeat'])
             : 'Never';
 
-        // Refresh archive_count from archives; size_bytes is maintained by the
-        // scheduler (every 5 min) from actual disk usage — don't overwrite it
-        // with SUM(deduplicated_size) which excludes repo metadata/uncompacted chunks.
+        // Refresh archive_count from archives; size_bytes is maintained by
+        // RepositorySizeService after backup/prune/compact/delete — don't overwrite
+        // it with SUM(deduplicated_size) which excludes repo metadata/uncompacted chunks.
         $this->db->query("
             UPDATE repositories r SET
                 r.archive_count = (SELECT COUNT(*) FROM archives a WHERE a.repository_id = r.id)

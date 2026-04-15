@@ -400,26 +400,21 @@ class AgentApiController extends Controller
                 'message' => "Archive created: \"{$input['archive_name']}\" — {$origSize} original, {$dedupSize} deduplicated",
             ]);
 
-            // Update repo stats + borg version.
-            // size_bytes is only set from SUM(deduplicated_size) for remote SSH
-            // repos (where we can't du) OR when currently 0 (fresh repo). For
-            // local repos the scheduler's du scan is the source of truth — it
-            // includes repo metadata and uncompacted chunks that SUM misses.
+            // Update archive count + borg version. Size is refreshed below
+            // via RepositorySizeService (du for local, SUM for remote SSH) —
+            // runs once per backup instead of a periodic scan, so idle disks
+            // stay idle.
             $borgVer = !empty($agent['borg_version']) ? preg_replace('/^borg\s+/', '', $agent['borg_version']) : null;
             $this->db->query("
                 UPDATE repositories SET
-                    archive_count = (SELECT COUNT(*) FROM archives WHERE repository_id = ?),
-                    size_bytes = CASE
-                        WHEN storage_type = 'remote_ssh' OR size_bytes = 0
-                        THEN COALESCE((SELECT SUM(deduplicated_size) FROM archives WHERE repository_id = ?), 0)
-                        ELSE size_bytes
-                    END
+                    archive_count = (SELECT COUNT(*) FROM archives WHERE repository_id = ?)
                     " . ($borgVer ? ", borg_version_last = ?" : "") . "
                 WHERE id = ?
             ", $borgVer
-                ? [$job['repository_id'], $job['repository_id'], $borgVer, $job['repository_id']]
-                : [$job['repository_id'], $job['repository_id'], $job['repository_id']]
+                ? [$job['repository_id'], $borgVer, $job['repository_id']]
+                : [$job['repository_id'], $job['repository_id']]
             );
+            \BBS\Services\RepositorySizeService::refresh((int) $job['repository_id']);
 
             $this->db->insert('server_log', [
                 'agent_id' => $agent['id'],
@@ -590,22 +585,18 @@ class AgentApiController extends Controller
                     'message' => "Archive created: \"{$input['archive_name']}\" — {$origSize} original, {$dedupSize} deduplicated",
                 ]);
 
-                // Update repo stats + borg version (see comment above on size_bytes)
+                // Update archive count + borg version; size refreshed after (see above).
                 $borgVer2 = !empty($agent['borg_version']) ? preg_replace('/^borg\s+/', '', $agent['borg_version']) : null;
                 $this->db->query("
                     UPDATE repositories SET
-                        archive_count = (SELECT COUNT(*) FROM archives WHERE repository_id = ?),
-                        size_bytes = CASE
-                            WHEN storage_type = 'remote_ssh' OR size_bytes = 0
-                            THEN COALESCE((SELECT SUM(deduplicated_size) FROM archives WHERE repository_id = ?), 0)
-                            ELSE size_bytes
-                        END
+                        archive_count = (SELECT COUNT(*) FROM archives WHERE repository_id = ?)
                         " . ($borgVer2 ? ", borg_version_last = ?" : "") . "
                     WHERE id = ?
                 ", $borgVer2
-                    ? [$job['repository_id'], $job['repository_id'], $borgVer2, $job['repository_id']]
-                    : [$job['repository_id'], $job['repository_id'], $job['repository_id']]
+                    ? [$job['repository_id'], $borgVer2, $job['repository_id']]
+                    : [$job['repository_id'], $job['repository_id']]
                 );
+                \BBS\Services\RepositorySizeService::refresh((int) $job['repository_id']);
 
                 $this->db->insert('server_log', [
                     'agent_id' => $agent['id'],
