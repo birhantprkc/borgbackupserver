@@ -37,9 +37,16 @@ log_mig() { echo "[$(date '+%H:%M:%S')] $*"; }
 mkdir -p /var/bbs/config
 OWNERSHIP_FILE=/var/bbs/config/.ownership
 
-DEFAULT_APP_UID=33;    DEFAULT_APP_GID=33
-DEFAULT_MYSQL_UID=100; DEFAULT_MYSQL_GID=100
-DEFAULT_CH_UID=999;    DEFAULT_CH_GID=999
+# Defaults come from the actual /etc/passwd inside this image, not hardcoded
+# values. apt-get assigns system UIDs dynamically, so clickhouse can be 995 on
+# one build and 999 on another — hardcoding would cause false "migrations" that
+# look for files owned by a UID that never existed on this volume.
+DEFAULT_APP_UID=$(id -u www-data 2>/dev/null || echo 33)
+DEFAULT_APP_GID=$(id -g www-data 2>/dev/null || echo 33)
+DEFAULT_MYSQL_UID=$(id -u mysql 2>/dev/null || echo 100)
+DEFAULT_MYSQL_GID=$(id -g mysql 2>/dev/null || echo 100)
+DEFAULT_CH_UID=$(id -u clickhouse 2>/dev/null || echo 999)
+DEFAULT_CH_GID=$(id -g clickhouse 2>/dev/null || echo 999)
 
 # --- Load previously-applied state (if any) ---
 APP_UID=""; APP_GID=""
