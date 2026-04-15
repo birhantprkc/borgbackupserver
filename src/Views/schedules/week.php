@@ -356,14 +356,14 @@ function bbs_histogram_ticks(int $max): array
 .sched-ctxmenu button i { width: 18px; text-align: center; }
 .sched-ctxmenu .divider { height: 1px; background: var(--bs-border-color); margin: 4px 0; }
 
-/* Accent header for the primary schedule cards — burnt orange gradient */
+/* Accent header for the primary schedule cards — subdued navy gradient */
 .sched-accent-header {
-    background: linear-gradient(135deg, #7c2d12 0%, #c2410c 50%, #ea580c 100%) !important;
+    background: linear-gradient(135deg, #1e293b 0%, #243a6b 50%, #2b4d8c 100%) !important;
     color: #fff !important;
     border-bottom: 1px solid rgba(0, 0, 0, 0.25);
 }
-.sched-accent-header .text-muted { color: rgba(255, 255, 255, 0.75) !important; }
-.sched-accent-header i { color: #fff; }
+.sched-accent-header .text-muted { color: rgba(255, 255, 255, 0.7) !important; }
+.sched-accent-header i { color: #9ec5fe; }
 </style>
 
 <div class="container-fluid py-3">
