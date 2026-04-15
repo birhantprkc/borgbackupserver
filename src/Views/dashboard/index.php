@@ -504,7 +504,7 @@ $pieColors = ['#36a2eb', '#ff6384', '#ffce56', '#4bc0c0', '#9966ff', '#6c757d'];
             <div class="card-header bg-body fw-semibold d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-calendar-event me-1"></i> Upcoming Backups</span>
                 <a href="/schedules" class="small text-decoration-none">
-                    View all <i class="bi bi-arrow-right"></i>
+                    View Schedule <i class="bi bi-arrow-right"></i>
                 </a>
             </div>
             <div class="card-body p-0 dash-table" id="upcoming-backups">
