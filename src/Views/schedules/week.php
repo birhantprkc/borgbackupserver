@@ -6,7 +6,7 @@ $gridHeight = 24 * $pxPerHour;
 // A block is at least $minBlockPx tall so its text is readable. For the
 // lane algorithm we need to reserve at least this many minutes of vertical
 // space so short back-to-back blocks don't visually overlap.
-$minBlockPx = 36;
+$minBlockPx = 26;
 $minBlockMin = max(1, (int) ceil($minBlockPx * 60 / $pxPerHour));
 
 // Group blocks by day so we can render just one day at a time, and compute
@@ -193,7 +193,7 @@ foreach ($histogram as $h) {
 .day-col .hour-line.major { opacity: 0.6; }
 .day-block {
     position: absolute;
-    padding: 3px 8px;
+    padding: 1px 8px;
     border-radius: 5px;
     color: #fff;
     overflow: hidden;
@@ -203,7 +203,7 @@ foreach ($histogram as $h) {
     text-decoration: none;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: 6px;
 }
@@ -224,14 +224,13 @@ foreach ($histogram as $h) {
 }
 .day-block .agent {
     font-weight: 600;
-    font-size: 0.78rem;
-    line-height: 1.15;
+    font-size: 0.74rem;
+    line-height: 1;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     flex: 1 1 auto;
     min-width: 0;
-    align-self: center;
 }
 .day-block .side {
     display: flex;
@@ -239,11 +238,10 @@ foreach ($histogram as $h) {
     align-items: flex-end;
     justify-content: center;
     text-align: right;
-    line-height: 1.1;
+    line-height: 1.05;
     flex: 0 0 auto;
     max-width: 60%;
     min-width: 0;
-    gap: 1px;
 }
 .day-block .side > div {
     white-space: nowrap;
@@ -251,8 +249,8 @@ foreach ($histogram as $h) {
     text-overflow: ellipsis;
     max-width: 100%;
 }
-.day-block .side .plan { font-weight: 500; font-size: 0.62rem; opacity: 0.95; }
-.day-block .side .when { font-size: 0.6rem; opacity: 0.8; font-variant-numeric: tabular-nums; }
+.day-block .side .plan { font-weight: 500; font-size: 0.6rem; opacity: 0.95; }
+.day-block .side .when { font-size: 0.58rem; opacity: 0.8; font-variant-numeric: tabular-nums; }
 .dim {
     opacity: 0.12 !important;
     pointer-events: none;
