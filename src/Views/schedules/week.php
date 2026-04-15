@@ -193,17 +193,19 @@ foreach ($histogram as $h) {
 .day-col .hour-line.major { opacity: 0.6; }
 .day-block {
     position: absolute;
-    padding: 5px 10px;
+    padding: 3px 8px;
     border-radius: 5px;
     color: #fff;
-    font-size: 0.85rem;
-    line-height: 1.25;
     overflow: hidden;
     cursor: pointer;
     border-left: 4px solid rgba(0, 0, 0, 0.35);
     transition: opacity 0.15s, transform 0.15s;
     text-decoration: none;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 6px;
 }
 .day-block:hover {
     transform: scale(1.01);
@@ -220,19 +222,38 @@ foreach ($histogram as $h) {
         rgba(255, 255, 255, 0.12) 16px
     );
 }
-.day-block .plan {
+.day-block .agent {
     font-weight: 600;
+    font-size: 0.9rem;
+    line-height: 1.2;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    flex: 1 1 auto;
+    min-width: 0;
+    align-self: center;
 }
-.day-block .meta {
+.day-block .side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    text-align: right;
+    font-size: 0.62rem;
+    line-height: 1.15;
     opacity: 0.9;
-    font-size: 0.72rem;
+    flex: 0 0 auto;
+    max-width: 55%;
+    min-width: 0;
+}
+.day-block .side > div {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    max-width: 100%;
 }
+.day-block .side .plan { font-weight: 500; font-size: 0.65rem; }
+.day-block .side .time { opacity: 0.85; }
+.day-block .side .dur { opacity: 0.75; }
 .dim {
     opacity: 0.12 !important;
     pointer-events: none;
@@ -364,10 +385,16 @@ foreach ($histogram as $h) {
                            href="/clients/<?= $b['agent_id'] ?>?tab=schedules"
                            style="top: <?= $top ?>px; height: <?= $height ?>px; left: calc(<?= $left ?>% + 4px); width: calc(<?= $laneWidth ?>% - 8px); background: <?= $color ?>;"
                            title="<?= htmlspecialchars($title) ?>">
-                            <div class="plan"><?= htmlspecialchars($b['plan_name']) ?></div>
-                            <?php if ($height >= 40): ?>
-                            <div class="meta"><?= htmlspecialchars($b['agent_name']) ?> · <?= htmlspecialchars($b['time_label']) ?> · <?= htmlspecialchars($durLabel) ?></div>
-                            <?php endif; ?>
+                            <div class="agent"><?= htmlspecialchars($b['agent_name']) ?></div>
+                            <div class="side">
+                                <div class="plan"><?= htmlspecialchars($b['plan_name']) ?></div>
+                                <?php if ($height >= 38): ?>
+                                <div class="time"><?= htmlspecialchars($b['time_label']) ?></div>
+                                <?php endif; ?>
+                                <?php if ($height >= 52): ?>
+                                <div class="dur"><?= htmlspecialchars($durLabel) ?></div>
+                                <?php endif; ?>
+                            </div>
                         </a>
                         <?php endforeach; ?>
                         <?php if (empty($blocksByDay[$dIdx])): ?>
