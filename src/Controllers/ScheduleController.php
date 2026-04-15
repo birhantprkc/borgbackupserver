@@ -308,15 +308,18 @@ class ScheduleController extends Controller
             $shownAgents[(int) $o['agent_id']] = $o['agent_name'];
         }
 
-        // Histogram: 24 hour buckets, each bucket has per-agent counts and a
-        // list of (plan_id, plan_name, agent_name) tuples so we can render
-        // rich hover tooltips.
+        // Histogram: 24 hour buckets. Dedupe by schedule_id per hour so a
+        // daily schedule counts once (not 7x for each day of the week).
         $histogram = [];
         for ($h = 0; $h < 24; $h++) {
             $histogram[$h] = ['total' => 0, 'agents' => [], 'plans' => []];
         }
+        $seenInHour = []; // hour => schedule_id => true
         foreach ($blocks as $b) {
             $h = (int) floor($b['start_min'] / 60);
+            $sid = $b['schedule_id'];
+            if (isset($seenInHour[$h][$sid])) continue;
+            $seenInHour[$h][$sid] = true;
             $histogram[$h]['total']++;
             $aid = $b['agent_id'];
             $histogram[$h]['agents'][$aid] = ($histogram[$h]['agents'][$aid] ?? 0) + 1;
@@ -324,6 +327,7 @@ class ScheduleController extends Controller
                 'agent_name' => $b['agent_name'],
                 'plan_name' => $b['plan_name'],
                 'time' => $b['time_label'],
+                'frequency' => $b['frequency'],
             ];
         }
 

@@ -577,7 +577,7 @@ foreach ($histogram as $h) {
 </div>
 
 <script>
-(function () {
+document.addEventListener('DOMContentLoaded', function () {
     const scheduleMap = <?= json_encode($scheduleMap ?? []) ?>;
     const csrfToken   = <?= json_encode($csrfToken ?? '') ?>;
     const histBuckets = <?= json_encode($histogram ?? []) ?>;
@@ -654,9 +654,10 @@ foreach ($histogram as $h) {
             const bucket = histBuckets[hour];
             if (!bucket || !bucket.total) return;
             const hLabel = hour === 0 ? '12 AM' : hour < 12 ? hour + ' AM' : hour === 12 ? '12 PM' : (hour - 12) + ' PM';
-            let html = '<div class="tt-title">' + hLabel + ' — ' + bucket.total + ' backup' + (bucket.total > 1 ? 's' : '') + '</div><ul>';
+            let html = '<div class="tt-title">' + hLabel + ' — ' + bucket.total + ' schedule' + (bucket.total > 1 ? 's' : '') + '</div><ul>';
             (bucket.plans || []).forEach(p => {
-                html += '<li>' + esc(p.agent_name) + ' · ' + esc(p.plan_name) + ' <span style="opacity:.6">(' + esc(p.time) + ')</span></li>';
+                const freq = p.frequency === 'weekly' ? ' <span style="opacity:.5">· weekly</span>' : '';
+                html += '<li>' + esc(p.agent_name) + ' · ' + esc(p.plan_name) + ' <span style="opacity:.6">(' + esc(p.time) + ')</span>' + freq + '</li>';
             });
             html += '</ul>';
             showTooltip(html, ev);
@@ -718,14 +719,29 @@ foreach ($histogram as $h) {
     });
 
     // ----------------- Change Time modal -----------------------------------
+    let activeScheduleId = null;
     const modalEl = document.getElementById('change-time-modal');
-    const modal = new bootstrap.Modal(modalEl);
     const ctTimesList = document.getElementById('ct-times-list');
     const ctDowSection = document.getElementById('ct-dow-section');
     const ctDow = document.getElementById('ct-dow');
     const ctContext = document.getElementById('ct-context');
     const ctError = document.getElementById('ct-error');
-    let activeScheduleId = null;
+
+    // Lazily init Bootstrap's Modal controller so we fail gracefully if
+    // Bootstrap JS didn't load, and also to avoid TDZ ordering problems.
+    let _modal = null;
+    function getModal() {
+        if (_modal) return _modal;
+        if (typeof bootstrap === 'undefined' || !bootstrap.Modal) {
+            console.error('Bootstrap JS not loaded — falling back to manual modal show/hide');
+            return {
+                show: () => { modalEl.classList.add('show'); modalEl.style.display = 'block'; document.body.classList.add('modal-open'); },
+                hide: () => { modalEl.classList.remove('show'); modalEl.style.display = 'none'; document.body.classList.remove('modal-open'); },
+            };
+        }
+        _modal = new bootstrap.Modal(modalEl);
+        return _modal;
+    }
 
     function addTimeRow(value) {
         const row = document.createElement('div');
@@ -767,7 +783,7 @@ foreach ($histogram as $h) {
         if (times.length === 0) addTimeRow('');
         else times.forEach(t => addTimeRow(t));
 
-        modal.show();
+        getModal().show();
     }
 
     document.getElementById('ct-add-time').addEventListener('click', () => addTimeRow(''));
@@ -802,7 +818,7 @@ foreach ($histogram as $h) {
                 ctError.style.display = '';
                 return;
             }
-            modal.hide();
+            getModal().hide();
             // Reload the page so blocks reposition. A later iteration can
             // mutate the DOM in place for a slicker feel.
             window.location.reload();
@@ -811,5 +827,5 @@ foreach ($histogram as $h) {
             ctError.style.display = '';
         }
     });
-})();
+});
 </script>
