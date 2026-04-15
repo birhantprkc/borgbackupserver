@@ -308,27 +308,36 @@ class ScheduleController extends Controller
             $shownAgents[(int) $o['agent_id']] = $o['agent_name'];
         }
 
-        // Histogram: 24 hour buckets. Dedupe by schedule_id per hour so a
-        // daily schedule counts once (not 7x for each day of the week).
-        $histogram = [];
-        for ($h = 0; $h < 24; $h++) {
-            $histogram[$h] = ['total' => 0, 'agents' => [], 'plans' => []];
+        // Per-day histograms. For each day-of-week 0..6 we build a 24-bucket
+        // array. Each bucket carries the list of schedule entries firing in
+        // that hour so the tooltip/click handler can reference them.
+        $histograms = [];
+        for ($d = 0; $d < 7; $d++) {
+            $histograms[$d] = [];
+            for ($h = 0; $h < 24; $h++) {
+                $histograms[$d][$h] = ['total' => 0, 'schedules' => []];
+            }
         }
-        $seenInHour = []; // hour => schedule_id => true
         foreach ($blocks as $b) {
+            $d = $b['day_idx'];
             $h = (int) floor($b['start_min'] / 60);
-            $sid = $b['schedule_id'];
-            if (isset($seenInHour[$h][$sid])) continue;
-            $seenInHour[$h][$sid] = true;
-            $histogram[$h]['total']++;
-            $aid = $b['agent_id'];
-            $histogram[$h]['agents'][$aid] = ($histogram[$h]['agents'][$aid] ?? 0) + 1;
-            $histogram[$h]['plans'][] = [
+            $histograms[$d][$h]['total']++;
+            $histograms[$d][$h]['schedules'][] = [
+                'schedule_id' => $b['schedule_id'],
+                'agent_id' => $b['agent_id'],
                 'agent_name' => $b['agent_name'],
                 'plan_name' => $b['plan_name'],
                 'time' => $b['time_label'],
                 'frequency' => $b['frequency'],
             ];
+        }
+        // Compute global max across all days so the y-axis scale is consistent
+        // when switching days (otherwise bars jump around visually).
+        $histMax = 0;
+        foreach ($histograms as $day) {
+            foreach ($day as $bucket) {
+                if ($bucket['total'] > $histMax) $histMax = $bucket['total'];
+            }
         }
 
         // Raw schedule map for the "Change Time" modal. Keyed by schedule id.
@@ -349,7 +358,8 @@ class ScheduleController extends Controller
         $this->view('schedules/week', [
             'pageTitle' => 'Schedules',
             'blocks' => $blocks,
-            'histogram' => $histogram,
+            'histograms' => $histograms,
+            'histMax' => $histMax,
             'scheduleMap' => $scheduleMap,
             'continuous' => $continuous,
             'otherSchedules' => $other,

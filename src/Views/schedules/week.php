@@ -63,9 +63,9 @@ foreach ($histogram as $h) {
 <style>
 .hist-container {
     position: relative;
-    height: 120px;
+    height: 140px;
     display: grid;
-    grid-template-columns: 48px repeat(24, 1fr);
+    grid-template-columns: 40px repeat(24, 1fr);
     column-gap: 2px;
     align-items: end;
 }
@@ -84,10 +84,19 @@ foreach ($histogram as $h) {
     border-radius: 3px 3px 0 0;
     overflow: hidden;
     min-height: 1px;
+    gap: 1px;
 }
 .hist-seg {
     width: 100%;
-    border-top: 1px solid rgba(0, 0, 0, 0.2);
+    flex: 1 1 0;
+    min-height: 6px;
+    cursor: pointer;
+    transition: filter 0.1s, transform 0.1s;
+}
+.hist-seg:hover {
+    filter: brightness(1.25);
+    transform: scaleX(1.4);
+    z-index: 5;
 }
 .hist-hour-label {
     position: absolute;
@@ -99,26 +108,22 @@ foreach ($histogram as $h) {
     color: var(--bs-secondary-color);
 }
 .hist-hour-label.major { font-weight: 600; color: var(--bs-body-color); }
-.hist-count-label {
-    position: absolute;
-    bottom: 20px;
-    left: 0;
-    right: 0;
-    text-align: center;
-    font-size: 0.7rem;
-    font-weight: 600;
-    color: var(--bs-body-color);
-    pointer-events: none;
-}
 .hist-yaxis {
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
+    position: relative;
     font-size: 0.65rem;
     color: var(--bs-secondary-color);
-    padding: 0 6px 18px 0;
+    padding-right: 6px;
+    padding-bottom: 18px;
     text-align: right;
+    height: 100%;
 }
+.hist-yaxis span {
+    position: absolute;
+    right: 6px;
+    transform: translateY(-50%);
+}
+.hist-yaxis span:first-child { top: 0; }
+.hist-yaxis span:last-child { bottom: 18px; transform: translateY(50%); }
 
 .day-pills {
     display: flex;
@@ -314,14 +319,27 @@ foreach ($histogram as $h) {
             <h4 class="mb-0"><i class="bi bi-calendar-week me-2"></i>Schedules</h4>
             <div class="text-muted small">Times shown in <?= htmlspecialchars($userTz) ?></div>
         </div>
-        <div class="d-flex align-items-center gap-2">
-            <label class="form-label mb-0 small text-muted">Client:</label>
-            <select id="agent-filter" class="form-select form-select-sm" style="width: auto;">
-                <option value="">All</option>
-                <?php foreach ($shownAgents as $aid => $aname): ?>
-                <option value="<?= (int) $aid ?>"><?= htmlspecialchars($aname) ?></option>
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+            <div class="day-pills" id="day-pills">
+                <?php foreach ($dayLabels as $idx => $label): ?>
+                <?php $count = count($blocksByDay[$idx]); ?>
+                <button type="button"
+                        class="day-pill <?= $idx === $todayIdx ? 'today' : '' ?>"
+                        data-day-idx="<?= $idx ?>">
+                    <?= $idx === $todayIdx ? 'Today' : $label ?>
+                    <?php if ($count > 0): ?><span class="pill-count"><?= $count ?></span><?php endif; ?>
+                </button>
                 <?php endforeach; ?>
-            </select>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <label class="form-label mb-0 small text-muted">Client:</label>
+                <select id="agent-filter" class="form-select form-select-sm" style="width: auto;">
+                    <option value="">All</option>
+                    <?php foreach ($shownAgents as $aid => $aname): ?>
+                    <option value="<?= (int) $aid ?>"><?= htmlspecialchars($aname) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
         </div>
     </div>
 
@@ -334,63 +352,55 @@ foreach ($histogram as $h) {
     </div>
     <?php else: ?>
 
-    <!-- Histogram: hour-of-day load -->
+    <!-- Histogram: hour-of-day load for the selected day. Each bar is
+         divided into 1-unit segments, one per schedule, so individual
+         schedules are hoverable and clickable. -->
     <div class="card border-0 shadow-sm mb-3">
         <div class="card-header bg-body fw-semibold d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-bar-chart me-1"></i>Load by hour (daily + the selected day's weekly schedules)</span>
-            <span class="text-muted small">peak: <?= $maxHistCount ?> <?= $maxHistCount === 1 ? 'backup' : 'backups' ?></span>
+            <span><i class="bi bi-bar-chart me-1"></i>Load by hour</span>
+            <span class="text-muted small">peak: <?= $histMax ?> <?= $histMax === 1 ? 'schedule' : 'schedules' ?></span>
         </div>
         <div class="card-body py-3">
-            <div class="hist-container" id="histogram">
+            <?php for ($dIdx = 0; $dIdx < 7; $dIdx++): ?>
+            <div class="hist-container" data-day-idx="<?= $dIdx ?>" style="<?= $dIdx === $todayIdx ? '' : 'display: none;' ?>">
                 <div class="hist-yaxis">
-                    <span><?= $maxHistCount ?></span>
-                    <span><?= (int) ceil($maxHistCount / 2) ?></span>
+                    <span><?= $histMax ?></span>
                     <span>0</span>
                 </div>
                 <?php for ($h = 0; $h < 24; $h++): ?>
                 <?php
-                    $bar = $histogram[$h];
+                    $bar = $histograms[$dIdx][$h];
                     $total = $bar['total'];
-                    $barHeightPct = $maxHistCount > 0 ? ($total / $maxHistCount) * 100 : 0;
+                    $barHeightPct = $histMax > 0 ? ($total / $histMax) * 100 : 0;
                     $isMajor = ($h % 6 === 0) || $h === 23;
                     $hourLabel = $h === 0 ? '12a' : ($h < 12 ? "{$h}a" : ($h === 12 ? '12p' : ($h - 12) . 'p'));
                 ?>
                 <div class="hist-bar-wrap" data-hour="<?= $h ?>">
-                    <?php if ($total > 0): ?>
-                    <div class="hist-count-label"><?= $total ?></div>
-                    <?php endif; ?>
                     <div class="hist-bar" style="height: <?= $barHeightPct ?>%;">
-                        <?php foreach ($bar['agents'] as $aid => $count): ?>
+                        <?php foreach ($bar['schedules'] as $sch): ?>
                         <div class="hist-seg"
-                             data-agent-id="<?= (int) $aid ?>"
-                             style="flex: <?= (int) $count ?>; background: <?= bbs_agent_color((int) $aid) ?>;"
-                             title="<?= htmlspecialchars($shownAgents[$aid] ?? 'Unknown') ?>: <?= (int) $count ?>"></div>
+                             data-schedule-id="<?= $sch['schedule_id'] ?>"
+                             data-agent-id="<?= (int) $sch['agent_id'] ?>"
+                             data-plan-name="<?= htmlspecialchars($sch['plan_name']) ?>"
+                             data-agent-name="<?= htmlspecialchars($sch['agent_name']) ?>"
+                             data-time="<?= htmlspecialchars($sch['time']) ?>"
+                             data-frequency="<?= htmlspecialchars($sch['frequency']) ?>"
+                             style="background: <?= bbs_agent_color((int) $sch['agent_id']) ?>;"></div>
                         <?php endforeach; ?>
                     </div>
                     <div class="hist-hour-label <?= $isMajor ? 'major' : '' ?>"><?= $isMajor ? $hourLabel : '' ?></div>
                 </div>
                 <?php endfor; ?>
             </div>
+            <?php endfor; ?>
         </div>
     </div>
 
-    <!-- Day picker + timeline -->
+    <!-- Day timeline (day picker is in the page header, shared with histogram) -->
     <div class="card border-0 shadow-sm mb-3">
-        <div class="card-header bg-body">
-            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <span class="fw-semibold"><i class="bi bi-calendar-day me-1"></i>Day view</span>
-                <div class="day-pills" id="day-pills">
-                    <?php foreach ($dayLabels as $idx => $label): ?>
-                    <?php $count = count($blocksByDay[$idx]); ?>
-                    <button type="button"
-                            class="day-pill <?= $idx === $todayIdx ? 'today' : '' ?>"
-                            data-day-idx="<?= $idx ?>">
-                        <?= $idx === $todayIdx ? 'Today' : $label ?>
-                        <?php if ($count > 0): ?><span class="pill-count"><?= $count ?></span><?php endif; ?>
-                    </button>
-                    <?php endforeach; ?>
-                </div>
-            </div>
+        <div class="card-header bg-body fw-semibold">
+            <i class="bi bi-calendar-day me-1"></i>Day view
+            <span class="text-muted small ms-2" id="day-view-label"></span>
         </div>
         <div class="card-body p-2">
             <div class="day-timeline">
@@ -580,18 +590,25 @@ foreach ($histogram as $h) {
 document.addEventListener('DOMContentLoaded', function () {
     const scheduleMap = <?= json_encode($scheduleMap ?? []) ?>;
     const csrfToken   = <?= json_encode($csrfToken ?? '') ?>;
-    const histBuckets = <?= json_encode($histogram ?? []) ?>;
+    const dayLabels   = <?= json_encode($dayLabelsLong) ?>;
 
     // ----------------- Day picker + filter ----------------------------------
     const pills = document.querySelectorAll('.day-pill');
-    const contents = document.querySelectorAll('.day-content');
+    const dayContents = document.querySelectorAll('.day-content');
+    const histContainers = document.querySelectorAll('.hist-container');
+    const dayViewLabel = document.getElementById('day-view-label');
     const filter = document.getElementById('agent-filter');
+    const today = <?= $todayIdx ?>;
 
     function showDay(idx) {
         pills.forEach(p => p.classList.toggle('active', Number(p.dataset.dayIdx) === idx));
-        contents.forEach(c => c.style.display = (Number(c.dataset.dayIdx) === idx) ? '' : 'none');
+        dayContents.forEach(c => c.style.display = (Number(c.dataset.dayIdx) === idx) ? '' : 'none');
+        histContainers.forEach(c => c.style.display = (Number(c.dataset.dayIdx) === idx) ? '' : 'none');
+        if (dayViewLabel) {
+            dayViewLabel.textContent = idx === today ? '(Today · ' + dayLabels[idx] + ')' : dayLabels[idx];
+        }
     }
-    showDay(<?= $todayIdx ?>);
+    showDay(today);
     pills.forEach(p => p.addEventListener('click', () => showDay(Number(p.dataset.dayIdx))));
 
     if (filter) {
@@ -647,23 +664,27 @@ document.addEventListener('DOMContentLoaded', function () {
         b.addEventListener('mouseleave', hideTooltip);
     });
 
-    // Histogram segment hover tooltip — lists plans in that hour
-    document.querySelectorAll('.hist-bar-wrap').forEach(bar => {
-        bar.addEventListener('mouseenter', ev => {
-            const hour = Number(bar.dataset.hour);
-            const bucket = histBuckets[hour];
-            if (!bucket || !bucket.total) return;
-            const hLabel = hour === 0 ? '12 AM' : hour < 12 ? hour + ' AM' : hour === 12 ? '12 PM' : (hour - 12) + ' PM';
-            let html = '<div class="tt-title">' + hLabel + ' — ' + bucket.total + ' schedule' + (bucket.total > 1 ? 's' : '') + '</div><ul>';
-            (bucket.plans || []).forEach(p => {
-                const freq = p.frequency === 'weekly' ? ' <span style="opacity:.5">· weekly</span>' : '';
-                html += '<li>' + esc(p.agent_name) + ' · ' + esc(p.plan_name) + ' <span style="opacity:.6">(' + esc(p.time) + ')</span>' + freq + '</li>';
-            });
-            html += '</ul>';
+    // Histogram segments — each one = one schedule firing in that hour.
+    // Hover shows a tooltip for that schedule; click opens the context menu
+    // (same actions as the day-block click).
+    document.querySelectorAll('.hist-seg').forEach(seg => {
+        seg.addEventListener('mouseenter', ev => {
+            const html = '<div class="tt-title">' + esc(seg.dataset.planName) + '</div>' +
+                '<div class="tt-meta">' + esc(seg.dataset.agentName) + ' · ' + esc(seg.dataset.frequency) + '</div>' +
+                'Starts: <strong>' + esc(seg.dataset.time) + '</strong>' +
+                '<div style="margin-top:6px;opacity:.6;font-size:.7rem;">Click for options</div>';
             showTooltip(html, ev);
         });
-        bar.addEventListener('mousemove', moveTooltip);
-        bar.addEventListener('mouseleave', hideTooltip);
+        seg.addEventListener('mousemove', moveTooltip);
+        seg.addEventListener('mouseleave', hideTooltip);
+        seg.addEventListener('click', ev => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            ctxScheduleId = Number(seg.dataset.scheduleId);
+            ctxAgentId = Number(seg.dataset.agentId);
+            hideTooltip();
+            openCtxMenu(ev);
+        });
     });
 
     // ----------------- Context menu ----------------------------------------
@@ -692,12 +713,21 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     function closeCtxMenu() { ctx.style.display = 'none'; }
     document.addEventListener('click', ev => {
-        if (!ctx.contains(ev.target) && !ev.target.closest('.day-block')) closeCtxMenu();
+        if (!ctx.contains(ev.target) && !ev.target.closest('.day-block') && !ev.target.closest('.hist-seg')) closeCtxMenu();
     });
     document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { closeCtxMenu(); hideTooltip(); } });
 
     document.getElementById('ctx-edit-plan').addEventListener('click', () => {
-        if (ctxAgentId) window.location.href = '/clients/' + ctxAgentId + '?tab=schedules';
+        if (!ctxScheduleId) return;
+        const sched = scheduleMap[ctxScheduleId];
+        if (!sched) return;
+        // Need the plan id for the deep-link — available via blocks since we
+        // stashed it, but easier: find any day-block for this schedule and
+        // read its data-plan-id.
+        const blk = document.querySelector('.day-block[data-schedule-id="' + ctxScheduleId + '"]');
+        const planId = blk ? blk.dataset.planId : null;
+        const url = '/clients/' + ctxAgentId + '?tab=schedules' + (planId ? '&edit_plan=' + planId : '');
+        window.location.href = url;
     });
 
     document.getElementById('ctx-change-time').addEventListener('click', () => {

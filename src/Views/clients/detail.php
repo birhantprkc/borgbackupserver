@@ -2245,6 +2245,21 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
 
     // Tooltips for help links in schedules tab
     document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootstrap.Tooltip(el));
+
+    // Deep-link: ?edit_plan=<id> auto-expands the edit panel for that plan and
+    // scrolls it into view. Used by the Schedules calendar's "Edit Plan" menu.
+    (function () {
+        const params = new URLSearchParams(window.location.search);
+        const planId = params.get('edit_plan');
+        if (!planId) return;
+        const panel = document.getElementById('edit-plan-' + planId);
+        if (!panel) return;
+        const collapse = bootstrap.Collapse.getOrCreateInstance(panel, { toggle: false });
+        collapse.show();
+        panel.addEventListener('shown.bs.collapse', () => {
+            panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, { once: true });
+    })();
     </script>
     </div><!-- /create-plan-section -->
     <?php endif; ?>
