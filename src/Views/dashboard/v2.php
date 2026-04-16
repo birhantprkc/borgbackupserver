@@ -134,20 +134,15 @@ $dfToGB = function (string $s): string {
 </style>
 
 <div class="v2 container-fluid px-0">
-    <!-- Header: title + server identity -->
-    <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
-        <div>
-            <h4 class="mb-0"><i class="bi bi-speedometer2 me-2"></i>Dashboard <span class="badge bg-primary bg-opacity-25 text-primary ms-1" style="font-size:0.6rem;">V2 PREVIEW</span></h4>
-            <div class="text-muted small mt-1">
-                <span title="Server version"><i class="bi bi-box-seam me-1"></i>Borg Backup Server <?= htmlspecialchars($bbsVersion) ?></span>
-                <span class="mx-2">·</span>
-                <span title="Hostname"><i class="bi bi-hdd-network me-1"></i><?= htmlspecialchars($serverHost) ?></span>
-                <span class="mx-2">·</span>
-                <span title="OS"><i class="bi bi-terminal me-1"></i><?= htmlspecialchars($osName) ?></span>
-                <span class="mx-2">·</span>
-                <span title="Uptime"><i class="bi bi-clock-history me-1"></i><?= $fmtUptime($uptimeSec) ?></span>
-            </div>
-        </div>
+    <!-- Server identity bar -->
+    <div class="text-muted small mb-3">
+        <span title="Server version"><i class="bi bi-box-seam me-1"></i>Borg Backup Server <?= htmlspecialchars($bbsVersion) ?></span>
+        <span class="mx-2">·</span>
+        <span title="Hostname"><i class="bi bi-hdd-network me-1"></i><?= htmlspecialchars($serverHost) ?></span>
+        <span class="mx-2">·</span>
+        <span title="OS"><i class="bi bi-terminal me-1"></i><?= htmlspecialchars($osName) ?></span>
+        <span class="mx-2">·</span>
+        <span title="Uptime"><i class="bi bi-clock-history me-1"></i><?= $fmtUptime($uptimeSec) ?></span>
     </div>
 
     <!-- Row 1: Hero tiles -->
