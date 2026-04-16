@@ -33,6 +33,7 @@ class DashboardController extends Controller
         $data = array_merge($data, $this->getSlowStats());
         $data = array_merge($data, $this->getV2Extras());
         $data['pageTitle'] = 'Dashboard';
+        $data['pageTitleBadge'] = 'V2 PREVIEW';
         $data['isV2'] = true;
 
         $this->view('dashboard/v2', $data);

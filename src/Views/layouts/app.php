@@ -29,8 +29,26 @@
                 <img src="/images/borg_icon_dark.png" alt="BBS" style="height: 36px;">
                 <?php endif; ?>
             </a>
-            <span class="navbar-text fw-semibold ms-3 d-none d-sm-inline"><?= htmlspecialchars($pageTitle ?? '') ?></span>
-            <span class="navbar-text fw-semibold ms-2 d-sm-none small"><?= htmlspecialchars($pageTitle ?? '') ?></span>
+            <?php
+            $navIcons = [
+                'Dashboard' => 'bi-speedometer2', 'Clients' => 'bi-display',
+                'Queue' => 'bi-clock-history', 'Schedules' => 'bi-calendar-week',
+                'Log' => 'bi-journal-text', 'Storage' => 'bi-hdd-stack',
+                'Settings' => 'bi-gear', 'Users' => 'bi-people',
+                'Notifications' => 'bi-bell', 'Profile' => 'bi-person',
+            ];
+            $navIcon = $navIcons[$pageTitle ?? ''] ?? '';
+            $badge = $pageTitleBadge ?? '';
+            ?>
+            <span class="navbar-text fw-semibold ms-3 d-none d-sm-inline">
+                <?php if ($navIcon): ?><i class="bi <?= $navIcon ?> me-1"></i><?php endif; ?>
+                <?= htmlspecialchars($pageTitle ?? '') ?>
+                <?php if ($badge): ?><span class="badge bg-primary bg-opacity-25 text-primary ms-1" style="font-size:0.55rem;vertical-align:middle;"><?= htmlspecialchars($badge) ?></span><?php endif; ?>
+            </span>
+            <span class="navbar-text fw-semibold ms-2 d-sm-none small">
+                <?php if ($navIcon): ?><i class="bi <?= $navIcon ?> me-1"></i><?php endif; ?>
+                <?= htmlspecialchars($pageTitle ?? '') ?>
+            </span>
             <div class="d-flex align-items-center ms-auto me-2 me-md-3">
                 <?php
                 $notifCount = $notifCount ?? (new \BBS\Services\NotificationService())->unreadCount($_SESSION['user_id'] ?? null);
