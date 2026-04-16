@@ -434,68 +434,8 @@ $dfToGB = function (string $s): string {
     </div>
 
     <?php if ($isAdmin): ?>
-    <!-- Row 6: File Catalog (3/5) + MariaDB (2/5) -->
+    <!-- Row 6: MariaDB (2/5) + File Catalog (3/5) -->
     <div class="row g-3 mb-3">
-        <?php if (!empty($clickhouseStats ?? null)): ?>
-        <?php
-            $chTopRepos = $clickhouseStats['top_repos'] ?? [];
-            $chDiskBytes = (int) ($clickhouseStats['disk_bytes'] ?? 0);
-            $pieColors = ['#36a2eb','#ff6384','#ffce56','#4bc0c0','#9966ff','#6c757d'];
-        ?>
-        <div class="col-lg-7">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header card-head-gradient fw-semibold">
-                    <i class="bi bi-list-columns-reverse me-2"></i>File Catalog (ClickHouse)
-                </div>
-                <div class="card-body py-2">
-                    <div class="d-flex flex-wrap gap-3">
-                        <!-- Stats (left, compact table with striped rows) -->
-                        <div style="min-width:180px;max-width:240px;">
-                            <?php
-                            $chStatRows = [
-                                ['Catalog rows', $compact((int) ($clickhouseStats['total_rows'] ?? 0))],
-                                ['Index size',   ServerStats::formatBytes($chDiskBytes)],
-                                ['Compression',  ($clickhouseStats['compression_ratio'] ?? 0) . '×'],
-                                ['Indexed clients', (int) ($clickhouseStats['agent_count'] ?? 0)],
-                            ];
-                            ?>
-                            <table class="table table-sm mb-0 small" style="font-size:0.82rem;">
-                                <tbody>
-                                <?php foreach ($chStatRows as $ri => $row): ?>
-                                <tr class="<?= $ri % 2 === 0 ? '' : 'table-active' ?>" style="<?= $ri % 2 === 0 ? '' : 'background: var(--bs-tertiary-bg) !important;' ?>">
-                                    <td class="text-muted border-0 py-1 ps-1"><?= $row[0] ?></td>
-                                    <td class="fw-bold border-0 py-1 pe-1 text-end"><?= $row[1] ?></td>
-                                </tr>
-                                <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <!-- Donut (center, sized to match the repos list) -->
-                        <?php if (!empty($chTopRepos)): ?>
-                        <div class="d-flex align-items-center flex-shrink-0">
-                            <canvas id="catalogPieChart" width="110" height="110"></canvas>
-                        </div>
-
-                        <!-- Top repositories list (right) -->
-                        <div class="flex-grow-1" style="min-width:200px;">
-                            <div class="small fw-semibold text-uppercase mb-1" style="font-size:0.65rem;letter-spacing:0.03em;color:var(--bs-secondary-color);"><i class="bi bi-trophy me-1"></i>Top Repositories</div>
-                            <?php foreach ($chTopRepos as $i => $repo): ?>
-                            <div class="d-flex align-items-center justify-content-between" style="font-size:0.8rem;padding:3px 0;<?= $i % 2 === 1 ? 'background:var(--bs-tertiary-bg);border-radius:3px;padding-left:4px;padding-right:4px;' : '' ?>">
-                                <span class="text-truncate me-2"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:<?= $pieColors[$i % 6] ?>;margin-right:6px;"></span><?= htmlspecialchars($repo['name']) ?></span>
-                                <span class="text-muted text-nowrap" style="font-size:0.75rem;font-variant-numeric:tabular-nums;"><?= $compact((int) $repo['rows']) ?> rows</span>
-                            </div>
-                            <?php endforeach; ?>
-                        </div>
-                        <?php else: ?>
-                        <div class="text-muted small fst-italic align-self-center">No catalog data yet</div>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <?php endif; ?>
-
         <?php if (!empty($mysqlStats)): ?>
         <?php
             $msUptime = (int) ($mysqlStats['uptime'] ?? 0);
@@ -534,6 +474,66 @@ $dfToGB = function (string $s): string {
                             <div class="fw-bold" style="font-size:1.1rem;"><?= $compact((int) ($mysqlStats['slow_queries'] ?? 0)) ?></div>
                             <div class="text-muted" style="font-size:0.7rem;">Slow Queries</div>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <?php if (!empty($clickhouseStats ?? null)): ?>
+        <?php
+            $chTopRepos = $clickhouseStats['top_repos'] ?? [];
+            $chDiskBytes = (int) ($clickhouseStats['disk_bytes'] ?? 0);
+            $pieColors = ['#36a2eb','#ff6384','#ffce56','#4bc0c0','#9966ff','#6c757d'];
+        ?>
+        <div class="col-lg-7">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header card-head-gradient fw-semibold">
+                    <i class="bi bi-list-columns-reverse me-2"></i>File Catalog (ClickHouse)
+                </div>
+                <div class="card-body py-2">
+                    <div class="d-flex flex-wrap" style="gap: 20px;">
+                        <!-- Stats (left) -->
+                        <div style="min-width:170px;">
+                            <?php
+                            $chStatRows = [
+                                ['Catalog rows', $compact((int) ($clickhouseStats['total_rows'] ?? 0))],
+                                ['Index size',   ServerStats::formatBytes($chDiskBytes)],
+                                ['Compression',  ($clickhouseStats['compression_ratio'] ?? 0) . '×'],
+                                ['Indexed clients', (int) ($clickhouseStats['agent_count'] ?? 0)],
+                            ];
+                            ?>
+                            <table class="table table-sm mb-0" style="font-size:0.82rem;">
+                                <tbody>
+                                <?php foreach ($chStatRows as $ri => $row): ?>
+                                <tr style="<?= $ri % 2 === 1 ? 'background: var(--bs-tertiary-bg);' : '' ?>">
+                                    <td class="text-muted border-0 py-1 ps-2"><?= $row[0] ?></td>
+                                    <td class="fw-bold border-0 py-1 pe-2 text-end"><?= $row[1] ?></td>
+                                </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Donut + Top repos (right, aligned at top) -->
+                        <?php if (!empty($chTopRepos)): ?>
+                        <div class="d-flex align-items-start flex-grow-1" style="gap: 16px; min-width: 280px;">
+                            <div class="flex-shrink-0 pt-1">
+                                <canvas id="catalogPieChart" width="110" height="110"></canvas>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="small fw-semibold text-uppercase mb-1" style="font-size:0.65rem;letter-spacing:0.03em;color:var(--bs-secondary-color);"><i class="bi bi-trophy me-1"></i>Top Repositories</div>
+                                <?php foreach ($chTopRepos as $i => $repo): ?>
+                                <div class="d-flex align-items-center justify-content-between" style="font-size:0.8rem;padding:3px 4px;<?= $i % 2 === 1 ? 'background:var(--bs-tertiary-bg);border-radius:3px;' : '' ?>">
+                                    <span class="text-truncate me-2"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:<?= $pieColors[$i % 6] ?>;margin-right:6px;"></span><?= htmlspecialchars($repo['name']) ?></span>
+                                    <span class="text-muted text-nowrap" style="font-size:0.75rem;font-variant-numeric:tabular-nums;"><?= $compact((int) $repo['rows']) ?> rows</span>
+                                </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        <?php else: ?>
+                        <div class="text-muted small fst-italic align-self-center">No catalog data yet</div>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
