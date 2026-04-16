@@ -455,13 +455,41 @@ $dfToGB = function (string $s): string {
                 <div class="card-header card-head-gradient fw-semibold">
                     <i class="bi bi-database me-2"></i>MariaDB
                 </div>
-                <div class="card-body py-2">
+                <?php
+                    $msUptime = (int) ($mysqlStats['uptime'] ?? 0);
+                    $msUptimeStr = $msUptime >= 86400
+                        ? intdiv($msUptime, 86400) . 'd ' . intdiv($msUptime % 86400, 3600) . 'h'
+                        : intdiv($msUptime, 3600) . 'h ' . intdiv($msUptime % 3600, 60) . 'm';
+                ?>
+                <div class="card-body py-3">
                     <div class="row g-3">
                         <div class="col-sm-6">
-                            <div class="mini-stat"><span class="k">Queries / sec</span><span class="v"><?= $mysqlStats['qps'] ?? 0 ?></span></div>
-                            <div class="mini-stat"><span class="k">Connections</span><span class="v"><?= $mysqlStats['threads_connected'] ?? 0 ?></span></div>
-                            <div class="mini-stat"><span class="k">Buffer hit rate</span><span class="v"><?= $mysqlStats['hit_rate'] ?? 0 ?>%</span></div>
-                            <div class="mini-stat"><span class="k">Slow queries</span><span class="v"><?= $compact((int) ($mysqlStats['slow_queries'] ?? 0)) ?></span></div>
+                            <div class="row g-0 text-center">
+                                <div class="col-4 py-2">
+                                    <div class="fw-bold" style="font-size:1.1rem;"><?= $mysqlStats['qps'] ?? 0 ?></div>
+                                    <div class="text-muted" style="font-size:0.7rem;">QPS</div>
+                                </div>
+                                <div class="col-4 py-2">
+                                    <div class="fw-bold" style="font-size:1.1rem;"><?= $mysqlStats['threads_connected'] ?? 0 ?></div>
+                                    <div class="text-muted" style="font-size:0.7rem;">Connections</div>
+                                </div>
+                                <div class="col-4 py-2">
+                                    <div class="fw-bold" style="font-size:1.1rem;"><?= $mysqlStats['hit_rate'] ?? 0 ?>%</div>
+                                    <div class="text-muted" style="font-size:0.7rem;">Hit Rate</div>
+                                </div>
+                                <div class="col-4 py-2">
+                                    <div class="fw-bold" style="font-size:1.1rem;"><?= $msUptimeStr ?></div>
+                                    <div class="text-muted" style="font-size:0.7rem;">Uptime</div>
+                                </div>
+                                <div class="col-4 py-2">
+                                    <div class="fw-bold" style="font-size:1.1rem;"><?= $mysqlStats['buffer_pool_used_pct'] ?? 0 ?>%</div>
+                                    <div class="text-muted" style="font-size:0.7rem;">Buffer Pool</div>
+                                </div>
+                                <div class="col-4 py-2">
+                                    <div class="fw-bold" style="font-size:1.1rem;"><?= $compact((int) ($mysqlStats['slow_queries'] ?? 0)) ?></div>
+                                    <div class="text-muted" style="font-size:0.7rem;">Slow Queries</div>
+                                </div>
+                            </div>
                         </div>
                         <div class="col-sm-6 d-flex flex-column align-items-center justify-content-center">
                             <?php if ($msDiskTotal > 0): ?>
