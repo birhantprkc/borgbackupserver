@@ -20,10 +20,16 @@ $fmtUptime = function (?int $s): string {
     return "{$m}m";
 };
 
-// Dedup savings %
+// Dedup savings % (original data vs actual disk footprint)
 $dedupSavingsPct = $totalOriginalBytes > 0
-    ? round((1 - $totalDedupBytes / $totalOriginalBytes) * 100, 1)
+    ? round((1 - $totalDiskBytes / $totalOriginalBytes) * 100, 1)
     : 0;
+
+// Append "B" to df-style sizes ("100G" → "100GB")
+$dfToGB = function (string $s): string {
+    if (preg_match('/^[\d.]+[TGMK]$/', $s)) return $s . 'B';
+    return $s;
+};
 ?>
 
 <style>
@@ -86,6 +92,10 @@ $dedupSavingsPct = $totalOriginalBytes > 0
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: 12px;
+    max-width: 100%;
+}
+@media (min-width: 768px) {
+    .v2 .storage-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 380px)); }
 }
 .v2 .storage-card {
     background: var(--bs-body-bg);
@@ -108,6 +118,14 @@ $dedupSavingsPct = $totalOriginalBytes > 0
 .v2 .mini-stat { display: flex; justify-content: space-between; padding: 4px 0; font-size: 0.82rem; }
 .v2 .mini-stat .k { color: var(--bs-secondary-color); }
 .v2 .mini-stat .v { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.v2 .table thead th {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--bs-secondary-color);
+    font-weight: 600;
+}
 </style>
 
 <div class="v2 container-fluid px-0">
@@ -147,7 +165,7 @@ $dedupSavingsPct = $totalOriginalBytes > 0
             <a href="#recovery-points" class="text-decoration-none metric-tile warning d-block">
                 <div class="label"><i class="bi bi-archive me-1"></i>Recovery Points</div>
                 <div class="value"><?= $compact($totalArchiveCount) ?></div>
-                <div class="sub"><?= ServerStats::formatBytes($totalDedupBytes) ?> protected</div>
+                <div class="sub"><?= ServerStats::formatBytes($totalDiskBytes) ?> on disk</div>
             </a>
         </div>
         <div class="col-xl-3 col-md-6">
@@ -186,7 +204,7 @@ $dedupSavingsPct = $totalOriginalBytes > 0
                 <div class="card-body">
                     <div class="mini-stat"><span class="k"><i class="bi bi-archive me-1"></i>Recovery points</span><span class="v"><?= number_format($totalArchiveCount) ?></span></div>
                     <div class="mini-stat"><span class="k"><i class="bi bi-files me-1"></i>Original data</span><span class="v"><?= ServerStats::formatBytes($totalOriginalBytes) ?></span></div>
-                    <div class="mini-stat"><span class="k"><i class="bi bi-hdd me-1"></i>On disk (deduped)</span><span class="v"><?= ServerStats::formatBytes($totalDedupBytes) ?></span></div>
+                    <div class="mini-stat"><span class="k"><i class="bi bi-hdd me-1"></i>On disk (deduped)</span><span class="v"><?= ServerStats::formatBytes($totalDiskBytes) ?></span></div>
                     <div class="mini-stat"><span class="k"><i class="bi bi-magic me-1"></i>Dedup savings</span><span class="v text-success"><?= $dedupSavingsPct ?>%</span></div>
                     <?php if ($lastBackup): ?>
                     <div class="mini-stat"><span class="k"><i class="bi bi-clock-history me-1"></i>Last backup</span><span class="v"><?= TimeHelper::ago($lastBackup['completed_at']) ?></span></div>
@@ -219,7 +237,7 @@ $dedupSavingsPct = $totalOriginalBytes > 0
                         <span class="val" id="mem-val"><?= $memPct ?>% · <?= ServerStats::formatBytes($memory['used']) ?></span>
                     </div>
                     <?php if (!empty($partitions)): ?>
-                    <?php foreach (array_slice($partitions, 0, 2) as $part): ?>
+                    <?php foreach ($partitions as $part): ?>
                         <?php
                             $pPct = $part['percent'] ?? 0;
                             $pColor = $pPct > 90 ? '#dc3545' : ($pPct > 70 ? '#ffc107' : '#6c757d');
@@ -227,7 +245,7 @@ $dedupSavingsPct = $totalOriginalBytes > 0
                     <div class="health-row">
                         <span class="lbl text-truncate" title="<?= htmlspecialchars($part['mount']) ?>"><?= htmlspecialchars($part['mount']) ?></span>
                         <div class="bar"><div class="fill" style="width: <?= $pPct ?>%; background: <?= $pColor ?>;"></div></div>
-                        <span class="val"><?= $pPct ?>% · <?= $part['size'] ?></span>
+                        <span class="val"><?= $pPct ?>% · <?= $dfToGB($part['size']) ?></span>
                     </div>
                     <?php endforeach; ?>
                     <?php endif; ?>
@@ -277,7 +295,7 @@ $dedupSavingsPct = $totalOriginalBytes > 0
                     <?php endif; ?>
                     <div class="sc-footer">
                         <span><i class="bi bi-hdd me-1"></i><?= $loc['repo_count'] ?> repo<?= $loc['repo_count'] === 1 ? '' : 's' ?></span>
-                        <span><?= ServerStats::formatBytes((int) $loc['repo_bytes']) ?> backed up</span>
+                        <span><?= ServerStats::formatBytes((int) $loc['repo_bytes']) ?> disk usage</span>
                     </div>
                 </div>
                 <?php endforeach; ?>
@@ -302,11 +320,21 @@ $dedupSavingsPct = $totalOriginalBytes > 0
                             <thead><tr><th>Client</th><th>Task</th><th class="d-th-md">Repo</th><th>Status</th></tr></thead>
                             <tbody>
                             <?php foreach ($activeJobs as $j): ?>
+                                <?php
+                                    $pct = ($j['files_total'] ?? 0) > 0 ? round(($j['files_processed'] / $j['files_total']) * 100) : null;
+                                    $badgeClass = $j['status'] === 'queued' ? 'bg-warning text-dark' : 'bg-primary';
+                                ?>
                                 <tr style="cursor:pointer" onclick="window.location='/queue/<?= (int) $j['id'] ?>'">
                                     <td><?= htmlspecialchars($j['agent_name']) ?></td>
                                     <td><?= htmlspecialchars(ucfirst($j['task_type'])) ?></td>
                                     <td class="d-table-cell-md"><?= htmlspecialchars($j['repo_name'] ?? '--') ?></td>
-                                    <td><span class="badge bg-info"><?= htmlspecialchars($j['status']) ?></span></td>
+                                    <td>
+                                        <?php if ($pct !== null && $j['status'] === 'running'): ?>
+                                        <div class="progress" style="height:18px;min-width:60px;"><div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width:<?= $pct ?>%"><?= $pct ?>%</div></div>
+                                        <?php else: ?>
+                                        <span class="badge <?= $badgeClass ?>"><?= htmlspecialchars(ucfirst($j['status'])) ?></span>
+                                        <?php endif; ?>
+                                    </td>
                                 </tr>
                             <?php endforeach; ?>
                             </tbody>
@@ -328,13 +356,26 @@ $dedupSavingsPct = $totalOriginalBytes > 0
                     <?php else: ?>
                     <div class="table-responsive">
                         <table class="table table-hover mb-0 small">
-                            <thead><tr><th>Client</th><th>Plan</th><th>Next Run</th></tr></thead>
+                            <thead><tr><th>Client</th><th>Plan</th><th>Next Run</th><th></th></tr></thead>
                             <tbody>
                             <?php foreach (array_slice($upcomingSchedules, 0, 6) as $s): ?>
+                                <?php
+                                    $nextTs = strtotime($s['next_run'] ?? '');
+                                    $isOverdue = $nextTs && $nextTs < time();
+                                ?>
                                 <tr style="cursor:pointer" onclick="window.location='/clients/<?= (int) $s['agent_id'] ?>?tab=schedules'">
                                     <td><?= htmlspecialchars($s['agent_name']) ?></td>
                                     <td><?= htmlspecialchars($s['plan_name']) ?></td>
-                                    <td><?= TimeHelper::format($s['next_run'], 'M j, g:i A') ?></td>
+                                    <td class="<?= $isOverdue ? 'text-danger fw-semibold' : '' ?>">
+                                        <?php if ($isOverdue): ?><i class="bi bi-exclamation-triangle me-1"></i><?php endif; ?>
+                                        <?= TimeHelper::format($s['next_run'], 'M j, g:i A') ?>
+                                    </td>
+                                    <td class="text-nowrap" onclick="event.stopPropagation()">
+                                        <form method="POST" action="/plans/<?= (int) $s['plan_id'] ?>/trigger" class="d-inline" data-confirm="Run <?= htmlspecialchars($s['agent_name']) ?> / <?= htmlspecialchars($s['plan_name']) ?> now?">
+                                            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                            <button type="submit" class="btn btn-sm btn-outline-success py-0 px-2" title="Run now"><i class="bi bi-play-fill"></i></button>
+                                        </form>
+                                    </td>
                                 </tr>
                             <?php endforeach; ?>
                             </tbody>
@@ -357,7 +398,7 @@ $dedupSavingsPct = $totalOriginalBytes > 0
             <?php else: ?>
             <div class="table-responsive">
                 <table class="table table-hover mb-0 small">
-                    <thead><tr><th>Client</th><th>Task</th><th class="d-th-md">Plan</th><th class="d-th-md">Repo</th><th>Completed</th><th class="d-th-md">Duration</th><th>Status</th></tr></thead>
+                    <thead><tr><th>Client</th><th>Task</th><th class="d-th-md">Plan</th><th class="d-th-md">Repo</th><th>Completed</th><th class="d-th-md">Duration</th><th class="text-center">Status</th></tr></thead>
                     <tbody>
                     <?php foreach ($recentJobs as $j): ?>
                         <?php
@@ -387,8 +428,8 @@ $dedupSavingsPct = $totalOriginalBytes > 0
         <?php if (!empty($mysqlStats)): ?>
         <div class="col-lg-6">
             <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-body fw-semibold">
-                    <i class="bi bi-database me-1"></i>MySQL
+                <div class="card-header card-head-gradient fw-semibold">
+                    <i class="bi bi-database me-1"></i>MariaDB
                 </div>
                 <div class="card-body py-2">
                     <div class="mini-stat"><span class="k">Queries / sec</span><span class="v"><?= $mysqlStats['qps'] ?? 0 ?></span></div>
@@ -402,8 +443,8 @@ $dedupSavingsPct = $totalOriginalBytes > 0
         <?php if (!empty($clickhouseStats)): ?>
         <div class="col-lg-6">
             <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-body fw-semibold">
-                    <i class="bi bi-list-columns-reverse me-1"></i>File Catalog
+                <div class="card-header card-head-gradient fw-semibold">
+                    <i class="bi bi-list-columns-reverse me-1"></i>File Catalog (ClickHouse)
                 </div>
                 <div class="card-body py-2">
                     <div class="mini-stat"><span class="k">Catalog rows</span><span class="v"><?= $compact((int) ($clickhouseStats['total_rows'] ?? 0)) ?></span></div>

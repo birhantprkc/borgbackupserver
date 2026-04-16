@@ -110,12 +110,17 @@ class DashboardController extends Controller
             JOIN agents a ON a.id = r.agent_id
             WHERE {$agentWhere}
         ", $agentParams);
+        // Original data = sum of per-archive original_size (how much data was fed to borg).
+        // On-disk = sum of repositories.size_bytes (actual du or remote estimate).
+        // SUM(archives.deduplicated_size) was incorrect here — it overcounts because
+        // each archive's dedup figure reflects that archive's marginal contribution,
+        // not the total on-disk footprint after global dedup across all archives.
         $dedupRow = $this->db->fetchOne("
             SELECT COALESCE(SUM(ar.original_size), 0) AS orig,
-                   COALESCE(SUM(ar.deduplicated_size), 0) AS dedup
-            FROM archives ar
-            JOIN repositories r ON r.id = ar.repository_id
+                   COALESCE(SUM(r.size_bytes), 0) AS on_disk
+            FROM repositories r
             JOIN agents a ON a.id = r.agent_id
+            LEFT JOIN archives ar ON ar.repository_id = r.id
             WHERE {$agentWhere}
         ", $agentParams);
         $lastBackup = $this->db->fetchOne("
@@ -145,7 +150,7 @@ class DashboardController extends Controller
             'storageLocations' => $storageLocations,
             'totalArchiveCount' => (int) ($archiveCountRow['c'] ?? 0),
             'totalOriginalBytes' => (int) ($dedupRow['orig'] ?? 0),
-            'totalDedupBytes' => (int) ($dedupRow['dedup'] ?? 0),
+            'totalDiskBytes' => (int) ($dedupRow['on_disk'] ?? 0),
             'lastBackup' => $lastBackup ?: null,
             'bbsVersion' => $bbsVersion,
             'osName' => $osName,
