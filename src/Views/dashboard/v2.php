@@ -139,7 +139,7 @@ $dfToGB = function (string $s): string {
         <div>
             <h4 class="mb-0"><i class="bi bi-speedometer2 me-2"></i>Dashboard <span class="badge bg-primary bg-opacity-25 text-primary ms-1" style="font-size:0.6rem;">V2 PREVIEW</span></h4>
             <div class="text-muted small mt-1">
-                <span title="Server version"><i class="bi bi-box-seam me-1"></i>BBS <?= htmlspecialchars($bbsVersion) ?></span>
+                <span title="Server version"><i class="bi bi-box-seam me-1"></i>Borg Backup Server <?= htmlspecialchars($bbsVersion) ?></span>
                 <span class="mx-2">·</span>
                 <span title="Hostname"><i class="bi bi-hdd-network me-1"></i><?= htmlspecialchars($serverHost) ?></span>
                 <span class="mx-2">·</span>

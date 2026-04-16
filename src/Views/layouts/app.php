@@ -29,8 +29,10 @@
                 <img src="/images/borg_icon_dark.png" alt="BBS" style="height: 36px;">
                 <?php endif; ?>
             </a>
-            <span class="navbar-text fw-semibold ms-3 d-none d-sm-inline"><?= htmlspecialchars($pageTitle ?? '') ?></span>
-            <span class="navbar-text fw-semibold ms-2 d-sm-none small"><?= htmlspecialchars($pageTitle ?? '') ?></span>
+            <!-- Page title removed from navbar — the sidebar active state
+                 indicates which page you're on, and each page renders its
+                 own heading in the content area. Avoids the duplicate title
+                 issue on v2 dashboard and any future page redesigns. -->
             <div class="d-flex align-items-center ms-auto me-2 me-md-3">
                 <?php
                 $notifCount = $notifCount ?? (new \BBS\Services\NotificationService())->unreadCount($_SESSION['user_id'] ?? null);
