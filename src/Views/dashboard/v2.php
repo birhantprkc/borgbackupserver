@@ -378,7 +378,7 @@ $dfToGB = function (string $s): string {
                                     <td><?= htmlspecialchars($s['agent_name']) ?></td>
                                     <td><?= htmlspecialchars($s['plan_name']) ?></td>
                                     <td class="<?= $isOverdue ? 'text-danger fw-semibold' : '' ?>">
-                                        <?php if ($isOverdue): ?><i class="bi bi-exclamation-triangle me-1"></i><?php endif; ?>
+                                        <?php if ($isOverdue): ?><i class="bi bi-exclamation-triangle me-1" title="Agent Offline, Backup Delayed"></i><?php endif; ?>
                                         <?= TimeHelper::format($s['next_run'], 'M j, g:i A') ?>
                                     </td>
                                     <td class="text-nowrap" onclick="event.stopPropagation()">
