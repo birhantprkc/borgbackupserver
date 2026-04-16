@@ -434,118 +434,105 @@ $dfToGB = function (string $s): string {
     </div>
 
     <?php if ($isAdmin): ?>
-    <!-- Row 6: System detail — MariaDB + File Catalog side by side.
-         Each card is a two-column layout (stats left, chart right) that
-         wraps to stacked rows on mobile. -->
+    <!-- Row 6: File Catalog (3/5) + MariaDB (2/5) -->
     <div class="row g-3 mb-3">
-        <?php if (!empty($mysqlStats)): ?>
-        <?php
-            $msStorage = $mysqlStorage ?? null;
-            $dbBytes = $msStorage['db_bytes'] ?? 0;
-            $msDiskTotal = $msStorage['disk_total'] ?? 0;
-            $msDiskUsed = $msStorage['disk_used'] ?? 0;
-            $msDiskFree = $msStorage['disk_free'] ?? 0;
-            $msDbPct = $msDiskTotal > 0 ? round($dbBytes / $msDiskTotal * 100, 1) : 0;
-            $msOtherPct = $msDiskTotal > 0 ? round(($msDiskUsed - $dbBytes) / $msDiskTotal * 100, 1) : 0;
-            if ($msOtherPct < 0) $msOtherPct = 0;
-            $msFreePct = $msDiskTotal > 0 ? round($msDiskFree / $msDiskTotal * 100, 1) : 0;
-        ?>
-        <div class="col-lg-6">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header card-head-gradient fw-semibold">
-                    <i class="bi bi-database me-2"></i>MariaDB
-                </div>
-                <?php
-                    $msUptime = (int) ($mysqlStats['uptime'] ?? 0);
-                    $msUptimeStr = $msUptime >= 86400
-                        ? intdiv($msUptime, 86400) . 'd ' . intdiv($msUptime % 86400, 3600) . 'h'
-                        : intdiv($msUptime, 3600) . 'h ' . intdiv($msUptime % 3600, 60) . 'm';
-                ?>
-                <div class="card-body py-3">
-                    <div class="row g-3">
-                        <div class="col-sm-6">
-                            <div class="row g-0 text-center">
-                                <div class="col-4 py-2">
-                                    <div class="fw-bold" style="font-size:1.1rem;"><?= $mysqlStats['qps'] ?? 0 ?></div>
-                                    <div class="text-muted" style="font-size:0.7rem;">QPS</div>
-                                </div>
-                                <div class="col-4 py-2">
-                                    <div class="fw-bold" style="font-size:1.1rem;"><?= $mysqlStats['threads_connected'] ?? 0 ?></div>
-                                    <div class="text-muted" style="font-size:0.7rem;">Connections</div>
-                                </div>
-                                <div class="col-4 py-2">
-                                    <div class="fw-bold" style="font-size:1.1rem;"><?= $mysqlStats['hit_rate'] ?? 0 ?>%</div>
-                                    <div class="text-muted" style="font-size:0.7rem;">Hit Rate</div>
-                                </div>
-                                <div class="col-4 py-2">
-                                    <div class="fw-bold" style="font-size:1.1rem;"><?= $msUptimeStr ?></div>
-                                    <div class="text-muted" style="font-size:0.7rem;">Uptime</div>
-                                </div>
-                                <div class="col-4 py-2">
-                                    <div class="fw-bold" style="font-size:1.1rem;"><?= $mysqlStats['buffer_pool_used_pct'] ?? 0 ?>%</div>
-                                    <div class="text-muted" style="font-size:0.7rem;">Buffer Pool</div>
-                                </div>
-                                <div class="col-4 py-2">
-                                    <div class="fw-bold" style="font-size:1.1rem;"><?= $compact((int) ($mysqlStats['slow_queries'] ?? 0)) ?></div>
-                                    <div class="text-muted" style="font-size:0.7rem;">Slow Queries</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-sm-6 d-flex flex-column align-items-center justify-content-center">
-                            <?php if ($msDiskTotal > 0): ?>
-                            <canvas id="mariadbChart" width="120" height="120"></canvas>
-                            <div class="text-center small mt-1">
-                                <span style="color:#48bb78;">&#9632;</span> BBS <span class="text-muted">(<?= ServerStats::formatBytes($dbBytes) ?>)</span>
-                                <span class="ms-2" style="color:#6c757d;">&#9632;</span> Other
-                                <span class="ms-2" style="color:#2d3748;">&#9632;</span> Free
-                            </div>
-                            <?php else: ?>
-                            <div class="text-muted small fst-italic">Disk info unavailable</div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <?php endif; ?>
         <?php if (!empty($clickhouseStats ?? null)): ?>
         <?php
             $chTopRepos = $clickhouseStats['top_repos'] ?? [];
             $chDiskBytes = (int) ($clickhouseStats['disk_bytes'] ?? 0);
+            $pieColors = ['#36a2eb','#ff6384','#ffce56','#4bc0c0','#9966ff','#6c757d'];
         ?>
-        <div class="col-lg-6">
+        <div class="col-lg-7">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header card-head-gradient fw-semibold">
                     <i class="bi bi-list-columns-reverse me-2"></i>File Catalog (ClickHouse)
                 </div>
                 <div class="card-body py-2">
-                    <div class="row g-3">
-                        <div class="col-sm-6">
-                            <div class="mini-stat"><span class="k">Catalog rows</span><span class="v"><?= $compact((int) ($clickhouseStats['total_rows'] ?? 0)) ?></span></div>
-                            <div class="mini-stat"><span class="k">Index size</span><span class="v"><?= ServerStats::formatBytes($chDiskBytes) ?></span></div>
-                            <div class="mini-stat"><span class="k">Compression</span><span class="v"><?= $clickhouseStats['compression_ratio'] ?? 0 ?>×</span></div>
-                            <div class="mini-stat"><span class="k">Indexed clients</span><span class="v"><?= (int) ($clickhouseStats['agent_count'] ?? 0) ?></span></div>
+                    <div class="d-flex flex-wrap gap-3">
+                        <!-- Stats (left, compact table with striped rows) -->
+                        <div style="min-width:180px;max-width:240px;">
+                            <?php
+                            $chStatRows = [
+                                ['Catalog rows', $compact((int) ($clickhouseStats['total_rows'] ?? 0))],
+                                ['Index size',   ServerStats::formatBytes($chDiskBytes)],
+                                ['Compression',  ($clickhouseStats['compression_ratio'] ?? 0) . '×'],
+                                ['Indexed clients', (int) ($clickhouseStats['agent_count'] ?? 0)],
+                            ];
+                            ?>
+                            <table class="table table-sm mb-0 small" style="font-size:0.82rem;">
+                                <tbody>
+                                <?php foreach ($chStatRows as $ri => $row): ?>
+                                <tr class="<?= $ri % 2 === 0 ? '' : 'table-active' ?>" style="<?= $ri % 2 === 0 ? '' : 'background: var(--bs-tertiary-bg) !important;' ?>">
+                                    <td class="text-muted border-0 py-1 ps-1"><?= $row[0] ?></td>
+                                    <td class="fw-bold border-0 py-1 pe-1 text-end"><?= $row[1] ?></td>
+                                </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
                         </div>
-                        <div class="col-sm-6">
-                            <?php if (!empty($chTopRepos)): ?>
-                            <?php $pieColors = ['#36a2eb','#ff6384','#ffce56','#4bc0c0','#9966ff','#6c757d']; ?>
-                            <div class="d-flex gap-3 align-items-start">
-                                <div class="flex-shrink-0 text-center">
-                                    <canvas id="catalogPieChart" width="80" height="80"></canvas>
-                                </div>
-                                <div class="flex-grow-1 min-width-0">
-                                    <div class="small fw-semibold text-uppercase mb-1" style="font-size:0.65rem;letter-spacing:0.03em;color:var(--bs-secondary-color);"><i class="bi bi-trophy me-1"></i>Top Repositories</div>
-                                    <?php foreach ($chTopRepos as $i => $repo): ?>
-                                    <div class="d-flex align-items-center justify-content-between" style="font-size:0.78rem;padding:1px 0;">
-                                        <span class="text-truncate me-2"><span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:<?= $pieColors[$i % 6] ?>;margin-right:5px;"></span><?= htmlspecialchars($repo['name']) ?></span>
-                                        <span class="text-muted text-nowrap" style="font-size:0.72rem;font-variant-numeric:tabular-nums;"><?= $compact((int) $repo['rows']) ?> rows</span>
-                                    </div>
-                                    <?php endforeach; ?>
-                                </div>
+
+                        <!-- Donut (center, sized to match the repos list) -->
+                        <?php if (!empty($chTopRepos)): ?>
+                        <div class="d-flex align-items-center flex-shrink-0">
+                            <canvas id="catalogPieChart" width="110" height="110"></canvas>
+                        </div>
+
+                        <!-- Top repositories list (right) -->
+                        <div class="flex-grow-1" style="min-width:200px;">
+                            <div class="small fw-semibold text-uppercase mb-1" style="font-size:0.65rem;letter-spacing:0.03em;color:var(--bs-secondary-color);"><i class="bi bi-trophy me-1"></i>Top Repositories</div>
+                            <?php foreach ($chTopRepos as $i => $repo): ?>
+                            <div class="d-flex align-items-center justify-content-between" style="font-size:0.8rem;padding:3px 0;<?= $i % 2 === 1 ? 'background:var(--bs-tertiary-bg);border-radius:3px;padding-left:4px;padding-right:4px;' : '' ?>">
+                                <span class="text-truncate me-2"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:<?= $pieColors[$i % 6] ?>;margin-right:6px;"></span><?= htmlspecialchars($repo['name']) ?></span>
+                                <span class="text-muted text-nowrap" style="font-size:0.75rem;font-variant-numeric:tabular-nums;"><?= $compact((int) $repo['rows']) ?> rows</span>
                             </div>
-                            <?php else: ?>
-                            <div class="text-muted small fst-italic">No catalog data yet</div>
-                            <?php endif; ?>
+                            <?php endforeach; ?>
+                        </div>
+                        <?php else: ?>
+                        <div class="text-muted small fst-italic align-self-center">No catalog data yet</div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <?php if (!empty($mysqlStats)): ?>
+        <?php
+            $msUptime = (int) ($mysqlStats['uptime'] ?? 0);
+            $msUptimeStr = $msUptime >= 86400
+                ? intdiv($msUptime, 86400) . 'd ' . intdiv($msUptime % 86400, 3600) . 'h'
+                : intdiv($msUptime, 3600) . 'h ' . intdiv($msUptime % 3600, 60) . 'm';
+        ?>
+        <div class="col-lg-5">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header card-head-gradient fw-semibold">
+                    <i class="bi bi-database me-2"></i>MariaDB
+                </div>
+                <div class="card-body py-3">
+                    <div class="row g-0 text-center">
+                        <div class="col-4 py-2">
+                            <div class="fw-bold" style="font-size:1.1rem;"><?= $mysqlStats['qps'] ?? 0 ?></div>
+                            <div class="text-muted" style="font-size:0.7rem;">QPS</div>
+                        </div>
+                        <div class="col-4 py-2">
+                            <div class="fw-bold" style="font-size:1.1rem;"><?= $mysqlStats['threads_connected'] ?? 0 ?></div>
+                            <div class="text-muted" style="font-size:0.7rem;">Connections</div>
+                        </div>
+                        <div class="col-4 py-2">
+                            <div class="fw-bold" style="font-size:1.1rem;"><?= $mysqlStats['hit_rate'] ?? 0 ?>%</div>
+                            <div class="text-muted" style="font-size:0.7rem;">Hit Rate</div>
+                        </div>
+                        <div class="col-4 py-2">
+                            <div class="fw-bold" style="font-size:1.1rem;"><?= $msUptimeStr ?></div>
+                            <div class="text-muted" style="font-size:0.7rem;">Uptime</div>
+                        </div>
+                        <div class="col-4 py-2">
+                            <div class="fw-bold" style="font-size:1.1rem;"><?= $mysqlStats['buffer_pool_used_pct'] ?? 0 ?>%</div>
+                            <div class="text-muted" style="font-size:0.7rem;">Buffer Pool</div>
+                        </div>
+                        <div class="col-4 py-2">
+                            <div class="fw-bold" style="font-size:1.1rem;"><?= $compact((int) ($mysqlStats['slow_queries'] ?? 0)) ?></div>
+                            <div class="text-muted" style="font-size:0.7rem;">Slow Queries</div>
                         </div>
                     </div>
                 </div>
@@ -582,36 +569,6 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
     });
-
-    // --- MariaDB donut: BBS database vs other vs free ---
-    <?php if ($isAdmin && !empty($msStorage) && ($msStorage['disk_total'] ?? 0) > 0): ?>
-    (function () {
-        const el = document.getElementById('mariadbChart');
-        if (!el) return;
-        const fmtB = b => { b = Number(b); if (b >= 1099511627776) return (b/1099511627776).toFixed(1)+' TB'; if (b >= 1073741824) return (b/1073741824).toFixed(1)+' GB'; if (b >= 1048576) return (b/1048576).toFixed(1)+' MB'; return (b/1024).toFixed(0)+' KB'; };
-        new Chart(el.getContext('2d'), {
-            type: 'doughnut',
-            data: {
-                labels: ['BBS Database', 'Other Data', 'Free'],
-                datasets: [{
-                    data: [<?= $dbBytes ?>, <?= max(0, $msDiskUsed - $dbBytes) ?>, <?= $msDiskFree ?>],
-                    backgroundColor: ['#48bb78', '#6c757d', isDark ? '#2d3748' : '#e2e8f0'],
-                    borderWidth: 0,
-                }]
-            },
-            options: {
-                responsive: false,
-                cutout: '60%',
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: { label: ctx => ctx.label + ': ' + fmtB(ctx.raw) }
-                    }
-                }
-            }
-        });
-    })();
-    <?php endif; ?>
 
     // --- ClickHouse pie: top clients by catalog disk usage ---
     <?php if ($isAdmin && !empty($chTopRepos)): ?>
