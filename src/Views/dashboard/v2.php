@@ -495,9 +495,9 @@ $dfToGB = function (string $s): string {
                     <i class="bi bi-list-columns-reverse me-2"></i>File Catalog (ClickHouse)
                 </div>
                 <div class="card-body py-2">
-                    <div class="d-flex flex-wrap" style="gap: 20px;">
+                    <div class="d-flex flex-wrap" style="gap: 24px;">
                         <!-- Stats (left) -->
-                        <div style="min-width:170px;">
+                        <div style="min-width:250px;max-width:300px;">
                             <?php
                             $chStatRows = [
                                 ['Catalog rows', $compact((int) ($clickhouseStats['total_rows'] ?? 0))],
@@ -520,7 +520,7 @@ $dfToGB = function (string $s): string {
 
                         <!-- Donut + Top repos (right, aligned at top) -->
                         <?php if (!empty($chTopRepos)): ?>
-                        <div class="d-flex align-items-start flex-grow-1" style="gap: 16px; min-width: 280px;">
+                        <div class="d-flex align-items-start" style="gap: 16px; min-width: 240px; max-width: 380px;">
                             <div class="flex-shrink-0 pt-1">
                                 <canvas id="catalogPieChart" width="110" height="110"></canvas>
                             </div>
