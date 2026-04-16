@@ -94,8 +94,13 @@ $dfToGB = function (string $s): string {
     gap: 12px;
     max-width: 100%;
 }
-@media (min-width: 768px) {
-    .v2 .storage-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 380px)); }
+/* On large screens, fit exactly N columns (set via inline CSS var).
+   Falls back to auto-fill below 1200px or when cards are > 5. */
+@media (min-width: 1200px) {
+    .v2 .storage-grid.exact-cols {
+        grid-template-columns: repeat(var(--storage-cols), 1fr);
+    }
+    .v2 .storage-grid.single-col .storage-card { max-width: 400px; }
 }
 .v2 .storage-card {
     background: var(--bs-body-bg);
@@ -165,7 +170,7 @@ $dfToGB = function (string $s): string {
             <a href="#recovery-points" class="text-decoration-none metric-tile warning d-block">
                 <div class="label"><i class="bi bi-archive me-1"></i>Recovery Points</div>
                 <div class="value"><?= $compact($totalArchiveCount) ?></div>
-                <div class="sub"><?= ServerStats::formatBytes($totalDiskBytes) ?> on disk</div>
+                <div class="sub"><?= ServerStats::formatBytes($totalOriginalBytes) ?> protected · <?= ServerStats::formatBytes($totalDiskBytes) ?> on disk</div>
             </a>
         </div>
         <div class="col-xl-3 col-md-6">
@@ -263,7 +268,13 @@ $dfToGB = function (string $s): string {
             <span class="text-muted small"><?= count($storageLocations) ?> configured</span>
         </div>
         <div class="card-body">
-            <div class="storage-grid">
+            <?php
+                $locCount = count($storageLocations);
+                $gridClasses = 'storage-grid';
+                if ($locCount <= 6) $gridClasses .= ' exact-cols';
+                if ($locCount === 1) $gridClasses .= ' single-col';
+            ?>
+            <div class="<?= $gridClasses ?>" style="--storage-cols: <?= min($locCount, 6) ?>">
                 <?php foreach ($storageLocations as $loc): ?>
                 <?php
                     $pct = $loc['disk_percent'] ?? 0;
