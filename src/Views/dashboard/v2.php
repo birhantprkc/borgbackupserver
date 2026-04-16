@@ -495,9 +495,9 @@ $dfToGB = function (string $s): string {
                     <i class="bi bi-list-columns-reverse me-2"></i>File Catalog (ClickHouse)
                 </div>
                 <div class="card-body py-2">
-                    <div class="d-flex flex-wrap" style="gap: 24px;">
+                    <div class="d-flex flex-wrap" style="gap: 0;">
                         <!-- Stats (left) -->
-                        <div style="min-width:250px;max-width:300px;">
+                        <div style="min-width:220px;max-width:260px;margin-right:60px;">
                             <?php
                             $chStatRows = [
                                 ['Catalog rows', $compact((int) ($clickhouseStats['total_rows'] ?? 0))],
@@ -506,10 +506,10 @@ $dfToGB = function (string $s): string {
                                 ['Indexed clients', (int) ($clickhouseStats['agent_count'] ?? 0)],
                             ];
                             ?>
-                            <table class="table table-sm mb-0" style="font-size:0.82rem;">
+                            <table class="table table-sm table-striped mb-0" style="font-size:0.82rem;">
                                 <tbody>
                                 <?php foreach ($chStatRows as $ri => $row): ?>
-                                <tr style="<?= $ri % 2 === 1 ? 'background: var(--bs-tertiary-bg);' : '' ?>">
+                                <tr>
                                     <td class="text-muted border-0 py-1 ps-2"><?= $row[0] ?></td>
                                     <td class="fw-bold border-0 py-1 pe-2 text-end"><?= $row[1] ?></td>
                                 </tr>
@@ -520,7 +520,7 @@ $dfToGB = function (string $s): string {
 
                         <!-- Donut + Top repos (right, aligned at top) -->
                         <?php if (!empty($chTopRepos)): ?>
-                        <div class="d-flex align-items-start" style="gap: 16px; min-width: 240px; max-width: 380px;">
+                        <div class="d-flex align-items-start flex-grow-1" style="gap: 16px; min-width: 240px;">
                             <div class="flex-shrink-0 pt-1">
                                 <canvas id="catalogPieChart" width="110" height="110"></canvas>
                             </div>
