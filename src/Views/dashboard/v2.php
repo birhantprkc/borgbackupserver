@@ -528,21 +528,21 @@ $dfToGB = function (string $s): string {
                         </div>
                         <div class="col-sm-6">
                             <?php if (!empty($chTopRepos)): ?>
-                            <div class="d-flex align-items-center justify-content-between mb-2">
-                                <div class="d-flex align-items-center gap-2">
-                                    <canvas id="catalogPieChart" width="80" height="80" style="flex-shrink:0;"></canvas>
-                                    <div class="small fw-semibold text-uppercase" style="font-size:0.7rem;letter-spacing:0.03em;color:var(--bs-secondary-color);"><i class="bi bi-trophy me-1"></i>Top Repositories</div>
+                            <?php $pieColors = ['#36a2eb','#ff6384','#ffce56','#4bc0c0','#9966ff','#6c757d']; ?>
+                            <div class="d-flex gap-3 align-items-start">
+                                <div class="flex-shrink-0 text-center">
+                                    <canvas id="catalogPieChart" width="80" height="80"></canvas>
+                                </div>
+                                <div class="flex-grow-1 min-width-0">
+                                    <div class="small fw-semibold text-uppercase mb-1" style="font-size:0.65rem;letter-spacing:0.03em;color:var(--bs-secondary-color);"><i class="bi bi-trophy me-1"></i>Top Repositories</div>
+                                    <?php foreach ($chTopRepos as $i => $repo): ?>
+                                    <div class="d-flex align-items-center justify-content-between" style="font-size:0.78rem;padding:1px 0;">
+                                        <span class="text-truncate me-2"><span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:<?= $pieColors[$i % 6] ?>;margin-right:5px;"></span><?= htmlspecialchars($repo['name']) ?></span>
+                                        <span class="text-muted text-nowrap" style="font-size:0.72rem;font-variant-numeric:tabular-nums;"><?= $compact((int) $repo['rows']) ?> rows</span>
+                                    </div>
+                                    <?php endforeach; ?>
                                 </div>
                             </div>
-                            <?php
-                                $pieColors = ['#36a2eb','#ff6384','#ffce56','#4bc0c0','#9966ff','#6c757d'];
-                            ?>
-                            <?php foreach ($chTopRepos as $i => $repo): ?>
-                            <div class="d-flex align-items-center justify-content-between" style="font-size:0.8rem;padding:2px 0;">
-                                <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:<?= $pieColors[$i % 6] ?>;margin-right:6px;"></span><?= htmlspecialchars($repo['name']) ?></span>
-                                <span class="text-muted" style="font-variant-numeric:tabular-nums;"><?= $compact((int) $repo['rows']) ?> rows</span>
-                            </div>
-                            <?php endforeach; ?>
                             <?php else: ?>
                             <div class="text-muted small fst-italic">No catalog data yet</div>
                             <?php endif; ?>
