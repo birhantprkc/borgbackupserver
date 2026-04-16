@@ -35,6 +35,7 @@
                 'Queue' => 'bi-clock-history', 'Schedules' => 'bi-calendar-week',
                 'Log' => 'bi-journal-text', 'Storage' => 'bi-hdd-stack',
                 'Settings' => 'bi-gear', 'Users' => 'bi-people',
+                'User Management' => 'bi-people',
                 'Notifications' => 'bi-bell', 'Profile' => 'bi-person',
             ];
             $navIcon = $navIcons[$pageTitle ?? ''] ?? '';
@@ -179,7 +180,7 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="/users" class="nav-link sidebar-link <?= ($pageTitle ?? '') === 'Users' ? 'active' : '' ?>">
+                    <a href="/users" class="nav-link sidebar-link <?= str_contains($pageTitle ?? '', 'User') ? 'active' : '' ?>">
                         <i class="bi bi-people d-block mb-1 fs-4"></i>
                         <span class="small">Users</span>
                     </a>
@@ -225,7 +226,7 @@
             <i class="bi bi-gear"></i>
             <span>Settings</span>
         </a>
-        <a href="/users" class="mobile-nav-item <?= ($pageTitle ?? '') === 'Users' ? 'active' : '' ?>">
+        <a href="/users" class="mobile-nav-item <?= str_contains($pageTitle ?? '', 'User') ? 'active' : '' ?>">
             <i class="bi bi-people"></i>
             <span>Users</span>
         </a>

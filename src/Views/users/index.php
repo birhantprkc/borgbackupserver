@@ -1,5 +1,5 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h5 class="mb-0">User Management</h5>
+    <div></div>
     <button class="btn btn-sm btn-success" data-bs-toggle="collapse" data-bs-target="#addUserForm">
         <i class="bi bi-plus-circle me-1"></i> Add User
     </button>

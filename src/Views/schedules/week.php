@@ -388,10 +388,7 @@ function bbs_histogram_ticks(int $max): array
 
 <div class="container-fluid py-3">
     <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-        <div>
-            <h4 class="mb-0"><i class="bi bi-calendar-week me-2"></i>Schedules</h4>
-            <div class="text-muted small">Times shown in <?= htmlspecialchars($userTz) ?></div>
-        </div>
+        <div class="text-muted small">Times shown in <?= htmlspecialchars($userTz) ?></div>
         <div class="d-flex align-items-center gap-3 flex-wrap">
             <div class="day-pills" id="day-pills">
                 <?php foreach ($dayLabels as $idx => $label): ?>
