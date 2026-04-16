@@ -40,12 +40,12 @@
             $navIcon = $navIcons[$pageTitle ?? ''] ?? '';
             $badge = $pageTitleBadge ?? '';
             ?>
-            <span class="navbar-text fw-semibold ms-3 d-none d-sm-inline">
-                <?php if ($navIcon): ?><i class="bi <?= $navIcon ?> me-1"></i><?php endif; ?>
+            <span class="navbar-text fw-semibold ms-3 d-none d-sm-inline" style="font-size:1.25rem;color:rgba(255,255,255,0.75);">
+                <?php if ($navIcon): ?><i class="bi <?= $navIcon ?> me-2"></i><?php endif; ?>
                 <?= htmlspecialchars($pageTitle ?? '') ?>
-                <?php if ($badge): ?><span class="badge bg-primary bg-opacity-25 text-primary ms-1" style="font-size:0.55rem;vertical-align:middle;"><?= htmlspecialchars($badge) ?></span><?php endif; ?>
+                <?php if ($badge): ?><span class="badge bg-primary bg-opacity-25 text-primary ms-2" style="font-size:0.55rem;vertical-align:middle;"><?= htmlspecialchars($badge) ?></span><?php endif; ?>
             </span>
-            <span class="navbar-text fw-semibold ms-2 d-sm-none small">
+            <span class="navbar-text fw-semibold ms-2 d-sm-none" style="font-size:1.1rem;color:rgba(255,255,255,0.75);">
                 <?php if ($navIcon): ?><i class="bi <?= $navIcon ?> me-1"></i><?php endif; ?>
                 <?= htmlspecialchars($pageTitle ?? '') ?>
             </span>
