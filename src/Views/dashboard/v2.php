@@ -498,10 +498,23 @@ $dfToGB = function (string $s): string {
                             <div class="mini-stat"><span class="k">Compression</span><span class="v"><?= $clickhouseStats['compression_ratio'] ?? 0 ?>×</span></div>
                             <div class="mini-stat"><span class="k">Indexed clients</span><span class="v"><?= (int) ($clickhouseStats['agent_count'] ?? 0) ?></span></div>
                         </div>
-                        <div class="col-sm-6 d-flex flex-column align-items-center justify-content-center">
+                        <div class="col-sm-6">
                             <?php if (!empty($chTopRepos)): ?>
-                            <canvas id="catalogPieChart" width="120" height="120"></canvas>
-                            <div class="text-center small mt-1" id="catalogPieLegend" style="max-width:180px;line-height:1.6;"></div>
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <div class="d-flex align-items-center gap-2">
+                                    <canvas id="catalogPieChart" width="80" height="80" style="flex-shrink:0;"></canvas>
+                                    <div class="small fw-semibold text-uppercase" style="font-size:0.7rem;letter-spacing:0.03em;color:var(--bs-secondary-color);"><i class="bi bi-trophy me-1"></i>Top Repositories</div>
+                                </div>
+                            </div>
+                            <?php
+                                $pieColors = ['#36a2eb','#ff6384','#ffce56','#4bc0c0','#9966ff','#6c757d'];
+                            ?>
+                            <?php foreach ($chTopRepos as $i => $repo): ?>
+                            <div class="d-flex align-items-center justify-content-between" style="font-size:0.8rem;padding:2px 0;">
+                                <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:<?= $pieColors[$i % 6] ?>;margin-right:6px;"></span><?= htmlspecialchars($repo['name']) ?></span>
+                                <span class="text-muted" style="font-variant-numeric:tabular-nums;"><?= $compact((int) $repo['rows']) ?> rows</span>
+                            </div>
+                            <?php endforeach; ?>
                             <?php else: ?>
                             <div class="text-muted small fst-italic">No catalog data yet</div>
                             <?php endif; ?>
@@ -607,14 +620,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
         });
-        // Build compact inline legend
-        const leg = document.getElementById('catalogPieLegend');
-        if (leg) {
-            leg.innerHTML = labels.map((l, i) =>
-                '<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:' + colors[i % colors.length] + ';margin-right:3px;"></span>' +
-                '<span style="font-size:0.7rem;">' + l + '</span>'
-            ).join('&nbsp;&nbsp;');
-        }
+        // Legend is rendered server-side as a list, no JS needed.
     })();
     <?php endif; ?>
 });
