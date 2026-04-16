@@ -423,34 +423,79 @@ $dfToGB = function (string $s): string {
     </div>
 
     <?php if ($isAdmin): ?>
-    <!-- Row 6: Compact system detail -->
+    <!-- Row 6: System detail — MariaDB + File Catalog side by side.
+         Each card is a two-column layout (stats left, chart right) that
+         wraps to stacked rows on mobile. -->
     <div class="row g-3 mb-3">
         <?php if (!empty($mysqlStats)): ?>
+        <?php
+            $msStorage = $mysqlStorage ?? null;
+            $dbBytes = $msStorage['db_bytes'] ?? 0;
+            $msDiskTotal = $msStorage['disk_total'] ?? 0;
+            $msDiskUsed = $msStorage['disk_used'] ?? 0;
+            $msDiskFree = $msStorage['disk_free'] ?? 0;
+            $msDbPct = $msDiskTotal > 0 ? round($dbBytes / $msDiskTotal * 100, 1) : 0;
+            $msOtherPct = $msDiskTotal > 0 ? round(($msDiskUsed - $dbBytes) / $msDiskTotal * 100, 1) : 0;
+            if ($msOtherPct < 0) $msOtherPct = 0;
+            $msFreePct = $msDiskTotal > 0 ? round($msDiskFree / $msDiskTotal * 100, 1) : 0;
+        ?>
         <div class="col-lg-6">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header card-head-gradient fw-semibold">
-                    <i class="bi bi-database me-1"></i>MariaDB
+                    <i class="bi bi-database me-2"></i>MariaDB
                 </div>
                 <div class="card-body py-2">
-                    <div class="mini-stat"><span class="k">Queries / sec</span><span class="v"><?= $mysqlStats['qps'] ?? 0 ?></span></div>
-                    <div class="mini-stat"><span class="k">Connections</span><span class="v"><?= $mysqlStats['threads_connected'] ?? 0 ?></span></div>
-                    <div class="mini-stat"><span class="k">Buffer pool hit rate</span><span class="v"><?= $mysqlStats['hit_rate'] ?? 0 ?>%</span></div>
-                    <div class="mini-stat"><span class="k">Slow queries</span><span class="v"><?= $compact((int) ($mysqlStats['slow_queries'] ?? 0)) ?></span></div>
+                    <div class="row g-3">
+                        <div class="col-sm-6">
+                            <div class="mini-stat"><span class="k">Queries / sec</span><span class="v"><?= $mysqlStats['qps'] ?? 0 ?></span></div>
+                            <div class="mini-stat"><span class="k">Connections</span><span class="v"><?= $mysqlStats['threads_connected'] ?? 0 ?></span></div>
+                            <div class="mini-stat"><span class="k">Buffer hit rate</span><span class="v"><?= $mysqlStats['hit_rate'] ?? 0 ?>%</span></div>
+                            <div class="mini-stat"><span class="k">Slow queries</span><span class="v"><?= $compact((int) ($mysqlStats['slow_queries'] ?? 0)) ?></span></div>
+                        </div>
+                        <div class="col-sm-6 d-flex flex-column align-items-center justify-content-center">
+                            <?php if ($msDiskTotal > 0): ?>
+                            <canvas id="mariadbChart" width="120" height="120"></canvas>
+                            <div class="text-center small mt-1">
+                                <span style="color:#48bb78;">&#9632;</span> BBS <span class="text-muted">(<?= ServerStats::formatBytes($dbBytes) ?>)</span>
+                                <span class="ms-2" style="color:#6c757d;">&#9632;</span> Other
+                                <span class="ms-2" style="color:#2d3748;">&#9632;</span> Free
+                            </div>
+                            <?php else: ?>
+                            <div class="text-muted small fst-italic">Disk info unavailable</div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
         <?php endif; ?>
-        <?php if (!empty($clickhouseStats)): ?>
+        <?php if (!empty($clickhouseStats ?? null)): ?>
+        <?php
+            $chTopRepos = $clickhouseStats['top_repos'] ?? [];
+            $chDiskBytes = (int) ($clickhouseStats['disk_bytes'] ?? 0);
+        ?>
         <div class="col-lg-6">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header card-head-gradient fw-semibold">
-                    <i class="bi bi-list-columns-reverse me-1"></i>File Catalog (ClickHouse)
+                    <i class="bi bi-list-columns-reverse me-2"></i>File Catalog (ClickHouse)
                 </div>
                 <div class="card-body py-2">
-                    <div class="mini-stat"><span class="k">Catalog rows</span><span class="v"><?= $compact((int) ($clickhouseStats['total_rows'] ?? 0)) ?></span></div>
-                    <div class="mini-stat"><span class="k">Index size</span><span class="v"><?= ServerStats::formatBytes((int) ($clickhouseStats['disk_bytes'] ?? 0)) ?></span></div>
-                    <div class="mini-stat"><span class="k">Compression ratio</span><span class="v"><?= $clickhouseStats['compression_ratio'] ?? 0 ?>×</span></div>
-                    <div class="mini-stat"><span class="k">Indexed clients</span><span class="v"><?= (int) ($clickhouseStats['agent_count'] ?? 0) ?></span></div>
+                    <div class="row g-3">
+                        <div class="col-sm-6">
+                            <div class="mini-stat"><span class="k">Catalog rows</span><span class="v"><?= $compact((int) ($clickhouseStats['total_rows'] ?? 0)) ?></span></div>
+                            <div class="mini-stat"><span class="k">Index size</span><span class="v"><?= ServerStats::formatBytes($chDiskBytes) ?></span></div>
+                            <div class="mini-stat"><span class="k">Compression</span><span class="v"><?= $clickhouseStats['compression_ratio'] ?? 0 ?>×</span></div>
+                            <div class="mini-stat"><span class="k">Indexed clients</span><span class="v"><?= (int) ($clickhouseStats['agent_count'] ?? 0) ?></span></div>
+                        </div>
+                        <div class="col-sm-6 d-flex flex-column align-items-center justify-content-center">
+                            <?php if (!empty($chTopRepos)): ?>
+                            <canvas id="catalogPieChart" width="120" height="120"></canvas>
+                            <div class="text-center small mt-1" id="catalogPieLegend" style="max-width:180px;line-height:1.6;"></div>
+                            <?php else: ?>
+                            <div class="text-muted small fst-italic">No catalog data yet</div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -485,5 +530,81 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
     });
+
+    // --- MariaDB donut: BBS database vs other vs free ---
+    <?php if ($isAdmin && !empty($msStorage) && ($msStorage['disk_total'] ?? 0) > 0): ?>
+    (function () {
+        const el = document.getElementById('mariadbChart');
+        if (!el) return;
+        const fmtB = b => { b = Number(b); if (b >= 1099511627776) return (b/1099511627776).toFixed(1)+' TB'; if (b >= 1073741824) return (b/1073741824).toFixed(1)+' GB'; if (b >= 1048576) return (b/1048576).toFixed(1)+' MB'; return (b/1024).toFixed(0)+' KB'; };
+        new Chart(el.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: ['BBS Database', 'Other Data', 'Free'],
+                datasets: [{
+                    data: [<?= $dbBytes ?>, <?= max(0, $msDiskUsed - $dbBytes) ?>, <?= $msDiskFree ?>],
+                    backgroundColor: ['#48bb78', '#6c757d', isDark ? '#2d3748' : '#e2e8f0'],
+                    borderWidth: 0,
+                }]
+            },
+            options: {
+                responsive: false,
+                cutout: '60%',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: { label: ctx => ctx.label + ': ' + fmtB(ctx.raw) }
+                    }
+                }
+            }
+        });
+    })();
+    <?php endif; ?>
+
+    // --- ClickHouse pie: top clients by catalog disk usage ---
+    <?php if ($isAdmin && !empty($chTopRepos)): ?>
+    (function () {
+        const el = document.getElementById('catalogPieChart');
+        if (!el) return;
+        const colors = ['#36a2eb','#ff6384','#ffce56','#4bc0c0','#9966ff','#6c757d'];
+        const repos = <?= json_encode($chTopRepos) ?>;
+        const diskTotal = <?= $chDiskBytes ?>;
+        const top5Disk = repos.reduce((s, r) => s + Number(r.disk_bytes), 0);
+        const otherDisk = Math.max(diskTotal - top5Disk, 0);
+        const labels = repos.map(r => r.name);
+        const data = repos.map(r => Number(r.disk_bytes));
+        if (otherDisk > 0) { labels.push('Other'); data.push(otherDisk); }
+        const fmtB = b => { b = Number(b); if (b >= 1099511627776) return (b/1099511627776).toFixed(1)+' TB'; if (b >= 1073741824) return (b/1073741824).toFixed(1)+' GB'; if (b >= 1048576) return (b/1048576).toFixed(1)+' MB'; return (b/1024).toFixed(0)+' KB'; };
+        new Chart(el.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: data,
+                    backgroundColor: colors.slice(0, data.length),
+                    borderWidth: 0,
+                }]
+            },
+            options: {
+                responsive: false,
+                cutout: '55%',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: { label: ctx => ctx.label + ': ' + fmtB(ctx.raw) }
+                    }
+                }
+            }
+        });
+        // Build compact inline legend
+        const leg = document.getElementById('catalogPieLegend');
+        if (leg) {
+            leg.innerHTML = labels.map((l, i) =>
+                '<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:' + colors[i % colors.length] + ';margin-right:3px;"></span>' +
+                '<span style="font-size:0.7rem;">' + l + '</span>'
+            ).join('&nbsp;&nbsp;');
+        }
+    })();
+    <?php endif; ?>
 });
 </script>

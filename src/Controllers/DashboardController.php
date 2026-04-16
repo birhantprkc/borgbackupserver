@@ -146,6 +146,9 @@ class DashboardController extends Controller
         $hostnameSetting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
         $serverHost = $hostnameSetting['value'] ?? gethostname();
 
+        // MySQL storage breakdown (for the MariaDB card visual)
+        $mysqlStorage = $this->isAdmin() ? ServerStats::getMysqlStorage() : null;
+
         return [
             'storageLocations' => $storageLocations,
             'totalArchiveCount' => (int) ($archiveCountRow['c'] ?? 0),
@@ -156,6 +159,7 @@ class DashboardController extends Controller
             'osName' => $osName,
             'uptimeSec' => $uptimeSec,
             'serverHost' => $serverHost,
+            'mysqlStorage' => $mysqlStorage,
         ];
     }
 
