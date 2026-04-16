@@ -324,7 +324,10 @@ $dfToGB = function (string $s): string {
                 </div>
                 <div class="card-body p-0" id="active-jobs">
                     <?php if (empty($activeJobs)): ?>
-                    <div class="p-4 text-muted text-center">No active jobs</div>
+                    <div class="p-5 text-muted text-center">
+                        <i class="bi bi-hourglass d-block mb-2" style="font-size:1.8rem;opacity:0.4;"></i>
+                        <div>No Active Jobs</div>
+                    </div>
                     <?php else: ?>
                     <div class="table-responsive">
                         <table class="table table-hover mb-0 small">
