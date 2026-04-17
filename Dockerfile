@@ -1,7 +1,9 @@
 FROM php:8.4-apache
 
-# Install system dependencies, apply security patches and clean up in one layer
-RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
+# Install system dependencies, apply security patches, and clean up in one layer.
+# dist-upgrade pulls kernel-abi and other fixes that plain upgrade skips — helps
+# reduce Docker Hub CVE scan counts.
+RUN apt-get update && apt-get upgrade -y && apt-get dist-upgrade -y && apt-get install -y --no-install-recommends \
     git \
     curl \
     ca-certificates \
@@ -39,6 +41,7 @@ RUN ARCH=$(dpkg --print-architecture) && \
         > /etc/apt/sources.list.d/clickhouse.list && \
     apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends clickhouse-server clickhouse-client && \
+    apt-get upgrade -y && apt-get dist-upgrade -y && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Disable ClickHouse system log tables (heavy idle disk I/O)
