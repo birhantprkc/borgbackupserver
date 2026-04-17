@@ -649,6 +649,44 @@ class AdminApiController extends Controller
             FROM remote_ssh_configs ORDER BY name
         ");
 
+        // Decorate local locations with live df capacity/usage (#157).
+        foreach ($locations as &$loc) {
+            $disk = \BBS\Services\ServerStats::getDiskUsage($loc['path']);
+            if ($disk) {
+                $loc['total_bytes'] = (int) $disk['total'];
+                $loc['used_bytes'] = (int) $disk['used'];
+                $loc['free_bytes'] = (int) $disk['free'];
+                $loc['total_size_gb'] = round($disk['total'] / 1073741824, 2);
+                $loc['current_usage_gb'] = round($disk['used'] / 1073741824, 2);
+                $loc['free_space_gb'] = round($disk['free'] / 1073741824, 2);
+                $loc['usage_percentage'] = $disk['total'] > 0
+                    ? round(($disk['used'] / $disk['total']) * 100, 1)
+                    : 0;
+            } else {
+                $loc['total_bytes'] = null;
+                $loc['used_bytes'] = null;
+                $loc['free_bytes'] = null;
+                $loc['total_size_gb'] = null;
+                $loc['current_usage_gb'] = null;
+                $loc['free_space_gb'] = null;
+                $loc['usage_percentage'] = null;
+            }
+        }
+        unset($loc);
+
+        // Decorate remote SSH configs with the same fields derived from the
+        // pre-polled disk_* columns (updated by the scheduler every 15 min).
+        foreach ($remoteConfigs as &$rc) {
+            $total = $rc['disk_total_bytes'] !== null ? (int) $rc['disk_total_bytes'] : null;
+            $used  = $rc['disk_used_bytes']  !== null ? (int) $rc['disk_used_bytes']  : null;
+            $free  = $rc['disk_free_bytes']  !== null ? (int) $rc['disk_free_bytes']  : null;
+            $rc['total_size_gb'] = $total !== null ? round($total / 1073741824, 2) : null;
+            $rc['current_usage_gb'] = $used !== null ? round($used / 1073741824, 2) : null;
+            $rc['free_space_gb'] = $free !== null ? round($free / 1073741824, 2) : null;
+            $rc['usage_percentage'] = ($total && $used !== null) ? round(($used / $total) * 100, 1) : null;
+        }
+        unset($rc);
+
         $this->json([
             'local' => $locations,
             'remote_ssh' => $remoteConfigs,
