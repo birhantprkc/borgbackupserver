@@ -27,6 +27,22 @@ class NotificationService
     {
         $alwaysSend = in_array($type, self::ALWAYS_SEND_EVENTS, true);
 
+        // #153: success events (backup_completed, restore_completed, etc.) can
+        // flood the notification bell with "routine" entries the user then
+        // has to mark-as-read. Off by default — the user can opt back in via
+        // Settings → Notifications.
+        if ($alwaysSend) {
+            $pref = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'inapp_notify_success_events'");
+            $showSuccess = ($pref['value'] ?? '0') === '1';
+            if (!$showSuccess) {
+                // Still fire email/Apprise (those have their own per-event
+                // toggles), but skip the in-app notification center record.
+                $this->sendEmailIfEnabled($type, $message);
+                $this->sendAppriseIfEnabled($type, $message, $agentId);
+                return;
+            }
+        }
+
         // For success events, resolve any previous unresolved notification first
         // so a fresh one is always created and notifications always fire
         if ($alwaysSend) {

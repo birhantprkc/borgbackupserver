@@ -318,6 +318,34 @@ $updateAvailable = $updateService->isUpdateAvailable();
     </div>
 
     <div class="col-lg-5">
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+                <i class="bi bi-bell me-1"></i> In-App Notifications
+            </div>
+            <div class="card-body">
+                <form method="POST" action="/settings">
+                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                    <input type="hidden" name="_tab" value="notifications">
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" role="switch"
+                               id="inapp_notify_success_events" name="inapp_notify_success_events" value="1"
+                               <?= ($settings['inapp_notify_success_events'] ?? '0') === '1' ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="inapp_notify_success_events">
+                            Show successful backups / restores in the notification bell
+                        </label>
+                    </div>
+                    <p class="small text-muted mb-3">
+                        Off by default. When off, only failures, agent-offline, storage-low, and other
+                        alert-worthy events show up in the bell menu — so routine success messages
+                        don't pile up and bury real issues. Email and push notifications stay
+                        independent of this setting.
+                    </p>
+                    <button type="submit" class="btn btn-sm btn-warning">
+                        <i class="bi bi-check-lg me-1"></i> Save
+                    </button>
+                </form>
+            </div>
+        </div>
         <div class="card border-0 bg-body-secondary">
             <div class="card-body">
                 <h6 class="card-title"><i class="bi bi-lightbulb me-1 text-warning"></i> Tip</h6>
