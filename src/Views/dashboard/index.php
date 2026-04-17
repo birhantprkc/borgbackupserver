@@ -73,7 +73,7 @@ $dfFix = function (string $s): string {
     margin-bottom: 8px;
 }
 .v2 .health-row:last-child { margin-bottom: 0; }
-.v2 .health-row .lbl { width: 64px; font-size: 0.78rem; color: var(--bs-secondary-color); font-weight: 600; }
+.v2 .health-row .lbl { width: 64px; font-size: 0.82rem; color: var(--bs-secondary-color); font-weight: 400; }
 .v2 .health-row .bar {
     flex: 1;
     height: 12px;
@@ -171,8 +171,11 @@ $dfFix = function (string $s): string {
 
     <!-- Row 2: Activity chart | Backup summary | Server health (admin only) -->
     <?php
-        $row2JobsCol = $isAdmin ? 'col-xl-5 col-lg-6' : 'col-lg-7';
-        $row2SummaryCol = $isAdmin ? 'col-xl-4 col-lg-6' : 'col-lg-5';
+        // Admin: Jobs gets half, Backup Summary + Server Health share the
+        // other half equally. Non-admin: Jobs + Backup Summary split 7/5.
+        $row2JobsCol = $isAdmin ? 'col-xl-6 col-lg-6' : 'col-lg-7';
+        $row2SummaryCol = $isAdmin ? 'col-xl-3 col-lg-6' : 'col-lg-5';
+        $row2HealthCol = 'col-xl-3 col-lg-12';
     ?>
     <div class="row g-3 mb-3">
         <div class="<?= $row2JobsCol ?>">
@@ -206,7 +209,7 @@ $dfFix = function (string $s): string {
         </div>
 
         <?php if ($isAdmin): ?>
-        <div class="col-xl-3 col-lg-12">
+        <div class="<?= $row2HealthCol ?>">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header card-head-gradient fw-semibold">
                     <i class="bi bi-cpu me-2"></i>Server Health
