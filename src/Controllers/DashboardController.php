@@ -8,6 +8,20 @@ use BBS\Services\ServerStats;
 
 class DashboardController extends Controller
 {
+    /** Category → task_type list, for filtering the Recently Completed panel. */
+    private const RECENT_JOB_CATEGORIES = [
+        'backup'  => ['backup'],
+        'restore' => ['restore', 'restore_mysql', 'restore_pg', 'restore_mongo', 's3_restore'],
+        'prune'   => ['prune'],
+        'compact' => ['compact'],
+        's3'      => ['s3_sync'],
+        'other'   => [
+            'check', 'repo_check', 'repo_repair', 'break_lock',
+            'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full',
+            'archive_delete', 'update_borg', 'update_agent', 'plugin_test',
+        ],
+    ];
+
     public function index(): void
     {
         $this->requireAuth();
@@ -280,6 +294,28 @@ class DashboardController extends Controller
         }
         $errorCount = $this->db->fetchOne($errorCountQuery, $jobParams)['cnt'];
 
+        // Optional task-type filter for the Recently Completed list. Accepts
+        // a comma-separated list of category keys (backup, restore, prune,
+        // compact, s3, other) — see self::RECENT_JOB_CATEGORIES for the
+        // task_type mapping. Persisted client-side via localStorage.
+        $recentScope = $jobScope;
+        $recentParams = $jobParams;
+        $typesParam = $_GET['types'] ?? '';
+        if ($typesParam !== '') {
+            $wanted = array_filter(array_map('trim', explode(',', $typesParam)));
+            $taskTypes = [];
+            foreach ($wanted as $cat) {
+                foreach (self::RECENT_JOB_CATEGORIES[$cat] ?? [] as $t) {
+                    $taskTypes[$t] = true;
+                }
+            }
+            if (!empty($taskTypes)) {
+                $placeholders = implode(',', array_fill(0, count($taskTypes), '?'));
+                $recentScope .= " AND bj.task_type IN ({$placeholders})";
+                $recentParams = array_merge($recentParams, array_keys($taskTypes));
+            }
+        }
+
         $recentJobs = $this->db->fetchAll("
             SELECT bj.*, SUBSTRING(bj.error_log, 1, 255) as error_log, a.name as agent_name,
                    r.name as repo_name, bp.name as plan_name
@@ -287,10 +323,10 @@ class DashboardController extends Controller
             JOIN agents a ON a.id = bj.agent_id
             LEFT JOIN repositories r ON r.id = bj.repository_id
             LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
-            WHERE bj.status IN ('completed', 'failed', 'cancelled') {$jobScope}
+            WHERE bj.status IN ('completed', 'failed', 'cancelled') {$recentScope}
             ORDER BY bj.completed_at DESC
             LIMIT 10
-        ", $jobParams);
+        ", $recentParams);
 
         $activeJobs = $this->db->fetchAll("
             SELECT bj.*, SUBSTRING(bj.error_log, 1, 255) as error_log, a.name as agent_name,

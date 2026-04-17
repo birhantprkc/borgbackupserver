@@ -401,8 +401,40 @@ $dfFix = function (string $s): string {
 
     <!-- Row 5: Recent completed jobs -->
     <div class="card border-0 shadow-sm mb-3">
-        <div class="card-header card-head-gradient fw-semibold">
-            <i class="bi bi-check2-circle me-2"></i>Recently Completed
+        <div class="card-header card-head-gradient fw-semibold d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-check2-circle me-2"></i>Recently Completed</span>
+            <div class="dropdown">
+                <button id="recentFilterBtn" class="btn btn-sm btn-link text-white text-decoration-none p-0" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" title="Filter by type">
+                    <i class="bi bi-funnel"></i>
+                    <span id="recentFilterCount" class="badge bg-primary bg-opacity-50 ms-1" style="display:none;font-size:0.6rem;"></span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end p-2" style="min-width: 200px;">
+                    <li class="small text-muted fw-semibold px-1 pb-1 border-bottom mb-1">Task Types</li>
+                    <?php
+                    $filterCats = [
+                        ['backup',  'Backup',        'bi-box-arrow-in-down'],
+                        ['restore', 'Restore',       'bi-box-arrow-up'],
+                        ['prune',   'Prune',         'bi-scissors'],
+                        ['compact', 'Compact',       'bi-archive'],
+                        ['s3',      'S3 Sync',       'bi-cloud-upload'],
+                        ['other',   'Other / Maint', 'bi-tools'],
+                    ];
+                    foreach ($filterCats as [$key, $label, $icon]): ?>
+                    <li>
+                        <label class="dropdown-item d-flex align-items-center gap-2 py-1 px-2 rounded" style="cursor:pointer;">
+                            <input type="checkbox" class="form-check-input m-0 recent-filter-cb" data-cat="<?= $key ?>" checked>
+                            <i class="bi <?= $icon ?> text-muted"></i>
+                            <span><?= $label ?></span>
+                        </label>
+                    </li>
+                    <?php endforeach; ?>
+                    <li><hr class="dropdown-divider my-1"></li>
+                    <li class="d-flex gap-2 px-1">
+                        <button type="button" class="btn btn-sm btn-outline-secondary flex-grow-1" id="recentFilterAll">All</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary flex-grow-1" id="recentFilterNone">None</button>
+                    </li>
+                </ul>
+            </div>
         </div>
         <div class="card-body p-0" id="recent-jobs">
             <?php if (empty($recentJobs)): ?>
@@ -609,5 +641,110 @@ document.addEventListener('DOMContentLoaded', function () {
         // Legend is rendered server-side as a list, no JS needed.
     })();
     <?php endif; ?>
+
+    // --- Recently Completed: task-type filter ----------------------------
+    (function () {
+        const STORAGE_KEY = 'bbs_recent_jobs_filter';
+        const ALL = ['backup','restore','prune','compact','s3','other'];
+        const checkboxes = document.querySelectorAll('.recent-filter-cb');
+        const btn = document.getElementById('recentFilterBtn');
+        const badge = document.getElementById('recentFilterCount');
+        const btnAll = document.getElementById('recentFilterAll');
+        const btnNone = document.getElementById('recentFilterNone');
+        const container = document.getElementById('recent-jobs');
+        if (!checkboxes.length || !container) return;
+
+        // Load saved selection (defaults to all checked)
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        const active = saved && Array.isArray(saved) ? new Set(saved) : new Set(ALL);
+        checkboxes.forEach(cb => { cb.checked = active.has(cb.dataset.cat); });
+        updateBadge();
+
+        function updateBadge() {
+            const count = ALL.length - active.size;
+            if (count === 0 || active.size === 0) {
+                badge.style.display = 'none';
+            } else {
+                badge.textContent = active.size;
+                badge.style.display = '';
+            }
+        }
+
+        function save() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify([...active]));
+        }
+
+        function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+        function timeAgo(str) {
+            if (!str) return '--';
+            const diff = Math.floor((Date.now() - new Date((str).replace(' ','T')+'Z').getTime()) / 1000);
+            if (diff < 60) return diff + 's ago';
+            if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+            if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+            return Math.floor(diff/86400) + 'd ago';
+        }
+        function fmtDur(s) {
+            s = parseInt(s) || 0;
+            if (s >= 3600) return Math.floor(s/3600) + 'h ' + Math.floor((s%3600)/60) + 'm';
+            if (s >= 60) return Math.floor(s/60) + 'm ' + (s%60) + 's';
+            return s > 0 ? s + 's' : '--';
+        }
+
+        function renderRows(jobs) {
+            if (!jobs || !jobs.length) {
+                container.innerHTML = '<div class="p-5 text-muted text-center"><i class="bi bi-filter d-block mb-2" style="font-size:1.8rem;opacity:0.4;"></i><div>No Jobs Match This Filter</div></div>';
+                return;
+            }
+            let html = '<div class="table-responsive"><table class="table table-hover mb-0 small"><thead><tr><th>Client</th><th>Task</th><th class="d-th-md">Plan</th><th class="d-th-md">Repo</th><th>Completed</th><th class="d-th-md">Duration</th><th class="text-center">Status</th></tr></thead><tbody>';
+            jobs.forEach(j => {
+                const icon = j.status === 'completed' ? 'bi-check-circle-fill text-success'
+                    : j.status === 'failed' ? 'bi-x-circle-fill text-danger'
+                    : 'bi-slash-circle-fill text-secondary';
+                html += '<tr style="cursor:pointer" onclick="window.location=\'/queue/'+j.id+'\'">'
+                    + '<td>' + esc(j.agent_name) + '</td>'
+                    + '<td>' + esc((j.task_type||'').charAt(0).toUpperCase() + (j.task_type||'').slice(1)) + '</td>'
+                    + '<td class="d-table-cell-md">' + esc(j.plan_name || '--') + '</td>'
+                    + '<td class="d-table-cell-md">' + esc(j.repo_name || '--') + '</td>'
+                    + '<td>' + timeAgo(j.completed_at) + '</td>'
+                    + '<td class="d-table-cell-md">' + fmtDur(j.duration_seconds) + '</td>'
+                    + '<td class="text-center"><i class="bi ' + icon + '"></i></td>'
+                    + '</tr>';
+            });
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        }
+
+        async function refresh() {
+            const types = [...active].join(',');
+            const url = '/dashboard/json' + (types && active.size < ALL.length ? '?types=' + encodeURIComponent(types) : '');
+            try {
+                const resp = await fetch(url, { credentials: 'same-origin' });
+                if (!resp.ok) return;
+                const data = await resp.json();
+                renderRows(data.recentJobs || []);
+            } catch (e) { /* silent */ }
+        }
+
+        checkboxes.forEach(cb => cb.addEventListener('change', () => {
+            if (cb.checked) active.add(cb.dataset.cat);
+            else active.delete(cb.dataset.cat);
+            save();
+            updateBadge();
+            refresh();
+        }));
+        btnAll.addEventListener('click', () => {
+            ALL.forEach(c => active.add(c));
+            checkboxes.forEach(cb => cb.checked = true);
+            save(); updateBadge(); refresh();
+        });
+        btnNone.addEventListener('click', () => {
+            active.clear();
+            checkboxes.forEach(cb => cb.checked = false);
+            save(); updateBadge(); refresh();
+        });
+
+        // Initial fetch if saved filter differs from the server-rendered default
+        if (saved && active.size < ALL.length) refresh();
+    })();
 });
 </script>
