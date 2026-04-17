@@ -14,33 +14,26 @@ class DashboardController extends Controller
 
         $data = $this->getDashboardData();
         $data = array_merge($data, $this->getSlowStats());
+        $data = array_merge($data, $this->getDashboardExtras());
         $data['pageTitle'] = 'Dashboard';
 
         $this->view('dashboard/index', $data);
     }
 
-    /**
-     * Preview of a redesigned dashboard — #146. Rendered at /v2 so it can be
-     * iterated on before replacing the default view. Reuses the same fast+slow
-     * data methods and layers on a storage-location-per-card layout plus
-     * version/host info.
-     */
-    public function v2(): void
+    /** Legacy dashboard preserved temporarily at /dashboard-legacy. */
+    public function legacy(): void
     {
         $this->requireAuth();
 
         $data = $this->getDashboardData();
         $data = array_merge($data, $this->getSlowStats());
-        $data = array_merge($data, $this->getV2Extras());
         $data['pageTitle'] = 'Dashboard';
-        $data['pageTitleBadge'] = 'V2 PREVIEW';
-        $data['isV2'] = true;
 
-        $this->view('dashboard/v2', $data);
+        $this->view('dashboard/index.v1.bak', $data);
     }
 
-    /** Data unique to the v2 dashboard — per-location storage, server identity, global totals. */
-    private function getV2Extras(): array
+    /** Data unique to the dashboard — per-location storage, server identity, global totals. */
+    private function getDashboardExtras(): array
     {
         // --- Storage locations: per-location df + repo/archive counts ---
         $locations = $this->db->fetchAll("
