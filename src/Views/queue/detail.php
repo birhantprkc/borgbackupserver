@@ -22,10 +22,7 @@ if (($job['bytes_total'] ?? 0) > 0 && $job['bytes_processed'] > 0) {
 
 function formatBytes($bytes) {
     if (!$bytes || $bytes == 0) return '--';
-    $units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    $i = 0;
-    while ($bytes >= 1024 && $i < count($units) - 1) { $bytes /= 1024; $i++; }
-    return round($bytes, $i > 0 ? 1 : 0) . ' ' . $units[$i];
+    return \BBS\Services\ServerStats::formatBytes((int) $bytes);
 }
 
 $isActive = in_array($job['status'], ['queued', 'sent', 'running']);
@@ -481,7 +478,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
         const units = ['B','KB','MB','GB','TB'];
         let i = 0, s = b;
         while (s >= 1024 && i < units.length-1) { s /= 1024; i++; }
-        return (i > 0 ? s.toFixed(1) : s) + ' ' + units[i];
+        return (i > 0 ? s.toFixed(1) : s) + '\u00A0' + units[i];
     }
 
     function updateProgressBar(job, data) {

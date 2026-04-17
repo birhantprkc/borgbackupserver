@@ -196,10 +196,11 @@ class ServerStats
 
     private static function formatDfSize(float $bytes): string
     {
-        if ($bytes >= 1099511627776) return round($bytes / 1099511627776, 1) . 'T';
-        if ($bytes >= 1073741824) return round($bytes / 1073741824) . 'G';
-        if ($bytes >= 1048576) return round($bytes / 1048576) . 'M';
-        return round($bytes / 1024) . 'K';
+        $nbsp = "\u{00A0}";
+        if ($bytes >= 1099511627776) return round($bytes / 1099511627776, 1) . $nbsp . 'TB';
+        if ($bytes >= 1073741824) return round($bytes / 1073741824) . $nbsp . 'GB';
+        if ($bytes >= 1048576) return round($bytes / 1048576) . $nbsp . 'MB';
+        return round($bytes / 1024) . $nbsp . 'KB';
     }
 
     /**
@@ -464,6 +465,6 @@ class ServerStats
             $size /= 1024;
             $i++;
         }
-        return round($size, $precision) . $units[$i];
+        return round($size, $precision) . "\u{00A0}" . $units[$i];
     }
 }

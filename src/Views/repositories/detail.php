@@ -1,8 +1,5 @@
 <?php
-$sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB'
-    : ($totalSize >= 1048576 ? round($totalSize / 1048576, 1) . ' MB'
-    : ($totalSize >= 1024 ? round($totalSize / 1024, 1) . ' KB'
-    : ($totalSize > 0 ? $totalSize . ' B' : '0')));
+$sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $totalSize) : '0';
 ?>
 
 <!-- Breadcrumb -->
@@ -230,11 +227,7 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                     $saved = $totalOriginal - $totalDedup;
                     if ($saved > 0) {
                         $fmtBytes = function(int $b) {
-                            if ($b >= 1099511627776) return round($b / 1099511627776, 1) . ' TB';
-                            if ($b >= 1073741824) return round($b / 1073741824, 1) . ' GB';
-                            if ($b >= 1048576) return round($b / 1048576, 1) . ' MB';
-                            if ($b >= 1024) return round($b / 1024, 1) . ' KB';
-                            return $b . ' B';
+                            return \BBS\Services\ServerStats::formatBytes($b);
                         };
                         $dedupSaved = $fmtBytes($saved) . ' saved';
                     }
@@ -493,12 +486,8 @@ $sizeLabel = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB
                 </thead>
                 <tbody>
                     <?php foreach ($archives as $ar):
-                        $origLabel = $ar['original_size'] >= 1073741824 ? round($ar['original_size'] / 1073741824, 1) . ' GB'
-                            : ($ar['original_size'] >= 1048576 ? round($ar['original_size'] / 1048576, 1) . ' MB'
-                            : round($ar['original_size'] / 1024, 1) . ' KB');
-                        $dedupLabel = $ar['deduplicated_size'] >= 1073741824 ? round($ar['deduplicated_size'] / 1073741824, 1) . ' GB'
-                            : ($ar['deduplicated_size'] >= 1048576 ? round($ar['deduplicated_size'] / 1048576, 1) . ' MB'
-                            : round($ar['deduplicated_size'] / 1024, 1) . ' KB');
+                        $origLabel = \BBS\Services\ServerStats::formatBytes((int) $ar['original_size']);
+                        $dedupLabel = \BBS\Services\ServerStats::formatBytes((int) $ar['deduplicated_size']);
                     ?>
                     <tr style="cursor:pointer" onclick="window.location='/clients/<?= $repo['agent_id'] ?>/repo/<?= $repo['id'] ?>/archive/<?= $ar['id'] ?>'">
                         <td>

@@ -25,9 +25,10 @@ $dedupSavingsPct = $totalOriginalBytes > 0
     ? round((1 - $totalDiskBytes / $totalOriginalBytes) * 100, 1)
     : 0;
 
-// Append "B" to df-style sizes ("100G" → "100GB")
-$dfToGB = function (string $s): string {
-    if (preg_match('/^[\d.]+[TGMK]$/', $s)) return $s . 'B';
+// df output from the OS uses single-letter units ("100G"). Add a non-breaking
+// space + "B" suffix so it matches our standard "100 GB" format.
+$dfFix = function (string $s): string {
+    if (preg_match('/^([\d.]+)([TGMK])$/', $s, $m)) return $m[1] . "\u{00A0}" . $m[2] . 'B';
     return $s;
 };
 ?>
@@ -245,7 +246,7 @@ $dfToGB = function (string $s): string {
                     <div class="health-row">
                         <span class="lbl text-truncate" title="<?= htmlspecialchars($part['mount']) ?>"><?= htmlspecialchars($part['mount']) ?></span>
                         <div class="bar"><div class="fill" style="width: <?= $pPct ?>%; background: <?= $pColor ?>;"></div></div>
-                        <span class="val"><?= $pPct ?>% · <?= $dfToGB($part['size']) ?></span>
+                        <span class="val"><?= $pPct ?>% · <?= $dfFix($part['size']) ?></span>
                     </div>
                     <?php endforeach; ?>
                     <?php endif; ?>
@@ -581,7 +582,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const labels = repos.map(r => r.name);
         const data = repos.map(r => Number(r.disk_bytes));
         if (otherDisk > 0) { labels.push('Other'); data.push(otherDisk); }
-        const fmtB = b => { b = Number(b); if (b >= 1099511627776) return (b/1099511627776).toFixed(1)+' TB'; if (b >= 1073741824) return (b/1073741824).toFixed(1)+' GB'; if (b >= 1048576) return (b/1048576).toFixed(1)+' MB'; return (b/1024).toFixed(0)+' KB'; };
+        const fmtB = b => { b = Number(b); const s = '\u00A0'; if (b >= 1099511627776) return (b/1099511627776).toFixed(1)+s+'TB'; if (b >= 1073741824) return (b/1073741824).toFixed(1)+s+'GB'; if (b >= 1048576) return (b/1048576).toFixed(1)+s+'MB'; return (b/1024).toFixed(0)+s+'KB'; };
         new Chart(el.getContext('2d'), {
             type: 'doughnut',
             data: {

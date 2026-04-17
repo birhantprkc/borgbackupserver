@@ -28,10 +28,7 @@ $statusClass = match($agent['status']) {
     'error' => 'danger',
     default => 'warning',
 };
-$sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB'
-    : ($totalSize >= 1048576 ? round($totalSize / 1048576, 1) . ' MB'
-    : ($totalSize >= 1024 ? round($totalSize / 1024, 1) . ' KB'
-    : ($totalSize > 0 ? $totalSize . ' B' : '0')));
+$sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $totalSize) : '0';
 ?>
 <div class="mb-4">
         <div class="d-flex justify-content-between align-items-start mb-3">
@@ -420,7 +417,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                                 <span class="fw-semibold">
                                     <?php
                                     $s = $repo['size_bytes'];
-                                    echo $s >= 1073741824 ? round($s / 1073741824, 1) . ' GB' : ($s >= 1048576 ? round($s / 1048576, 1) . ' MB' : ($s >= 1024 ? round($s / 1024, 1) . ' KB' : ($s > 0 ? $s . ' B' : '0')));
+                                    echo $s > 0 ? \BBS\Services\ServerStats::formatBytes((int) $s) : '0';
                                     ?>
                                     <span class="text-muted">(<?= $repo['archive_count'] ?> archives)</span>
                                 </span>
@@ -562,11 +559,11 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
                 tooltip: {
                     callbacks: {
                         label: function(ctx) {
-                            const bytes = ctx.parsed;
-                            if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' GB';
-                            if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
-                            if (bytes >= 1024) return (bytes / 1024).toFixed(1) + ' KB';
-                            return bytes + ' B';
+                            const bytes = ctx.parsed, s = '\u00A0';
+                            if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + s + 'GB';
+                            if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + s + 'MB';
+                            if (bytes >= 1024) return (bytes / 1024).toFixed(1) + s + 'KB';
+                            return bytes + s + 'B';
                         }
                     }
                 }
@@ -701,7 +698,7 @@ $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' 
     <div id="repo-cards-grid" class="row g-3 mb-4 pb-5" style="overflow:visible;">
         <?php foreach ($repositories as $repo):
             $s = $repo['size_bytes'];
-            $sizeLabel = $s >= 1073741824 ? round($s / 1073741824, 1) . ' GB' : ($s >= 1048576 ? round($s / 1048576, 1) . ' MB' : ($s > 0 ? round($s / 1024, 1) . ' KB' : '--'));
+            $sizeLabel = $s > 0 ? \BBS\Services\ServerStats::formatBytes((int) $s) : '--';
             $repoPlanCount = 0;
             foreach ($plans as $p) { if (($p['repository_id'] ?? 0) == $repo['id']) $repoPlanCount++; }
             $repoActiveJobs = 0;
@@ -3214,10 +3211,11 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
     const statusMap = { online: 'success', offline: 'secondary', error: 'danger', setup: 'warning' };
 
     function fmtBytes(b) {
-        if (b >= 1073741824) return (b / 1073741824).toFixed(1) + ' GB';
-        if (b >= 1048576) return (b / 1048576).toFixed(1) + ' MB';
-        if (b >= 1024) return (b / 1024).toFixed(1) + ' KB';
-        return b > 0 ? b + ' B' : '0';
+        const s = '\u00A0';
+        if (b >= 1073741824) return (b / 1073741824).toFixed(1) + s + 'GB';
+        if (b >= 1048576) return (b / 1048576).toFixed(1) + s + 'MB';
+        if (b >= 1024) return (b / 1024).toFixed(1) + s + 'KB';
+        return b > 0 ? b + s + 'B' : '0';
     }
 
     function setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }

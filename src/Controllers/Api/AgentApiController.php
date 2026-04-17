@@ -1076,11 +1076,12 @@ class AgentApiController extends Controller
 
     private function formatBytesLog(int $bytes): string
     {
-        if ($bytes == 0) return '0 B';
+        $nbsp = "\u{00A0}";
+        if ($bytes == 0) return "0{$nbsp}B";
         $units = ['B', 'KB', 'MB', 'GB', 'TB'];
         $i = 0;
         while ($bytes >= 1024 && $i < count($units) - 1) { $bytes /= 1024; $i++; }
-        return round($bytes, $i > 0 ? 1 : 0) . ' ' . $units[$i];
+        return round($bytes, $i > 0 ? 1 : 0) . $nbsp . $units[$i];
     }
 
     /**

@@ -1,9 +1,10 @@
 <?php
 function fmtSize($bytes) {
-    if ($bytes >= 1073741824) return round($bytes / 1073741824, 1) . ' GB';
-    if ($bytes >= 1048576) return round($bytes / 1048576, 1) . ' MB';
-    if ($bytes >= 1024) return round($bytes / 1024, 1) . ' KB';
-    return $bytes . ' B';
+    $s = "\u{00A0}";
+    if ($bytes >= 1073741824) return round($bytes / 1073741824, 1) . "{$s}GB";
+    if ($bytes >= 1048576) return round($bytes / 1048576, 1) . "{$s}MB";
+    if ($bytes >= 1024) return round($bytes / 1024, 1) . "{$s}KB";
+    return $bytes . "{$s}B";
 }
 
 // Status codes from borg + their display label and theme-aware badge color
@@ -333,10 +334,11 @@ $savings = $archive['original_size'] > 0
     function fmtSize(b) {
         if (!b || b == 0) return '--';
         b = parseInt(b);
-        if (b >= 1073741824) return (b / 1073741824).toFixed(1) + ' GB';
-        if (b >= 1048576) return (b / 1048576).toFixed(1) + ' MB';
-        if (b >= 1024) return (b / 1024).toFixed(1) + ' KB';
-        return b + ' B';
+        const s = '\u00A0';
+        if (b >= 1073741824) return (b / 1073741824).toFixed(1) + s + 'GB';
+        if (b >= 1048576) return (b / 1048576).toFixed(1) + s + 'MB';
+        if (b >= 1024) return (b / 1024).toFixed(1) + s + 'KB';
+        return b + s + 'B';
     }
 
     function loadFiles() {

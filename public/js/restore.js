@@ -50,11 +50,11 @@
     function formatSize(bytes) {
         if (bytes === null || bytes === undefined || bytes === '') return '';
         bytes = Number(bytes);
-        if (bytes === 0) return '0 B';
+        if (bytes === 0) return '0\u00A0B';
         const units = ['B', 'KB', 'MB', 'GB', 'TB'];
         let i = 0, size = bytes;
         while (size >= 1024 && i < units.length - 1) { size /= 1024; i++; }
-        return size.toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
+        return size.toFixed(i > 0 ? 1 : 0) + '\u00A0' + units[i];
     }
 
     function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }

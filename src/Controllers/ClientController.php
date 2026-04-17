@@ -163,17 +163,8 @@ class ClientController extends Controller
             $storageByClient[] = ['name' => 'Other', 'size' => $otherSize];
         }
 
-        // Format total size for display
-        $totalSizeFormatted = '--';
-        if ($totalSize >= 1099511627776) {
-            $totalSizeFormatted = round($totalSize / 1099511627776, 1) . ' TB';
-        } elseif ($totalSize >= 1073741824) {
-            $totalSizeFormatted = round($totalSize / 1073741824, 1) . ' GB';
-        } elseif ($totalSize >= 1048576) {
-            $totalSizeFormatted = round($totalSize / 1048576, 1) . ' MB';
-        } elseif ($totalSize > 0) {
-            $totalSizeFormatted = round($totalSize / 1024, 1) . ' KB';
-        }
+        // Format total size for display (use ServerStats for consistency)
+        $totalSizeFormatted = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $totalSize) : '--';
 
         $this->view('clients/index', [
             'pageTitle' => 'Clients',
@@ -548,10 +539,7 @@ class ClientController extends Controller
         );
 
         // Format size
-        $sizeDisplay = $totalSize >= 1073741824 ? round($totalSize / 1073741824, 1) . ' GB'
-            : ($totalSize >= 1048576 ? round($totalSize / 1048576, 1) . ' MB'
-            : ($totalSize >= 1024 ? round($totalSize / 1024, 1) . ' KB'
-            : ($totalSize > 0 ? $totalSize . ' B' : '0')));
+        $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $totalSize) : '0';
 
         // Format next backup
         $nextRunLabel = '--';

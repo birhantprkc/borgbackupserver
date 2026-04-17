@@ -147,14 +147,7 @@
                             <?php endif; ?>
                         </td>
                         <td><?= number_format($agent['restore_points']) ?></td>
-                        <td><?php
-                            $sz = (int) $agent['total_size'];
-                            if ($sz >= 1099511627776) echo round($sz / 1099511627776, 1) . ' TB';
-                            elseif ($sz >= 1073741824) echo round($sz / 1073741824, 1) . ' GB';
-                            elseif ($sz >= 1048576) echo round($sz / 1048576, 1) . ' MB';
-                            elseif ($sz > 0) echo round($sz / 1024, 1) . ' KB';
-                            else echo '--';
-                        ?></td>
+                        <td><?php $sz = (int) $agent['total_size']; echo $sz > 0 ? \BBS\Services\ServerStats::formatBytes($sz) : '--'; ?></td>
                         <td><?= $agent['schedule_count'] ?></td>
                         <td><?= $agent['repo_count'] ?></td>
                         <td><?= htmlspecialchars($agent['owner_name'] ?? '--') ?></td>
@@ -301,10 +294,11 @@ document.getElementById('clientSearch').addEventListener('input', function() {
                             label: function(ctx) {
                                 let bytes = ctx.raw;
                                 let label = ctx.label || '';
-                                if (bytes >= 1099511627776) return label + ': ' + (bytes / 1099511627776).toFixed(1) + ' TB';
-                                if (bytes >= 1073741824) return label + ': ' + (bytes / 1073741824).toFixed(1) + ' GB';
-                                if (bytes >= 1048576) return label + ': ' + (bytes / 1048576).toFixed(1) + ' MB';
-                                return label + ': ' + (bytes / 1024).toFixed(1) + ' KB';
+                                const s = '\u00A0';
+                                if (bytes >= 1099511627776) return label + ': ' + (bytes / 1099511627776).toFixed(1) + s + 'TB';
+                                if (bytes >= 1073741824) return label + ': ' + (bytes / 1073741824).toFixed(1) + s + 'GB';
+                                if (bytes >= 1048576) return label + ': ' + (bytes / 1048576).toFixed(1) + s + 'MB';
+                                return label + ': ' + (bytes / 1024).toFixed(1) + s + 'KB';
                             }
                         }
                     }

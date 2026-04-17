@@ -470,11 +470,12 @@ class ReportService
 
     private static function formatBytes(int $bytes): string
     {
-        if ($bytes <= 0) return '0 B';
-        if ($bytes >= 1099511627776) return round($bytes / 1099511627776, 1) . ' TB';
-        if ($bytes >= 1073741824) return round($bytes / 1073741824, 1) . ' GB';
-        if ($bytes >= 1048576) return round($bytes / 1048576, 1) . ' MB';
-        if ($bytes >= 1024) return round($bytes / 1024, 1) . ' KB';
-        return $bytes . ' B';
+        $nbsp = "\u{00A0}";
+        if ($bytes <= 0) return "0{$nbsp}B";
+        if ($bytes >= 1099511627776) return round($bytes / 1099511627776, 1) . "{$nbsp}TB";
+        if ($bytes >= 1073741824) return round($bytes / 1073741824, 1) . "{$nbsp}GB";
+        if ($bytes >= 1048576) return round($bytes / 1048576, 1) . "{$nbsp}MB";
+        if ($bytes >= 1024) return round($bytes / 1024, 1) . "{$nbsp}KB";
+        return $bytes . "{$nbsp}B";
     }
 }
