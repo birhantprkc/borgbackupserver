@@ -212,7 +212,8 @@ class ClientController extends Controller
 
         $id = $this->db->insert('agents', [
             'name' => $name,
-            'api_key' => $apiKey,
+            'api_key_hash' => hash('sha256', $apiKey),
+            'api_key_encrypted' => \BBS\Services\Encryption::encrypt($apiKey),
             'status' => 'setup',
             'user_id' => $userId,
         ]);
@@ -1663,6 +1664,14 @@ class ClientController extends Controller
         // Use the new permission service to check access
         if (!$this->canAccessAgent($id)) {
             return null;
+        }
+
+        // Populate plaintext token for display (install command) from stored
+        // encrypted blob. Falls back silently if decrypt fails.
+        if (empty($agent['api_key']) && !empty($agent['api_key_encrypted'])) {
+            try {
+                $agent['api_key'] = \BBS\Services\Encryption::decrypt($agent['api_key_encrypted']);
+            } catch (\Throwable $e) { /* leave blank */ }
         }
 
         return $agent;

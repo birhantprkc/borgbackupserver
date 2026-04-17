@@ -41,7 +41,7 @@ class AdminApiController extends Controller
         $agent = $this->db->fetchOne("
             SELECT a.id, a.name, a.hostname, a.ip_address, a.os_info,
                    a.borg_version, a.agent_version, a.status, a.last_heartbeat,
-                   a.api_key, a.created_at, u.username as owner
+                   a.api_key, a.api_key_encrypted, a.created_at, u.username as owner
             FROM agents a
             LEFT JOIN users u ON u.id = a.user_id
             WHERE a.id = ?
@@ -50,6 +50,14 @@ class AdminApiController extends Controller
         if (!$agent) {
             $this->json(['error' => 'Client not found'], 404);
         }
+
+        // Decrypt stored token for API response (falls back to legacy plaintext).
+        if (empty($agent['api_key']) && !empty($agent['api_key_encrypted'])) {
+            try {
+                $agent['api_key'] = \BBS\Services\Encryption::decrypt($agent['api_key_encrypted']);
+            } catch (\Throwable $e) { /* leave blank */ }
+        }
+        unset($agent['api_key_encrypted']);
 
         // Include repos and plans
         $repos = $this->db->fetchAll(
@@ -84,7 +92,8 @@ class AdminApiController extends Controller
 
         $id = $this->db->insert('agents', [
             'name' => $name,
-            'api_key' => $apiKey,
+            'api_key_hash' => hash('sha256', $apiKey),
+            'api_key_encrypted' => \BBS\Services\Encryption::encrypt($apiKey),
             'status' => 'setup',
             'user_id' => null,
         ]);

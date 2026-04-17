@@ -29,10 +29,35 @@ class AgentApiController extends Controller
             $this->json(['error' => 'Missing authorization token'], 401);
         }
 
-        $agent = $this->db->fetchOne("SELECT * FROM agents WHERE api_key = ?", [$token]);
+        $tokenHash = hash('sha256', $token);
+        $agent = $this->db->fetchOne("SELECT * FROM agents WHERE api_key_hash = ?", [$tokenHash]);
+
+        // Legacy fallback + transparent upgrade for records that haven't been
+        // migrated yet. Once migrated, plaintext is cleared.
+        if (!$agent) {
+            $legacy = $this->db->fetchOne("SELECT * FROM agents WHERE api_key = ?", [$token]);
+            if ($legacy) {
+                try {
+                    $this->db->update('agents', [
+                        'api_key_hash' => $tokenHash,
+                        'api_key_encrypted' => \BBS\Services\Encryption::encrypt($token),
+                        'api_key' => null,
+                    ], 'id = ?', [$legacy['id']]);
+                    $this->db->insert('server_log', [
+                        'agent_id' => $legacy['id'],
+                        'level' => 'info',
+                        'message' => 'Agent credential storage upgraded (security hardening).',
+                    ]);
+                    $legacy['api_key_hash'] = $tokenHash;
+                    $legacy['api_key'] = null;
+                } catch (\Throwable $e) {
+                    // Non-fatal — continue with the legacy record this request.
+                }
+                $agent = $legacy;
+            }
+        }
 
         if (!$agent) {
-            // Rate limit failed API auth: 20 attempts per 5 minutes
             if (!$this->checkRateLimit('agent_api', 20, 300)) {
                 $this->json(['error' => 'Too many failed attempts'], 429);
             }
