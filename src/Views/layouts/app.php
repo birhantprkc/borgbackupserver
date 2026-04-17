@@ -187,7 +187,16 @@
                 </li>
                 <?php endif; ?>
             </ul>
-            <div class="border-top p-2 text-center">
+            <div class="border-top pt-2 pb-2 text-center">
+                <?php
+                    $bbsVersionForSidebar = (new \BBS\Services\UpdateService())->getCurrentVersion();
+                ?>
+                <div class="mb-2">
+                    <span class="badge rounded-pill text-body-secondary border"
+                          style="font-weight:500;font-size:0.65rem;padding:3px 9px;background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.12) !important;">
+                        v<?= htmlspecialchars($bbsVersionForSidebar) ?>
+                    </span>
+                </div>
                 <a href="/logout" class="nav-link sidebar-link">
                     <i class="bi bi-box-arrow-left d-block mb-1 fs-4"></i>
                     <span class="small">Logout</span>

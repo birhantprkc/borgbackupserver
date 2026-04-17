@@ -137,17 +137,6 @@ $dfFix = function (string $s): string {
 </style>
 
 <div class="v2 container-fluid px-0">
-    <!-- Server identity bar -->
-    <div class="text-muted small mb-3">
-        <span title="Server version"><i class="bi bi-box-seam me-1"></i>Borg Backup Server <?= htmlspecialchars($bbsVersion) ?></span>
-        <span class="mx-2">·</span>
-        <span title="Hostname"><i class="bi bi-hdd-network me-1"></i><?= htmlspecialchars($serverHost) ?></span>
-        <span class="mx-2">·</span>
-        <span title="OS"><i class="bi bi-terminal me-1"></i><?= htmlspecialchars($osName) ?></span>
-        <span class="mx-2">·</span>
-        <span title="Uptime"><i class="bi bi-clock-history me-1"></i><?= $fmtUptime($uptimeSec) ?></span>
-    </div>
-
     <!-- Row 1: Hero tiles -->
     <div class="row g-3 mb-3">
         <div class="col-xl-3 col-md-6">
@@ -576,6 +565,17 @@ $dfFix = function (string $s): string {
         <?php endif; ?>
     </div>
     <?php endif; ?>
+
+    <!-- Server identity footer -->
+    <div class="text-center text-muted small mt-4 pb-2">
+        <span title="Server version"><i class="bi bi-box-seam me-1"></i>Borg Backup Server <?= htmlspecialchars($bbsVersion) ?></span>
+        <span class="mx-2">·</span>
+        <span title="Hostname"><i class="bi bi-hdd-network me-1"></i><?= htmlspecialchars($serverHost) ?></span>
+        <span class="mx-2">·</span>
+        <span title="OS"><i class="bi bi-terminal me-1"></i><?= htmlspecialchars($osName) ?></span>
+        <span class="mx-2">·</span>
+        <span title="Uptime"><i class="bi bi-clock-history me-1"></i><?= $fmtUptime($uptimeSec) ?></span>
+    </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
