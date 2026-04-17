@@ -240,17 +240,19 @@ $dfFix = function (string $s): string {
                         <span class="val" id="mem-val"><?= $memPct ?>% · <?= ServerStats::formatBytes($memory['used']) ?></span>
                     </div>
                     <?php if (!empty($partitions)): ?>
+                    <div id="health-partitions">
                     <?php foreach ($partitions as $part): ?>
                         <?php
                             $pPct = $part['percent'] ?? 0;
                             $pColor = $pPct > 90 ? '#dc3545' : ($pPct > 70 ? '#ffc107' : '#6c757d');
                         ?>
-                    <div class="health-row">
+                    <div class="health-row" data-mount="<?= htmlspecialchars($part['mount']) ?>">
                         <span class="lbl text-truncate" title="<?= htmlspecialchars($part['mount']) ?>"><?= htmlspecialchars($part['mount']) ?></span>
-                        <div class="bar"><div class="fill" style="width: <?= $pPct ?>%; background: <?= $pColor ?>;"></div></div>
-                        <span class="val"><?= $pPct ?>% · <?= $dfFix($part['size']) ?></span>
+                        <div class="bar"><div class="fill part-fill" style="width: <?= $pPct ?>%; background: <?= $pColor ?>;"></div></div>
+                        <span class="val part-val"><?= $pPct ?>% · <?= $dfFix($part['size']) ?></span>
                     </div>
                     <?php endforeach; ?>
+                    </div>
                     <?php endif; ?>
                 </div>
             </div>
@@ -639,6 +641,58 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
         // Legend is rendered server-side as a list, no JS needed.
+    })();
+    <?php endif; ?>
+
+    // --- Server Health: live refresh every 15s ---------------------------
+    <?php if ($isAdmin): ?>
+    (function () {
+        const cpuFill = document.getElementById('cpu-fill');
+        const cpuVal = document.getElementById('cpu-val');
+        const memFill = document.getElementById('mem-fill');
+        const memVal = document.getElementById('mem-val');
+        const partsEl = document.getElementById('health-partitions');
+        if (!cpuFill && !memFill && !partsEl) return;
+
+        function color(pct, high, mid, low) {
+            return pct > high ? '#dc3545' : (pct > mid ? '#ffc107' : low);
+        }
+
+        async function poll() {
+            try {
+                const resp = await fetch('/dashboard/health-json', { credentials: 'same-origin' });
+                if (!resp.ok) return;
+                const d = await resp.json();
+                if (d.cpu && cpuFill && cpuVal) {
+                    const p = Number(d.cpu.percent) || 0;
+                    cpuFill.style.width = p + '%';
+                    cpuFill.style.background = color(p, 80, 50, '#198754');
+                    cpuVal.textContent = p + '% · ' + d.cpu['1min'];
+                }
+                if (d.memory && memFill && memVal) {
+                    const p = Number(d.memory.percent) || 0;
+                    memFill.style.width = p + '%';
+                    memFill.style.background = color(p, 85, 60, '#0dcaf0');
+                    memVal.textContent = p + '% · ' + d.memory.used_label;
+                }
+                if (d.partitions && partsEl) {
+                    d.partitions.forEach(p => {
+                        const row = partsEl.querySelector('[data-mount="' + CSS.escape(p.mount) + '"]');
+                        if (!row) return;
+                        const fill = row.querySelector('.part-fill');
+                        const val = row.querySelector('.part-val');
+                        const pct = Number(p.percent) || 0;
+                        if (fill) {
+                            fill.style.width = pct + '%';
+                            fill.style.background = color(pct, 90, 70, '#6c757d');
+                        }
+                        if (val) val.textContent = pct + '% · ' + p.size_label;
+                    });
+                }
+            } catch (e) { /* silent */ }
+        }
+
+        setInterval(poll, 15000);
     })();
     <?php endif; ?>
 

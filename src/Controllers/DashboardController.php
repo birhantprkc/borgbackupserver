@@ -183,6 +183,50 @@ class DashboardController extends Controller
     }
 
     /**
+     * GET /dashboard/health-json — lightweight CPU/memory/partition poll for
+     * the Server Health card (every ~15s). Server-side formats the values so
+     * the JS only has to swap text.
+     */
+    public function apiHealthJson(): void
+    {
+        $this->requireAuth();
+        if (!$this->isAdmin()) {
+            $this->json(['error' => 'admin only'], 403);
+        }
+        $cpu = ServerStats::getCpuLoad();
+        $mem = ServerStats::getMemory();
+        $partitions = ServerStats::getPartitions();
+
+        // Standardize df-style single-letter units to "GB"/"TB"/etc.
+        $dfFix = function (string $s): string {
+            if (preg_match('/^([\d.]+)([TGMK])$/', $s, $m)) return $m[1] . "\u{00A0}" . $m[2] . 'B';
+            return $s;
+        };
+
+        $parts = [];
+        foreach ($partitions as $p) {
+            $parts[] = [
+                'mount' => $p['mount'],
+                'percent' => $p['percent'] ?? 0,
+                'size_label' => $dfFix($p['size'] ?? ''),
+            ];
+        }
+
+        $this->json([
+            'cpu' => [
+                'percent' => $cpu['percent'] ?? 0,
+                '1min' => $cpu['1min'] ?? 0,
+                'cores' => $cpu['cores'] ?? 1,
+            ],
+            'memory' => [
+                'percent' => $mem['percent'] ?? 0,
+                'used_label' => ServerStats::formatBytes($mem['used'] ?? 0),
+            ],
+            'partitions' => $parts,
+        ]);
+    }
+
+    /**
      * GET /dashboard/stats-json — slow stats (ClickHouse, server health), polled every 60s.
      */
     public function apiStatsJson(): void
