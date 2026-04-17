@@ -27,7 +27,7 @@ class NotificationController extends Controller
         $this->verifyCsrf();
 
         $service = new NotificationService();
-        $service->markRead($id);
+        $service->markRead($id, $_SESSION['user_id'] ?? null);
 
         $this->redirect('/notifications');
     }

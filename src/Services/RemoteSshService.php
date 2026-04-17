@@ -227,6 +227,14 @@ class RemoteSshService
             $port = (int) ($config['remote_port'] ?? 22);
             $basePath = $config['remote_base_path'] ?: './';
 
+            // Defense in depth: the base path is embedded in a command string
+            // that runs on the REMOTE shell (proc_open's array form only
+            // protects the local side). Reject anything that isn't a plain
+            // POSIX path so shell metacharacters can't escape.
+            if (!preg_match('#^[A-Za-z0-9_./\-]+$#', $basePath)) {
+                return null;
+            }
+
             $sshCmd = [
                 'ssh',
                 '-i', $keyFile,

@@ -171,9 +171,19 @@ class NotificationService
         );
     }
 
-    public function markRead(int $id): void
+    public function markRead(int $id, ?int $userId = null): void
     {
-        $this->db->update('notifications', ['read_at' => date('Y-m-d H:i:s')], 'id = ?', [$id]);
+        // Scope by accessible agents so a user can't mark other users' (or
+        // admin-only) notifications read. Global notifications (agent_id IS
+        // NULL) are visible to everyone.
+        [$agentWhere, $agentParams] = $this->getAgentFilter($userId);
+        $params = array_merge([date('Y-m-d H:i:s'), $id], $agentParams);
+        $this->db->query(
+            "UPDATE notifications n LEFT JOIN agents a ON a.id = n.agent_id
+             SET n.read_at = ?
+             WHERE n.id = ? AND (n.agent_id IS NULL OR {$agentWhere})",
+            $params
+        );
     }
 
     public function markAllRead(?int $userId = null): void

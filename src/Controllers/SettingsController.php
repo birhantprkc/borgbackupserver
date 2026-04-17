@@ -90,7 +90,7 @@ class SettingsController extends Controller
         $this->requireAdmin();
         $this->verifyCsrf();
 
-        $allowed = ['max_queue', 'server_host', 'ssh_port', 'agent_poll_interval', 'stall_timeout_minutes', 'session_timeout_hours', 'default_theme', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_from', 'notification_retention_days', 'storage_alert_threshold', 'apprise_urls', 'self_backup_retention'];
+        $allowed = ['max_queue', 'server_host', 'ssh_port', 'agent_poll_interval', 'stall_timeout_minutes', 'session_timeout_hours', 'default_theme', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_from', 'notification_retention_days', 'storage_alert_threshold', 'apprise_urls', 'self_backup_retention'];
 
         foreach ($allowed as $key) {
             if (isset($_POST[$key])) {
@@ -101,6 +101,12 @@ class SettingsController extends Controller
                     $this->db->insert('settings', ['key' => $key, 'value' => $_POST[$key]]);
                 }
             }
+        }
+
+        // SMTP password: only update when non-empty (so leaving the field blank
+        // doesn't wipe it). Stored encrypted via APP_KEY.
+        if (!empty($_POST['smtp_pass'])) {
+            $this->saveSetting('smtp_pass', \BBS\Services\Encryption::encrypt($_POST['smtp_pass']));
         }
 
         // Checkbox toggles: unchecked = not posted, so explicitly save '0'

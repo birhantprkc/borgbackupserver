@@ -762,39 +762,46 @@ class RepositoryController extends Controller
                 $this->json(['files' => [], 'total' => 0]);
             }
 
+            // All variable values are bound via the ClickHouse adapter's `?`
+            // parameter binding to prevent injection. Integer IDs are still
+            // interpolated directly (ints are cast above, safe by design).
+            $searchPattern = $search !== '' ? '%' . $search . '%' : null;
+
             // Deleted files = present in previous archive but not in current
             if ($status === 'deleted' && $prevArchiveId > 0) {
                 $where = "agent_id = {$aid} AND archive_id = {$prevArchiveId} AND path != ''
                           AND path NOT IN (SELECT path FROM file_catalog WHERE agent_id = {$aid} AND archive_id = {$arid})";
-                if ($search !== '') {
-                    $searchEsc = addslashes($search);
-                    $where .= " AND path LIKE '%{$searchEsc}%'";
+                $params = [];
+                if ($searchPattern !== null) {
+                    $where .= " AND path LIKE ?";
+                    $params[] = $searchPattern;
                 }
 
-                $countRow = $ch->fetchOne("SELECT count() as cnt FROM file_catalog WHERE {$where}");
+                $countRow = $ch->fetchOne("SELECT count() as cnt FROM file_catalog WHERE {$where}", $params);
                 $total = (int) ($countRow['cnt'] ?? 0);
 
-                $files = $ch->fetchAll("SELECT path, file_name, file_size, 'deleted' as status FROM file_catalog WHERE {$where} ORDER BY path LIMIT {$perPage} OFFSET {$offset}");
+                $files = $ch->fetchAll("SELECT path, file_name, file_size, 'deleted' as status FROM file_catalog WHERE {$where} ORDER BY path LIMIT {$perPage} OFFSET {$offset}", $params);
             } else {
                 $where = "agent_id = {$aid} AND archive_id = {$arid} AND path != ''";
+                $params = [];
                 // Filter out non-file statuses unless specifically requested
                 $nonFileStatuses = ['D', 'S', 'H', 'X', 'B', 'F', 'E'];
                 if ($status !== '' && !in_array($status, $nonFileStatuses)) {
-                    $statusEsc = addslashes($status);
-                    $where .= " AND status = '{$statusEsc}'";
+                    $where .= " AND status = ?";
+                    $params[] = $status;
                 } elseif ($status === '') {
                     // "All" tab: only show real files
                     $where .= " AND status NOT IN ('D','S','H','X','B','F','E')";
                 }
-                if ($search !== '') {
-                    $searchEsc = addslashes($search);
-                    $where .= " AND path LIKE '%{$searchEsc}%'";
+                if ($searchPattern !== null) {
+                    $where .= " AND path LIKE ?";
+                    $params[] = $searchPattern;
                 }
 
-                $countRow = $ch->fetchOne("SELECT count() as cnt FROM file_catalog WHERE {$where}");
+                $countRow = $ch->fetchOne("SELECT count() as cnt FROM file_catalog WHERE {$where}", $params);
                 $total = (int) ($countRow['cnt'] ?? 0);
 
-                $files = $ch->fetchAll("SELECT path, file_name, file_size, status FROM file_catalog WHERE {$where} ORDER BY path LIMIT {$perPage} OFFSET {$offset}");
+                $files = $ch->fetchAll("SELECT path, file_name, file_size, status FROM file_catalog WHERE {$where} ORDER BY path LIMIT {$perPage} OFFSET {$offset}", $params);
             }
 
             $this->json(['files' => $files, 'total' => $total, 'page' => $page]);

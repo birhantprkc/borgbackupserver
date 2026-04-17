@@ -295,7 +295,9 @@ $updateAvailable = $updateService->isUpdateAvailable();
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">SMTP Password</label>
-                            <input type="password" class="form-control" name="smtp_pass" value="<?= htmlspecialchars($settings['smtp_pass'] ?? '') ?>">
+                            <input type="password" class="form-control" name="smtp_pass"
+                                   autocomplete="new-password"
+                                   placeholder="<?= !empty($settings['smtp_pass']) ? '(unchanged if empty)' : '' ?>">
                         </div>
                     </div>
                     <div class="mb-4">

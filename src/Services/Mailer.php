@@ -26,7 +26,23 @@ class Mailer
         $this->host = $settings['smtp_host'] ?? '';
         $this->port = (int) ($settings['smtp_port'] ?? 587);
         $this->username = $settings['smtp_user'] ?? '';
-        $this->password = $settings['smtp_pass'] ?? '';
+        // SMTP password is stored encrypted. Legacy plaintext values auto-upgrade:
+        // if decrypt() throws, we treat the raw value as plaintext and re-save
+        // it encrypted for next time.
+        $rawPass = $settings['smtp_pass'] ?? '';
+        $this->password = '';
+        if ($rawPass !== '') {
+            try {
+                $this->password = Encryption::decrypt($rawPass);
+            } catch (\Throwable $e) {
+                $this->password = $rawPass;
+                try {
+                    $db->update('settings',
+                        ['value' => Encryption::encrypt($rawPass)],
+                        "`key` = ?", ['smtp_pass']);
+                } catch (\Throwable $e2) { /* non-fatal */ }
+            }
+        }
         $this->fromEmail = $settings['smtp_from'] ?? $settings['smtp_from_email'] ?? '';
         $this->fromName = $settings['smtp_from_name'] ?? 'Borg Backup Server';
         $this->enabled = !empty($this->host) && !empty($this->fromEmail);

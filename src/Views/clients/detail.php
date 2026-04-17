@@ -2624,7 +2624,11 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
     function testPluginConfig(agentId, configId) {
         const resultDiv = document.getElementById('test-result-' + configId);
         resultDiv.innerHTML = '<div class="d-flex align-items-center text-muted small"><span class="spinner-border spinner-border-sm me-2"></span> Testing...</div>';
-        fetch('/clients/' + agentId + '/plugin-configs/' + configId + '/test', { method: 'POST', credentials: 'same-origin' })
+        fetch('/clients/' + agentId + '/plugin-configs/' + configId + '/test', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'X-CSRF-Token': csrfToken }
+        })
         .then(r => r.json())
         .then(data => {
             if (data.status === 'completed') { resultDiv.innerHTML = '<div class="alert alert-success small mb-0 mt-1"><i class="bi bi-check-circle me-1"></i> ' + (data.message || 'Test passed.') + '</div>'; }
@@ -3187,6 +3191,7 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
 </div><!-- /client-tab-content -->
 
 <script>
+const csrfToken = '<?= $this->csrfToken() ?>';
 // Hide content below header when edit panel is open
 (function() {
     const editPanel = document.getElementById('edit-client');

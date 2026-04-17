@@ -127,7 +127,9 @@ class PluginConfigController extends Controller
     public function test(int $id, int $configId): void
     {
         $this->requireAuth();
-        // Skip CSRF for AJAX — session auth is sufficient for same-origin POST
+        // Session-authenticated POST must verify CSRF — same-origin isn't
+        // enforced by browsers for cross-origin form POSTs.
+        $this->verifyCsrf();
 
         if (!$this->getAgent($id)) {
             $this->json(['error' => 'Access denied'], 403);

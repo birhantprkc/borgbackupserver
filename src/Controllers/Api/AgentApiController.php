@@ -766,8 +766,15 @@ class AgentApiController extends Controller
             $this->json(['error' => 'archive_id and files[] required'], 400);
         }
 
-        // Verify archive exists
-        $archive = $this->db->fetchOne("SELECT id FROM archives WHERE id = ?", [$archiveId]);
+        // Verify archive exists AND belongs to the calling agent. Without the
+        // ownership check, a compromised agent token could upload catalog rows
+        // against another tenant's archive (cross-tenant pollution).
+        $archive = $this->db->fetchOne(
+            "SELECT ar.id FROM archives ar
+             JOIN repositories r ON r.id = ar.repository_id
+             WHERE ar.id = ? AND r.agent_id = ?",
+            [$archiveId, (int) $agent['id']]
+        );
         if (!$archive) {
             $this->json(['error' => 'Archive not found'], 404);
         }
