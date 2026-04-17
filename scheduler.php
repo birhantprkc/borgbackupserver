@@ -550,13 +550,13 @@ foreach ($serverJobs as $sj) {
         } else {
             $csLocalPath = \BBS\Services\BorgCommandBuilder::getLocalRepoPath($csRepo);
 
-            // Run borg list via bbs-ssh-helper (handles sudo to the repo-owning user)
+            // Run borg list via bbs-ssh-helper (handles sudo to the repo-owning user).
+            // Passphrase is piped on stdin ("-" marker) so it's not visible in `ps`.
             $runAsUser = $sj['ssh_unix_user'] ?? null;
             if ($runAsUser) {
-                // Use ssh-helper which handles sudo properly
                 $csCmd = [
                     'sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-list',
-                    $runAsUser, $passphrase, $csLocalPath
+                    $runAsUser, '-', $csLocalPath
                 ];
                 $csEnv = [];
             } else {
@@ -585,6 +585,9 @@ foreach ($serverJobs as $sj) {
             $csError = '';
             $csExitCode = -1;
             if (is_resource($csProc)) {
+                if ($runAsUser) {
+                    fwrite($csPipes[0], $passphrase . "\n");
+                }
                 fclose($csPipes[0]);
                 $csOutput = stream_get_contents($csPipes[1]);
                 $csError = stream_get_contents($csPipes[2]);
@@ -667,7 +670,7 @@ foreach ($serverJobs as $sj) {
                     if ($runAsUser) {
                         $infoCmd = [
                             'sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-cmd',
-                            $runAsUser, $passphrase, 'info', '--json', $archivePath
+                            $runAsUser, '-', 'info', '--json', $archivePath
                         ];
                         $infoEnvStrings = null;
                     } else {
@@ -690,6 +693,9 @@ foreach ($serverJobs as $sj) {
                     ], $infoPipes, null, $infoEnvStrings);
 
                     if (is_resource($infoProc)) {
+                        if ($runAsUser) {
+                            fwrite($infoPipes[0], $passphrase . "\n");
+                        }
                         fclose($infoPipes[0]);
                         $infoOutput = stream_get_contents($infoPipes[1]);
                         fclose($infoPipes[1]);
@@ -833,7 +839,7 @@ foreach ($serverJobs as $sj) {
         } else {
             $runAsUserSync = $sj['ssh_unix_user'] ?? null;
             if ($runAsUserSync) {
-                $syncCmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-list', $runAsUserSync, $passphrase, $crLocalPath];
+                $syncCmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-list', $runAsUserSync, '-', $crLocalPath];
                 $syncEnvStrings = null;
             } else {
                 $syncCmd = ['borg', 'list', '--json', $crLocalPath];
@@ -847,6 +853,9 @@ foreach ($serverJobs as $sj) {
             }
             $syncProc = proc_open($syncCmd, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $syncPipes, null, $syncEnvStrings);
             if (is_resource($syncProc)) {
+                if ($runAsUserSync) {
+                    fwrite($syncPipes[0], $passphrase . "\n");
+                }
                 fclose($syncPipes[0]);
                 $syncOutput = stream_get_contents($syncPipes[1]);
                 fclose($syncPipes[1]);
@@ -1047,7 +1056,7 @@ foreach ($serverJobs as $sj) {
                 if ($runAsUser) {
                     $crCmd = [
                         'sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-list-archive',
-                        $runAsUser, $passphrase, $archivePath
+                        $runAsUser, '-', $archivePath
                     ];
                     $crEnv = null;
                 } else {
@@ -1074,6 +1083,9 @@ foreach ($serverJobs as $sj) {
                     continue;
                 }
 
+                if ($runAsUser) {
+                    fwrite($crPipes[0], $passphrase . "\n");
+                }
                 fclose($crPipes[0]);
 
                 // Stream borg stdout line-by-line to TSV — constant memory usage
@@ -1324,9 +1336,10 @@ foreach ($serverJobs as $sj) {
         // Local repos: run as the repo's unix user via bbs-ssh-helper
         $runAsUser = $sj['ssh_unix_user'] ?? null;
         if ($runAsUser) {
-            // Use ssh-helper which handles sudo properly
+            // Use ssh-helper which handles sudo properly. Passphrase is piped
+            // via stdin ("-" marker) so it's not visible in `ps`.
             $cmd = array_merge(
-                ['sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-cmd', $runAsUser, $passphrase],
+                ['sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-cmd', $runAsUser, '-'],
                 $borgArgs
             );
             $envStrings = [];
@@ -1341,9 +1354,9 @@ foreach ($serverJobs as $sj) {
             $envStrings['HOME'] = '/tmp/bbs-borg-www-data';
         }
 
-        // Log the borg command (without passphrase)
+        // Log the borg command (passphrase passed on stdin, never in argv)
         $logCmd = $runAsUser
-            ? array_merge(['sudo', 'bbs-ssh-helper', 'borg-cmd', $runAsUser, '***'], $borgArgs)
+            ? array_merge(['sudo', 'bbs-ssh-helper', 'borg-cmd', $runAsUser, '-'], $borgArgs)
             : $cmd;
         $cmdStr = implode(' ', array_map('escapeshellarg', array_values($logCmd)));
         $db->insert('server_log', [
@@ -1362,6 +1375,9 @@ foreach ($serverJobs as $sj) {
         $stdout = '';
 
         if (is_resource($proc)) {
+            if ($runAsUser) {
+                fwrite($pipes[0], $passphrase . "\n");
+            }
             fclose($pipes[0]);
             $stdout = stream_get_contents($pipes[1]);
             $stderr = stream_get_contents($pipes[2]);

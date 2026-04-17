@@ -19,13 +19,36 @@ set -euo pipefail
 
 ACTION="${1:-}"
 
-# Check if a path is under /var/bbs/ or a registered storage location
+# Check if a path is under /var/bbs/ or a registered storage location.
+# Paths are canonicalized with readlink -m (resolves symlinks and `..`
+# segments without requiring the path to exist) before the allow-list
+# check, so crafted inputs like `/var/bbs/../etc/shadow` cannot bypass
+# the prefix match.
 is_allowed_path() {
     local CHECK_PATH="$1"
-    [[ "$CHECK_PATH" =~ ^/var/bbs/ ]] && return 0
+
+    # Must be an absolute path
+    [ -z "$CHECK_PATH" ] && return 1
+    [[ "$CHECK_PATH" != /* ]] && return 1
+
+    # Canonicalize — symlinks resolved, .. collapsed, no existence required
+    local NORMALIZED
+    NORMALIZED=$(readlink -m "$CHECK_PATH" 2>/dev/null || echo "")
+    [ -z "$NORMALIZED" ] && return 1
+
+    # Defense in depth — readlink -m should never leave `..` behind
+    [[ "$NORMALIZED" == *"/../"* ]] && return 1
+    [[ "$NORMALIZED" == *"/.." ]] && return 1
+
+    # Check against allow-list
+    [[ "$NORMALIZED" =~ ^/var/bbs(/|$) ]] && return 0
     if [ -f /etc/bbs/allowed-storage-paths ]; then
         while IFS= read -r allowed_path; do
-            [[ -n "$allowed_path" ]] && [[ "$CHECK_PATH" =~ ^"$allowed_path"/ ]] && return 0
+            [ -z "$allowed_path" ] && continue
+            local ALLOWED_NORM
+            ALLOWED_NORM=$(readlink -m "$allowed_path" 2>/dev/null || echo "$allowed_path")
+            [[ "$NORMALIZED" == "$ALLOWED_NORM" ]] && return 0
+            [[ "$NORMALIZED" == "$ALLOWED_NORM"/* ]] && return 0
         done < /etc/bbs/allowed-storage-paths
     fi
     return 1
@@ -149,11 +172,14 @@ case "$ACTION" in
 
     borg-extract)
         # Run borg extract as the repo-owning user
-        # Usage: bbs-ssh-helper borg-extract <username> <tmpdir> <passphrase> <repo::archive> [paths...]
+        # Usage: bbs-ssh-helper borg-extract <username> <tmpdir> <passphrase|-> <repo::archive> [paths...]
+        # When <passphrase> is "-", the passphrase is read from the first
+        # line of stdin (avoids argv/`ps` exposure).
         USERNAME="${2:-}"
         TMPDIR="${3:-}"
         PASSPHRASE="${4:-}"
         shift 4 2>/dev/null || true
+        if [ "$PASSPHRASE" = "-" ]; then IFS= read -r PASSPHRASE || PASSPHRASE=""; fi
 
         if [ -z "$USERNAME" ] || [ -z "$TMPDIR" ] || [ $# -eq 0 ]; then
             echo "Usage: bbs-ssh-helper borg-extract <username> <tmpdir> <passphrase> <repo::archive> [paths...]"
@@ -205,9 +231,10 @@ case "$ACTION" in
     verify-repo)
         # Verify a borg repo exists and return JSON (encryption mode, archive list).
         # Runs as root since repo may have arbitrary ownership before import.
-        # Usage: bbs-ssh-helper verify-repo <passphrase> <repo_path>
+        # Usage: bbs-ssh-helper verify-repo <passphrase|-> <repo_path>
         PASSPHRASE="${2:-}"
         REPO_PATH="${3:-}"
+        if [ "$PASSPHRASE" = "-" ]; then IFS= read -r PASSPHRASE || PASSPHRASE=""; fi
 
         if [ -z "$REPO_PATH" ]; then
             echo "Usage: bbs-ssh-helper verify-repo <passphrase> <repo_path>"
@@ -238,10 +265,11 @@ case "$ACTION" in
 
     borg-list)
         # Run borg list as the repo-owning user
-        # Usage: bbs-ssh-helper borg-list <username> <passphrase> <repo_path>
+        # Usage: bbs-ssh-helper borg-list <username> <passphrase|-> <repo_path>
         USERNAME="${2:-}"
         PASSPHRASE="${3:-}"
         REPO_PATH="${4:-}"
+        if [ "$PASSPHRASE" = "-" ]; then IFS= read -r PASSPHRASE || PASSPHRASE=""; fi
 
         if [ -z "$USERNAME" ] || [ -z "$REPO_PATH" ]; then
             echo "Usage: bbs-ssh-helper borg-list <username> <passphrase> <repo_path>"
@@ -279,11 +307,12 @@ case "$ACTION" in
 
     borg-list-archive)
         # List files in a specific archive (for catalog rebuild)
-        # Usage: bbs-ssh-helper borg-list-archive <username> <passphrase> <repo_path>::<archive_name>
+        # Usage: bbs-ssh-helper borg-list-archive <username> <passphrase|-> <repo_path>::<archive_name>
         # Output: JSON array of file paths
         USERNAME="${2:-}"
         PASSPHRASE="${3:-}"
         ARCHIVE_PATH="${4:-}"
+        if [ "$PASSPHRASE" = "-" ]; then IFS= read -r PASSPHRASE || PASSPHRASE=""; fi
 
         if [ -z "$USERNAME" ] || [ -z "$ARCHIVE_PATH" ]; then
             echo "Usage: bbs-ssh-helper borg-list-archive <username> <passphrase> <repo::archive>"
@@ -321,13 +350,14 @@ case "$ACTION" in
         ;;
 
     borg-cmd)
-        # Run arbitrary borg command as the repo-owning user
-        # Usage: bbs-ssh-helper borg-cmd <username> <passphrase> <borg-subcommand> [args...]
-        # Example: bbs-ssh-helper borg-cmd bbs-3 "secret" compact /var/bbs/home/3/repo
-        # Example: bbs-ssh-helper borg-cmd bbs-3 "secret" check --verbose /var/bbs/home/3/repo
+        # Run one of the allow-listed borg subcommands as the repo-owning user
+        # Usage: bbs-ssh-helper borg-cmd <username> <passphrase|-> <borg-subcommand> [args...]
+        # When <passphrase> is "-", the passphrase is read from the first
+        # line of stdin (avoids argv/`ps` exposure).
         USERNAME="${2:-}"
         PASSPHRASE="${3:-}"
         shift 3 2>/dev/null || true
+        if [ "$PASSPHRASE" = "-" ]; then IFS= read -r PASSPHRASE || PASSPHRASE=""; fi
         # Remaining args are the borg subcommand and its arguments
 
         if [ -z "$USERNAME" ] || [ $# -eq 0 ]; then
@@ -340,10 +370,37 @@ case "$ACTION" in
             exit 1
         fi
 
+        # Allowlist borg subcommands this wrapper is permitted to run. Any
+        # other subcommand — including init, extract, list (have dedicated
+        # wrappers), create, mount, serve, export-tar, config — is rejected.
+        BORG_SUBCMD="$1"
+        case "$BORG_SUBCMD" in
+            prune|compact|check|break-lock|delete|info) ;;
+            *)
+                echo "Error: borg subcommand '$BORG_SUBCMD' is not permitted via borg-cmd"
+                exit 1
+                ;;
+        esac
+
+        # Reject flags that can reshape borg's execution environment:
+        # --rsh lets the caller specify an arbitrary SSH/shell command,
+        # --remote-path lets them point at an alternate borg binary, and
+        # --debug-profile writes debug dumps to an arbitrary path.
+        for arg in "$@"; do
+            case "$arg" in
+                --rsh|--rsh=*|--remote-path|--remote-path=*|--debug-profile|--debug-profile=*)
+                    echo "Error: flag '$arg' is not permitted"
+                    exit 1
+                    ;;
+            esac
+        done
+
         # Validate that at least one arg is an allowed path
         FOUND_ALLOWED_PATH=false
         for arg in "$@"; do
-            if is_allowed_path "$arg"; then
+            # Strip any ::archive suffix so the path portion can be checked
+            PATH_ONLY="${arg%%::*}"
+            if is_allowed_path "$PATH_ONLY"; then
                 FOUND_ALLOWED_PATH=true
                 break
             fi
@@ -373,10 +430,11 @@ case "$ACTION" in
     borg-init)
         # Run borg init as root so it works on NFS and other filesystems where
         # www-data may not have write access despite correct POSIX permissions.
-        # Usage: bbs-ssh-helper borg-init <repo_path> <encryption> [passphrase]
+        # Usage: bbs-ssh-helper borg-init <repo_path> <encryption> [passphrase|-]
         REPO_PATH="${2:-}"
         ENCRYPTION="${3:-}"
         PASSPHRASE="${4:-}"
+        if [ "$PASSPHRASE" = "-" ]; then IFS= read -r PASSPHRASE || PASSPHRASE=""; fi
 
         if [ -z "$REPO_PATH" ] || [ -z "$ENCRYPTION" ]; then
             echo "Usage: bbs-ssh-helper borg-init <repo_path> <encryption> [passphrase]"

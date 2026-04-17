@@ -166,12 +166,29 @@ class RepositoryController extends Controller
         }
 
         // Run borg init via bbs-ssh-helper (runs as root, works on NFS and other
-        // filesystems where www-data may lack write access despite POSIX permissions)
+        // filesystems where www-data may lack write access despite POSIX permissions).
+        // Passphrase is piped on stdin ("-" marker) so it's not visible in `ps`.
         $initCmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-init', $localPath, $encryption];
+        $passphraseToPipe = '';
         if ($encryption !== 'none' && !empty($passphrase)) {
-            $initCmd[] = $passphrase;
+            $initCmd[] = '-';
+            $passphraseToPipe = $passphrase;
         }
-        exec(implode(' ', array_map('escapeshellarg', $initCmd)) . ' 2>&1', $initOutput, $initRet);
+        $initOutput = [];
+        $initRet = 1;
+        $initProc = proc_open($initCmd, [
+            0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w'],
+        ], $initPipes);
+        if (is_resource($initProc)) {
+            if ($passphraseToPipe !== '') fwrite($initPipes[0], $passphraseToPipe . "\n");
+            fclose($initPipes[0]);
+            $stdout = stream_get_contents($initPipes[1]);
+            $stderr = stream_get_contents($initPipes[2]);
+            fclose($initPipes[1]);
+            fclose($initPipes[2]);
+            $initRet = proc_close($initProc);
+            $initOutput = array_values(array_filter(explode("\n", trim($stdout . "\n" . $stderr))));
+        }
 
         if ($initRet !== 0) {
             $errorMsg = implode("\n", $initOutput);
@@ -1522,7 +1539,7 @@ class RepositoryController extends Controller
 
             $localPath = rtrim($location['path'], '/') . '/' . $agentId . '/' . $name;
 
-            $helperCmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'verify-repo', $passphrase, $localPath];
+            $helperCmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'verify-repo', '-', $localPath];
             $proc = proc_open($helperCmd, [
                 0 => ['pipe', 'r'],
                 1 => ['pipe', 'w'],
@@ -1533,6 +1550,7 @@ class RepositoryController extends Controller
             $stderr = '';
             $exitCode = -1;
             if (is_resource($proc)) {
+                fwrite($pipes[0], ($passphrase ?? '') . "\n");
                 fclose($pipes[0]);
                 $output = stream_get_contents($pipes[1]);
                 $stderr = stream_get_contents($pipes[2]);

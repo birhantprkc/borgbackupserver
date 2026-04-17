@@ -1406,10 +1406,11 @@ class ClientController extends Controller
                 // Local repos: Use SSH helper to run borg extract as the repo-owning user
                 // (www-data can't read repo files owned by the bbs-* user)
                 $sshUser = $agent['ssh_unix_user'] ?? '';
-                if (!empty($sshUser)) {
-                    // Pass passphrase as argument (sudo strips env vars)
+                $useHelper = !empty($sshUser);
+                if ($useHelper) {
+                    // Passphrase piped on stdin ("-" marker) so it's not in argv.
                     $passphrase = $env['BORG_PASSPHRASE'] ?? '';
-                    $cmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-extract', $sshUser, $tmpDir, $passphrase];
+                    $cmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-extract', $sshUser, $tmpDir, '-'];
                     $cmd = array_merge($cmd, $borgArgs);
 
                     $envStrings = null; // helper handles env; null inherits current env (for PATH)
@@ -1437,6 +1438,9 @@ class ClientController extends Controller
                 throw new \RuntimeException('Failed to run borg extract');
             }
 
+            if (!empty($useHelper)) {
+                fwrite($pipes[0], ($passphrase ?? '') . "\n");
+            }
             fclose($pipes[0]);
             $stdout = stream_get_contents($pipes[1]);
             $stderr = stream_get_contents($pipes[2]);
