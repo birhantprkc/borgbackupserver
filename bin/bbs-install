@@ -17,7 +17,7 @@ step() { echo -e "\n${CYAN}${BOLD}[$1] $2${NC}"; }
 die()  { fail "$*"; exit 1; }
 
 LOG_FILE="/var/log/bbs-install.log"
-exec > >(tee -a "$LOG_FILE") 2>&1
+exec > >(stdbuf -oL tee -a "$LOG_FILE") 2>&1
 
 # Ensure interactive prompts work even when piped (curl | sudo bash)
 if [[ ! -t 0 ]] && [[ -e /dev/tty ]]; then
@@ -26,8 +26,10 @@ else
     exec 3<&0
 fi
 ask() {
-    # Extract prompt from -p arg and write it directly to /dev/tty
-    # (read -p gets swallowed by the tee pipe)
+    # Extract prompt from -p arg and write it to stdout (same stream as all
+    # our ok/info/echo output) so ordering stays correct through the
+    # tee-to-logfile pipe. Previously writing to /dev/tty made prompts jump
+    # ahead of buffered stdout and the user saw interleaved output (#155).
     local args=() prompt=""
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -36,7 +38,12 @@ ask() {
             *)   args+=("$1"); shift ;;
         esac
     done
-    [[ -n "$prompt" ]] && echo -n "$prompt" > /dev/tty
+    if [[ -n "$prompt" ]]; then
+        printf "%s" "$prompt"
+        # Force-flush the tee pipeline so the prompt actually reaches the
+        # terminal before read() blocks for input.
+        sleep 0.05
+    fi
     read "${args[@]}" <&3
 }
 
@@ -232,6 +239,7 @@ PACKAGES=(
     memcached certbot python3-certbot-apache
     dnsutils  # for dig
     python3-pip  # for apprise
+    cron  # not installed on ubuntu-minimal by default (#155)
 )
 
 info "Installing ${#PACKAGES[@]} packages (this can take a few minutes, please be patient)..."
