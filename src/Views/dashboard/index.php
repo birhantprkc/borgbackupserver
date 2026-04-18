@@ -657,7 +657,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const otherDisk = Math.max(diskTotal - top5Disk, 0);
         const labels = repos.map(r => r.name);
         const data = repos.map(r => Number(r.disk_bytes));
-        if (otherDisk > 0) { labels.push('Other'); data.push(otherDisk); }
+        const rowCounts = repos.map(r => Number(r.rows));
+        if (otherDisk > 0) { labels.push('Other'); data.push(otherDisk); rowCounts.push(null); }
+        const fmtN = n => (n == null ? null : Number(n).toLocaleString());
         const fmtB = b => { b = Number(b); const s = '\u00A0'; if (b >= 1099511627776) return (b/1099511627776).toFixed(1)+s+'TB'; if (b >= 1073741824) return (b/1073741824).toFixed(1)+s+'GB'; if (b >= 1048576) return (b/1048576).toFixed(1)+s+'MB'; return (b/1024).toFixed(0)+s+'KB'; };
         new Chart(el.getContext('2d'), {
             type: 'doughnut',
@@ -677,7 +679,16 @@ document.addEventListener('DOMContentLoaded', function () {
                     tooltip: {
                         enabled: false,
                         external: externalTooltip,
-                        callbacks: { label: ctx => ctx.label + ': ' + fmtB(ctx.raw) }
+                        callbacks: {
+                            // Name is already shown as the bold title; body shows
+                            // size and row count.
+                            label: ctx => {
+                                const lines = ['Size: ' + fmtB(ctx.raw)];
+                                const rc = rowCounts[ctx.dataIndex];
+                                if (rc != null) lines.push('Rows: ' + fmtN(rc));
+                                return lines;
+                            }
+                        }
                     }
                 }
             }
