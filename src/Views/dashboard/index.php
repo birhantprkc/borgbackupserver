@@ -588,6 +588,43 @@ document.addEventListener('DOMContentLoaded', function () {
     const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
     const tc = isDark ? '#8b929a' : '#6c757d';
     const gc = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
+
+    // Chart.js by default renders tooltips onto the canvas, so they get
+    // clipped to the canvas rectangle. The ClickHouse doughnut canvas is
+    // only 110×110, so any label beyond a few characters is cut off
+    // (issue #164). This external tooltip handler renders an HTML div
+    // appended to <body> instead, escaping the canvas entirely.
+    const chartTooltipEl = (function () {
+        let el = document.getElementById('chartjs-ext-tooltip');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'chartjs-ext-tooltip';
+            el.style.cssText =
+                'position:absolute;pointer-events:none;z-index:2147483647;' +
+                'background:rgba(0,0,0,0.85);color:#fff;border-radius:4px;' +
+                'padding:6px 10px;font-size:0.78rem;white-space:nowrap;' +
+                'transform:translate(-50%,-100%);transition:opacity 0.1s;opacity:0;';
+            document.body.appendChild(el);
+        }
+        return el;
+    })();
+    function externalTooltip(ctx) {
+        const { chart, tooltip } = ctx;
+        if (tooltip.opacity === 0) { chartTooltipEl.style.opacity = 0; return; }
+        if (tooltip.body) {
+            const titleLines = tooltip.title || [];
+            const bodyLines = tooltip.body.map(b => b.lines);
+            let html = '';
+            titleLines.forEach(t => { html += '<div style="font-weight:600;margin-bottom:2px;">' + t.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])) + '</div>'; });
+            bodyLines.forEach(lines => { html += '<div>' + lines.join(' ').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])) + '</div>'; });
+            chartTooltipEl.innerHTML = html;
+        }
+        const rect = chart.canvas.getBoundingClientRect();
+        chartTooltipEl.style.opacity = 1;
+        chartTooltipEl.style.left = (window.scrollX + rect.left + tooltip.caretX) + 'px';
+        chartTooltipEl.style.top  = (window.scrollY + rect.top + tooltip.caretY - 8) + 'px';
+    }
+
     new Chart(document.getElementById('jobsChart').getContext('2d'), {
         type: 'bar',
         data: {
@@ -638,6 +675,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 plugins: {
                     legend: { display: false },
                     tooltip: {
+                        enabled: false,
+                        external: externalTooltip,
                         callbacks: { label: ctx => ctx.label + ': ' + fmtB(ctx.raw) }
                     }
                 }
