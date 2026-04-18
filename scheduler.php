@@ -238,12 +238,22 @@ foreach ($serverJobs as $sj) {
         'prune_years' => $sj['prune_years'] ?? 0,
     ];
 
-    // Mark as running
+    // Atomically claim the job. Cron runs this scheduler every minute, so
+    // a long-running compact/prune can overlap with the next invocation:
+    // both instances fetch the same 'sent' row via getServerSideJobs() before
+    // either marks it 'running'. Without this guard both would execute the
+    // same job (issue #163). The WHERE status='sent' clause makes the claim
+    // atomic — if another scheduler already transitioned the row, rowCount()
+    // is 0 and we skip this iteration.
     $startedAt = date('Y-m-d H:i:s');
-    $db->update('backup_jobs', [
-        'status' => 'running',
-        'started_at' => $startedAt,
-    ], 'id = ?', [$sj['id']]);
+    $claim = $db->query(
+        "UPDATE backup_jobs SET status='running', started_at=? WHERE id=? AND status='sent'",
+        [$startedAt, $sj['id']]
+    );
+    if ($claim->rowCount() === 0) {
+        echo date('Y-m-d H:i:s') . " Skipped job #{$sj['id']} ({$sj['task_type']}) — already claimed by another scheduler run\n";
+        continue;
+    }
 
     echo date('Y-m-d H:i:s') . " Executing server-side: job #{$sj['id']} ({$sj['task_type']})\n";
 
