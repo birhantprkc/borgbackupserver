@@ -113,8 +113,57 @@ class ReportService
         }
 
         $storagePath = $settings['storage_path'] ?? '/var/bbs';
-        $diskUsage = ServerStats::getDiskUsage($storagePath);
 
+        // Aggregate disk usage across every configured local storage location.
+        // Falls back to the default storage_path if no locations are configured.
+        $locations = $this->db->fetchAll("SELECT id, label, path FROM storage_locations ORDER BY label");
+        $locationStats = [];
+        $seenPartitions = [];
+        $aggTotal = 0; $aggUsed = 0; $aggFree = 0;
+        foreach ($locations as $loc) {
+            $u = ServerStats::getDiskUsage($loc['path']);
+            if (!$u) continue;
+            // Dedupe by (total + free) as a cheap partition fingerprint so
+            // multiple logical locations on the same disk aren't double-counted.
+            $fp = $u['total'] . ':' . $u['free'];
+            $isDup = isset($seenPartitions[$fp]);
+            if (!$isDup) {
+                $aggTotal += (int) $u['total'];
+                $aggUsed  += (int) $u['used'];
+                $aggFree  += (int) $u['free'];
+                $seenPartitions[$fp] = true;
+            }
+            $locationStats[] = [
+                'label' => $loc['label'] ?: $loc['path'],
+                'path'  => $loc['path'],
+                'disk_total' => (int) $u['total'],
+                'disk_used'  => (int) $u['used'],
+                'disk_free'  => (int) $u['free'],
+                'disk_percent' => (float) ($u['percent'] ?? 0),
+            ];
+        }
+        // Fallback when no storage_locations rows are configured (fresh install)
+        if (empty($locationStats)) {
+            $u = ServerStats::getDiskUsage($storagePath);
+            if ($u) {
+                $aggTotal = (int) $u['total'];
+                $aggUsed  = (int) $u['used'];
+                $aggFree  = (int) $u['free'];
+                $locationStats[] = [
+                    'label' => $storagePath,
+                    'path'  => $storagePath,
+                    'disk_total' => (int) $u['total'],
+                    'disk_used'  => (int) $u['used'],
+                    'disk_free'  => (int) $u['free'],
+                    'disk_percent' => (float) ($u['percent'] ?? 0),
+                ];
+            }
+        }
+        $aggPercent = $aggTotal > 0 ? round(($aggUsed / $aggTotal) * 100, 1) : 0;
+
+        // Counts + on-disk bytes split across two queries to avoid the JOIN
+        // inflation that was reporting SUM(deduplicated_size) — which is the
+        // per-archive marginal contribution, not the actual disk footprint.
         $repoStats = $this->db->fetchOne("
             SELECT COUNT(*) as repo_count, COALESCE(SUM(size_bytes), 0) as total_size
             FROM repositories
@@ -122,8 +171,7 @@ class ReportService
 
         $archiveStats = $this->db->fetchOne("
             SELECT COUNT(*) as archive_count,
-                   COALESCE(SUM(original_size), 0) as total_original,
-                   COALESCE(SUM(deduplicated_size), 0) as total_dedup
+                   COALESCE(SUM(original_size), 0) as total_original
             FROM archives
         ");
 
@@ -150,15 +198,15 @@ class ReportService
             'errors' => $errors,
             'server' => [
                 'storage_path' => $storagePath,
-                'disk_total' => $diskUsage['total'] ?? 0,
-                'disk_used' => $diskUsage['used'] ?? 0,
-                'disk_free' => $diskUsage['free'] ?? 0,
-                'disk_percent' => $diskUsage['percent'] ?? 0,
+                'disk_total' => $aggTotal,
+                'disk_used' => $aggUsed,
+                'disk_free' => $aggFree,
+                'disk_percent' => $aggPercent,
+                'storage_locations' => $locationStats,
                 'repo_count' => (int) ($repoStats['repo_count'] ?? 0),
                 'repo_total_size' => (int) ($repoStats['total_size'] ?? 0),
                 'archive_count' => (int) ($archiveStats['archive_count'] ?? 0),
                 'archive_original' => (int) ($archiveStats['total_original'] ?? 0),
-                'archive_dedup' => (int) ($archiveStats['total_dedup'] ?? 0),
             ],
         ];
 
@@ -179,10 +227,16 @@ class ReportService
             $data['remote_storage'] = $remoteStorageData;
         }
 
-        // Upsert: update existing report for this date or create new one
+        // Upsert: update existing report for this date or create new one.
+        // Bump created_at on regenerate so the UI timestamp reflects the refresh;
+        // otherwise the header shows the original generation time and users think
+        // nothing happened when they click "Generate Report Now".
         $existing = $this->db->fetchOne("SELECT id FROM daily_reports WHERE report_date = ?", [$reportDate]);
         if ($existing) {
-            $this->db->update('daily_reports', ['data' => json_encode($data)], 'id = ?', [$existing['id']]);
+            $this->db->update('daily_reports', [
+                'data' => json_encode($data),
+                'created_at' => date('Y-m-d H:i:s'),
+            ], 'id = ?', [$existing['id']]);
             $id = (int) $existing['id'];
         } else {
             $id = $this->db->insert('daily_reports', [
@@ -376,23 +430,43 @@ class ReportService
             $diskUsed = self::formatBytes($srv['disk_used']);
             $diskTotal = self::formatBytes($srv['disk_total']);
             $diskColor = $diskPct >= 90 ? '#dc3545' : ($diskPct >= 75 ? '#ffc107' : '#28a745');
-            $repoCount = $srv['repo_count'];
-            $archiveCount = $srv['archive_count'];
-            $archiveOriginal = self::formatBytes($srv['archive_original']);
-            $archiveDedup = self::formatBytes($srv['archive_dedup']);
-            $dedupSavings = $srv['archive_original'] > 0
-                ? round((1 - $srv['archive_dedup'] / $srv['archive_original']) * 100, 1) : 0;
+            $repoCount = $srv['repo_count'] ?? 0;
+            $archiveCount = $srv['archive_count'] ?? 0;
+            $archiveOriginal = self::formatBytes($srv['archive_original'] ?? 0);
+            // repo_total_size was added in v2.28.1; fall back to legacy archive_dedup
+            // for reports stored before the fix.
+            $onDiskBytes = (int) ($srv['repo_total_size'] ?? $srv['archive_dedup'] ?? 0);
+            $repoTotal = self::formatBytes($onDiskBytes);
+            $dedupSavings = ($srv['archive_original'] ?? 0) > 0
+                ? round((1 - $onDiskBytes / $srv['archive_original']) * 100, 1) : 0;
 
             $html .= <<<HTML
                 <div style="padding:0 24px 16px;">
                     <h3 style="font-size:16px;margin:0 0 12px 0;color:#333;">Server</h3>
                     <table style="font-size:13px;border-collapse:collapse;">
-                        <tr><td style="padding:4px 16px 4px 0;color:#6c757d;">Storage</td>
+                        <tr><td style="padding:4px 16px 4px 0;color:#6c757d;vertical-align:top;">Storage</td>
                             <td style="padding:4px 0;"><span style="color:{$diskColor};font-weight:600;">{$diskPct}%</span> used ({$diskUsed} / {$diskTotal})</td></tr>
+            HTML;
+
+            // Per-location breakdown when multiple storage locations are configured
+            $locations = $srv['storage_locations'] ?? [];
+            if (count($locations) > 1) {
+                foreach ($locations as $loc) {
+                    $locLabel = htmlspecialchars($loc['label']);
+                    $locPct = $loc['disk_percent'];
+                    $locUsed = self::formatBytes($loc['disk_used']);
+                    $locTotal = self::formatBytes($loc['disk_total']);
+                    $locColor = $locPct >= 90 ? '#dc3545' : ($locPct >= 75 ? '#ffc107' : '#28a745');
+                    $html .= "<tr><td style='padding:2px 16px 2px 16px;color:#adb5bd;font-size:12px;'>&nbsp;&nbsp;&bull; {$locLabel}</td>"
+                            . "<td style='padding:2px 0;font-size:12px;color:#6c757d;'><span style='color:{$locColor};'>{$locPct}%</span> ({$locUsed} / {$locTotal})</td></tr>";
+                }
+            }
+
+            $html .= <<<HTML
                         <tr><td style="padding:4px 16px 4px 0;color:#6c757d;">Repositories</td>
-                            <td style="padding:4px 0;">{$repoCount}</td></tr>
+                            <td style="padding:4px 0;">{$repoCount} ({$repoTotal} on disk)</td></tr>
                         <tr><td style="padding:4px 16px 4px 0;color:#6c757d;">Archives</td>
-                            <td style="padding:4px 0;">{$archiveCount} ({$archiveOriginal} original, {$archiveDedup} deduplicated, {$dedupSavings}% savings)</td></tr>
+                            <td style="padding:4px 0;">{$archiveCount} ({$archiveOriginal} original, {$dedupSavings}% dedup savings)</td></tr>
                     </table>
                 </div>
             HTML;
