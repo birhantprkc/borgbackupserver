@@ -79,8 +79,21 @@ $dfFix = function (string $s): string {
     height: 1rem;
     font-size: 0.72rem;
     font-weight: 600;
+    position: relative;
 }
 .v2 .health-row .progress-bar { transition: width 0.4s, background-color 0.2s; }
+/* Overlay label spans the full progress container, so the % is always
+   visible and centered regardless of how narrow the filled portion is. */
+.v2 .health-row .progress-label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    text-shadow: 0 0 3px rgba(0,0,0,0.7), 0 0 1px rgba(0,0,0,0.9);
+    pointer-events: none;
+}
 .v2 .health-row .val { font-size: 0.78rem; font-variant-numeric: tabular-nums; min-width: 80px; text-align: right; color: var(--bs-body-color); }
 
 .v2 .storage-grid {
@@ -218,14 +231,16 @@ $dfFix = function (string $s): string {
                     <div class="health-row">
                         <span class="lbl">CPU</span>
                         <div class="progress" role="progressbar" aria-label="CPU usage" aria-valuenow="<?= $cpuPct ?>" aria-valuemin="0" aria-valuemax="100">
-                            <div class="progress-bar" id="cpu-fill" style="width: <?= $cpuPct ?>%; background-color: <?= $cpuColor ?>;"><?= $cpuPct ?>%</div>
+                            <div class="progress-bar" id="cpu-fill" style="width: <?= $cpuPct ?>%; background-color: <?= $cpuColor ?>;"></div>
+                            <span class="progress-label"><?= $cpuPct ?>%</span>
                         </div>
                         <span class="val" id="cpu-val"><?= $cpuLoad['1min'] ?></span>
                     </div>
                     <div class="health-row">
                         <span class="lbl">Memory</span>
                         <div class="progress" role="progressbar" aria-label="Memory usage" aria-valuenow="<?= $memPct ?>" aria-valuemin="0" aria-valuemax="100">
-                            <div class="progress-bar" id="mem-fill" style="width: <?= $memPct ?>%; background-color: <?= $memColor ?>;"><?= $memPct ?>%</div>
+                            <div class="progress-bar" id="mem-fill" style="width: <?= $memPct ?>%; background-color: <?= $memColor ?>;"></div>
+                            <span class="progress-label"><?= $memPct ?>%</span>
                         </div>
                         <span class="val" id="mem-val"><?= ServerStats::formatBytes($memory['used']) ?></span>
                     </div>
@@ -239,7 +254,8 @@ $dfFix = function (string $s): string {
                     <div class="health-row" data-mount="<?= htmlspecialchars($part['mount']) ?>">
                         <span class="lbl text-truncate" title="<?= htmlspecialchars($part['mount']) ?>"><?= htmlspecialchars($part['mount']) ?></span>
                         <div class="progress" role="progressbar" aria-label="<?= htmlspecialchars($part['mount']) ?> usage" aria-valuenow="<?= $pPct ?>" aria-valuemin="0" aria-valuemax="100">
-                            <div class="progress-bar part-fill" style="width: <?= $pPct ?>%; background-color: <?= $pColor ?>;"><?= $pPct ?>%</div>
+                            <div class="progress-bar part-fill" style="width: <?= $pPct ?>%; background-color: <?= $pColor ?>;"></div>
+                            <span class="progress-label"><?= $pPct ?>%</span>
                         </div>
                         <span class="val part-val"><?= $dfFix($part['size']) ?></span>
                     </div>
@@ -720,9 +736,12 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (!fillEl) return;
                     fillEl.style.width = pct + '%';
                     fillEl.style.backgroundColor = bg;
-                    fillEl.textContent = pct + '%';
                     const parent = fillEl.parentElement;
-                    if (parent) parent.setAttribute('aria-valuenow', pct);
+                    if (parent) {
+                        parent.setAttribute('aria-valuenow', pct);
+                        const label = parent.querySelector('.progress-label');
+                        if (label) label.textContent = pct + '%';
+                    }
                 }
                 if (d.cpu && cpuFill && cpuVal) {
                     const p = Number(d.cpu.percent) || 0;
