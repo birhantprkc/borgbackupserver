@@ -1282,7 +1282,10 @@ foreach ($serverJobs as $sj) {
             $borgArgs[$lastIdx] = $repo['path'];
         }
     } elseif ($sj['task_type'] === 'compact') {
-        $borgArgs = ['compact', $repoPath];
+        // --verbose so borg emits the "compaction freed about X GB" summary
+        // line, which the generic stdout logger downstream captures into
+        // server_log (issue #162).
+        $borgArgs = ['compact', '--verbose', $repoPath];
     } elseif ($sj['task_type'] === 'repo_check') {
         $borgArgs = ['check', '--verbose', $repoPath];
     } elseif ($sj['task_type'] === 'repo_repair') {
