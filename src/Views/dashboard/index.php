@@ -96,6 +96,19 @@ $dfFix = function (string $s): string {
 }
 .v2 .health-row .val { font-size: 0.78rem; font-variant-numeric: tabular-nums; min-width: 80px; text-align: right; color: var(--bs-body-color); }
 
+/* File Catalog card — stats table with hairline separators (no striped bg) */
+.v2 .ch-stats-table td {
+    border-top: 0;
+    border-bottom: 1px solid var(--bs-border-color-translucent);
+}
+.v2 .ch-stats-table tr:last-child td { border-bottom: 0; }
+
+/* File Catalog card — Top Repositories rows, tighter line-height */
+.v2 .top-repo-row {
+    padding: 2px 4px;
+    line-height: 1.25;
+}
+
 .v2 .storage-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -546,12 +559,12 @@ $dfFix = function (string $s): string {
                                 ['Indexed clients', (int) ($clickhouseStats['agent_count'] ?? 0)],
                             ];
                             ?>
-                            <table class="table table-sm table-striped mb-0" style="font-size:0.82rem;">
+                            <table class="table table-sm mb-0 ch-stats-table" style="font-size:0.82rem;">
                                 <tbody>
                                 <?php foreach ($chStatRows as $ri => $row): ?>
                                 <tr>
-                                    <td class="text-muted border-0 py-1 ps-2"><?= $row[0] ?></td>
-                                    <td class="fw-bold border-0 py-1 pe-2 text-end"><?= $row[1] ?></td>
+                                    <td class="text-muted py-1 ps-2"><?= $row[0] ?></td>
+                                    <td class="fw-bold py-1 pe-2 text-end"><?= $row[1] ?></td>
                                 </tr>
                                 <?php endforeach; ?>
                                 </tbody>
@@ -567,7 +580,7 @@ $dfFix = function (string $s): string {
                             <div class="flex-grow-1">
                                 <div class="small fw-semibold text-uppercase mb-1" style="font-size:0.65rem;letter-spacing:0.03em;color:var(--bs-secondary-color);"><i class="bi bi-trophy me-1"></i>Top Repositories</div>
                                 <?php foreach ($chTopRepos as $i => $repo): ?>
-                                <div class="d-flex align-items-center justify-content-between" style="font-size:0.8rem;padding:3px 4px;<?= $i % 2 === 1 ? 'background:var(--bs-tertiary-bg);border-radius:3px;' : '' ?>">
+                                <div class="d-flex align-items-center justify-content-between top-repo-row" style="font-size:0.8rem;<?= $i % 2 === 1 ? 'background:var(--bs-tertiary-bg);border-radius:3px;' : '' ?>">
                                     <span class="text-truncate me-2"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:<?= $pieColors[$i % 6] ?>;margin-right:6px;"></span><?= htmlspecialchars($repo['name']) ?></span>
                                     <span class="text-muted text-nowrap" style="font-size:0.75rem;font-variant-numeric:tabular-nums;"><?= $compact((int) $repo['rows']) ?> rows</span>
                                 </div>
