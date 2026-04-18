@@ -1,3 +1,44 @@
+/* Card header gradient — site-wide. Used on dashboard and anywhere else that
+   wants the signature blue header. Promoted out of the dashboard's .v2 scope
+   so other pages (archive detail, etc.) can adopt it without wrapping. */
+.card-head-gradient {
+    background: linear-gradient(135deg, #1e293b 0%, #243a6b 50%, #2b4d8c 100%);
+    color: #fff;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.25);
+}
+.card-head-gradient .text-muted { color: rgba(255, 255, 255, 0.7) !important; }
+.card-head-gradient i { color: #9ec5fe; }
+
+/* Metric tile — site-wide stat block with colored variant backgrounds.
+   Lifted from the dashboard .v2 scope so archive detail and other pages
+   can use the same visual vocabulary. */
+.metric-tile {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 10px;
+    padding: 14px 16px;
+    transition: border-color 0.12s, transform 0.12s;
+}
+a.metric-tile:hover { transform: translateY(-1px); filter: brightness(1.1); }
+.metric-tile .value { font-size: 1.5rem; font-weight: 700; line-height: 1.15; }
+.metric-tile .label { font-size: 0.72rem; color: var(--bs-secondary-color); text-transform: uppercase; letter-spacing: 0.04em; }
+.metric-tile .sub { font-size: 0.72rem; color: var(--bs-secondary-color); margin-top: 2px; }
+.metric-tile.primary { background-color: rgba(13,110,253,0.05); border-color: rgba(13,110,253,0.2); }
+.metric-tile.primary .value { color: var(--bs-primary); }
+.metric-tile.success { background-color: rgba(25,135,84,0.05); border-color: rgba(25,135,84,0.2); }
+.metric-tile.success .value { color: var(--bs-success); }
+.metric-tile.info    { background-color: rgba(13,202,240,0.05); border-color: rgba(13,202,240,0.2); }
+.metric-tile.info .value { color: var(--bs-info); }
+.metric-tile.warning { background-color: rgba(255,193,7,0.05); border-color: rgba(255,193,7,0.2); }
+.metric-tile.warning .value { color: #b58900; }
+.metric-tile.danger  { background-color: rgba(220,53,69,0.05); border-color: rgba(220,53,69,0.2); }
+.metric-tile.danger .value { color: var(--bs-danger); }
+[data-bs-theme="dark"] .metric-tile.primary { background-color: rgba(13,110,253,0.08); }
+[data-bs-theme="dark"] .metric-tile.success { background-color: rgba(25,135,84,0.08); }
+[data-bs-theme="dark"] .metric-tile.info    { background-color: rgba(13,202,240,0.08); }
+[data-bs-theme="dark"] .metric-tile.warning { background-color: rgba(255,193,7,0.08); color: #ffc107; }
+[data-bs-theme="dark"] .metric-tile.warning .value { color: #ffc107; }
+[data-bs-theme="dark"] .metric-tile.danger  { background-color: rgba(220,53,69,0.08); }
+
 /* Global dropdown + tooltip escape fix. Issue #161 and several predecessors:
    Bootstrap cards and other containers use overflow:hidden (for rounded
    corners), which clips dropdown menus that pop out of them. The

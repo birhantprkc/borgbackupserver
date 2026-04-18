@@ -689,11 +689,14 @@ class RepositoryController extends Controller
                      GROUP BY status ORDER BY cnt DESC"
                 );
 
-                // Largest files
+                // Largest files. status != 'X' so excluded entries (node_modules,
+                // /proc, /sys-style paths that were on disk but skipped) don't
+                // dominate the list — their size is irrelevant to the archive (#132).
                 $largestFiles = $ch->fetchAll(
                     "SELECT path, file_name, file_size, status
                      FROM file_catalog
                      WHERE agent_id = {$aid} AND archive_id = {$arid} AND path != ''
+                       AND status != 'X'
                      ORDER BY file_size DESC LIMIT 20"
                 );
 

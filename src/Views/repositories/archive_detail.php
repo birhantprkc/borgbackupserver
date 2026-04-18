@@ -7,19 +7,23 @@ function fmtSize($bytes) {
     return $bytes . "{$s}B";
 }
 
-// Status codes from borg + their display label and theme-aware badge color
+// Status codes from borg + display label and full badge class token.
+// Using pre-composed class strings (rather than just a color name) lets us
+// combine Bootstrap 5.3's *-subtle / *-emphasis pairs for readable badges on
+// subtle variants — the old `bg-body-secondary` single-class token rendered
+// near-invisibly on dark cards (#132).
 $statusLabels = [
-    'A' => ['Added', 'success'],
-    'M' => ['Modified', 'warning'],
-    'C' => ['Metadata Changed', 'info'],
-    'U' => ['Unchanged', 'secondary'],
-    'D' => ['Directory', 'body-secondary'],
-    'S' => ['Symlink', 'body-secondary'],
-    'H' => ['Hardlink', 'body-secondary'],
-    'X' => ['Excluded', 'body-secondary'],
-    'B' => ['Block Device', 'body-secondary'],
-    'F' => ['FIFO', 'body-secondary'],
-    'E' => ['Empty', 'body-secondary'],
+    'A' => ['Added',            'bg-success'],
+    'M' => ['Modified',         'bg-warning text-dark'],
+    'C' => ['Metadata Changed', 'bg-info text-dark'],
+    'U' => ['Unchanged',        'bg-secondary'],
+    'D' => ['Directory',        'bg-secondary-subtle text-secondary-emphasis'],
+    'S' => ['Symlink',          'bg-secondary-subtle text-secondary-emphasis'],
+    'H' => ['Hardlink',         'bg-secondary-subtle text-secondary-emphasis'],
+    'X' => ['Excluded',         'bg-warning-subtle text-warning-emphasis'],
+    'B' => ['Block Device',     'bg-secondary-subtle text-secondary-emphasis'],
+    'F' => ['FIFO',             'bg-secondary-subtle text-secondary-emphasis'],
+    'E' => ['Empty',            'bg-secondary-subtle text-secondary-emphasis'],
 ];
 
 // Non-file entry types — exclude from file counts and size totals
@@ -37,15 +41,19 @@ $fileRows = [];
 $otherRows = [];
 $totalFiles = 0;
 $totalSize = 0;
+$otherCount = 0;
 foreach ($statusBreakdown as $row) {
     if (in_array($row['status'], $nonFileStatuses)) {
         $otherRows[] = $row;
+        $otherCount += (int) $row['cnt'];
     } else {
         $fileRows[] = $row;
         $totalFiles += (int) $row['cnt'];
         $totalSize += (int) $row['total_size'];
     }
 }
+// "Grand Total" row includes directories, symlinks, etc. per #133 feedback
+$grandTotalCount = $totalFiles + $otherCount;
 
 $hasDatabases = !empty($archive['databases_backed_up']);
 $dbInfo = $hasDatabases ? json_decode($archive['databases_backed_up'], true) : null;
@@ -54,6 +62,20 @@ $savings = $archive['original_size'] > 0
     ? round((1 - $archive['deduplicated_size'] / $archive['original_size']) * 100, 1)
     : 0;
 ?>
+
+<style>
+/* Archive detail — Status Breakdown footer row (#133 item 2).
+   The old `tfoot.border-top` with `fw-semibold` rendered the Total row
+   nearly invisible on dark cards. Give it a subtle tinted background,
+   bolder weight, and a proper top border so it reads as a summary row. */
+.status-breakdown-foot { border-top: 2px solid var(--bs-border-color); }
+.status-breakdown-foot td {
+    background-color: var(--bs-tertiary-bg);
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
+}
+.status-breakdown-foot tr:not(:last-child) td { border-bottom: 1px solid var(--bs-border-color-translucent); }
+</style>
 
 <!-- Breadcrumb -->
 <nav aria-label="breadcrumb" class="mb-3">
@@ -94,50 +116,35 @@ $savings = $archive['original_size'] > 0
             </div>
         </div>
 
-        <!-- Stats Row -->
+        <!-- Stats Row (metric-tile style, matches dashboard visual language) -->
         <div class="row g-3 mt-3">
             <div class="col-6 col-md-3">
-                <div class="d-flex align-items-center p-2 rounded bg-body-secondary">
-                    <div class="stat-icon-sm bg-primary bg-opacity-10 text-primary rounded-2 p-2 me-2">
-                        <i class="bi bi-hdd"></i>
-                    </div>
-                    <div>
-                        <div class="fw-bold"><?= fmtSize($archive['original_size']) ?></div>
-                        <div class="text-muted" style="font-size: 0.7rem;">Total Size</div>
-                    </div>
+                <div class="metric-tile primary h-100">
+                    <div class="label"><i class="bi bi-hdd me-1"></i>Total Size</div>
+                    <div class="value"><?= fmtSize($archive['original_size']) ?></div>
+                    <div class="sub">original, pre-dedup</div>
                 </div>
             </div>
             <div class="col-6 col-md-3">
-                <div class="d-flex align-items-center p-2 rounded bg-body-secondary">
-                    <div class="stat-icon-sm bg-success bg-opacity-10 text-success rounded-2 p-2 me-2">
-                        <i class="bi bi-archive"></i>
-                    </div>
-                    <div>
-                        <div class="fw-bold"><?= fmtSize($archive['deduplicated_size']) ?></div>
-                        <div class="text-muted" style="font-size: 0.7rem;"><?= $savings ?>% dedup savings</div>
-                    </div>
+                <div class="metric-tile success h-100">
+                    <div class="label"><i class="bi bi-archive me-1"></i>On Disk</div>
+                    <div class="value"><?= fmtSize($archive['deduplicated_size']) ?></div>
+                    <div class="sub"><?= $savings ?>% dedup savings</div>
                 </div>
             </div>
             <div class="col-6 col-md-3">
-                <div class="d-flex align-items-center p-2 rounded bg-body-secondary">
-                    <div class="stat-icon-sm bg-info bg-opacity-10 text-info rounded-2 p-2 me-2">
-                        <i class="bi bi-files"></i>
-                    </div>
-                    <div>
-                        <div class="fw-bold"><?= number_format($archive['file_count'] ?: $totalFiles) ?></div>
-                        <div class="text-muted" style="font-size: 0.7rem;">Files</div>
-                    </div>
+                <div class="metric-tile info h-100"
+                     title="File count as recorded by borg when the archive was created. This is the authoritative number. The pre-scan count shown during backup is a quick filesystem estimate and may differ.">
+                    <div class="label"><i class="bi bi-files me-1"></i>Files in Archive</div>
+                    <div class="value"><?= number_format((int) $archive['file_count']) ?></div>
+                    <div class="sub">from borg manifest</div>
                 </div>
             </div>
             <div class="col-6 col-md-3">
-                <div class="d-flex align-items-center p-2 rounded bg-body-secondary">
-                    <div class="stat-icon-sm bg-warning bg-opacity-10 text-warning rounded-2 p-2 me-2">
-                        <i class="bi bi-clock-history"></i>
-                    </div>
-                    <div>
-                        <div class="fw-bold"><?= htmlspecialchars($durLabel) ?></div>
-                        <div class="text-muted" style="font-size: 0.7rem;">Duration</div>
-                    </div>
+                <div class="metric-tile warning h-100">
+                    <div class="label"><i class="bi bi-clock-history me-1"></i>Duration</div>
+                    <div class="value"><?= htmlspecialchars($durLabel) ?></div>
+                    <div class="sub"><?= $jobInfo['completed_at'] ?? '' ? \BBS\Core\TimeHelper::ago($jobInfo['completed_at']) : '' ?></div>
                 </div>
             </div>
         </div>
@@ -149,7 +156,7 @@ $savings = $archive['original_size'] > 0
 <div class="row g-3 mb-4">
     <div class="col-lg-4">
         <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-body fw-semibold">
+            <div class="card-header card-head-gradient fw-semibold">
                 <i class="bi bi-bar-chart me-1"></i> File Changes
             </div>
             <div class="card-body">
@@ -158,9 +165,9 @@ $savings = $archive['original_size'] > 0
                     <?php foreach ($fileRows as $row):
                         $pct = round(((int) $row['cnt'] / $totalFiles) * 100, 1);
                         if ($pct < 0.5) continue;
-                        [$label, $color] = $statusLabels[$row['status']] ?? [$row['status'], 'secondary'];
+                        [$label, $badge] = $statusLabels[$row['status']] ?? [$row['status'], 'bg-secondary'];
                     ?>
-                    <div class="progress-bar bg-<?= $color ?>" style="width: <?= $pct ?>%" title="<?= $label ?>: <?= number_format($row['cnt']) ?> files"><?php if ($pct > 5): ?><?= $label ?><?php endif; ?></div>
+                    <div class="progress-bar <?= $badge ?>" style="width: <?= $pct ?>%" title="<?= $label ?>: <?= number_format($row['cnt']) ?> files"><?php if ($pct > 5): ?><?= $label ?><?php endif; ?></div>
                     <?php endforeach; ?>
                 </div>
                 <?php endif; ?>
@@ -175,10 +182,10 @@ $savings = $archive['original_size'] > 0
                     </thead>
                     <tbody>
                         <?php foreach ($fileRows as $row):
-                            [$label, $color] = $statusLabels[$row['status']] ?? [$row['status'], 'secondary'];
+                            [$label, $badge] = $statusLabels[$row['status']] ?? [$row['status'], 'bg-secondary'];
                         ?>
                         <tr>
-                            <td><span class="badge bg-<?= $color ?>"><?= $label ?></span></td>
+                            <td><span class="badge <?= $badge ?>"><?= $label ?></span></td>
                             <td class="text-end"><?= number_format($row['cnt']) ?></td>
                             <td class="text-end"><?= fmtSize($row['total_size']) ?></td>
                         </tr>
@@ -193,22 +200,29 @@ $savings = $archive['original_size'] > 0
                         <?php if (!empty($otherRows)): ?>
                         <tr><td colspan="3" class="text-muted small pt-3 border-0">Other Entries</td></tr>
                         <?php foreach ($otherRows as $row):
-                            [$label, $color] = $statusLabels[$row['status']] ?? [$row['status'], 'secondary'];
+                            [$label, $badge] = $statusLabels[$row['status']] ?? [$row['status'], 'bg-secondary'];
                         ?>
                         <tr>
-                            <td><span class="badge bg-<?= $color ?>"><?= $label ?></span></td>
+                            <td><span class="badge <?= $badge ?>"><?= $label ?></span></td>
                             <td class="text-end text-muted"><?= number_format($row['cnt']) ?></td>
                             <td class="text-end text-muted">--</td>
                         </tr>
                         <?php endforeach; ?>
                         <?php endif; ?>
                     </tbody>
-                    <tfoot class="border-top">
+                    <tfoot class="status-breakdown-foot">
                         <tr>
-                            <td class="fw-semibold">Total</td>
-                            <td class="text-end fw-semibold"><?= number_format($totalFiles) ?></td>
-                            <td class="text-end fw-semibold"><?= fmtSize($totalSize) ?></td>
+                            <td class="fw-bold">Files Total</td>
+                            <td class="text-end fw-bold"><?= number_format($totalFiles) ?></td>
+                            <td class="text-end fw-bold"><?= fmtSize($totalSize) ?></td>
                         </tr>
+                        <?php if ($otherCount > 0): ?>
+                        <tr>
+                            <td class="fw-bold">Grand Total</td>
+                            <td class="text-end fw-bold"><?= number_format($grandTotalCount) ?></td>
+                            <td class="text-end text-muted small">incl. dirs/links</td>
+                        </tr>
+                        <?php endif; ?>
                     </tfoot>
                 </table>
             </div>
@@ -217,7 +231,7 @@ $savings = $archive['original_size'] > 0
 
     <div class="col-lg-8">
         <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-body fw-semibold">
+            <div class="card-header card-head-gradient fw-semibold">
                 <i class="bi bi-file-earmark-arrow-up me-1"></i> Largest Files
             </div>
             <div class="card-body p-0">
@@ -232,14 +246,14 @@ $savings = $archive['original_size'] > 0
                         </thead>
                         <tbody>
                             <?php foreach ($largestFiles as $f):
-                                [$label, $color] = $statusLabels[$f['status']] ?? [$f['status'], 'secondary'];
+                                [$label, $badge] = $statusLabels[$f['status']] ?? [$f['status'], 'bg-secondary'];
                             ?>
                             <tr>
                                 <td style="word-break: break-all;" title="<?= htmlspecialchars($f['path']) ?>">
                                     <span class="small"><?= htmlspecialchars($f['path']) ?></span>
                                 </td>
                                 <td class="text-end text-nowrap"><?= fmtSize($f['file_size']) ?></td>
-                                <td><span class="badge bg-<?= $color ?>"><?= $label ?></span></td>
+                                <td><span class="badge <?= $badge ?>"><?= $label ?></span></td>
                             </tr>
                             <?php endforeach; ?>
                             <?php if (empty($largestFiles)): ?>
@@ -255,7 +269,7 @@ $savings = $archive['original_size'] > 0
 
 <!-- File Browser -->
 <div class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-body fw-semibold d-flex justify-content-between align-items-center">
+    <div class="card-header card-head-gradient fw-semibold d-flex justify-content-between align-items-center">
         <div>
             <i class="bi bi-files me-1"></i> File Browser
         </div>
@@ -311,15 +325,17 @@ $savings = $archive['original_size'] > 0
     var perPage = 50;
     var searchTimeout = null;
 
+    // [label, full-badge-class-token] — must mirror $statusLabels in the PHP prelude
     var statusLabels = {
-        'A': ['Added', 'success'],
-        'M': ['Modified', 'warning'],
-        'C': ['Metadata Changed', 'info'],
-        'U': ['Unchanged', 'secondary'],
-        'D': ['Directory', 'body-secondary'],
-        'S': ['Symlink', 'body-secondary'],
-        'H': ['Hardlink', 'body-secondary'],
-        'deleted': ['Deleted', 'danger']
+        'A': ['Added',            'bg-success'],
+        'M': ['Modified',         'bg-warning text-dark'],
+        'C': ['Metadata Changed', 'bg-info text-dark'],
+        'U': ['Unchanged',        'bg-secondary'],
+        'D': ['Directory',        'bg-secondary-subtle text-secondary-emphasis'],
+        'S': ['Symlink',          'bg-secondary-subtle text-secondary-emphasis'],
+        'H': ['Hardlink',         'bg-secondary-subtle text-secondary-emphasis'],
+        'X': ['Excluded',         'bg-warning-subtle text-warning-emphasis'],
+        'deleted': ['Deleted',    'bg-danger']
     };
 
     <?php foreach ($statusBreakdown as $row): ?>
@@ -361,11 +377,11 @@ $savings = $archive['original_size'] > 0
                 var html = '';
                 if (data.files && data.files.length > 0) {
                     data.files.forEach(function(f) {
-                        var st = statusLabels[f.status] || [f.status, 'secondary'];
+                        var st = statusLabels[f.status] || [f.status, 'bg-secondary'];
                         html += '<tr>';
                         html += '<td style="word-break:break-all;">' + esc(f.path) + '</td>';
                         html += '<td class="text-end text-nowrap">' + fmtSize(f.file_size) + '</td>';
-                        html += '<td><span class="badge bg-' + st[1] + '">' + st[0] + '</span></td>';
+                        html += '<td><span class="badge ' + st[1] + '">' + st[0] + '</span></td>';
                         html += '</tr>';
                     });
                 } else {
@@ -429,7 +445,7 @@ $savings = $archive['original_size'] > 0
 
 <?php if ($hasDatabases && $dbInfo && !empty($dbInfo['databases'])): ?>
 <div class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-body fw-semibold">
+    <div class="card-header card-head-gradient fw-semibold">
         <i class="bi bi-database text-info me-1"></i> Database Backups
     </div>
     <div class="card-body">
@@ -442,7 +458,7 @@ $savings = $archive['original_size'] > 0
 
 <?php if (!empty($jobInfo['directories'])): ?>
 <div class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-body fw-semibold">
+    <div class="card-header card-head-gradient fw-semibold">
         <i class="bi bi-folder me-1"></i> Backup Directories
     </div>
     <div class="card-body">

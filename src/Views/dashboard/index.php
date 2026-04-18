@@ -34,37 +34,11 @@ $dfFix = function (string $s): string {
 ?>
 
 <style>
-.v2 .metric-tile {
-    border: 1px solid var(--bs-border-color);
-    border-radius: 10px;
-    padding: 14px 16px;
-    transition: border-color 0.12s, transform 0.12s;
-}
-.v2 a.metric-tile:hover { transform: translateY(-1px); filter: brightness(1.1); }
-.v2 .metric-tile .value { font-size: 1.75rem; font-weight: 700; line-height: 1.1; }
-.v2 .metric-tile .label { font-size: 0.75rem; color: var(--bs-secondary-color); text-transform: uppercase; letter-spacing: 0.04em; }
-.v2 .metric-tile .sub { font-size: 0.8rem; color: var(--bs-secondary-color); margin-top: 2px; }
-/* Colored tile backgrounds matching the original dashboard */
-.v2 .metric-tile.primary { background-color: rgba(13,110,253,0.05); border-color: rgba(13,110,253,0.2); }
-.v2 .metric-tile.primary .value { color: var(--bs-primary); }
-.v2 .metric-tile.success { background-color: rgba(25,135,84,0.05); border-color: rgba(25,135,84,0.2); }
-.v2 .metric-tile.success .value { color: var(--bs-success); }
-.v2 .metric-tile.warning { background-color: rgba(255,193,7,0.05); border-color: rgba(255,193,7,0.2); }
-.v2 .metric-tile.warning .value { color: var(--bs-warning); }
-.v2 .metric-tile.danger { background-color: rgba(220,53,69,0.05); border-color: rgba(220,53,69,0.2); }
-.v2 .metric-tile.danger .value { color: var(--bs-danger); }
-[data-bs-theme="dark"] .v2 .metric-tile.primary { background-color: rgba(13,110,253,0.08); }
-[data-bs-theme="dark"] .v2 .metric-tile.success { background-color: rgba(25,135,84,0.08); }
-[data-bs-theme="dark"] .v2 .metric-tile.warning { background-color: rgba(255,193,7,0.08); }
-[data-bs-theme="dark"] .v2 .metric-tile.danger { background-color: rgba(220,53,69,0.08); }
-
-.v2 .card-head-gradient {
-    background: linear-gradient(135deg, #1e293b 0%, #243a6b 50%, #2b4d8c 100%);
-    color: #fff;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.25);
-}
-.v2 .card-head-gradient .text-muted { color: rgba(255, 255, 255, 0.7) !important; }
-.v2 .card-head-gradient i { color: #9ec5fe; }
+/* metric-tile styles are in public/css/style.css (global) since they're shared
+   with archive detail and other pages. Dashboard-specific value sizing: */
+.v2 .metric-tile .value { font-size: 1.75rem; line-height: 1.1; }
+.v2 .metric-tile .label { font-size: 0.75rem; }
+.v2 .metric-tile .sub   { font-size: 0.8rem; }
 
 .v2 .health-row {
     display: flex;
