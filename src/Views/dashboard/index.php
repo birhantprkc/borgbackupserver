@@ -96,8 +96,15 @@ $dfFix = function (string $s): string {
 }
 .v2 .health-row .val { font-size: 0.78rem; font-variant-numeric: tabular-nums; min-width: 80px; text-align: right; color: var(--bs-body-color); }
 
-/* File Catalog card — stats table with hairline separators (no striped bg) */
+/* File Catalog card — stats table with hairline separators (no striped bg).
+   --bs-table-bg override strips the table's own background so the card's
+   background shows through instead of a darker block behind the rows. */
+.v2 .ch-stats-table {
+    --bs-table-bg: transparent;
+    background-color: transparent;
+}
 .v2 .ch-stats-table td {
+    background-color: transparent;
     border-top: 0;
     border-bottom: 1px solid var(--bs-border-color-translucent);
 }
