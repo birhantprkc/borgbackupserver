@@ -272,6 +272,67 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+    // Global dropdown/tooltip escape fix (issue #161 and predecessors).
+    // Every dropdown toggle in the app gets data-bs-strategy="fixed" so Popper
+    // positions the menu with position:fixed, which escapes parent containers
+    // that clip it (cards with overflow:hidden, table wrappers, sticky headers).
+    // Tooltips get boundary:'viewport' + container:'body' via a default instance
+    // so they also clear parent clipping. This replaces the per-element patches
+    // we were adding case-by-case.
+    (function() {
+        function upgradeDropdown(el) {
+            if (el.dataset.bsDropdownFixed === '1') return;
+            el.setAttribute('data-bs-strategy', 'fixed');
+            el.dataset.bsDropdownFixed = '1';
+            // If Bootstrap already instantiated this dropdown, dispose so the
+            // next open picks up the new strategy.
+            if (window.bootstrap && bootstrap.Dropdown) {
+                var existing = bootstrap.Dropdown.getInstance(el);
+                if (existing) existing.dispose();
+            }
+        }
+        function upgradeTooltip(el) {
+            if (el.dataset.bsTooltipFixed === '1') return;
+            el.dataset.bsTooltipFixed = '1';
+            // Set container/boundary via data attributes so that any tooltip
+            // instance (whether created here or later by a view-level script
+            // doing `new bootstrap.Tooltip(el)`) picks up the same config.
+            if (!el.hasAttribute('data-bs-container')) el.setAttribute('data-bs-container', 'body');
+            if (!el.hasAttribute('data-bs-boundary')) el.setAttribute('data-bs-boundary', 'viewport');
+            if (window.bootstrap && bootstrap.Tooltip && !bootstrap.Tooltip.getInstance(el)) {
+                new bootstrap.Tooltip(el);
+            }
+        }
+        function upgradeAll(root) {
+            root = root || document;
+            root.querySelectorAll('[data-bs-toggle="dropdown"]').forEach(upgradeDropdown);
+            root.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(upgradeTooltip);
+        }
+        function init() {
+            upgradeAll();
+            // Pick up dropdowns/tooltips added to the DOM later (AJAX rows, modals).
+            var obs = new MutationObserver(function(muts) {
+                muts.forEach(function(m) {
+                    m.addedNodes.forEach(function(n) {
+                        if (n.nodeType !== 1) return;
+                        if (n.matches) {
+                            if (n.matches('[data-bs-toggle="dropdown"]')) upgradeDropdown(n);
+                            if (n.matches('[data-bs-toggle="tooltip"]')) upgradeTooltip(n);
+                        }
+                        if (n.querySelectorAll) upgradeAll(n);
+                    });
+                });
+            });
+            obs.observe(document.body, { childList: true, subtree: true });
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+    <script>
     function toggleTheme() {
         var html = document.documentElement;
         var newTheme = html.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';

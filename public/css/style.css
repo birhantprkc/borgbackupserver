@@ -1,3 +1,16 @@
+/* Global dropdown + tooltip escape fix. Issue #161 and several predecessors:
+   Bootstrap cards and other containers use overflow:hidden (for rounded
+   corners), which clips dropdown menus that pop out of them. The
+   companion JS in layouts/app.php sets data-bs-strategy="fixed" on every
+   dropdown so Popper uses position:fixed and the menu renders in the
+   top-level stacking context. This rule guarantees the menu sits above
+   everything else once it's shown. */
+.dropdown-menu.show,
+.tooltip.show,
+.popover.show {
+    z-index: 2147483647 !important;
+}
+
 /* Font & nav color variables */
 :root {
     --bs-body-font-family: 'Inter', system-ui, -apple-system, sans-serif;
