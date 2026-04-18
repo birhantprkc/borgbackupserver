@@ -110,6 +110,13 @@ $dfFix = function (string $s): string {
 }
 .v2 .ch-stats-table tr:last-child td { border-bottom: 0; }
 
+/* Recently Completed — smaller column headers per user feedback */
+.v2 .recent-jobs-table thead th {
+    font-size: 75%;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
 /* File Catalog card — Top Repositories rows, tighter line-height */
 .v2 .top-repo-row {
     padding: 2px 4px;
@@ -471,7 +478,7 @@ $dfFix = function (string $s): string {
             <div class="p-4 text-muted text-center">No completed jobs yet</div>
             <?php else: ?>
             <div class="table-responsive">
-                <table class="table table-hover mb-0 small">
+                <table class="table table-hover mb-0 small recent-jobs-table">
                     <thead><tr><th>Client</th><th>Task</th><th class="d-th-md">Plan</th><th class="d-th-md">Repo</th><th>Completed</th><th class="d-th-md">Duration</th><th class="text-center">Status</th></tr></thead>
                     <tbody>
                     <?php foreach ($recentJobs as $j): ?>
@@ -844,7 +851,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 container.innerHTML = '<div class="p-5 text-muted text-center"><i class="bi bi-filter d-block mb-2" style="font-size:1.8rem;opacity:0.4;"></i><div>No Jobs Match This Filter</div></div>';
                 return;
             }
-            let html = '<div class="table-responsive"><table class="table table-hover mb-0 small"><thead><tr><th>Client</th><th>Task</th><th class="d-th-md">Plan</th><th class="d-th-md">Repo</th><th>Completed</th><th class="d-th-md">Duration</th><th class="text-center">Status</th></tr></thead><tbody>';
+            let html = '<div class="table-responsive"><table class="table table-hover mb-0 small recent-jobs-table"><thead><tr><th>Client</th><th>Task</th><th class="d-th-md">Plan</th><th class="d-th-md">Repo</th><th>Completed</th><th class="d-th-md">Duration</th><th class="text-center">Status</th></tr></thead><tbody>';
             jobs.forEach(j => {
                 const icon = j.status === 'completed' ? 'bi-check-circle-fill text-success'
                     : j.status === 'failed' ? 'bi-x-circle-fill text-danger'

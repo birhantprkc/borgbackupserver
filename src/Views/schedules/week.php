@@ -284,7 +284,9 @@ function bbs_histogram_ticks(int $max): array
 .day-block .agent {
     font-weight: 600;
     font-size: 0.74rem;
-    line-height: 1;
+    /* 1.2 (not 1.0) so descenders on letters like p/g/y aren't clipped
+       by the day-block's overflow:hidden */
+    line-height: 1.2;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -297,7 +299,7 @@ function bbs_histogram_ticks(int $max): array
     align-items: flex-end;
     justify-content: center;
     text-align: right;
-    line-height: 1.05;
+    line-height: 1.2;
     flex: 0 0 auto;
     max-width: 60%;
     min-width: 0;
