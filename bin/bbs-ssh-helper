@@ -294,13 +294,15 @@ case "$ACTION" in
         # Run borg list --json as the repo-owning user
         # Do NOT use 2>&1 here — borg warnings on stderr corrupt the JSON output
         # and cause json_decode to fail, which can wipe all archive records.
+        # --lock-wait: wait up to 10 min for the repo lock rather than failing
+        # immediately when a concurrent backup/compact is in progress.
         sudo -u "$USERNAME" \
             BORG_PASSPHRASE="$PASSPHRASE" \
             BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes \
             BORG_RELOCATED_REPO_ACCESS_IS_OK=yes \
             BORG_BASE_DIR="$BORG_DIR" \
             HOME="$BORG_DIR" \
-            borg list --json "$REPO_PATH"
+            borg list --lock-wait 600 --json "$REPO_PATH"
 
         exit $?
         ;;
@@ -338,13 +340,15 @@ case "$ACTION" in
         chown "$USERNAME":"$USERNAME" "$BORG_DIR"
 
         # Run borg list on archive with JSON output (paths only)
+        # --lock-wait: wait up to 10 min for the repo lock rather than failing
+        # immediately when a concurrent backup/compact is in progress.
         sudo -u "$USERNAME" \
             BORG_PASSPHRASE="$PASSPHRASE" \
             BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes \
             BORG_RELOCATED_REPO_ACCESS_IS_OK=yes \
             BORG_BASE_DIR="$BORG_DIR" \
             HOME="$BORG_DIR" \
-            borg list --json-lines "$ARCHIVE_PATH" 2>&1
+            borg list --lock-wait 600 --json-lines "$ARCHIVE_PATH" 2>&1
 
         exit $?
         ;;
@@ -415,6 +419,18 @@ case "$ACTION" in
         mkdir -p "$BORG_DIR"
         chown "$USERNAME":"$USERNAME" "$BORG_DIR"
 
+        # Inject --lock-wait so server-side ops (compact/prune/check/info/
+        # delete) wait up to 10 min for the repo lock rather than failing
+        # immediately when an agent backup or another server-side task is
+        # still holding it. break-lock is the only allow-listed subcommand
+        # where --lock-wait is meaningless, so skip injection in that case.
+        SUBCMD="$1"; shift
+        if [ "$SUBCMD" = "break-lock" ]; then
+            BORG_EXTRA_OPTS=()
+        else
+            BORG_EXTRA_OPTS=(--lock-wait 600)
+        fi
+
         # Run borg command as the repo-owning user
         sudo -u "$USERNAME" \
             BORG_PASSPHRASE="$PASSPHRASE" \
@@ -422,7 +438,7 @@ case "$ACTION" in
             BORG_RELOCATED_REPO_ACCESS_IS_OK=yes \
             BORG_BASE_DIR="$BORG_DIR" \
             HOME="$BORG_DIR" \
-            borg "$@" 2>&1
+            borg "$SUBCMD" "${BORG_EXTRA_OPTS[@]}" "$@" 2>&1
 
         exit $?
         ;;

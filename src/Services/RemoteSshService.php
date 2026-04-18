@@ -154,6 +154,16 @@ class RemoteSshService
 
         $cmd = array_merge(['borg'], $borgArgs);
 
+        // Inject --lock-wait after the subcommand so ops (compact/prune/
+        // check/info/list/delete) wait up to 10 min for the repo lock
+        // rather than failing immediately when a concurrent backup or
+        // another server-side task is still holding it. break-lock is the
+        // one case where --lock-wait is meaningless, so skip it there.
+        $subcmd = $borgArgs[0] ?? '';
+        if ($subcmd !== '' && $subcmd !== 'break-lock') {
+            array_splice($cmd, 2, 0, ['--lock-wait=600']);
+        }
+
         // Insert --remote-path after the subcommand if needed
         if ($borgRemotePath && count($borgArgs) >= 1) {
             array_splice($cmd, 2, 0, ['--remote-path=' . $borgRemotePath]);
