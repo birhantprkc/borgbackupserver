@@ -44,7 +44,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                 </div>
                 <div class="text-muted d-flex flex-wrap gap-3 align-items-center" style="font-size:.8rem;">
                     <?php if ($agent['hostname']): ?>
-                        <span><i class="bi bi-hdd-network me-1"></i><?= htmlspecialchars($agent['hostname']) ?></span>
+                        <span><i class="bi bi-signpost me-1"></i><?= htmlspecialchars($agent['hostname']) ?></span>
                         <?php if ($agent['ip_address'] ?? null): ?>
                             <span class="d-none d-sm-inline"><i class="bi bi-globe me-1"></i><?= htmlspecialchars($agent['ip_address']) ?></span>
                         <?php endif; ?>
