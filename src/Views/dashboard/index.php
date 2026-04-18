@@ -74,19 +74,13 @@ $dfFix = function (string $s): string {
 }
 .v2 .health-row:last-child { margin-bottom: 0; }
 .v2 .health-row .lbl { width: 64px; font-size: 0.82rem; color: var(--bs-secondary-color); font-weight: 400; }
-.v2 .health-row .bar {
+.v2 .health-row .progress {
     flex: 1;
-    height: 12px;
-    background: var(--bs-tertiary-bg);
-    border-radius: 6px;
-    overflow: hidden;
-    position: relative;
+    height: 1rem;
+    font-size: 0.72rem;
+    font-weight: 600;
 }
-.v2 .health-row .fill {
-    height: 100%;
-    border-radius: 6px;
-    transition: width 0.4s;
-}
+.v2 .health-row .progress-bar { transition: width 0.4s, background-color 0.2s; }
 .v2 .health-row .val { font-size: 0.78rem; font-variant-numeric: tabular-nums; min-width: 80px; text-align: right; color: var(--bs-body-color); }
 
 .v2 .storage-grid {
@@ -223,13 +217,17 @@ $dfFix = function (string $s): string {
                     ?>
                     <div class="health-row">
                         <span class="lbl">CPU</span>
-                        <div class="bar"><div class="fill" id="cpu-fill" style="width: <?= $cpuPct ?>%; background: <?= $cpuColor ?>;"></div></div>
-                        <span class="val" id="cpu-val"><?= $cpuPct ?>% · <?= $cpuLoad['1min'] ?></span>
+                        <div class="progress" role="progressbar" aria-label="CPU usage" aria-valuenow="<?= $cpuPct ?>" aria-valuemin="0" aria-valuemax="100">
+                            <div class="progress-bar" id="cpu-fill" style="width: <?= $cpuPct ?>%; background-color: <?= $cpuColor ?>;"><?= $cpuPct ?>%</div>
+                        </div>
+                        <span class="val" id="cpu-val"><?= $cpuLoad['1min'] ?></span>
                     </div>
                     <div class="health-row">
                         <span class="lbl">Memory</span>
-                        <div class="bar"><div class="fill" id="mem-fill" style="width: <?= $memPct ?>%; background: <?= $memColor ?>;"></div></div>
-                        <span class="val" id="mem-val"><?= $memPct ?>% · <?= ServerStats::formatBytes($memory['used']) ?></span>
+                        <div class="progress" role="progressbar" aria-label="Memory usage" aria-valuenow="<?= $memPct ?>" aria-valuemin="0" aria-valuemax="100">
+                            <div class="progress-bar" id="mem-fill" style="width: <?= $memPct ?>%; background-color: <?= $memColor ?>;"><?= $memPct ?>%</div>
+                        </div>
+                        <span class="val" id="mem-val"><?= ServerStats::formatBytes($memory['used']) ?></span>
                     </div>
                     <?php if (!empty($partitions)): ?>
                     <div id="health-partitions">
@@ -240,8 +238,10 @@ $dfFix = function (string $s): string {
                         ?>
                     <div class="health-row" data-mount="<?= htmlspecialchars($part['mount']) ?>">
                         <span class="lbl text-truncate" title="<?= htmlspecialchars($part['mount']) ?>"><?= htmlspecialchars($part['mount']) ?></span>
-                        <div class="bar"><div class="fill part-fill" style="width: <?= $pPct ?>%; background: <?= $pColor ?>;"></div></div>
-                        <span class="val part-val"><?= $pPct ?>% · <?= $dfFix($part['size']) ?></span>
+                        <div class="progress" role="progressbar" aria-label="<?= htmlspecialchars($part['mount']) ?> usage" aria-valuenow="<?= $pPct ?>" aria-valuemin="0" aria-valuemax="100">
+                            <div class="progress-bar part-fill" style="width: <?= $pPct ?>%; background-color: <?= $pColor ?>;"><?= $pPct ?>%</div>
+                        </div>
+                        <span class="val part-val"><?= $dfFix($part['size']) ?></span>
                     </div>
                     <?php endforeach; ?>
                     </div>
@@ -716,17 +716,23 @@ document.addEventListener('DOMContentLoaded', function () {
                 const resp = await fetch('/dashboard/health-json', { credentials: 'same-origin' });
                 if (!resp.ok) return;
                 const d = await resp.json();
+                function paintBar(fillEl, pct, bg) {
+                    if (!fillEl) return;
+                    fillEl.style.width = pct + '%';
+                    fillEl.style.backgroundColor = bg;
+                    fillEl.textContent = pct + '%';
+                    const parent = fillEl.parentElement;
+                    if (parent) parent.setAttribute('aria-valuenow', pct);
+                }
                 if (d.cpu && cpuFill && cpuVal) {
                     const p = Number(d.cpu.percent) || 0;
-                    cpuFill.style.width = p + '%';
-                    cpuFill.style.background = color(p, 80, 50, '#198754');
-                    cpuVal.textContent = p + '% · ' + d.cpu['1min'];
+                    paintBar(cpuFill, p, color(p, 80, 50, '#198754'));
+                    cpuVal.textContent = d.cpu['1min'];
                 }
                 if (d.memory && memFill && memVal) {
                     const p = Number(d.memory.percent) || 0;
-                    memFill.style.width = p + '%';
-                    memFill.style.background = color(p, 85, 60, '#0dcaf0');
-                    memVal.textContent = p + '% · ' + d.memory.used_label;
+                    paintBar(memFill, p, color(p, 85, 60, '#0dcaf0'));
+                    memVal.textContent = d.memory.used_label;
                 }
                 if (d.partitions && partsEl) {
                     d.partitions.forEach(p => {
@@ -735,11 +741,8 @@ document.addEventListener('DOMContentLoaded', function () {
                         const fill = row.querySelector('.part-fill');
                         const val = row.querySelector('.part-val');
                         const pct = Number(p.percent) || 0;
-                        if (fill) {
-                            fill.style.width = pct + '%';
-                            fill.style.background = color(pct, 90, 70, '#6c757d');
-                        }
-                        if (val) val.textContent = pct + '% · ' + p.size_label;
+                        paintBar(fill, pct, color(pct, 90, 70, '#6c757d'));
+                        if (val) val.textContent = p.size_label;
                     });
                 }
             } catch (e) { /* silent */ }
