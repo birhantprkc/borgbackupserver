@@ -268,6 +268,41 @@ ensure_dir /run/mysqld              mysql:mysql         755
 ensure_dir /run/sshd                root:root           755
 ensure_dir /var/log/clickhouse-server clickhouse:clickhouse 755
 
+# --- Self-heal service data ownership (issue #158) ---
+# ensure_dir above only sets ownership on the top-level directory. Volumes
+# that were touched by old image builds (which ran `chown -R www-data:www-data
+# /var/bbs` at some point) still carry www-data-owned files under
+# /var/bbs/clickhouse and /var/bbs/mysql, and those services refuse to start
+# on mismatched ownership:
+#   Code: 430. DB::Exception: Effective user of the process (clickhouse)
+#   does not match the owner of the data (www-data).
+# The UID/GID migration block above doesn't catch this case because it keys
+# off the recorded OWNERSHIP_FILE, not the actual filesystem state. This
+# scan inspects the filesystem directly: if ANY entry under the data dir
+# is owned by the wrong user or group, repair it. Idempotent — on a clean
+# volume the initial `find ... -print -quit` short-circuits on the first
+# check and does no work.
+fix_service_dir_ownership() {
+    local dir="$1" user="$2" group="${3:-$2}"
+    [ -d "$dir" ] || return 0
+    local u g
+    u=$(id -u "$user" 2>/dev/null) || return 0
+    g=$(getent group "$group" | cut -d: -f3 2>/dev/null)
+    [ -z "$g" ] && g=$(id -g "$user" 2>/dev/null)
+    [ -z "$g" ] && return 0
+    # Short-circuit: does ANY file have wrong uid/gid?
+    local wrong
+    wrong=$(find "$dir" \( ! -uid "$u" -o ! -gid "$g" \) -print -quit 2>/dev/null)
+    [ -z "$wrong" ] && return 0
+    log_mig "Repairing ownership under $dir → $user:$group (first wrong entry: $wrong)"
+    log_mig "  this can take a minute on large data dirs — do not cancel"
+    find "$dir" ! -uid "$u" -exec chown -h "$u" {} + 2>/dev/null || true
+    find "$dir" ! -gid "$g" -exec chgrp -h "$g" {} + 2>/dev/null || true
+    log_mig "  repair complete"
+}
+fix_service_dir_ownership /var/bbs/clickhouse clickhouse
+fix_service_dir_ownership /var/bbs/mysql      mysql
+
 export TMPDIR=/var/bbs/tmp
 
 # --- SSH host key persistence ---
@@ -332,11 +367,18 @@ if command -v clickhouse-server &>/dev/null; then
     <tmp_path>/var/bbs/clickhouse/tmp/</tmp_path>
 </clickhouse>
 CHXML
-    TMPDIR=/var/bbs/tmp sudo -u clickhouse clickhouse-server --daemon --config-file=/etc/clickhouse-server/config.xml 2>/dev/null || true
+    # Don't swallow stderr — MISMATCHING_USERS_FOR_PROCESS_AND_DATA and
+    # other fatal startup errors go to stderr of the parent process, not
+    # the daemon's log file. Hiding them made #158 invisible to users.
+    TMPDIR=/var/bbs/tmp sudo -u clickhouse clickhouse-server --daemon --config-file=/etc/clickhouse-server/config.xml || \
+        echo "!! ClickHouse failed to start — check stderr above and /var/log/clickhouse-server/*.log"
     for i in {1..30}; do
         curl -sf http://localhost:8123/ping >/dev/null 2>&1 && break
         sleep 1
     done
+    if ! curl -sf http://localhost:8123/ping >/dev/null 2>&1; then
+        echo "!! ClickHouse did not respond on port 8123 after 30s — catalog features will be disabled"
+    fi
     if curl -sf http://localhost:8123/ping >/dev/null 2>&1; then
         echo "  ClickHouse started"
         # Drop old system log tables to reclaim disk space
