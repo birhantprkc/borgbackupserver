@@ -411,9 +411,16 @@ a .stat-card {
     font-size: 0.7rem;
 }
 
-/* Badge overrides */
+/* Badge / pill overrides — site-wide consistency.
+   - font-weight 500 (not bold) so badges read as labels, not emphasis.
+   - text-transform: capitalize gives every pill Title Case without having
+     to touch each rendering site (CSS leaves acronyms and already-cap
+     characters alone, so "API" stays "API" and "S3 sync" becomes "S3 Sync").
+   Per-page .text-uppercase overrides still win if a view needs the caps
+   look (e.g. the dashboard section labels). */
 .badge {
     font-weight: 500;
+    text-transform: capitalize;
 }
 
 /* Login page */
