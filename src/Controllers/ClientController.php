@@ -108,7 +108,11 @@ class ClientController extends Controller
               {$jobScope}
         ", $jobParams);
 
-        // Group task types into categories
+        // Group task types into categories. Failed jobs are split between
+        // "backup_failed" (actual data-loss risk) and "other_failed" (update
+        // jobs for sleeping clients, plugin tests, etc.) so a laptop that
+        // was offline at 5am doesn't paint the chart red like a backup
+        // disaster happened (#141).
         $categoryMap = [
             'backup' => 'backups',
             'restore' => 'restores', 'restore_mysql' => 'restores', 'restore_pg' => 'restores', 'restore_mongo' => 'restores',
@@ -121,9 +125,15 @@ class ClientController extends Controller
             $dt = new \DateTime($job['completed_at'], $utcTz);
             $dt->setTimezone($userTz);
             $dayKey = $dt->format('Y-m-d');
-            if (!isset($byDay[$dayKey])) $byDay[$dayKey] = ['backups' => 0, 's3_sync' => 0, 'failed' => 0];
+            if (!isset($byDay[$dayKey])) {
+                $byDay[$dayKey] = ['backups' => 0, 's3_sync' => 0, 'backup_failed' => 0, 'other_failed' => 0];
+            }
             if ($job['status'] === 'failed') {
-                $byDay[$dayKey]['failed']++;
+                if ($job['task_type'] === 'backup') {
+                    $byDay[$dayKey]['backup_failed']++;
+                } else {
+                    $byDay[$dayKey]['other_failed']++;
+                }
             } else {
                 $cat = $categoryMap[$job['task_type']] ?? null;
                 if ($cat && $cat !== 'restores') {
@@ -143,7 +153,8 @@ class ClientController extends Controller
                 'label' => $dt->format('D'),
                 'backups' => $byDay[$dayKey]['backups'] ?? 0,
                 's3_sync' => $byDay[$dayKey]['s3_sync'] ?? 0,
-                'failed' => $byDay[$dayKey]['failed'] ?? 0,
+                'backup_failed' => $byDay[$dayKey]['backup_failed'] ?? 0,
+                'other_failed'  => $byDay[$dayKey]['other_failed'] ?? 0,
             ];
         }
 

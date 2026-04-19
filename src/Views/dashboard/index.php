@@ -607,6 +607,10 @@ $dfFix = function (string $s): string {
         <span title="OS"><i class="bi bi-terminal me-1"></i><?= htmlspecialchars($osName) ?></span>
         <span class="mx-2">·</span>
         <span title="Uptime"><i class="bi bi-clock-history me-1"></i><?= $fmtUptime($uptimeSec) ?></span>
+        <span class="mx-2">·</span>
+        <a href="https://github.com/sponsors/marcpope" target="_blank" rel="noopener" class="text-decoration-none text-muted" title="Support this project on GitHub Sponsors">
+            <i class="bi bi-heart-fill text-danger me-1"></i>Sponsor
+        </a>
     </div>
 </div>
 

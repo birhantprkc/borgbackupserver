@@ -66,7 +66,7 @@
     <div class="col-md-6">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-header bg-body fw-semibold border-0">
-                <i class="bi bi-bar-chart me-1"></i> Backup Activity (7 days)
+                <i class="bi bi-bar-chart me-1"></i> Activity (7 days)
             </div>
             <div class="card-body py-2">
                 <canvas id="activityChart" height="160"></canvas>
@@ -227,7 +227,10 @@ document.getElementById('clientSearch').addEventListener('input', function() {
     const _tc = _dk ? '#8b929a' : '#6c757d';
     const _gc = _dk ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
 
-    // Backup Activity Chart (7 days)
+    // Activity Chart (7 days). Failed jobs are split into "Backup Failed"
+    // (red — actual data risk) and "Other Failed" (amber — updates that
+    // couldn't run because the client was asleep, plugin tests, etc.) per
+    // #141 so a single red bar no longer implies a backup disaster.
     const activityData = <?= json_encode($chartActivity) ?>;
     const actCtx = document.getElementById('activityChart');
     if (actCtx) {
@@ -239,19 +242,25 @@ document.getElementById('clientSearch').addEventListener('input', function() {
                     {
                         label: 'Backups',
                         data: activityData.map(d => d.backups),
-                        backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.75)',
                         borderRadius: 3,
                     },
                     {
                         label: 'S3 Sync',
                         data: activityData.map(d => d.s3_sync),
-                        backgroundColor: 'rgba(75, 192, 192, 0.7)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.75)',
                         borderRadius: 3,
                     },
                     {
-                        label: 'Failed',
-                        data: activityData.map(d => d.failed),
+                        label: 'Backup Failed',
+                        data: activityData.map(d => d.backup_failed),
                         backgroundColor: '#c0392b',
+                        borderRadius: 3,
+                    },
+                    {
+                        label: 'Other Failed',
+                        data: activityData.map(d => d.other_failed),
+                        backgroundColor: 'rgba(241, 196, 15, 0.85)',
                         borderRadius: 3,
                     }
                 ]
