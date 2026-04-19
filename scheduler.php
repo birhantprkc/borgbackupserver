@@ -50,14 +50,19 @@ if ($stale->rowCount() > 0) {
 
 // Step 2: Fail jobs for agents that are offline (sent or running only)
 // Queued jobs are left alone — the agent may come back online and pick them up.
-// Excludes server-side tasks (prune, compact, catalog, etc.) — those don't need the agent
+// Excludes:
+//   - Server-side tasks (prune, compact, catalog, etc.) — run by the scheduler, don't need the agent.
+//   - Management tasks (update_borg, update_agent) — these should wait for the
+//     agent to come back online and pick them up, not fail at 5am because the
+//     client's laptop was asleep (#144). They get their own grace-period sweep
+//     in Step 2c below.
 $staleJobs = $db->fetchAll("
     SELECT bj.id, bj.agent_id, bj.task_type, bj.backup_plan_id, bj.status, a.name as agent_name
     FROM backup_jobs bj
     JOIN agents a ON a.id = bj.agent_id
     WHERE bj.status IN ('sent', 'running')
       AND a.status = 'offline'
-      AND bj.task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full', 'archive_delete')
+      AND bj.task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full', 'archive_delete', 'update_borg', 'update_agent')
 ");
 
 foreach ($staleJobs as $sj) {
@@ -133,6 +138,35 @@ foreach ($zombieJobs as $zj) {
     }
 
     echo date('Y-m-d H:i:s') . " Auto-failed: job #{$zj['id']} ({$zj['task_type']}) — running >24h on online agent \"{$zj['agent_name']}\"\n";
+}
+
+// Step 2c: Fail stale management tasks (update_borg, update_agent) after 7 days
+// unpicked. These are excluded from Step 2 so they don't fail the moment the
+// client's laptop goes to sleep, but we still need a safety valve — if an agent
+// has been gone for a week and still hasn't polled for its pending update, the
+// job is effectively abandoned and should stop cluttering the queue.
+$staleMgmtCutoffDays = 7;
+$staleMgmt = $db->fetchAll("
+    SELECT bj.id, bj.agent_id, bj.task_type, a.name as agent_name
+    FROM backup_jobs bj
+    JOIN agents a ON a.id = bj.agent_id
+    WHERE bj.status IN ('queued', 'sent')
+      AND bj.task_type IN ('update_borg', 'update_agent')
+      AND bj.queued_at < DATE_SUB(NOW(), INTERVAL {$staleMgmtCutoffDays} DAY)
+");
+foreach ($staleMgmt as $sm) {
+    $db->update('backup_jobs', [
+        'status' => 'failed',
+        'completed_at' => date('Y-m-d H:i:s'),
+        'error_log' => "Agent did not pick up the update within {$staleMgmtCutoffDays} days",
+    ], 'id = ?', [$sm['id']]);
+    $db->insert('server_log', [
+        'agent_id' => $sm['agent_id'],
+        'backup_job_id' => $sm['id'],
+        'level' => 'warning',
+        'message' => "Job #{$sm['id']} ({$sm['task_type']}) expired — agent \"{$sm['agent_name']}\" did not poll for the update in {$staleMgmtCutoffDays} days",
+    ]);
+    echo date('Y-m-d H:i:s') . " Expired: job #{$sm['id']} ({$sm['task_type']}) — agent \"{$sm['agent_name']}\" offline >{$staleMgmtCutoffDays}d\n";
 }
 
 // Step 3: Check schedules and create queued jobs
