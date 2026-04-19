@@ -1,5 +1,4 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h4 class="mb-0">Notifications</h4>
+<div class="d-flex justify-content-end mb-3">
     <form method="POST" action="/notifications/read-all">
         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
         <button type="submit" class="btn btn-outline-secondary btn-sm">
