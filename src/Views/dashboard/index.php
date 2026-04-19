@@ -84,6 +84,18 @@ $dfFix = function (string $s): string {
 }
 .v2 .ch-stats-table tr:last-child td { border-bottom: 0; }
 
+/* On mobile / narrow viewports the File Catalog flex container wraps. Let
+   the stats table use the full card width instead of staying pinned to
+   260px, and give it breathing room before the donut + top-repos block. */
+@media (max-width: 767.98px) {
+    .v2 .ch-stats-wrap {
+        max-width: none !important;
+        margin-right: 0 !important;
+        margin-bottom: 12px !important;
+        width: 100%;
+    }
+}
+
 /* Recently Completed — smaller column headers per user feedback */
 .v2 .recent-jobs-table thead th {
     font-size: 75%;
@@ -537,8 +549,8 @@ $dfFix = function (string $s): string {
                 </div>
                 <div class="card-body py-2">
                     <div class="d-flex flex-wrap" style="gap: 0;">
-                        <!-- Stats (left) -->
-                        <div style="min-width:220px;max-width:260px;margin-right:60px;">
+                        <!-- Stats (left) — expands full-width when wrapped on mobile -->
+                        <div class="ch-stats-wrap" style="min-width:220px;max-width:260px;margin-right:60px;">
                             <?php
                             $chStatRows = [
                                 ['Catalog rows', $compact((int) ($clickhouseStats['total_rows'] ?? 0))],
