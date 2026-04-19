@@ -12,10 +12,10 @@
     <div class="text-muted text-center py-5">No notifications.</div>
 <?php else: ?>
 <div class="table-responsive">
-    <table class="table table-hover align-middle">
-        <thead class="table-light">
+    <table class="table table-sm table-hover align-middle small mb-0">
+        <thead>
             <tr>
-                <th style="width:40px"></th>
+                <th style="width:32px"></th>
                 <th>Message</th>
                 <th>Client</th>
                 <th>Severity</th>
@@ -39,7 +39,7 @@
                 $icon = $iconMap[$n['type']] ?? 'bi-bell text-secondary';
             ?>
             <tr class="<?= $rowClass ?>">
-                <td><i class="bi <?= $icon ?> fs-5"></i></td>
+                <td><i class="bi <?= $icon ?>"></i></td>
                 <td>
                     <?= htmlspecialchars($n['message']) ?>
                     <?php if ($n['occurrence_count'] > 1): ?>
