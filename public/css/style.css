@@ -308,6 +308,10 @@ html, body {
     transition: color 0.2s;
     flex: 1;
     text-align: center;
+    /* Reset <button> defaults so the More trigger looks identical to the <a> items */
+    background: transparent;
+    border: 0;
+    font-family: inherit;
 }
 
 .mobile-nav-item i {
@@ -321,6 +325,24 @@ html, body {
 
 .mobile-nav-item:hover {
     color: var(--bbs-nav-hover-color);
+}
+
+/* Mobile "More" bottom sheet — auto-size to content so it doesn't grab the
+   whole screen for just a handful of items. Extra padding at the bottom
+   keeps the last row above the phone's home indicator. */
+.offcanvas-bottom.mobile-more-sheet {
+    height: auto;
+    max-height: 70vh;
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
+}
+.offcanvas-bottom.mobile-more-sheet .offcanvas-body {
+    padding-bottom: env(safe-area-inset-bottom);
+}
+.offcanvas-bottom.mobile-more-sheet .list-group-item {
+    padding: 0.85rem 1rem;
+    border-left: 0;
+    border-right: 0;
 }
 
 /* Offset main content for fixed sidebar on desktop */

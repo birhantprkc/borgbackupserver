@@ -217,35 +217,69 @@
     </div>
 
     <!-- Bottom nav (mobile only) -->
+    <?php
+        $pt = $pageTitle ?? '';
+        $isAdmin = ($_SESSION['user_role'] ?? '') === 'admin';
+        // Active state for the More menu: true if the current page is one of
+        // the items inside the More sheet, so the user sees which section of
+        // the app they're in even though it's not a top-level tab.
+        $moreActive = in_array($pt, ['Schedules', 'Log', 'Storage'], true)
+            || ($isAdmin && str_contains($pt, 'User'));
+    ?>
     <nav class="mobile-bottom-nav d-md-none">
-        <a href="/" class="mobile-nav-item <?= ($pageTitle ?? '') === 'Dashboard' ? 'active' : '' ?>">
+        <a href="/" class="mobile-nav-item <?= $pt === 'Dashboard' ? 'active' : '' ?>">
             <i class="bi bi-speedometer2"></i>
             <span>Home</span>
         </a>
-        <a href="/clients" class="mobile-nav-item <?= ($pageTitle ?? '') === 'Clients' ? 'active' : '' ?>">
+        <a href="/clients" class="mobile-nav-item <?= $pt === 'Clients' ? 'active' : '' ?>">
             <i class="bi bi-display"></i>
             <span>Clients</span>
         </a>
-        <a href="/queue" class="mobile-nav-item <?= ($pageTitle ?? '') === 'Queue' ? 'active' : '' ?>">
+        <a href="/queue" class="mobile-nav-item <?= $pt === 'Queue' ? 'active' : '' ?>">
             <i class="bi bi-clock-history"></i>
             <span>Queue</span>
         </a>
-        <?php if (($_SESSION['user_role'] ?? '') === 'admin'): ?>
-        <a href="/settings" class="mobile-nav-item <?= ($pageTitle ?? '') === 'Settings' ? 'active' : '' ?>">
+        <?php if ($isAdmin): ?>
+        <a href="/settings" class="mobile-nav-item <?= $pt === 'Settings' ? 'active' : '' ?>">
             <i class="bi bi-gear"></i>
             <span>Settings</span>
         </a>
-        <a href="/users" class="mobile-nav-item <?= str_contains($pageTitle ?? '', 'User') ? 'active' : '' ?>">
-            <i class="bi bi-people"></i>
-            <span>Users</span>
-        </a>
-        <?php else: ?>
-        <a href="/log" class="mobile-nav-item <?= ($pageTitle ?? '') === 'Log' ? 'active' : '' ?>">
-            <i class="bi bi-journal-text"></i>
-            <span>Log</span>
-        </a>
         <?php endif; ?>
+        <button type="button" class="mobile-nav-item <?= $moreActive ? 'active' : '' ?>"
+                data-bs-toggle="offcanvas" data-bs-target="#mobileMoreMenu" aria-controls="mobileMoreMenu">
+            <i class="bi bi-three-dots"></i>
+            <span>More</span>
+        </button>
     </nav>
+
+    <!-- "More" offcanvas — pops up from the bottom with secondary nav items -->
+    <div class="offcanvas offcanvas-bottom mobile-more-sheet" tabindex="-1" id="mobileMoreMenu" aria-labelledby="mobileMoreMenuLabel">
+        <div class="offcanvas-header border-bottom">
+            <h5 class="offcanvas-title" id="mobileMoreMenuLabel">More</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body p-0">
+            <div class="list-group list-group-flush">
+                <a href="/schedules" class="list-group-item list-group-item-action d-flex align-items-center <?= $pt === 'Schedules' ? 'active' : '' ?>">
+                    <i class="bi bi-calendar-week fs-5 me-3"></i>Schedules
+                </a>
+                <a href="/log" class="list-group-item list-group-item-action d-flex align-items-center <?= $pt === 'Log' ? 'active' : '' ?>">
+                    <i class="bi bi-journal-text fs-5 me-3"></i>Log
+                </a>
+                <?php if ($isAdmin): ?>
+                <a href="/users" class="list-group-item list-group-item-action d-flex align-items-center <?= str_contains($pt, 'User') ? 'active' : '' ?>">
+                    <i class="bi bi-people fs-5 me-3"></i>Users
+                </a>
+                <a href="/storage-locations" class="list-group-item list-group-item-action d-flex align-items-center <?= $pt === 'Storage' ? 'active' : '' ?>">
+                    <i class="bi bi-hdd-stack fs-5 me-3"></i>Storage
+                </a>
+                <?php endif; ?>
+                <a href="/logout" class="list-group-item list-group-item-action d-flex align-items-center text-danger">
+                    <i class="bi bi-box-arrow-right fs-5 me-3"></i>Logout
+                </a>
+            </div>
+        </div>
+    </div>
 
     <!-- Confirm modal -->
     <div class="modal fade" id="confirmModal" tabindex="-1" data-bs-backdrop="static">
