@@ -666,12 +666,13 @@ class RepositoryController extends Controller
             ORDER BY created_at DESC LIMIT 1
         ", [$id, $archive['created_at']]);
 
-        // ClickHouse stats
+        // ClickHouse stats — only the queries that finish quickly run inline.
+        // The "deleted vs previous archive" summary used to run a large
+        // anti-join here and could add multiple seconds on archives with
+        // millions of files, blocking initial page render. It's now served
+        // by a separate AJAX endpoint (archiveDeletedSummary).
         $statusBreakdown = [];
         $largestFiles = [];
-        $deletedCount = 0;
-        $deletedSize = 0;
-        $deletedFiles = [];
         $clickhouseAvailable = false;
 
         try {
@@ -681,7 +682,7 @@ class RepositoryController extends Controller
                 $aid = (int) $agentId;
                 $arid = (int) $archiveId;
 
-                // Files by status
+                // Files by status — cheap: scans only this archive, groups by status.
                 $statusBreakdown = $ch->fetchAll(
                     "SELECT status, count() as cnt, sum(file_size) as total_size
                      FROM file_catalog
@@ -699,29 +700,6 @@ class RepositoryController extends Controller
                        AND status != 'X'
                      ORDER BY file_size DESC LIMIT 20"
                 );
-
-                // Deleted files (compared to previous archive)
-                if ($prevArchive) {
-                    $prevId = (int) $prevArchive['id'];
-                    $delSummary = $ch->fetchOne(
-                        "SELECT count() as cnt, sum(file_size) as total_size
-                         FROM file_catalog
-                         WHERE agent_id = {$aid} AND archive_id = {$prevId} AND path != ''
-                           AND path NOT IN (SELECT path FROM file_catalog WHERE agent_id = {$aid} AND archive_id = {$arid})"
-                    );
-                    $deletedCount = (int) ($delSummary['cnt'] ?? 0);
-                    $deletedSize = (int) ($delSummary['total_size'] ?? 0);
-
-                    if ($deletedCount > 0 && $deletedCount <= 10000) {
-                        $deletedFiles = $ch->fetchAll(
-                            "SELECT path, file_name, file_size
-                             FROM file_catalog
-                             WHERE agent_id = {$aid} AND archive_id = {$prevId} AND path != ''
-                               AND path NOT IN (SELECT path FROM file_catalog WHERE agent_id = {$aid} AND archive_id = {$arid})
-                             ORDER BY file_size DESC LIMIT 50"
-                        );
-                    }
-                }
             }
         } catch (\Exception $e) {
             // ClickHouse unavailable
@@ -739,11 +717,74 @@ class RepositoryController extends Controller
             'prevArchive' => $prevArchive,
             'statusBreakdown' => $statusBreakdown,
             'largestFiles' => $largestFiles,
-            'deletedCount' => $deletedCount,
-            'deletedSize' => $deletedSize,
-            'deletedFiles' => $deletedFiles,
             'clickhouseAvailable' => $clickhouseAvailable,
         ]);
+    }
+
+    /**
+     * GET /clients/{agentId}/repo/{id}/archive/{archiveId}/deleted-summary
+     * Returns {count, size} of files that existed in the previous archive
+     * but not this one. Deferred from the initial page render because the
+     * anti-join can be slow on large archives.
+     */
+    public function archiveDeletedSummary(int $agentId, int $id, int $archiveId): void
+    {
+        $this->requireAuth();
+        if (!$this->canAccessAgent($agentId)) {
+            $this->json(['error' => 'forbidden'], 403);
+        }
+
+        $archive = $this->db->fetchOne(
+            "SELECT id, created_at FROM archives WHERE id = ? AND repository_id = ?",
+            [$archiveId, $id]
+        );
+        if (!$archive) {
+            $this->json(['error' => 'not_found'], 404);
+        }
+
+        $prevArchive = $this->db->fetchOne("
+            SELECT id FROM archives
+            WHERE repository_id = ? AND created_at < ?
+            ORDER BY created_at DESC LIMIT 1
+        ", [$id, $archive['created_at']]);
+
+        if (!$prevArchive) {
+            $this->json(['count' => 0, 'size' => 0, 'has_prev' => false]);
+        }
+
+        try {
+            $ch = \BBS\Core\ClickHouse::getInstance();
+            if (!$ch->isAvailable()) {
+                $this->json(['count' => 0, 'size' => 0, 'has_prev' => true, 'error' => 'clickhouse_unavailable']);
+            }
+            $aid  = (int) $agentId;
+            $curr = (int) $archiveId;
+            $prev = (int) $prevArchive['id'];
+
+            // LEFT ANTI JOIN is what ClickHouse wants here — scans both archives
+            // once and streams paths that don't appear in the current archive.
+            // Much cheaper than NOT IN with a subquery on millions of rows.
+            $row = $ch->fetchOne(
+                "SELECT count() AS cnt, sum(file_size) AS total_size
+                 FROM (
+                     SELECT path, file_size
+                     FROM file_catalog
+                     WHERE agent_id = {$aid} AND archive_id = {$prev} AND path != ''
+                 ) AS prev
+                 LEFT ANTI JOIN (
+                     SELECT path
+                     FROM file_catalog
+                     WHERE agent_id = {$aid} AND archive_id = {$curr} AND path != ''
+                 ) AS curr USING (path)"
+            );
+            $this->json([
+                'count'    => (int) ($row['cnt'] ?? 0),
+                'size'     => (int) ($row['total_size'] ?? 0),
+                'has_prev' => true,
+            ]);
+        } catch (\Exception $e) {
+            $this->json(['count' => 0, 'size' => 0, 'has_prev' => true, 'error' => 'clickhouse_error']);
+        }
     }
 
     /**

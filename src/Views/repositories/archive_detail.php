@@ -190,11 +190,11 @@ $savings = $archive['original_size'] > 0
                             <td class="text-end"><?= fmtSize($row['total_size']) ?></td>
                         </tr>
                         <?php endforeach; ?>
-                        <?php if ($deletedCount > 0): ?>
-                        <tr>
+                        <?php if ($prevArchive): ?>
+                        <tr id="row-deleted" hidden>
                             <td><span class="badge bg-danger">Deleted</span></td>
-                            <td class="text-end"><?= number_format($deletedCount) ?></td>
-                            <td class="text-end"><?= fmtSize($deletedSize) ?></td>
+                            <td class="text-end" id="deleted-count">--</td>
+                            <td class="text-end" id="deleted-size">--</td>
                         </tr>
                         <?php endif; ?>
                         <?php if (!empty($otherRows)): ?>
@@ -283,7 +283,7 @@ $savings = $archive['original_size'] > 0
             <li class="nav-item"><a class="nav-link" href="javascript:void(0)" data-status="A">Added <span class="badge bg-success" id="tab-count-A"></span></a></li>
             <li class="nav-item"><a class="nav-link" href="javascript:void(0)" data-status="M">Modified <span class="badge bg-warning" id="tab-count-M"></span></a></li>
             <?php if ($prevArchive): ?>
-            <li class="nav-item"><a class="nav-link" href="javascript:void(0)" data-status="deleted">Deleted <span class="badge bg-danger" id="tab-count-deleted"><?= $deletedCount > 0 ? number_format($deletedCount) : '' ?></span></a></li>
+            <li class="nav-item"><a class="nav-link" href="javascript:void(0)" data-status="deleted">Deleted <span class="badge bg-danger" id="tab-count-deleted"></span></a></li>
             <?php endif; ?>
             <li class="nav-item"><a class="nav-link" href="javascript:void(0)" data-status="U">Unchanged <span class="badge bg-secondary" id="tab-count-U"></span></a></li>
         </ul>
@@ -344,6 +344,28 @@ $savings = $archive['original_size'] > 0
     if (el) el.textContent = '<?= number_format($row['cnt']) ?>';
     <?php endif; ?>
     <?php endforeach; ?>
+
+    // Deferred: deleted-files summary. The anti-join that computes it is
+    // expensive on large archives (millions of paths), so it's served by a
+    // separate endpoint rather than blocking the initial page render.
+    <?php if ($prevArchive): ?>
+    (function loadDeletedSummary() {
+        fetch('/clients/' + <?= (int) $agentId ?> + '/repo/' + <?= (int) $repo['id'] ?> + '/archive/' + <?= (int) $archiveId ?> + '/deleted-summary', { credentials: 'same-origin' })
+            .then(function(r) { return r.ok ? r.json() : null; })
+            .then(function(d) {
+                if (!d || d.error || !d.count) return;
+                var row = document.getElementById('row-deleted');
+                var cnt = document.getElementById('deleted-count');
+                var sz  = document.getElementById('deleted-size');
+                var tab = document.getElementById('tab-count-deleted');
+                if (cnt) cnt.textContent = Number(d.count).toLocaleString();
+                if (sz)  sz.textContent  = fmtSize(d.size);
+                if (row) row.hidden = false;
+                if (tab) tab.textContent = Number(d.count).toLocaleString();
+            })
+            .catch(function() { /* silent */ });
+    })();
+    <?php endif; ?>
 
     function esc(s) { return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : ''; }
 
