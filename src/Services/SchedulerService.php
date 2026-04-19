@@ -114,6 +114,22 @@ class SchedulerService
         ", [$now]);
 
         foreach ($overdueSchedules as $sched) {
+            // Skip if we already have an unresolved missed_schedule notification
+            // for this (agent, plan). Without this, calling notify() every minute
+            // increments occurrence_count on the existing row (and resets read_at
+            // to NULL), so an agent that's been offline for days can accumulate
+            // thousands of occurrences and refuse to stay "read". The agent_offline
+            // notification already covers the broader condition — one
+            // missed_schedule per plan per offline period is enough.
+            $existing = $this->db->fetchOne(
+                "SELECT id FROM notifications
+                 WHERE type = 'missed_schedule'
+                   AND agent_id = ? AND reference_id = ? AND resolved_at IS NULL
+                 LIMIT 1",
+                [$sched['agent_id'], $sched['backup_plan_id']]
+            );
+            if ($existing) continue;
+
             $notificationService->notify(
                 'missed_schedule',
                 $sched['agent_id'],
