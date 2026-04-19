@@ -94,7 +94,7 @@ $borgExe = "$BorgDir\borg\borg.exe"
 $borgZip = "$env:TEMP\borg-windows.zip"
 
 # Remove old borg installation to avoid locked-file errors during extraction.
-# Preserve the ssh/ subdir — MinGit doesn't need to be re-downloaded every time.
+# Preserve the ssh/ subdir -MinGit doesn't need to be re-downloaded every time.
 if (Test-Path "$BorgDir\borg") {
     Write-Step "Removing old Borg installation..."
     for ($i = 1; $i -le 5; $i++) {
@@ -217,20 +217,20 @@ if ($existingGitSsh) {
                 Write-Ok "Installed bundled SSH: $sshExe"
                 [System.IO.File]::WriteAllText($sshPathFile, $sshExe, (New-Object System.Text.UTF8Encoding $false))
             } else {
-                # MinGit layout might differ — search for ssh.exe
+                # MinGit layout might differ -search for ssh.exe
                 $foundSsh = Get-ChildItem -Path $sshDir -Recurse -Filter "ssh.exe" | Select-Object -First 1
                 if ($foundSsh) {
                     Write-Ok "Installed bundled SSH: $($foundSsh.FullName)"
                     [System.IO.File]::WriteAllText($sshPathFile, $foundSsh.FullName, (New-Object System.Text.UTF8Encoding $false))
                 } else {
-                    Write-Warn "MinGit extracted but ssh.exe not found — will use system SSH"
+                    Write-Warn "MinGit extracted but ssh.exe not found -will use system SSH"
                 }
             }
         } else {
-            Write-Warn "Could not find MinGit download URL — will use system SSH"
+            Write-Warn "Could not find MinGit download URL -will use system SSH"
         }
     } catch {
-        Write-Warn "Failed to install MinGit SSH: $_ — will use system SSH"
+        Write-Warn "Failed to install MinGit SSH: $_ -will use system SSH"
     }
 }
 
