@@ -1,0 +1,12 @@
+-- Re-apply the "api_key is nullable" change with unambiguous syntax.
+-- Migration 077 used `MODIFY COLUMN api_key VARCHAR(64) DEFAULT NULL` which
+-- some MariaDB/MySQL versions (and SQL modes) interpret as "preserve the
+-- existing NOT NULL attribute, just change the default." Reports from Docker
+-- installs still hitting
+--   Field 'api_key' doesn't have a default value
+-- on INSERT confirm that (#173).
+--
+-- This statement makes the nullability explicit with the `NULL` keyword
+-- before `DEFAULT NULL`. Idempotent — running it on a system where 077 did
+-- take effect is a no-op.
+ALTER TABLE agents MODIFY COLUMN api_key VARCHAR(64) NULL DEFAULT NULL;
