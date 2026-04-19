@@ -293,7 +293,10 @@ html, body {
     z-index: 1040;
     padding: 4px 0;
     padding-bottom: calc(4px + env(safe-area-inset-bottom));
-    box-shadow: 0 -2px 10px rgba(0,0,0,0.15);
+    /* Thin lighter top border for definition against the page, plus a
+       stronger upward shadow so the bar clearly separates from content. */
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.35), 0 -1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .mobile-nav-item {
