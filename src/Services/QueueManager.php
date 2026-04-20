@@ -491,13 +491,20 @@ class QueueManager
 
         $repo = ['path' => $archive['repo_path'], 'passphrase_encrypted' => $archive['passphrase_encrypted']];
 
-        // Windows drive-letter restore: paths like C/Users/... need --strip-components 1
-        // to remove the drive prefix, with cwd set to the drive root (e.g. C:\)
+        // Windows drive-letter restore (#167). Borg archives from Windows
+        // clients store paths like "C/Users/marcp/file.txt" — the drive
+        // letter is the first path segment. Our catalog indexer prepends a
+        // leading slash for uniform display ("/C/Users/..."), so paths
+        // arriving from the UI may or may not have that slash. Either way,
+        // buildExtractCommand ltrims it before passing to borg, so the borg-
+        // side path is always "C/Users/...". --strip-components=1 removes
+        // that drive-letter segment and cwd=<drive>:\ routes the write back
+        // to the original absolute location.
         $stripComponents = 0;
         if (!$destination && !empty($paths)) {
             $driveLetter = null;
             foreach ($paths as $p) {
-                if (preg_match('/^([A-Za-z])\//', $p, $m)) {
+                if (preg_match('#^/?([A-Za-z])/#', $p, $m)) {
                     $driveLetter = strtoupper($m[1]);
                     break;
                 }
