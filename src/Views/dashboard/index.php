@@ -43,7 +43,7 @@ $dfFix = function (string $s): string {
 .v2 .health-row {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 5px;
     margin-bottom: 8px;
 }
 .v2 .health-row:last-child { margin-bottom: 0; }
