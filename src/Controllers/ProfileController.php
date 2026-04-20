@@ -103,6 +103,24 @@ class ProfileController extends Controller
             $this->flash('success', 'Time format updated.');
         }
 
+        // Update per-user storage-alert threshold (#156). Only processed when
+        // the dedicated form submits; other tabs leave these fields unset.
+        if ($tab === 'storage_alerts' && isset($_POST['storage_alert_mode'])) {
+            $mode = $_POST['storage_alert_mode'];
+            if (!in_array($mode, ['percent', 'gb_free', 'disabled'], true)) {
+                $this->flash('danger', 'Invalid storage alert mode.');
+                $this->redirect('/profile');
+            }
+            $value = max(1, (int) ($_POST['storage_alert_value'] ?? 90));
+            if ($mode === 'percent' && $value > 100) $value = 100;
+            $this->db->update('users', [
+                'storage_alert_mode'  => $mode,
+                'storage_alert_value' => $value,
+            ], 'id = ?', [$userId]);
+            $this->flash('success', 'Storage alert preferences updated.');
+            $this->redirect('/profile');
+        }
+
         // Update email
         $email = trim($_POST['email'] ?? '');
         if ($email && $email !== $user['email']) {

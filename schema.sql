@@ -24,6 +24,8 @@ CREATE TABLE users (
     daily_report_hour TINYINT NOT NULL DEFAULT 6,
     report_frequency ENUM('daily', 'weekly') NOT NULL DEFAULT 'daily',
     report_day TINYINT NOT NULL DEFAULT 1,
+    storage_alert_mode ENUM('percent','gb_free','disabled') NOT NULL DEFAULT 'percent',
+    storage_alert_value INT NOT NULL DEFAULT 90,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -326,6 +328,7 @@ CREATE TABLE notifications (
     type VARCHAR(50) NOT NULL,
     agent_id INT DEFAULT NULL,
     reference_id INT DEFAULT NULL,
+    user_id INT DEFAULT NULL,
     severity VARCHAR(20) NOT NULL DEFAULT 'warning',
     message TEXT NOT NULL,
     occurrence_count INT NOT NULL DEFAULT 1,
@@ -334,7 +337,9 @@ CREATE TABLE notifications (
     read_at DATETIME DEFAULT NULL,
     resolved_at DATETIME DEFAULT NULL,
     FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
-    INDEX idx_unresolved (resolved_at, read_at)
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_unresolved (resolved_at, read_at),
+    INDEX idx_user_unresolved (user_id, resolved_at, read_at)
 );
 
 CREATE TABLE notification_services (

@@ -1699,13 +1699,14 @@ if ((int) date('i') % 15 === 0) {
     }
 }
 
-// Step 6: Check storage for low disk space (all storage locations)
+// Step 6: Check storage for low disk space — per-user thresholds (#156).
+// Each user picks their own trigger: percent-used, free-gb, or disabled.
+// We collect every storage endpoint's stats once, then evaluate each user's
+// threshold against them so the disk_total_space / df syscalls only run once
+// regardless of how many users are on the server.
 $notificationService = $notificationService ?? new NotificationService();
-$thresholdSetting = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_alert_threshold'");
-$storageThreshold = (int) ($thresholdSetting['value'] ?? 90);
 
 $storageLocations = $db->fetchAll("SELECT * FROM storage_locations ORDER BY id");
-// Fallback if no storage_locations table yet (pre-migration)
 if (empty($storageLocations)) {
     $storagePathSetting = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_path'");
     if (!empty($storagePathSetting['value'])) {
@@ -1713,40 +1714,69 @@ if (empty($storageLocations)) {
     }
 }
 
-$anyLow = false;
+// Collect usage for every storage endpoint once.
+$storageStats = []; // [{label, detail, total_bytes, free_bytes, used_percent}]
 foreach ($storageLocations as $sl) {
     $slPath = $sl['path'] ?? '';
     if (empty($slPath) || !is_dir($slPath)) continue;
     $total = @disk_total_space($slPath);
-    $free = @disk_free_space($slPath);
-    if ($total !== false && $free !== false && $total > 0) {
-        $usagePercent = round((($total - $free) / $total) * 100, 1);
-        if ($usagePercent >= $storageThreshold) {
-            $label = $sl['label'] ?? $slPath;
-            $notificationService->notify('storage_low', null, null, "Storage \"{$label}\" is at {$usagePercent}% capacity ({$slPath})", 'warning');
-            $anyLow = true;
-        }
-    }
+    $free  = @disk_free_space($slPath);
+    if ($total === false || $free === false || $total <= 0) continue;
+    $storageStats[] = [
+        'label'        => $sl['label'] ?? $slPath,
+        'detail'       => $slPath,
+        'total_bytes'  => (int) $total,
+        'free_bytes'   => (int) $free,
+        'used_percent' => round((($total - $free) / $total) * 100, 1),
+    ];
 }
-
-// Also check remote SSH storage
 $remoteConfigs = $db->fetchAll("SELECT * FROM remote_ssh_configs WHERE disk_total_bytes IS NOT NULL AND disk_total_bytes > 0");
 foreach ($remoteConfigs as $rc) {
     $total = (int) $rc['disk_total_bytes'];
-    $free = (int) $rc['disk_free_bytes'];
-    if ($total > 0) {
-        $usagePercent = round((($total - $free) / $total) * 100, 1);
-        if ($usagePercent >= $storageThreshold) {
-            $notificationService->notify('storage_low', null, null,
-                "Remote storage \"{$rc['name']}\" is at {$usagePercent}% capacity ({$rc['remote_user']}@{$rc['remote_host']})",
-                'warning');
-            $anyLow = true;
-        }
-    }
+    $free  = (int) $rc['disk_free_bytes'];
+    if ($total <= 0) continue;
+    $storageStats[] = [
+        'label'        => "Remote storage \"{$rc['name']}\"",
+        'detail'       => "{$rc['remote_user']}@{$rc['remote_host']}",
+        'total_bytes'  => $total,
+        'free_bytes'   => $free,
+        'used_percent' => round((($total - $free) / $total) * 100, 1),
+    ];
 }
 
-if (!$anyLow) {
-    $notificationService->resolve('storage_low', null, null);
+// Evaluate each active user's threshold against the collected stats.
+$users = $db->fetchAll("SELECT id, storage_alert_mode, storage_alert_value FROM users WHERE storage_alert_mode != 'disabled'");
+foreach ($users as $u) {
+    $mode  = $u['storage_alert_mode'];
+    $value = (int) $u['storage_alert_value'];
+    $userId = (int) $u['id'];
+    $anyLow = false;
+
+    foreach ($storageStats as $st) {
+        $triggered = false;
+        $suffix    = '';
+        if ($mode === 'percent') {
+            if ($st['used_percent'] >= $value) {
+                $triggered = true;
+                $suffix = "{$st['used_percent']}% used";
+            }
+        } elseif ($mode === 'gb_free') {
+            $freeGb = round($st['free_bytes'] / 1073741824, 1);
+            if ($freeGb <= $value) {
+                $triggered = true;
+                $suffix = "{$freeGb} GB free";
+            }
+        }
+        if (!$triggered) continue;
+
+        $msg = "{$st['label']} is low on space ({$suffix}) — {$st['detail']}";
+        $notificationService->notify('storage_low', null, null, $msg, 'warning', $userId);
+        $anyLow = true;
+    }
+
+    if (!$anyLow) {
+        $notificationService->resolve('storage_low', null, null, $userId);
+    }
 }
 
 // Step 7: Cleanup old resolved notifications and server logs

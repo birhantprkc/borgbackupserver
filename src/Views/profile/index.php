@@ -104,6 +104,60 @@
                 </form>
             </div>
         </div>
+
+        <!-- Per-user storage alert threshold (#156) -->
+        <div class="card border-0 shadow-sm mt-4">
+            <div class="card-header bg-body fw-semibold">
+                <i class="bi bi-hdd-stack me-1"></i> Low-Storage Alerts
+            </div>
+            <div class="card-body">
+                <form method="POST" action="/profile">
+                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                    <input type="hidden" name="_tab" value="storage_alerts">
+                    <?php
+                        $salMode  = $user['storage_alert_mode']  ?? 'percent';
+                        $salValue = (int) ($user['storage_alert_value'] ?? 90);
+                    ?>
+                    <div class="mb-3">
+                        <label class="form-label">Trigger</label>
+                        <select class="form-select" name="storage_alert_mode" id="salMode" onchange="salUpdate()">
+                            <option value="percent"  <?= $salMode === 'percent'  ? 'selected' : '' ?>>Percentage used</option>
+                            <option value="gb_free"  <?= $salMode === 'gb_free'  ? 'selected' : '' ?>>Free space (GB)</option>
+                            <option value="disabled" <?= $salMode === 'disabled' ? 'selected' : '' ?>>Disabled</option>
+                        </select>
+                        <div class="form-text">
+                            Notify when any storage location passes your threshold. Every user sets their own — admins no longer share one server-wide number.
+                        </div>
+                    </div>
+                    <div class="mb-3" id="salValueRow">
+                        <label class="form-label"><span id="salValueLabel">Alert when usage is at or above</span></label>
+                        <div class="input-group" style="max-width: 220px;">
+                            <input type="number" class="form-control" name="storage_alert_value" id="salValue" value="<?= $salValue ?>" min="1">
+                            <span class="input-group-text" id="salValueUnit"><?= $salMode === 'gb_free' ? 'GB free' : '% used' ?></span>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Alert Preferences</button>
+                </form>
+            </div>
+        </div>
+        <script>
+        function salUpdate() {
+            var mode = document.getElementById('salMode').value;
+            var row  = document.getElementById('salValueRow');
+            var unit = document.getElementById('salValueUnit');
+            var lbl  = document.getElementById('salValueLabel');
+            if (mode === 'disabled') { row.style.display = 'none'; return; }
+            row.style.display = '';
+            if (mode === 'gb_free') {
+                unit.textContent = 'GB free';
+                lbl.textContent  = 'Alert when free space is at or below';
+            } else {
+                unit.textContent = '% used';
+                lbl.textContent  = 'Alert when usage is at or above';
+            }
+        }
+        salUpdate();
+        </script>
     </div>
 </div>
 
