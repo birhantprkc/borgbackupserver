@@ -47,7 +47,16 @@ $dfFix = function (string $s): string {
     margin-bottom: 8px;
 }
 .v2 .health-row:last-child { margin-bottom: 0; }
-.v2 .health-row .lbl { width: 110px; font-size: 0.82rem; color: var(--bs-secondary-color); font-weight: 400; }
+.v2 .health-row .lbl {
+    width: 140px;
+    font-size: 0.82rem;
+    color: var(--bs-secondary-color);
+    font-weight: 400;
+    /* Right-align so short labels ("CPU", "Memory") hug the bar instead of
+       leaving empty space inside the fixed-width column. Longer partition
+       names get room to breathe in the full 140px. */
+    text-align: right;
+}
 .v2 .health-row .progress {
     flex: 1;
     height: 1rem;
