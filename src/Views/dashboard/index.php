@@ -47,7 +47,7 @@ $dfFix = function (string $s): string {
     margin-bottom: 8px;
 }
 .v2 .health-row:last-child { margin-bottom: 0; }
-.v2 .health-row .lbl { width: 64px; font-size: 0.82rem; color: var(--bs-secondary-color); font-weight: 400; }
+.v2 .health-row .lbl { width: 110px; font-size: 0.82rem; color: var(--bs-secondary-color); font-weight: 400; }
 .v2 .health-row .progress {
     flex: 1;
     height: 1rem;
