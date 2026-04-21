@@ -2088,6 +2088,7 @@ if ($hourOfDay === 3) {
             );
             $pendingIds = array_column($pending, 'agent_id');
 
+            $alreadyCurrent = 0;
             foreach ($agents as $agent) {
                 if (in_array($agent['id'], $pendingIds)) {
                     continue;
@@ -2100,6 +2101,23 @@ if ($hourOfDay === 3) {
                         $skipped++;
                         continue;
                     }
+                }
+
+                // Skip agents already on the target version (#174). The old
+                // behavior queued every day for every client regardless of
+                // whether an update was actually available, which re-installed
+                // the same binary and spammed the log.
+                $target = $borgService->getBestVersionForAgent($agent);
+                $targetVersion = $target['version'] ?? null;
+                $currentVersion = $agent['borg_version'] ?? null;
+                if (
+                    $targetVersion
+                    && $targetVersion !== 'latest'
+                    && $currentVersion
+                    && version_compare($currentVersion, $targetVersion, '>=')
+                ) {
+                    $alreadyCurrent++;
+                    continue;
                 }
 
                 $jobId = $db->insert('backup_jobs', [
@@ -2116,8 +2134,8 @@ if ($hourOfDay === 3) {
                 $queued++;
             }
 
-            if ($queued > 0 || $skipped > 0) {
-                echo date('Y-m-d H:i:s') . " Auto-update: queued {$queued} borg update(s), skipped {$skipped} incompatible\n";
+            if ($queued > 0 || $skipped > 0 || $alreadyCurrent > 0) {
+                echo date('Y-m-d H:i:s') . " Auto-update: queued {$queued} borg update(s), skipped {$skipped} incompatible, {$alreadyCurrent} already current\n";
             }
 
             $db->query(

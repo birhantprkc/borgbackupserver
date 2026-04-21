@@ -188,6 +188,22 @@ class ServerStats
                     'free' => self::formatDfSize($diskUsage['free']),
                     'percent' => $diskUsage['percent'],
                 ];
+                $hasVarBbs = true;
+            }
+        }
+
+        // If /var/bbs sits on the root filesystem, the Server Health widget
+        // was showing both / and /var/bbs as identical rows (#178). When they
+        // share a device, drop / so the widget reserves the space for the
+        // BBS-relevant mount.
+        if ($hasVarBbs) {
+            $rootStat = @stat('/');
+            $bbsStat  = @stat('/var/bbs');
+            if ($rootStat && $bbsStat && $rootStat['dev'] === $bbsStat['dev']) {
+                $partitions = array_values(array_filter(
+                    $partitions,
+                    fn($p) => $p['mount'] !== '/'
+                ));
             }
         }
 

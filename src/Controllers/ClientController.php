@@ -26,7 +26,7 @@ class ClientController extends Controller
             FROM agents a
             LEFT JOIN users u ON u.id = a.user_id
             WHERE {$where}
-            ORDER BY a.id DESC
+            ORDER BY a.name ASC, a.id DESC
         ", $params);
 
         // Aggregate stats for stat cards - reuse the same where clause

@@ -138,7 +138,7 @@
                             <?php endif; ?>
                         </td>
                         <td>
-                            <?= htmlspecialchars($agent['agent_version'] ?? '--') ?>
+                            <?= !empty($agent['agent_version']) ? 'v' . htmlspecialchars($agent['agent_version']) : '--' ?>
                             <?php if ($latestVersion && !empty($agent['agent_version']) && $agent['agent_version'] !== $latestVersion): ?>
                                 <form method="POST" action="/clients/<?= $agent['id'] ?>/update-agent" class="d-inline" onclick="event.stopPropagation()">
                                     <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">

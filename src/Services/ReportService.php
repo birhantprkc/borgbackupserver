@@ -16,8 +16,13 @@ class ReportService
     /**
      * Generate a daily report for the given date (default: today).
      * Stores as JSON in daily_reports table (upserts if date already exists).
+     *
+     * $bumpTimestamp: when true, re-writes created_at to NOW() on upsert so
+     * the UI timestamp reflects the manual refresh (#152). The scheduler's
+     * automatic minute-by-minute regeneration passes false so it doesn't
+     * look like the user just clicked the button (#176).
      */
-    public function generate(?string $date = null): array
+    public function generate(?string $date = null, bool $bumpTimestamp = false): array
     {
         if ($date) {
             $reportDate = $date;
@@ -41,18 +46,70 @@ class ReportService
         $totalBytes = 0;
 
         foreach ($agents as $agent) {
-            // Last backup job for this agent
-            $lastJob = $this->db->fetchOne("
-                SELECT bj.status, bj.completed_at, bj.files_processed,
+            // Latest completed/failed backup per plan for this agent — clients
+            // with multiple plans used to show only one plan's size in the
+            // report (#175). Aggregating across plans fixes that and gives a
+            // true "total backed-up" count for the client.
+            $planJobs = $this->db->fetchAll("
+                SELECT bj.backup_plan_id, bj.status, bj.completed_at, bj.files_processed,
                        COALESCE(a.original_size, bj.bytes_total, 0) as original_size,
                        COALESCE(a.deduplicated_size, 0) as deduplicated_size,
                        bj.error_log, bj.duration_seconds, bp.name as plan_name
                 FROM backup_jobs bj
+                INNER JOIN (
+                    SELECT backup_plan_id, MAX(completed_at) as max_at
+                    FROM backup_jobs
+                    WHERE agent_id = ? AND task_type = 'backup'
+                      AND status IN ('completed', 'failed')
+                      AND completed_at IS NOT NULL
+                    GROUP BY backup_plan_id
+                ) latest ON (
+                    (latest.backup_plan_id <=> bj.backup_plan_id)
+                    AND latest.max_at = bj.completed_at
+                )
                 LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
                 LEFT JOIN archives a ON a.backup_job_id = bj.id
-                WHERE bj.agent_id = ? AND bj.task_type = 'backup' AND bj.status IN ('completed', 'failed')
-                ORDER BY bj.completed_at DESC LIMIT 1
-            ", [$agent['id']]);
+                WHERE bj.agent_id = ? AND bj.task_type = 'backup'
+                  AND bj.status IN ('completed', 'failed')
+                ORDER BY bj.completed_at DESC
+            ", [$agent['id'], $agent['id']]);
+
+            // Aggregate across plans. "last_backup" keeps the most recent
+            // per-plan entry as the top-line timestamp; plan_breakdown
+            // surfaces each plan's status so a partial failure (one plan ok,
+            // one failed) is visible in the HTML renderer.
+            $lastJob = null;
+            $aggFiles = 0;
+            $aggOriginal = 0;
+            $aggDedup = 0;
+            $anyFailed = false;
+            $anyOk = false;
+            $planBreakdown = [];
+            foreach ($planJobs as $pj) {
+                if ($lastJob === null) $lastJob = $pj; // rows are ORDER BY completed_at DESC
+                if ($pj['status'] === 'completed') {
+                    $aggFiles    += (int) $pj['files_processed'];
+                    $aggOriginal += (int) $pj['original_size'];
+                    $aggDedup    += (int) $pj['deduplicated_size'];
+                    $anyOk = true;
+                } else {
+                    $anyFailed = true;
+                }
+                $planBreakdown[] = [
+                    'plan_name'    => $pj['plan_name'],
+                    'status'       => $pj['status'],
+                    'completed_at' => $pj['completed_at'],
+                    'files'        => (int) $pj['files_processed'],
+                    'original_size'=> (int) $pj['original_size'],
+                    'error'        => $pj['status'] === 'failed' ? substr($pj['error_log'] ?? '', 0, 200) : null,
+                ];
+            }
+            // Overall row status: failed if anything failed; completed if at
+            // least one ok and nothing failed; otherwise mirror $lastJob.
+            $overallStatus = null;
+            if ($anyFailed && $anyOk)       $overallStatus = 'partial';
+            elseif ($anyFailed)             $overallStatus = 'failed';
+            elseif ($anyOk)                 $overallStatus = 'completed';
 
             // Backups since last report for this agent
             $periodStats = $this->db->fetchOne("
@@ -79,14 +136,19 @@ class ReportService
                 'status' => $agent['status'],
                 'last_heartbeat' => $agent['last_heartbeat'],
                 'last_backup' => $lastJob ? [
-                    'status' => $lastJob['status'],
+                    // Status is the client-level overall across all plans; the
+                    // individual plan results are in plan_breakdown below.
+                    'status' => $overallStatus ?? $lastJob['status'],
                     'completed_at' => $lastJob['completed_at'],
                     'plan_name' => $lastJob['plan_name'],
-                    'files' => (int) $lastJob['files_processed'],
-                    'original_size' => (int) $lastJob['original_size'],
-                    'deduplicated_size' => (int) $lastJob['deduplicated_size'],
+                    // Totals aggregate every plan's latest completed backup,
+                    // so clients with multiple repos show their full data (#175).
+                    'files' => $aggFiles,
+                    'original_size' => $aggOriginal,
+                    'deduplicated_size' => $aggDedup,
                     'duration' => (int) $lastJob['duration_seconds'],
                     'error' => $lastJob['status'] === 'failed' ? substr($lastJob['error_log'] ?? '', 0, 500) : null,
+                    'plan_breakdown' => $planBreakdown,
                 ] : null,
                 'today_completed' => $completed,
                 'today_failed' => $failed,
@@ -228,15 +290,17 @@ class ReportService
         }
 
         // Upsert: update existing report for this date or create new one.
-        // Bump created_at on regenerate so the UI timestamp reflects the refresh;
-        // otherwise the header shows the original generation time and users think
-        // nothing happened when they click "Generate Report Now".
+        // Bump created_at only when the caller asked (manual regenerate) — the
+        // scheduler refreshes numbers every minute and bumping the timestamp
+        // there makes the "Recent Reports" list always show the current time
+        // (#176).
         $existing = $this->db->fetchOne("SELECT id FROM daily_reports WHERE report_date = ?", [$reportDate]);
         if ($existing) {
-            $this->db->update('daily_reports', [
-                'data' => json_encode($data),
-                'created_at' => date('Y-m-d H:i:s'),
-            ], 'id = ?', [$existing['id']]);
+            $update = ['data' => json_encode($data)];
+            if ($bumpTimestamp) {
+                $update['created_at'] = date('Y-m-d H:i:s');
+            }
+            $this->db->update('daily_reports', $update, 'id = ?', [$existing['id']]);
             $id = (int) $existing['id'];
         } else {
             $id = $this->db->insert('daily_reports', [
@@ -373,6 +437,8 @@ class ReportService
                 $lastBackup = $lb['completed_at'] ? $fmtTime($lb['completed_at'], 'M j, g:i A') : '--';
                 if ($lb['status'] === 'completed') {
                     $result = "<span style='color:#28a745;font-weight:600;'>OK</span>";
+                } elseif ($lb['status'] === 'partial') {
+                    $result = "<span style='color:#e67e22;font-weight:600;'>PARTIAL</span>";
                 } else {
                     $result = "<span style='color:#dc3545;font-weight:600;'>FAILED</span>";
                 }

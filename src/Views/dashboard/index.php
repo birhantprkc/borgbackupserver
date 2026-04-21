@@ -476,14 +476,39 @@ $dfFix = function (string $s): string {
                 <table class="table table-hover mb-0 small recent-jobs-table">
                     <thead><tr><th>Client</th><th>Task</th><th class="d-th-md">Plan</th><th class="d-th-md">Repo</th><th>Completed</th><th class="d-th-md">Duration</th><th class="text-center">Status</th></tr></thead>
                     <tbody>
+                    <?php
+                        // Task-type icon map — must stay aligned with src/Views/queue/index.php
+                        // so Dashboard "Recently Completed" looks like Queue at a glance (#172).
+                        $taskIcons = [
+                            'backup'          => 'bi-box-seam text-warning',
+                            'prune'           => 'bi-scissors text-secondary',
+                            'compact'         => 'bi-arrows-collapse text-info',
+                            'restore'         => 'bi-cloud-download text-primary',
+                            'restore_mysql'   => 'bi-database text-primary',
+                            'restore_pg'      => 'bi-database text-primary',
+                            'restore_mongo'   => 'bi-database text-primary',
+                            'check'           => 'bi-shield-check text-success',
+                            'repo_check'      => 'bi-shield-check text-success',
+                            'repo_repair'     => 'bi-tools text-warning',
+                            'break_lock'      => 'bi-unlock text-secondary',
+                            'update_borg'     => 'bi-arrow-up-square text-info',
+                            'update_agent'    => 'bi-arrow-up-square text-info',
+                            'plugin_test'     => 'bi-pencil text-secondary',
+                            's3_sync'         => 'bi-cloud-upload text-info',
+                            's3_restore'      => 'bi-cloud-download text-info',
+                            'catalog_sync'    => 'bi-list-ul text-success',
+                            'catalog_rebuild' => 'bi-list-ul text-success',
+                        ];
+                    ?>
                     <?php foreach ($recentJobs as $j): ?>
                         <?php
                             $statusIcon = $j['status'] === 'completed' ? 'bi-check-circle-fill text-success'
                                 : ($j['status'] === 'failed' ? 'bi-x-circle-fill text-danger' : 'bi-slash-circle-fill text-secondary');
+                            $taskIcon = $taskIcons[$j['task_type']] ?? 'bi-gear text-muted';
                         ?>
                         <tr style="cursor:pointer" onclick="window.location='/queue/<?= (int) $j['id'] ?>'">
                             <td><?= htmlspecialchars($j['agent_name']) ?></td>
-                            <td><?= htmlspecialchars(ucfirst($j['task_type'])) ?></td>
+                            <td class="text-nowrap"><i class="bi <?= $taskIcon ?> me-1"></i><?= htmlspecialchars(ucfirst($j['task_type'])) ?></td>
                             <td class="d-table-cell-md"><?= htmlspecialchars($j['plan_name'] ?? '--') ?></td>
                             <td class="d-table-cell-md"><?= htmlspecialchars($j['repo_name'] ?? '--') ?></td>
                             <td><?= TimeHelper::ago($j['completed_at']) ?></td>
@@ -845,6 +870,28 @@ document.addEventListener('DOMContentLoaded', function () {
             return s > 0 ? s + 's' : '--';
         }
 
+        // Task-type icon map (mirrors the PHP one above and queue/index.php)
+        const TASK_ICONS = {
+            'backup':          'bi-box-seam text-warning',
+            'prune':           'bi-scissors text-secondary',
+            'compact':         'bi-arrows-collapse text-info',
+            'restore':         'bi-cloud-download text-primary',
+            'restore_mysql':   'bi-database text-primary',
+            'restore_pg':      'bi-database text-primary',
+            'restore_mongo':   'bi-database text-primary',
+            'check':           'bi-shield-check text-success',
+            'repo_check':      'bi-shield-check text-success',
+            'repo_repair':     'bi-tools text-warning',
+            'break_lock':      'bi-unlock text-secondary',
+            'update_borg':     'bi-arrow-up-square text-info',
+            'update_agent':    'bi-arrow-up-square text-info',
+            'plugin_test':     'bi-pencil text-secondary',
+            's3_sync':         'bi-cloud-upload text-info',
+            's3_restore':      'bi-cloud-download text-info',
+            'catalog_sync':    'bi-list-ul text-success',
+            'catalog_rebuild': 'bi-list-ul text-success',
+        };
+
         function renderRows(jobs) {
             if (!jobs || !jobs.length) {
                 container.innerHTML = '<div class="p-5 text-muted text-center"><i class="bi bi-filter d-block mb-2" style="font-size:1.8rem;opacity:0.4;"></i><div>No Jobs Match This Filter</div></div>';
@@ -855,9 +902,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 const icon = j.status === 'completed' ? 'bi-check-circle-fill text-success'
                     : j.status === 'failed' ? 'bi-x-circle-fill text-danger'
                     : 'bi-slash-circle-fill text-secondary';
+                const taskIcon = TASK_ICONS[j.task_type] || 'bi-gear text-muted';
+                const taskLabel = (j.task_type||'').charAt(0).toUpperCase() + (j.task_type||'').slice(1);
                 html += '<tr style="cursor:pointer" onclick="window.location=\'/queue/'+j.id+'\'">'
                     + '<td>' + esc(j.agent_name) + '</td>'
-                    + '<td>' + esc((j.task_type||'').charAt(0).toUpperCase() + (j.task_type||'').slice(1)) + '</td>'
+                    + '<td class="text-nowrap"><i class="bi ' + taskIcon + ' me-1"></i>' + esc(taskLabel) + '</td>'
                     + '<td class="d-table-cell-md">' + esc(j.plan_name || '--') + '</td>'
                     + '<td class="d-table-cell-md">' + esc(j.repo_name || '--') + '</td>'
                     + '<td>' + timeAgo(j.completed_at) + '</td>'

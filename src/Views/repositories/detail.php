@@ -324,16 +324,18 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
                                 <td><?= $job['task_type'] ?></td>
                                 <td>
                                     <?php
-                                    $statusColor = match($job['status']) {
-                                        'completed' => 'success',
-                                        'failed' => 'danger',
-                                        'running' => 'info',
-                                        'sent' => 'primary',
-                                        'queued' => 'warning',
-                                        default => 'secondary',
+                                    // Full class tokens with text-color pairings so warning/info
+                                    // badges stay readable on light fills (#169).
+                                    $statusBadge = match($job['status']) {
+                                        'completed' => 'bg-success',
+                                        'failed'    => 'bg-danger',
+                                        'running'   => 'bg-info text-dark',
+                                        'sent'      => 'bg-primary',
+                                        'queued'    => 'bg-warning text-dark',
+                                        default     => 'bg-secondary',
                                     };
                                     ?>
-                                    <span class="badge bg-<?= $statusColor ?>"><?= $job['status'] ?></span>
+                                    <span class="badge <?= $statusBadge ?>"><?= $job['status'] ?></span>
                                 </td>
                                 <td>
                                     <?php

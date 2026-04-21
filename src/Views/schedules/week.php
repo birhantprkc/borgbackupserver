@@ -267,10 +267,12 @@ function bbs_histogram_ticks(int $max): array
     gap: 6px;
 }
 .day-block:hover {
-    transform: scale(1.01);
+    /* No transform: scale — it enlarged the text inside the block's fixed
+       overflow:hidden box, which clipped descenders (g, p, y) that fit at
+       rest (#171). Stronger box-shadow alone gives the lift cue. */
     z-index: 10;
     color: #fff;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
 }
 .day-block.estimated {
     background-image: repeating-linear-gradient(

@@ -45,7 +45,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.25.0"
+AGENT_VERSION = "2.25.1"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -3077,6 +3077,26 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
                                 _kill_process_tree(catalog_ssh)
                                 catalog_ssh = None
                             break
+
+                elif msg_type == "progress_percent":
+                    # Borg emits these during long operations when --progress
+                    # is passed — in particular for extract/restore where the
+                    # old backup-centric "archive_progress" handler never
+                    # fires. Forward "current / total" to /api/agent/progress
+                    # so the restore UI shows a live bar instead of staying
+                    # pinned at "Starting task..." (#168).
+                    now = time.time()
+                    if now - last_progress_time >= 3:
+                        cur = entry.get("current")
+                        tot = entry.get("total")
+                        if cur is not None and tot not in (None, 0):
+                            api_request(config, "/api/agent/progress", method="POST", data={
+                                "job_id": job_id,
+                                "files_total": int(tot),
+                                "files_processed": int(cur),
+                                "bytes_processed": 0,
+                            })
+                            last_progress_time = now
 
                 elif msg_type in ("file_status", "file_item") and task_type == "backup" and catalog_ssh:
                     # Stream file entry to server via SSH pipe

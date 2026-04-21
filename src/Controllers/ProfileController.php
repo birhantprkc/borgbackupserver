@@ -306,7 +306,8 @@ class ProfileController extends Controller
         $this->verifyCsrf();
 
         $reportService = new ReportService();
-        $report = $reportService->generate();
+        // true = bump created_at so the UI reflects the manual regenerate
+        $report = $reportService->generate(null, true);
         $this->flash('success', 'Report generated.');
         $this->redirect('/profile?tab=reports&report_id=' . $report['id']);
     }

@@ -129,7 +129,10 @@ class BorgCommandBuilder
      */
     public static function buildExtractCommand(array $repo, string $archiveName, array $paths = [], int $stripComponents = 0): array
     {
-        $cmd = ['borg', 'extract', '--log-json'];
+        // --progress tells borg to emit progress_percent events; the agent
+        // forwards those to /api/agent/progress so the UI shows a live bar
+        // during restore instead of staying stuck at "Starting task..." (#168).
+        $cmd = ['borg', 'extract', '--log-json', '--progress'];
 
         if ($stripComponents > 0) {
             $cmd[] = '--strip-components=' . $stripComponents;
