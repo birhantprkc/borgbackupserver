@@ -90,27 +90,36 @@ if ($existingSvc) {
 # -----------------------------------------------------------------------------
 # Install / Update Borg
 # -----------------------------------------------------------------------------
-$borgExe = "$BorgDir\borg\borg.exe"
+# The borg-windows zip layout has shifted between releases. v1.4.3 and earlier
+# shipped "borg/borg.exe" under a subdirectory; v1.4.4-win6 ships "borg.exe"
+# at the zip root next to its support files. Instead of hardcoding one layout,
+# locate borg.exe after extraction wherever it landed.
 $borgZip = "$env:TEMP\borg-windows.zip"
 
-# Remove old borg installation to avoid locked-file errors during extraction.
-# Preserve the ssh/ subdir -MinGit doesn't need to be re-downloaded every time.
-if (Test-Path "$BorgDir\borg") {
+# Remove everything under $BorgDir except ssh\ (MinGit is managed separately).
+# This clears any leftover files from a previous layout so mixed state from an
+# old "borg\" subdir and a new flat layout can't coexist (#180).
+if (Test-Path $BorgDir) {
     Write-Step "Removing old Borg installation..."
+    $oldItems = Get-ChildItem -Path $BorgDir -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'ssh' }
     for ($i = 1; $i -le 5; $i++) {
-        try {
-            Remove-Item -Path "$BorgDir\borg" -Recurse -Force -ErrorAction Stop
-            Write-Ok "Old borg binaries removed"
-            break
-        } catch {
-            if ($i -eq 5) {
-                Write-Fail "Cannot remove $BorgDir\borg - files may be locked by another process"
-                Write-Fail "Close any open terminals or Explorer windows in that folder and try again"
-                exit 1
+        $failed = $false
+        foreach ($item in $oldItems) {
+            try {
+                Remove-Item -Path $item.FullName -Recurse -Force -ErrorAction Stop
+            } catch {
+                $failed = $true
+                break
             }
-            Write-Warn "Retrying removal ($i/5)..."
-            Start-Sleep -Seconds 2
         }
+        if (-not $failed) { Write-Ok "Old borg binaries removed"; break }
+        if ($i -eq 5) {
+            Write-Fail "Cannot clean $BorgDir - files may be locked by another process"
+            Write-Fail "Close any open terminals or Explorer windows in that folder and try again"
+            exit 1
+        }
+        Write-Warn "Retrying removal ($i/5)..."
+        Start-Sleep -Seconds 2
     }
 }
 
@@ -143,17 +152,23 @@ New-Item -ItemType Directory -Path $BorgDir -Force | Out-Null
 Expand-Archive -Path $borgZip -DestinationPath $BorgDir -Force
 Remove-Item $borgZip -Force -ErrorAction SilentlyContinue
 
-if (Test-Path $borgExe) {
-    $borgVer = & $borgExe --version 2>&1 | Select-Object -First 1
-    Write-Ok "Installed: $borgVer"
-} else {
-    Write-Fail "Borg installation failed - borg.exe not found at $borgExe"
+# Locate borg.exe wherever the archive put it (excluding ssh\ so we don't pick
+# up an ssh-bundled tool with the same name).
+$foundBorg = Get-ChildItem -Path $BorgDir -Filter "borg.exe" -Recurse -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -notmatch '\\ssh\\' } |
+    Select-Object -First 1
+if (-not $foundBorg) {
+    Write-Fail "Borg installation failed - borg.exe not found anywhere under $BorgDir"
     exit 1
 }
+$borgExe    = $foundBorg.FullName
+$borgBinDir = $foundBorg.Directory.FullName
+$borgVer = & $borgExe --version 2>&1 | Select-Object -First 1
+Write-Ok "Installed: $borgVer"
+Write-Ok "Location:  $borgExe"
 
-# Add borg to system PATH
+# Add borg's directory to system PATH
 Write-Step "Adding Borg to system PATH..."
-$borgBinDir = "$BorgDir\borg"
 $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
 if ($machinePath -notlike "*$borgBinDir*") {
     [Environment]::SetEnvironmentVariable("Path", "$machinePath;$borgBinDir", "Machine")
