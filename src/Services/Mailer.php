@@ -114,18 +114,20 @@ class Mailer
     }
 
     /**
-     * Send a backup failure notification.
+     * Send a task-failure notification. Subject/body reflect the task type
+     * ('backup', 'update_borg', 'check', ...) so an update_borg failure
+     * isn't delivered as "Backup Failed" (#185).
      */
-    public function notifyFailure(string $agentName, int $jobId, string $error): void
+    public function notifyFailure(string $agentName, int $jobId, string $error, string $taskType = 'backup'): void
     {
         if (!$this->enabled) return;
 
         $db = Database::getInstance();
 
-        // Get admin emails
         $admins = $db->fetchAll("SELECT email, timezone FROM users WHERE role = 'admin' AND email != ''");
 
-        $subject = "[BBS] Backup Failed: {$agentName} (Job #{$jobId})";
+        $label = self::taskLabel($taskType);
+        $subject = "[BBS] {$label} Failed: {$agentName} (Job #{$jobId})";
 
         foreach ($admins as $admin) {
             try {
@@ -134,14 +136,36 @@ class Mailer
             } catch (\Exception $e) {
                 $dt = new \DateTime('now', new \DateTimeZone('UTC'));
             }
-            $body = "A backup job has failed.\n\n"
+            $body = "{$label} failed for client \"{$agentName}\".\n\n"
                   . "Client: {$agentName}\n"
-                  . "Job ID: #{$jobId}\n"
+                  . "Job ID: #{$jobId} ({$label})\n"
                   . "Time: " . $dt->format('Y-m-d H:i:s T') . "\n\n"
                   . "Error:\n{$error}\n\n"
                   . "-- Borg Backup Server";
             $this->send($admin['email'], $subject, $body);
         }
+    }
+
+    private static function taskLabel(string $taskType): string
+    {
+        static $labels = [
+            'backup'               => 'Backup',
+            'restore'              => 'Restore',
+            'check'                => 'Repository Check',
+            'prune'                => 'Prune',
+            'compact'              => 'Compact',
+            'update_borg'          => 'Borg Update',
+            'update_agent'         => 'Agent Update',
+            's3_sync'              => 'S3 Sync',
+            's3_restore'           => 'S3 Restore',
+            'repo_repair'          => 'Repository Repair',
+            'break_lock'           => 'Break Lock',
+            'catalog_sync'         => 'Catalog Sync',
+            'catalog_rebuild'      => 'Catalog Rebuild',
+            'catalog_rebuild_full' => 'Catalog Rebuild',
+            'archive_delete'       => 'Archive Delete',
+        ];
+        return $labels[$taskType] ?? ucfirst(str_replace('_', ' ', $taskType));
     }
 
     private function sendCommand($socket, string $command): string

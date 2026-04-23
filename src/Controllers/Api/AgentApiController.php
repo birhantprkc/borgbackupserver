@@ -571,7 +571,7 @@ class AgentApiController extends Controller
         if ($result === 'failed') {
             try {
                 $mailer = new Mailer();
-                $mailer->notifyFailure($agent['name'], $jobId, $input['error_log'] ?? 'Unknown error');
+                $mailer->notifyFailure($agent['name'], $jobId, $input['error_log'] ?? 'Unknown error', $job['task_type']);
             } catch (\Exception $e) {
                 // Don't fail the status report if email fails
             }
