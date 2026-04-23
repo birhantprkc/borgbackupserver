@@ -135,25 +135,34 @@ class NotificationService
             $labels = self::getEventLabels();
             $subject = '[BBS] ' . ($labels[$type] ?? ucfirst($type));
 
-            $body = $message . "\n\n"
-                  . "Time: " . date('Y-m-d H:i:s') . "\n"
-                  . "-- Borg Backup Server";
-
             // For user-scoped events (storage_low with per-user thresholds),
             // send to just that user. Otherwise fall back to every admin.
             if ($userId !== null) {
-                $user = $this->db->fetchOne("SELECT email FROM users WHERE id = ? AND email != ''", [$userId]);
-                if ($user) $mailer->send($user['email'], $subject, $body);
+                $user = $this->db->fetchOne("SELECT email, timezone FROM users WHERE id = ? AND email != ''", [$userId]);
+                if ($user) $mailer->send($user['email'], $subject, $this->buildEmailBody($message, $user['timezone'] ?? 'UTC'));
                 return;
             }
 
-            $admins = $this->db->fetchAll("SELECT email FROM users WHERE role = 'admin' AND email != ''");
+            $admins = $this->db->fetchAll("SELECT email, timezone FROM users WHERE role = 'admin' AND email != ''");
             foreach ($admins as $admin) {
-                $mailer->send($admin['email'], $subject, $body);
+                $mailer->send($admin['email'], $subject, $this->buildEmailBody($message, $admin['timezone'] ?? 'UTC'));
             }
         } catch (\Exception $e) {
             // Don't let email failures break notification flow
         }
+    }
+
+    private function buildEmailBody(string $message, string $tz): string
+    {
+        try {
+            $dt = new \DateTime('now', new \DateTimeZone('UTC'));
+            $dt->setTimezone(new \DateTimeZone($tz));
+        } catch (\Exception $e) {
+            $dt = new \DateTime('now', new \DateTimeZone('UTC'));
+        }
+        return $message . "\n\n"
+             . "Time: " . $dt->format('Y-m-d H:i:s T') . "\n"
+             . "-- Borg Backup Server";
     }
 
     private function sendAppriseIfEnabled(string $type, string $message, ?int $agentId = null): void

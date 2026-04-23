@@ -123,17 +123,23 @@ class Mailer
         $db = Database::getInstance();
 
         // Get admin emails
-        $admins = $db->fetchAll("SELECT email FROM users WHERE role = 'admin' AND email != ''");
+        $admins = $db->fetchAll("SELECT email, timezone FROM users WHERE role = 'admin' AND email != ''");
 
         $subject = "[BBS] Backup Failed: {$agentName} (Job #{$jobId})";
-        $body = "A backup job has failed.\n\n"
-              . "Client: {$agentName}\n"
-              . "Job ID: #{$jobId}\n"
-              . "Time: " . date('Y-m-d H:i:s') . "\n\n"
-              . "Error:\n{$error}\n\n"
-              . "-- Borg Backup Server";
 
         foreach ($admins as $admin) {
+            try {
+                $dt = new \DateTime('now', new \DateTimeZone('UTC'));
+                $dt->setTimezone(new \DateTimeZone($admin['timezone'] ?: 'UTC'));
+            } catch (\Exception $e) {
+                $dt = new \DateTime('now', new \DateTimeZone('UTC'));
+            }
+            $body = "A backup job has failed.\n\n"
+                  . "Client: {$agentName}\n"
+                  . "Job ID: #{$jobId}\n"
+                  . "Time: " . $dt->format('Y-m-d H:i:s T') . "\n\n"
+                  . "Error:\n{$error}\n\n"
+                  . "-- Borg Backup Server";
             $this->send($admin['email'], $subject, $body);
         }
     }
