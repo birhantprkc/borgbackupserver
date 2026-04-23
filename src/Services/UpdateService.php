@@ -175,9 +175,20 @@ class UpdateService
             $tag = $this->getSetting('latest_release_tag', 'v' . $latest);
         }
 
-        // Check for active backup jobs
+        // Check for active backup jobs — but ignore jobs stuck 'sent' to an
+        // offline agent (they'll stay stuck indefinitely and should never
+        // block a server upgrade), and ignore management tasks like
+        // update_borg/update_agent that aren't real backups (#184).
         $activeJobs = $this->db->fetchOne(
-            "SELECT COUNT(*) as cnt FROM backup_jobs WHERE status IN ('sent', 'running')"
+            "SELECT COUNT(*) as cnt FROM backup_jobs
+             WHERE status IN ('sent', 'running')
+               AND task_type NOT IN ('update_borg', 'update_agent',
+                   'prune', 'compact', 's3_sync', 's3_restore',
+                   'repo_check', 'repo_repair', 'break_lock',
+                   'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full',
+                   'archive_delete')
+               AND (agent_id IS NULL
+                    OR agent_id IN (SELECT id FROM agents WHERE status = 'online'))"
         );
         if ((int) $activeJobs['cnt'] > 0) {
             return ['success' => false, 'error' => "{$activeJobs['cnt']} backup job(s) still running. Wait for them to complete or cancel them before upgrading."];
