@@ -20,10 +20,15 @@ $fmtUptime = function (?int $s): string {
     return "{$m}m";
 };
 
-// Dedup savings % (original data vs actual disk footprint)
+// Dedup savings % (original data vs actual disk footprint).
+// Clamp the displayed value at 99.9% when there's still bytes on disk —
+// round() lifts 99.95%+ to 100% which misrepresents a non-empty repo (#191).
 $dedupSavingsPct = $totalOriginalBytes > 0
     ? round((1 - $totalDiskBytes / $totalOriginalBytes) * 100, 1)
     : 0;
+if ($dedupSavingsPct >= 100 && $totalDiskBytes > 0) {
+    $dedupSavingsPct = 99.9;
+}
 
 // df output from the OS uses single-letter units ("100G"). Add a non-breaking
 // space + "B" suffix so it matches our standard "100 GB" format.

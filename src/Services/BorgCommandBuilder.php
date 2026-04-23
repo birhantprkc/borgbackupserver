@@ -17,6 +17,11 @@ class BorgCommandBuilder
         $cmd[] = '--log-json';
         $cmd[] = '--list';
         $cmd[] = '--progress';
+        // Wait up to 10 min for the repo lock instead of failing immediately
+        // when a transient operation (e.g. borg prune/compact, concurrent
+        // backup on the same remote repo) still holds it. Borg's default is 1
+        // second, which turns any brief contention into a hard failure (#194).
+        $cmd[] = '--lock-wait=600';
 
         // Advanced options from the plan
         // Borg flags like --pattern take a value that may start with + or -
@@ -132,7 +137,9 @@ class BorgCommandBuilder
         // --progress tells borg to emit progress_percent events; the agent
         // forwards those to /api/agent/progress so the UI shows a live bar
         // during restore instead of staying stuck at "Starting task..." (#168).
-        $cmd = ['borg', 'extract', '--log-json', '--progress'];
+        // --lock-wait=600 matches borg create — avoid instant failure when
+        // another transient op is holding the repo lock (#194).
+        $cmd = ['borg', 'extract', '--log-json', '--progress', '--lock-wait=600'];
 
         if ($stripComponents > 0) {
             $cmd[] = '--strip-components=' . $stripComponents;

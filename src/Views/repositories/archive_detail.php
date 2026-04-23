@@ -61,6 +61,10 @@ $dbInfo = $hasDatabases ? json_decode($archive['databases_backed_up'], true) : n
 $savings = $archive['original_size'] > 0
     ? round((1 - $archive['deduplicated_size'] / $archive['original_size']) * 100, 1)
     : 0;
+// Rounding can produce 100 even when dedup is > 0 bytes (#191).
+if ($savings >= 100 && $archive['deduplicated_size'] > 0) {
+    $savings = 99.9;
+}
 ?>
 
 <style>

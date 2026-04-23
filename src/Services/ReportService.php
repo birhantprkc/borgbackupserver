@@ -505,6 +505,10 @@ class ReportService
             $repoTotal = self::formatBytes($onDiskBytes);
             $dedupSavings = ($srv['archive_original'] ?? 0) > 0
                 ? round((1 - $onDiskBytes / $srv['archive_original']) * 100, 1) : 0;
+            // Rounding can produce 100 even when the repo still holds bytes (#191).
+            if ($dedupSavings >= 100 && $onDiskBytes > 0) {
+                $dedupSavings = 99.9;
+            }
 
             $html .= <<<HTML
                 <div style="padding:0 24px 16px;">

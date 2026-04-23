@@ -509,6 +509,10 @@ class DashboardController extends Controller
             ];
             if ($info['total_original'] > 0) {
                 $info['dedup_savings'] = round((1 - $info['total_dedup'] / $info['total_original']) * 100, 1);
+                // Clamp at 99.9% — rounding can produce 100 even when dedup > 0 (#191).
+                if ($info['dedup_savings'] >= 100 && $info['total_dedup'] > 0) {
+                    $info['dedup_savings'] = 99.9;
+                }
             }
             if (!empty($path)) {
                 $diskUsage = \BBS\Services\ServerStats::getDiskUsage($path);
