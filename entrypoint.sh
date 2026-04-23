@@ -290,15 +290,39 @@ fix_service_dir_ownership() {
     g=$(getent group "$group" | cut -d: -f3 2>/dev/null)
     [ -z "$g" ] && g=$(id -g "$user" 2>/dev/null)
     [ -z "$g" ] && return 0
-    # Short-circuit: does ANY file have wrong uid/gid?
+    # Short-circuit on clean volumes. Flag entries with wrong uid, wrong
+    # gid, or mode bits that deny the owner traversal/read. Chown'ing to
+    # clickhouse doesn't help if a part directory is mode 000.
     local wrong
-    wrong=$(find "$dir" \( ! -uid "$u" -o ! -gid "$g" \) -print -quit 2>/dev/null)
+    wrong=$(find "$dir" \
+        \( ! -uid "$u" -o ! -gid "$g" \
+        -o \( -type d ! -perm -0500 \) \
+        -o \( -type f ! -perm -0400 \) \
+        \) -print -quit 2>/dev/null || true)
     [ -z "$wrong" ] && return 0
-    log_mig "Repairing ownership under $dir → $user:$group (first wrong entry: $wrong)"
+    log_mig "Repairing permissions under $dir → $user:$group (first wrong entry: $wrong)"
     log_mig "  this can take a minute on large data dirs — do not cancel"
-    find "$dir" ! -uid "$u" -exec chown -h "$u" {} + 2>/dev/null || true
-    find "$dir" ! -gid "$g" -exec chgrp -h "$g" {} + 2>/dev/null || true
-    log_mig "  repair complete"
+    # Surface real errors. The original self-heal silenced them, which hid
+    # #189: on FUSE filesystems that don't honor chown, the repair would
+    # claim success while ClickHouse still couldn't read its own data and
+    # failed async table load with a directory_iterator error on one part.
+    local fail=0
+    find "$dir" ! -uid "$u" -exec chown -h "$u" {} + || fail=1
+    find "$dir" ! -gid "$g" -exec chgrp -h "$g" {} + || fail=1
+    # u+rX only adds bits (never removes), so this is safe on clean data.
+    # Fixes part directories left unreadable by a crash mid-write and any
+    # files/dirs where the owner somehow lost read/execute access.
+    find "$dir" \
+        \( \( -type d ! -perm -0500 \) -o \( -type f ! -perm -0400 \) \) \
+        -exec chmod u+rX {} + || fail=1
+    if [ "$fail" = "1" ]; then
+        log_mig "  !! one or more repair calls failed — see stderr above"
+        log_mig "  !! If the data dir is on a FUSE filesystem (e.g. Unraid /mnt/user)"
+        log_mig "     that doesn't honor ownership changes, bind-mount from a native"
+        log_mig "     path such as /mnt/cache or /mnt/disk1 and restart the container."
+    else
+        log_mig "  repair complete"
+    fi
 }
 fix_service_dir_ownership /var/bbs/clickhouse clickhouse
 fix_service_dir_ownership /var/bbs/mysql      mysql
