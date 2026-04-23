@@ -1153,6 +1153,15 @@ class AgentApiController extends Controller
             return; // No compatible binary available
         }
 
+        // If no versioned binary exists for this agent's arch, the fallback
+        // is pip 'latest' — we can't tell whether an update is actually
+        // needed, and on arches without a working pip (armv7l, some BSD
+        // variants) it just fails daily forever. Skip auto-queue; the user
+        // can still click "Update Borg" manually. #187
+        if (($best['source'] ?? '') === 'pip' && ($best['version'] ?? '') === 'latest') {
+            return;
+        }
+
         // Check if agent already has this version or newer (but < 2.0)
         $agentBorgVer = preg_replace('/^borg\s+/', '', $agent['borg_version'] ?? '');
         if (!empty($agentBorgVer) && version_compare($agentBorgVer, $best['version'], '>=')) {

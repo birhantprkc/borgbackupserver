@@ -2110,6 +2110,17 @@ if ($hourOfDay === 3) {
                 $target = $borgService->getBestVersionForAgent($agent);
                 $targetVersion = $target['version'] ?? null;
                 $currentVersion = $agent['borg_version'] ?? null;
+
+                // No versioned binary for this arch — only pip 'latest' is
+                // available, and we can't tell whether an update is actually
+                // needed. Arches without a working pip (armv7l, some BSDs)
+                // would otherwise fail daily forever. Skip auto-queue; the
+                // user can still trigger "Update Borg" manually. #187
+                if (($target['source'] ?? '') === 'pip' && $targetVersion === 'latest') {
+                    $alreadyCurrent++;
+                    continue;
+                }
+
                 if (
                     $targetVersion
                     && $targetVersion !== 'latest'
