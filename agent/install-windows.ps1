@@ -185,6 +185,11 @@ $sshDir = "$BorgDir\ssh"
 $sshExe = "$sshDir\usr\bin\ssh.exe"
 $sshPathFile = "$AgentDir\ssh-path"
 
+# Ensure the agent directory exists before writing the ssh-path marker file.
+# On fresh installs, ProgramData\bbs-agent doesn't exist yet — WriteAllText
+# fails with "Parts of the Path could not be found" (#195).
+New-Item -ItemType Directory -Path $AgentDir -Force | Out-Null
+
 # Check if Git for Windows is already installed
 $gitSshPaths = @(
     "$env:ProgramFiles\Git\usr\bin\ssh.exe",
