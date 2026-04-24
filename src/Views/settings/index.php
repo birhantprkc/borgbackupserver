@@ -300,9 +300,29 @@ $updateAvailable = $updateService->isUpdateAvailable();
                                    placeholder="<?= !empty($settings['smtp_pass']) ? '(unchanged if empty)' : '' ?>">
                         </div>
                     </div>
-                    <div class="mb-4">
-                        <label class="form-label fw-semibold">From Address</label>
-                        <input type="email" class="form-control" name="smtp_from" value="<?= htmlspecialchars($settings['smtp_from'] ?? '') ?>" placeholder="backups@example.com">
+                    <?php
+                    // Default encryption choice based on port when smtp_secure is unset.
+                    $smtpPortForDefault = (int) ($settings['smtp_port'] ?? 587);
+                    $smtpSecureDefault = match ($smtpPortForDefault) {
+                        465 => 'ssl',
+                        25 => 'none',
+                        default => 'starttls',
+                    };
+                    $smtpSecure = $settings['smtp_secure'] ?? $smtpSecureDefault;
+                    ?>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Encryption</label>
+                            <select class="form-select" name="smtp_secure">
+                                <option value="starttls" <?= $smtpSecure === 'starttls' ? 'selected' : '' ?>>STARTTLS (typically port 587)</option>
+                                <option value="ssl" <?= $smtpSecure === 'ssl' ? 'selected' : '' ?>>SSL/TLS (typically port 465)</option>
+                                <option value="none" <?= $smtpSecure === 'none' ? 'selected' : '' ?>>None (plaintext)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">From Address</label>
+                            <input type="email" class="form-control" name="smtp_from" value="<?= htmlspecialchars($settings['smtp_from'] ?? '') ?>" placeholder="backups@example.com">
+                        </div>
                     </div>
 
                     <div class="d-flex align-items-center gap-3">

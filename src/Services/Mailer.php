@@ -8,6 +8,7 @@ class Mailer
 {
     private string $host;
     private int $port;
+    private string $secure;
     private string $username;
     private string $password;
     private string $fromEmail;
@@ -25,6 +26,7 @@ class Mailer
 
         $this->host = $settings['smtp_host'] ?? '';
         $this->port = (int) ($settings['smtp_port'] ?? 587);
+        $this->secure = $settings['smtp_secure'] ?? self::inferSecure($this->port);
         $this->username = $settings['smtp_user'] ?? '';
         // SMTP password is stored encrypted. Legacy plaintext values auto-upgrade:
         // if decrypt() throws, we treat the raw value as plaintext and re-save
@@ -54,7 +56,9 @@ class Mailer
     }
 
     /**
-     * Send an email using SMTP with STARTTLS.
+     * Send an email using SMTP. Honors the configured smtp_secure mode:
+     * 'ssl' (implicit TLS, typically port 465), 'starttls' (upgrade in-band,
+     * typically port 587), or 'none' (plaintext, port 25).
      */
     public function send(string $to, string $subject, string $body): bool
     {
@@ -63,7 +67,8 @@ class Mailer
         }
 
         try {
-            $socket = @fsockopen($this->host, $this->port, $errno, $errstr, 10);
+            $connHost = $this->secure === 'ssl' ? "ssl://{$this->host}" : $this->host;
+            $socket = @fsockopen($connHost, $this->port, $errno, $errstr, 10);
             if (!$socket) {
                 error_log("SMTP connect failed: {$errstr} ({$errno})");
                 return false;
@@ -72,8 +77,7 @@ class Mailer
             $this->readResponse($socket);
             $this->sendCommand($socket, "EHLO " . gethostname());
 
-            // STARTTLS if port 587
-            if ($this->port === 587) {
+            if ($this->secure === 'starttls') {
                 $this->sendCommand($socket, "STARTTLS");
                 stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT);
                 $this->sendCommand($socket, "EHLO " . gethostname());
@@ -166,6 +170,15 @@ class Mailer
             'archive_delete'       => 'Archive Delete',
         ];
         return $labels[$taskType] ?? ucfirst(str_replace('_', ' ', $taskType));
+    }
+
+    public static function inferSecure(int $port): string
+    {
+        return match ($port) {
+            465 => 'ssl',
+            25 => 'none',
+            default => 'starttls',
+        };
     }
 
     private function sendCommand($socket, string $command): string

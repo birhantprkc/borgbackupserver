@@ -90,7 +90,7 @@ class SettingsController extends Controller
         $this->requireAdmin();
         $this->verifyCsrf();
 
-        $allowed = ['max_queue', 'server_host', 'ssh_port', 'agent_poll_interval', 'stall_timeout_minutes', 'session_timeout_hours', 'default_theme', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_from', 'notification_retention_days', 'storage_alert_threshold', 'apprise_urls', 'self_backup_retention'];
+        $allowed = ['max_queue', 'server_host', 'ssh_port', 'agent_poll_interval', 'stall_timeout_minutes', 'session_timeout_hours', 'default_theme', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_secure', 'smtp_from', 'notification_retention_days', 'storage_alert_threshold', 'apprise_urls', 'self_backup_retention'];
 
         foreach ($allowed as $key) {
             if (isset($_POST[$key])) {
@@ -376,8 +376,19 @@ class SettingsController extends Controller
 
         $host = $settings['smtp_host'] ?? '';
         $port = (int) ($settings['smtp_port'] ?? 587);
+        $secure = $settings['smtp_secure'] ?? \BBS\Services\Mailer::inferSecure($port);
         $user = $settings['smtp_user'] ?? '';
-        $pass = $settings['smtp_pass'] ?? '';
+        $rawPass = $settings['smtp_pass'] ?? '';
+        // Password is stored encrypted — decrypt before sending to AUTH LOGIN.
+        // Legacy plaintext values may still exist, so fall back on decrypt failure.
+        $pass = '';
+        if ($rawPass !== '') {
+            try {
+                $pass = \BBS\Services\Encryption::decrypt($rawPass);
+            } catch (\Throwable $e) {
+                $pass = $rawPass;
+            }
+        }
         $from = $settings['smtp_from'] ?? '';
 
         if (empty($host)) {
@@ -386,7 +397,8 @@ class SettingsController extends Controller
         }
 
         try {
-            $socket = @fsockopen($host, $port, $errno, $errstr, 10);
+            $connHost = $secure === 'ssl' ? "ssl://{$host}" : $host;
+            $socket = @fsockopen($connHost, $port, $errno, $errstr, 10);
             if (!$socket) {
                 $this->json(['success' => false, 'error' => "Connection failed: {$errstr}"]);
                 return;
@@ -395,7 +407,7 @@ class SettingsController extends Controller
             $this->smtpRead($socket);
             $this->smtpCmd($socket, "EHLO " . gethostname());
 
-            if ($port === 587) {
+            if ($secure === 'starttls') {
                 $this->smtpCmd($socket, "STARTTLS");
                 if (!stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT)) {
                     fclose($socket);
