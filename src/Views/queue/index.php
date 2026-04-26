@@ -12,7 +12,7 @@
         $label = formatDurationLabel($duration);
         return '<div class="progress position-relative" style="height:20px;min-width:120px;" title="' . htmlspecialchars($label) . '">'
             . '<div class="progress-bar" style="width:' . $pct . '%;background-color:hsl(' . $hue . ',70%,45%);"></div>'
-            . '<span class="position-absolute top-50 start-50 translate-middle small fw-semibold text-dark text-nowrap">' . htmlspecialchars($label) . '</span>'
+            . '<span class="position-absolute top-50 start-50 translate-middle small fw-semibold px-2 rounded bg-body text-body border text-nowrap">' . htmlspecialchars($label) . '</span>'
             . '</div>';
     }
 
@@ -272,7 +272,7 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
         const label = formatDuration(s);
         return '<div class="progress position-relative" style="height:20px;min-width:120px;" title="' + esc(label) + '">' +
             '<div class="progress-bar" style="width:' + pct + '%;background-color:hsl(' + hue + ',70%,45%);"></div>' +
-            '<span class="position-absolute top-50 start-50 translate-middle small fw-semibold text-dark text-nowrap">' + esc(label) + '</span></div>';
+            '<span class="position-absolute top-50 start-50 translate-middle small fw-semibold px-2 rounded bg-body text-body border text-nowrap">' + esc(label) + '</span></div>';
     }
 
     function statusBadge(status) {
