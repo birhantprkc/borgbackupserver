@@ -1,9 +1,19 @@
 <?php
-    $avgDur = '--';
-    if ($avgSec > 0) {
-        if ($avgSec < 60) $avgDur = $avgSec . 's';
-        elseif ($avgSec < 3600) $avgDur = round($avgSec / 60) . 'm';
-        else $avgDur = round($avgSec / 3600, 1) . 'h';
+    function formatDurationLabel(int $s): string {
+        return $s >= 3600 ? floor($s / 3600) . 'h ' . floor(($s % 3600) / 60) . 'm ' . ($s % 60) . 's' : ($s >= 60 ? floor($s / 60) . 'm ' . ($s % 60) . 's' : $s . 's');
+    }
+
+    $avgDur = $avgSec > 0 ? formatDurationLabel((int) $avgSec) : '--';
+    $maxCompletedDuration = max(array_map(fn($j) => (int) ($j['duration_seconds'] ?? 0), $completed ?: [['duration_seconds' => 0]]));
+
+    function durationBarHtml(int $duration, int $maxDuration): string {
+        $pct = $maxDuration > 0 ? min(100, round(($duration / $maxDuration) * 100)) : 0;
+        $hue = 120 - round($pct * 1.2);
+        $label = formatDurationLabel($duration);
+        return '<div class="progress position-relative" style="height:20px;min-width:120px;" title="' . htmlspecialchars($label) . '">'
+            . '<div class="progress-bar" style="width:' . $pct . '%;background-color:hsl(' . $hue . ',70%,45%);"></div>'
+            . '<span class="position-absolute top-50 start-50 translate-middle small fw-semibold text-dark text-nowrap">' . htmlspecialchars($label) . '</span>'
+            . '</div>';
     }
 
     // Job type icons mapping
@@ -196,7 +206,7 @@
                         <td class="d-none d-md-table-cell">
                             <?php
                             $d = $job['duration_seconds'] ?? 0;
-                            echo $d >= 3600 ? floor($d / 3600) . 'h ' . floor(($d % 3600) / 60) . 'm ' . ($d % 60) . 's' : ($d >= 60 ? floor($d / 60) . 'm ' . ($d % 60) . 's' : $d . 's');
+                            echo durationBarHtml((int) $d, $maxCompletedDuration);
                             ?>
                         </td>
                         <td class="text-center">
@@ -252,6 +262,17 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
     function formatDuration(s) {
         s = parseInt(s) || 0;
         return s >= 3600 ? Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm ' + (s % 60) + 's' : (s >= 60 ? Math.floor(s / 60) + 'm ' + (s % 60) + 's' : s + 's');
+    }
+
+    function durationBar(s, maxS) {
+        s = parseInt(s) || 0;
+        maxS = parseInt(maxS) || 0;
+        const pct = maxS > 0 ? Math.min(100, Math.round((s / maxS) * 100)) : 0;
+        const hue = 120 - Math.round(pct * 1.2);
+        const label = formatDuration(s);
+        return '<div class="progress position-relative" style="height:20px;min-width:120px;" title="' + esc(label) + '">' +
+            '<div class="progress-bar" style="width:' + pct + '%;background-color:hsl(' + hue + ',70%,45%);"></div>' +
+            '<span class="position-absolute top-50 start-50 translate-middle small fw-semibold text-dark text-nowrap">' + esc(label) + '</span></div>';
     }
 
     function statusBadge(status) {
@@ -311,7 +332,7 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
             '<td class="text-end" onclick="event.stopPropagation()">' + actions + '</td></tr>';
     }
 
-    function buildCompletedRow(job) {
+    function buildCompletedRow(job, maxDuration) {
         let statusHtml;
         if (job.status === 'completed') {
             statusHtml = '<i class="bi bi-check-circle-fill text-success"></i>';
@@ -335,7 +356,7 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
             '<td class="text-nowrap">' + jobTypeIcon(job.task_type) + esc(job.task_type) + '</td>' +
             '<td class="d-none d-md-table-cell">' + Number(job.files_total || 0).toLocaleString() + '</td>' +
             '<td class="d-none d-md-table-cell">' + esc(job.repo_name || '--') + '</td>' +
-            '<td class="d-none d-md-table-cell">' + formatDuration(job.duration_seconds) + '</td>' +
+            '<td class="d-none d-md-table-cell">' + durationBar(job.duration_seconds, maxDuration) + '</td>' +
             '<td class="text-center">' + statusHtml + '</td>' +
             '<td class="text-end" onclick="event.stopPropagation()">' + actions + '</td></tr>';
     }
@@ -365,7 +386,8 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
                     let html = '<div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr>' +
                         '<th>Date</th><th>Client</th><th>Task</th><th class="d-none d-md-table-cell">Files</th><th class="d-none d-md-table-cell">Repo</th><th class="d-none d-md-table-cell">Duration</th><th class="text-center">Status</th><th style="width:80px;"></th>' +
                         '</tr></thead><tbody>';
-                    data.completed.forEach(j => html += buildCompletedRow(j));
+                    const maxDuration = Math.max(0, ...data.completed.map(j => parseInt(j.duration_seconds) || 0));
+                    data.completed.forEach(j => html += buildCompletedRow(j, maxDuration));
                     html += '</tbody></table></div>';
                     cCard.innerHTML = html;
                 }
