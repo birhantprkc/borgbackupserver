@@ -196,7 +196,7 @@
                         <td class="d-none d-md-table-cell">
                             <?php
                             $d = $job['duration_seconds'] ?? 0;
-                            echo $d >= 60 ? floor($d / 60) . 'm ' . ($d % 60) . 's' : $d . 's';
+                            echo $d >= 3600 ? floor($d / 3600) . 'h ' . floor(($d % 3600) / 60) . 'm ' . ($d % 60) . 's' : ($d >= 60 ? floor($d / 60) . 'm ' . ($d % 60) . 's' : $d . 's');
                             ?>
                         </td>
                         <td class="text-center">
@@ -251,7 +251,7 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
 
     function formatDuration(s) {
         s = parseInt(s) || 0;
-        return s >= 60 ? Math.floor(s / 60) + 'm ' + (s % 60) + 's' : s + 's';
+        return s >= 3600 ? Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm ' + (s % 60) + 's' : (s >= 60 ? Math.floor(s / 60) + 'm ' + (s % 60) + 's' : s + 's');
     }
 
     function statusBadge(status) {
