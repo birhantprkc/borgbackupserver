@@ -45,7 +45,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.29.6"
+AGENT_VERSION = "2.29.7"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -3220,7 +3220,16 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
 
             except ValueError:
                 # Non-JSON output, might be regular progress text
-                if "Error" in line or "error" in line:
+                if ("Error" in line
+                        or "error" in line
+                        or "NotLocked" in line
+                        or "Failed to release the lock" in line):
+                    # Cache-lock cleanup failures arrive as a plain Python
+                    # traceback (no JSON wrapper), so capture those lines
+                    # explicitly — they don't contain "Error". We need
+                    # them in error_output so the exit-code handler can
+                    # spot a NotLocked at end-of-run and downgrade it to
+                    # a warning (#214).
                     error_output += line + "\n"
                 logger.debug("borg: {}".format(line))
 
@@ -3318,12 +3327,38 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
                     error_output = "borg exited with warnings (code 1) — see job log for details"
                 logger.error("Job #{} failed with warnings (borg code 1)".format(job_id))
         else:
-            result = "failed"
-            logger.error(
-                "Job #{} failed with return code {}".format(job_id, proc.returncode)
+            # Special-case borg's cache-lock cleanup failure for backup
+            # jobs (#214): borg writes the archive successfully, then
+            # raises borg.locking.NotLocked when releasing the local
+            # cache lock — usually because something cleared the lock
+            # mid-run. The data is intact, so flagging the job as
+            # FAILED forces the user to retry an already-complete
+            # backup. Downgrade to completed-with-warnings instead.
+            cache_lock_cleanup_failed = (
+                task_type == "backup"
+                and "NotLocked" in error_output
+                and "Failed to release the lock" in error_output
             )
-            if not error_output:
-                error_output = "borg exited with code {}".format(proc.returncode)
+            if cache_lock_cleanup_failed:
+                result = "completed"
+                had_warnings = True
+                error_output = (
+                    "Backup archive was written successfully, but borg's local "
+                    "cache lock was already gone when it tried to release it "
+                    "(borg.locking.NotLocked). The archive is intact and "
+                    "restoreable; this is a cleanup-side error, not a backup "
+                    "failure.\n\n" + error_output
+                )
+                logger.warning(
+                    "Job #{} completed with warnings (cache-lock cleanup)".format(job_id)
+                )
+            else:
+                result = "failed"
+                logger.error(
+                    "Job #{} failed with return code {}".format(job_id, proc.returncode)
+                )
+                if not error_output:
+                    error_output = "borg exited with code {}".format(proc.returncode)
 
     except subprocess.TimeoutExpired:
         proc.kill()
