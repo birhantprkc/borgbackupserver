@@ -53,8 +53,12 @@ $currentTimeLabel = $is24h ? $nowInUserTz->format('H:i') : $nowInUserTz->format(
 
 function bbs_agent_color(int $id): string
 {
+    // Per-agent hue (137° spacing keeps adjacent IDs visually distinct).
+    // Saturation/lightness pulled down from (55%, 45%) → (32%, 38%) so
+    // the schedule blocks sit in the dark-navy palette of the rest of
+    // the app instead of looking like a saturated bar chart.
     $hue = ($id * 137) % 360;
-    return "hsl({$hue}, 55%, 45%)";
+    return "hsl({$hue}, 32%, 38%)";
 }
 
 // Pick a set of "nice" y-axis tick values for the histogram, including 0 and

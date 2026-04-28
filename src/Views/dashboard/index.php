@@ -58,20 +58,17 @@ $dfFix = function (string $s): string {
 .v2 .health-row {
     display: flex;
     align-items: center;
-    gap: 5px;
-    margin-bottom: 8px;
+    gap: 8px;
+    margin-bottom: 6px;
 }
 .v2 .health-row:last-child { margin-bottom: 0; }
 .v2 .health-row .lbl {
-    /* Left-align and content-size. A fixed 140px column was pushing short
-       labels like "CPU" far from the card edge and squeezing the progress
-       bars on narrower cards (#199). Now the column fits the longest label
-       in its own row and truncates with ellipsis past 140px, so bars always
-       get the remaining space. */
-    flex: 0 0 auto;
-    min-width: 50px;
-    max-width: 140px;
-    font-size: 0.82rem;
+    /* Fixed-width label column so every progress bar starts at the same
+       x-coordinate — long mount paths and short labels like "CPU" no
+       longer push the bars to different widths between rows. Truncates
+       with ellipsis past 95px. */
+    flex: 0 0 95px;
+    font-size: 0.72rem;
     color: var(--bs-secondary-color);
     font-weight: 400;
     text-align: left;
@@ -81,8 +78,8 @@ $dfFix = function (string $s): string {
 }
 .v2 .health-row .progress {
     flex: 1;
-    height: 1rem;
-    font-size: 0.72rem;
+    height: 0.95rem;
+    font-size: 0.66rem;
     font-weight: 600;
     position: relative;
 }
@@ -99,7 +96,16 @@ $dfFix = function (string $s): string {
     text-shadow: 0 0 3px rgba(0,0,0,0.7), 0 0 1px rgba(0,0,0,0.9);
     pointer-events: none;
 }
-.v2 .health-row .val { font-size: 0.78rem; font-variant-numeric: tabular-nums; min-width: 80px; text-align: right; color: var(--bs-body-color); }
+/* Right column also fixed-width so the bar's right edge is consistent
+   across rows. min-width: 80 was producing dead whitespace between
+   the bar and short values like "0.48". */
+.v2 .health-row .val {
+    flex: 0 0 60px;
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    color: var(--bs-body-color);
+}
 
 /* File Catalog card — stats table with hairline separators (no striped bg).
    --bs-table-bg override strips the table's own background so the card's
