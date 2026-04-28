@@ -45,7 +45,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.29.7"
+AGENT_VERSION = "2.29.8"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -3310,17 +3310,40 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
             # borg returns 1 for warnings. For backup the archive is
             # usually still useful (a file vanished mid-read, or — more
             # importantly — a configured source path didn't exist and was
-            # silently skipped, #203). Mark the job completed-with-warnings
-            # so the server can decorate the UI and fire a backup_warning
-            # notification instead of pretending it was a clean success.
-            # For restore (and any other op) exit 1 means at least one
-            # file failed to extract — fail the job outright.
+            # silently skipped, #203). For restore (and any other op)
+            # exit 1 means at least one file failed to extract — fail
+            # the job outright.
             if task_type == "backup":
                 result = "completed"
-                had_warnings = True
-                if not error_output:
-                    error_output = "borg exited with warnings (code 1) — see job log for details"
-                logger.warning("Job #{} completed with warnings".format(job_id))
+                # Routine borg/SSH warnings that fire on every backup of
+                # an active system aren't actionable and shouldn't trip
+                # had_warnings (which surfaces a notification). Only flag
+                # had_warnings when there's something the user would want
+                # to know about (#225).
+                routine_patterns = (
+                    "Permanently added",                  # SSH known_hosts notice
+                    "file changed while we backed it up", # active mysql / mailspool / log
+                    "file vanished while we backed it up",# transient files
+                    "stat: [Errno 2]",                    # file deleted between scan and read
+                )
+                warning_lines = [
+                    ln for ln in error_output.splitlines() if ln.strip()
+                ]
+                actionable = [
+                    ln for ln in warning_lines
+                    if not any(p in ln for p in routine_patterns)
+                ]
+                if actionable:
+                    had_warnings = True
+                    logger.warning("Job #{} completed with warnings".format(job_id))
+                else:
+                    # All warnings were routine — log at info level, don't
+                    # forward as had_warnings. Job appears as a clean
+                    # completion in the dashboard.
+                    error_output = ""
+                    logger.info(
+                        "Job #{} completed (borg exit 1 — only routine warnings)".format(job_id)
+                    )
             else:
                 result = "failed"
                 if not error_output:

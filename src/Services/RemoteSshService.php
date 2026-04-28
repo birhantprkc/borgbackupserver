@@ -86,6 +86,7 @@ class RemoteSshService
                 '-o', 'StrictHostKeyChecking=no',
                 '-o', 'UserKnownHostsFile=/dev/null',
                 '-o', 'BatchMode=yes',
+                '-o', 'LogLevel=ERROR',
                 '-o', 'ConnectTimeout=10',
                 "{$config['remote_user']}@{$config['remote_host']}",
                 "{$borgBin} --version",
@@ -191,7 +192,7 @@ class RemoteSshService
             $keyFile = $this->writeTempKey($sshKey);
 
             $port = (int) ($config['remote_port'] ?? 22);
-            $env['BORG_RSH'] = "ssh -i {$keyFile} -p {$port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes";
+            $env['BORG_RSH'] = "ssh -i {$keyFile} -p {$port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o LogLevel=ERROR";
 
             $proc = proc_open($cmd, [
                 0 => ['pipe', 'r'],
@@ -252,6 +253,7 @@ class RemoteSshService
                 '-o', 'StrictHostKeyChecking=no',
                 '-o', 'UserKnownHostsFile=/dev/null',
                 '-o', 'BatchMode=yes',
+                '-o', 'LogLevel=ERROR',
                 '-o', 'ConnectTimeout=10',
                 "{$config['remote_user']}@{$config['remote_host']}",
                 "df -k {$basePath}",
@@ -408,7 +410,7 @@ class RemoteSshService
         }
 
         $port = (int) ($config['remote_port'] ?? 22);
-        $env['BORG_RSH'] = "ssh -i {$keyFile} -p {$port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes";
+        $env['BORG_RSH'] = "ssh -i {$keyFile} -p {$port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o LogLevel=ERROR";
 
         $proc = proc_open($cmd, [
             0 => ['pipe', 'r'],

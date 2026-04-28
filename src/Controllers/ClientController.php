@@ -1398,7 +1398,7 @@ class ClientController extends Controller
                 chmod($remoteSshKeyFile, 0600);
 
                 $port = (int) ($archive['remote_port'] ?? 22);
-                $env['BORG_RSH'] = "ssh -i {$remoteSshKeyFile} -p {$port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes";
+                $env['BORG_RSH'] = "ssh -i {$remoteSshKeyFile} -p {$port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o LogLevel=ERROR";
 
                 $cmd = ['borg', 'extract'];
                 if (!empty($archive['borg_remote_path'])) {

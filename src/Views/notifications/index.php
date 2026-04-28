@@ -39,7 +39,7 @@
             ?>
             <tr class="<?= $rowClass ?>">
                 <td><i class="bi <?= $icon ?>"></i></td>
-                <td>
+                <td style="word-break: break-word; overflow-wrap: anywhere; min-width: 0;">
                     <?= htmlspecialchars($n['message']) ?>
                     <?php if ($n['occurrence_count'] > 1): ?>
                         <span class="badge bg-secondary ms-1"><?= (int)$n['occurrence_count'] ?> occurrences</span>
