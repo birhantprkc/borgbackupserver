@@ -34,7 +34,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
         <div class="d-flex justify-content-between align-items-start mb-3">
             <div class="flex-fill">
                 <div class="d-flex flex-wrap align-items-center gap-2">
-                    <h3 class="mb-0">
+                    <h3 class="mb-0" style="font-size:18px;">
                         <i class="bi bi-display me-2 text-primary"></i><?= htmlspecialchars($agent['name']) ?>
                     </h3>
                     <span class="badge bg-<?= $statusClass ?>" id="agent-status-badge"><?= ucfirst($agent['status']) ?></span>
