@@ -185,9 +185,9 @@ $dfFix = function (string $s): string {
 .v2 .mini-stat .v { font-weight: 600; font-variant-numeric: tabular-nums; }
 
 .v2 .table thead th {
-    font-size: 0.72rem;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
+    font-size: 0.875rem;
+    text-transform: none;
+    letter-spacing: 0;
     color: var(--bs-secondary-color);
     font-weight: 600;
 }

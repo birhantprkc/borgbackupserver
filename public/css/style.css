@@ -434,12 +434,14 @@ a .stat-card {
     cursor: pointer;
 }
 
-/* Tables */
+/* Tables. Headers are mixed case (not ALL CAPS) and sized to match the
+   site-wide card-header font (0.875rem) so a table on a page reads as
+   the same visual weight as the surrounding card header above it. */
 .table th {
     font-weight: 600;
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    font-size: 0.875rem;
+    text-transform: none;
+    letter-spacing: 0;
     color: #6c757d;
 }
 

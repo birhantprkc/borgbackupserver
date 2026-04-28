@@ -986,49 +986,50 @@ function applyRemotePreset(select, form) {
 <?php else: ?>
 <!-- ==================== Storage Overview (main page) ==================== -->
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div></div>
-    <button class="btn btn-sm btn-success" data-bs-toggle="collapse" data-bs-target="#addLocationForm">
-        <i class="bi bi-plus-circle me-1"></i> Add Location
-    </button>
-</div>
-
-<!-- Add Location Form -->
-<div class="collapse mb-4" id="addLocationForm">
-    <div class="card border-0 shadow-sm">
-        <div class="card-body">
-            <form method="POST" action="/storage-locations">
-                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                <div class="row g-3">
-                    <div class="col-md-3">
-                        <label class="form-label fw-semibold">Label</label>
-                        <input type="text" class="form-control" name="label" placeholder="e.g. Secondary Disk" required>
-                    </div>
-                    <div class="col-md-5">
-                        <label class="form-label fw-semibold">Path</label>
-                        <input type="text" class="form-control" name="path" placeholder="/mnt/storage2" required>
-                        <div class="form-text">Absolute path to the storage directory. Must exist and be writable.</div>
-                    </div>
-                    <div class="col-md-2 d-flex align-items-center pt-4">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="is_default" id="newIsDefault">
-                            <label class="form-check-label" for="newIsDefault">Default</label>
-                        </div>
-                    </div>
-                    <div class="col-md-2 d-flex align-items-end">
-                        <button type="submit" class="btn btn-sm btn-success w-100">Create</button>
-                    </div>
-                </div>
-            </form>
-        </div>
+<!-- Local Storage Locations -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-hdd me-2"></i>Local Storage</span>
+        <button class="btn btn-sm btn-success" data-bs-toggle="collapse" data-bs-target="#addLocationForm">
+            <i class="bi bi-plus-circle me-1"></i> Add Location
+        </button>
     </div>
-</div>
+    <div class="card-body">
+        <!-- Add Location Form -->
+        <div class="collapse mb-3" id="addLocationForm">
+            <div class="card border bg-body-tertiary">
+                <div class="card-body">
+                    <form method="POST" action="/storage-locations">
+                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label fw-semibold">Label</label>
+                                <input type="text" class="form-control" name="label" placeholder="e.g. Secondary Disk" required>
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label fw-semibold">Path</label>
+                                <input type="text" class="form-control" name="path" placeholder="/mnt/storage2" required>
+                                <div class="form-text">Absolute path to the storage directory. Must exist and be writable.</div>
+                            </div>
+                            <div class="col-md-2 d-flex align-items-center pt-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="is_default" id="newIsDefault">
+                                    <label class="form-check-label" for="newIsDefault">Default</label>
+                                </div>
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end">
+                                <button type="submit" class="btn btn-sm btn-success w-100">Create</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
 
-<!-- Storage Locations -->
-<?php if (empty($locations)): ?>
-<div class="alert alert-info">No storage locations configured. Add one to get started.</div>
-<?php else: ?>
-<div class="row g-3">
+        <?php if (empty($locations)): ?>
+        <div class="alert alert-info mb-0">No storage locations configured. Click "Add Location" above to get started.</div>
+        <?php else: ?>
+        <div class="row g-3">
     <?php foreach ($locations as $loc): ?>
     <div class="col-xl-4 col-lg-6">
         <div class="card border-0 shadow-sm h-100">
@@ -1086,19 +1087,23 @@ function applyRemotePreset(select, form) {
         </div>
     </div>
     <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+    </div>
 </div>
-<?php endif; ?>
 
 <!-- Remote Storage (SSH) -->
-<div class="d-flex justify-content-between align-items-center mb-3 mt-5">
-    <h5 class="mb-0"><i class="bi bi-hdd-network me-2"></i>Remote Storage (SSH)</h5>
-    <a href="/storage-locations?section=wizard" class="btn btn-sm btn-success">
-        <i class="bi bi-plus-circle me-1"></i> Add SSH Host
-    </a>
-</div>
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-hdd-network me-2"></i>Remote Storage (SSH)</span>
+        <a href="/storage-locations?section=wizard" class="btn btn-sm btn-success">
+            <i class="bi bi-plus-circle me-1"></i> Add SSH Host
+        </a>
+    </div>
+    <div class="card-body">
 
 <?php if (empty($remoteSshConfigs)): ?>
-<div class="alert alert-info">No remote SSH hosts configured. <a href="/storage-locations?section=wizard">Add one</a> to get started.</div>
+<div class="alert alert-info mb-0">No remote SSH hosts configured. <a href="/storage-locations?section=wizard">Add one</a> to get started.</div>
 <?php else: ?>
 <div class="row g-3">
     <?php foreach ($remoteSshConfigs as $rsc): ?>
@@ -1242,18 +1247,22 @@ function applyRemotePreset(select, form) {
     <?php endforeach; ?>
 </div>
 <?php endif; ?>
+    </div>
+</div>
 
 <!-- S3 Offsite Sync -->
 <?php
 $s3Configured = !empty($settings['s3_endpoint']) && !empty($settings['s3_bucket']);
 $s3SyncServerBackups = ($settings['s3_sync_server_backups'] ?? '0') === '1';
 ?>
-<div class="mb-3 mt-5">
-    <h5 class="mb-0"><i class="bi bi-bucket me-2"></i>S3 Offsite Sync</h5>
-</div>
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header fw-semibold">
+        <i class="bi bi-bucket me-2"></i>S3 Offsite Sync
+    </div>
+    <div class="card-body">
 
 <?php if (!$s3Configured): ?>
-<div class="alert alert-info">S3 offsite sync is not configured. <a href="/storage-locations?section=s3">Configure it</a> to replicate local repos to S3-compatible storage.</div>
+<div class="alert alert-info mb-0">S3 offsite sync is not configured. <a href="/storage-locations?section=s3">Configure it</a> to replicate local repos to S3-compatible storage.</div>
 <?php else: ?>
 <div class="row g-3">
     <div class="col-xl-4 col-lg-6">
@@ -1298,6 +1307,8 @@ $s3SyncServerBackups = ($settings['s3_sync_server_backups'] ?? '0') === '1';
     </div>
 </div>
 <?php endif; ?>
+    </div>
+</div>
 
 <script>
 function testRemoteSsh(id, triggerEl) {
