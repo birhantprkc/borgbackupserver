@@ -7,3 +7,18 @@ RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^ index.php [QSA,L]
+
+# Cache static assets aggressively. Without this Apache only sends
+# Last-Modified/ETag, so every page load issues a conditional GET that
+# burns a round-trip to revalidate — painful on home servers with low
+# upload bandwidth (#223). Layout templates already cache-bust CSS via
+# ?v=<mtime>, and image filenames are versioned via the favicon size
+# suffix, so a 7-day window is safe.
+<IfModule mod_headers.c>
+    <FilesMatch "\.(png|jpg|jpeg|gif|svg|webp|ico|woff2|woff|ttf)$">
+        Header set Cache-Control "public, max-age=604800"
+    </FilesMatch>
+    <FilesMatch "\.(css|js)$">
+        Header set Cache-Control "public, max-age=86400"
+    </FilesMatch>
+</IfModule>
