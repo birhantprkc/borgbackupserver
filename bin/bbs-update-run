@@ -85,17 +85,17 @@ for user in $(getent passwd | grep '^bbs-' | cut -d: -f1); do
         chown "$user":www-data "$home"
         chmod 750 "$home"
 
-        # .ssh dir strict ownership
+        # .ssh dir strict ownership. authorized_keys MUST be user-owned
+        # (root-owned authorized_keys is rejected by sshd's StrictModes
+        # on stock Ubuntu — sshd's privsep child can't read it as the
+        # user, and authentication fails with "Permission denied
+        # (publickey)"). The forced-command + 'restrict' directive in
+        # the file is what enforces the security model — chmod 600
+        # owned by the user is the standard, supported config.
         if [ -d "$home/.ssh" ]; then
             chown -R "$user":"$user" "$home/.ssh"
             chmod 700 "$home/.ssh"
-            if [ -f "$home/.ssh/authorized_keys" ]; then
-                # Root-own authorized_keys (defense in depth — a local shell
-                # as the bbs-* user shouldn't be able to rewrite the forced
-                # command). sshd accepts root-owned authorized_keys.
-                chown root:root "$home/.ssh/authorized_keys"
-                chmod 600 "$home/.ssh/authorized_keys"
-            fi
+            [ -f "$home/.ssh/authorized_keys" ] && chmod 600 "$home/.ssh/authorized_keys"
         fi
     fi
 done

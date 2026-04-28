@@ -104,14 +104,8 @@ case "$ACTION" in
         RESTRICT_CMD="command=\"/usr/local/bin/bbs-ssh-gate $HOME_DIR\",restrict"
 
         echo "$RESTRICT_CMD $PUBLIC_KEY" > "$AUTHORIZED_KEYS"
-        chown -R "$USERNAME":"$USERNAME" "$SSH_DIR"
-        # Defense in depth: root-own authorized_keys so a local shell as the
-        # bbs-* user (e.g. via some other server-side compromise) cannot
-        # rewrite or remove the forced command. sshd reads as root and is
-        # happy with root-owned authorized_keys; the .ssh directory stays
-        # user-owned so user-level housekeeping still works.
-        chown root:root "$AUTHORIZED_KEYS"
         chmod 600 "$AUTHORIZED_KEYS"
+        chown -R "$USERNAME":"$USERNAME" "$SSH_DIR"
 
         # Create catalog log directory with setgid so files inherit www-data group
         CATALOG_DIR="$HOME_DIR/.catalog-logs"
@@ -1010,14 +1004,11 @@ SSHEOF
                 continue
             fi
 
-            # Write new authorized_keys with gate dispatcher.
-            # Root-owned (defense in depth — see create-user comment); sshd
-            # accepts root-owned authorized_keys and a local user shell
-            # cannot rewrite it.
+            # Write new authorized_keys with gate dispatcher
             RESTRICT_CMD="command=\"/usr/local/bin/bbs-ssh-gate $HOME_DIR\",restrict"
             echo "$RESTRICT_CMD $PUBLIC_KEY" > "$AK_FILE"
-            chown root:root "$AK_FILE"
             chmod 600 "$AK_FILE"
+            chown "$USERNAME":"$USERNAME" "$AK_FILE"
 
             # Create catalog log directory with setgid
             CATALOG_DIR="$HOME_DIR/.catalog-logs"
