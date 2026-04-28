@@ -89,7 +89,13 @@ for user in $(getent passwd | grep '^bbs-' | cut -d: -f1); do
         if [ -d "$home/.ssh" ]; then
             chown -R "$user":"$user" "$home/.ssh"
             chmod 700 "$home/.ssh"
-            [ -f "$home/.ssh/authorized_keys" ] && chmod 600 "$home/.ssh/authorized_keys"
+            if [ -f "$home/.ssh/authorized_keys" ]; then
+                # Root-own authorized_keys (defense in depth — a local shell
+                # as the bbs-* user shouldn't be able to rewrite the forced
+                # command). sshd accepts root-owned authorized_keys.
+                chown root:root "$home/.ssh/authorized_keys"
+                chmod 600 "$home/.ssh/authorized_keys"
+            fi
         fi
     fi
 done
