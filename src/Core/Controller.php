@@ -20,8 +20,10 @@ class Controller
 
     protected function authView(string $template, array $data = []): void
     {
-        // Load branding and theme settings for auth pages
-        $brandingRows = $this->db->fetchAll("SELECT `key`, `value` FROM settings WHERE `key` IN ('default_theme', 'branding_login_logo', 'branding_login_theme')");
+        // Load branding and theme settings for auth pages. branding_icon is the
+        // small navbar logo, reused on the mobile login header (the big
+        // login_logo is too large for a phone-width pane).
+        $brandingRows = $this->db->fetchAll("SELECT `key`, `value` FROM settings WHERE `key` IN ('default_theme', 'branding_login_logo', 'branding_login_theme', 'branding_icon')");
         $brandSettings = [];
         foreach ($brandingRows as $row) {
             $brandSettings[$row['key']] = $row['value'];
@@ -34,6 +36,9 @@ class Controller
         }
         if (!isset($data['loginLogo'])) {
             $data['loginLogo'] = $brandSettings['branding_login_logo'] ?? null;
+        }
+        if (!isset($data['brandingIcon'])) {
+            $data['brandingIcon'] = $brandSettings['branding_icon'] ?? null;
         }
         extract($data);
         $viewPath = dirname(__DIR__) . '/Views/';

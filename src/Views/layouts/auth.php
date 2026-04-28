@@ -171,6 +171,10 @@
         }
         .auth-footer a { color: rgba(255, 255, 255, 0.6); }
 
+        /* Mobile-only header logo. Hidden on desktop where the split-pane
+           art carries the brand; shown above the form on mobile. */
+        .auth-mobile-logo { display: none; }
+
         /* Background binary-stream layer. A tiny, slow drift of 0/1 glyphs
            across the page — sparse on purpose. Keeps the page from feeling
            static without ever becoming the focus. Each glyph is spawned
@@ -231,8 +235,19 @@
                 box-shadow: none;
             }
             .auth-art { display: none; }
-            .auth-form-pane { padding: 48px 24px 24px; }
+            .auth-form-pane { padding: 32px 24px 24px; }
             .bg-binary { display: none; }
+            .auth-mobile-logo {
+                display: flex;
+                justify-content: center;
+                margin: 0 auto 24px;
+            }
+            .auth-mobile-logo img {
+                width: 88px;
+                height: 88px;
+                object-fit: contain;
+                filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.5));
+            }
         }
     </style>
 </head>
@@ -271,6 +286,20 @@
     </div>
 
     <div class="auth-form-pane">
+        <?php
+        // Mobile-only header logo. The full split-pane art is hidden on
+        // narrow viewports, so we put a small standalone logo above the
+        // form. Falls back to the navbar branding icon (smaller, sized
+        // for a small slot) before the default favicon — the larger
+        // login_logo would crowd a phone-width pane.
+        ?>
+        <div class="auth-mobile-logo">
+            <?php if (!empty($brandingIcon)): ?>
+                <img src="data:image/png;base64,<?= $brandingIcon ?>" alt="Logo">
+            <?php else: ?>
+                <img src="/images/favicon.png" alt="Borg Backup Server">
+            <?php endif; ?>
+        </div>
         <div class="auth-form-inner">
             <?php require $viewPath . $template . '.php'; ?>
         </div>
