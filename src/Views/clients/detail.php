@@ -430,7 +430,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
         </div>
     </div>
 
-    <!-- Row 3: Recent Activity Timeline -->
+    <!-- Row 3: Recent Activity (table) -->
     <div class="card border-0 shadow-sm">
         <div class="card-header fw-semibold">
             <i class="bi bi-clock-history me-1"></i> Recent Activity
@@ -439,45 +439,50 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
             <?php if (empty($recentJobs)): ?>
             <div class="p-4 text-muted text-center">No activity yet.</div>
             <?php else: ?>
-            <div class="list-group list-group-flush">
-                <?php foreach (array_slice($recentJobs, 0, 10) as $job): ?>
-                <?php
-                $jIcon = match($job['status']) {
-                    'completed' => 'check-circle-fill text-success',
-                    'failed' => 'x-circle-fill text-danger',
-                    'running' => 'arrow-repeat text-info',
-                    'queued','sent' => 'hourglass-split text-warning',
-                    default => 'dash-circle text-secondary',
-                };
-                $d = $job['duration_seconds'] ?? 0;
-                $durStr = $d >= 60 ? floor($d / 60) . 'm ' . ($d % 60) . 's' : ($d > 0 ? $d . 's' : '--');
-                ?>
-                <div class="list-group-item d-flex align-items-center py-2 px-3">
-                    <i class="bi bi-<?= $jIcon ?> fs-5 me-3"></i>
-                    <div class="flex-grow-1">
-                        <div class="d-flex justify-content-between">
-                            <span class="fw-semibold"><?= ucfirst($job['task_type']) ?></span>
-                            <small class="text-muted"><?= \BBS\Core\TimeHelper::format($job['completed_at'] ?? $job['started_at'] ?? $job['queued_at'], 'M j g:ia') ?></small>
-                        </div>
-                        <div class="small text-muted">
-                            <?= htmlspecialchars($job['repo_name'] ?? '') ?>
-                            <?php if ($job['files_total']): ?>
-                                &middot; <?= number_format($job['files_total']) ?> files
-                            <?php endif; ?>
-                            &middot; <?= $durStr ?>
-                            <?php if ($job['status'] === 'failed' && $job['error_log']): ?>
-                                <?php
-                                $errFull = $job['error_log'];
-                                $errShort = mb_strlen($errFull) > 80 ? mb_substr($errFull, 0, 80) . '…' : $errFull;
-                                ?>
-                                <span class="text-danger ms-1" title="<?= htmlspecialchars(mb_substr($errFull, 0, 500)) ?>">
-                                    &middot; <i class="bi bi-exclamation-triangle"></i> <?= htmlspecialchars($errShort) ?>
-                                </span>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                </div>
-                <?php endforeach; ?>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0" style="font-size: 0.875rem;">
+                    <thead>
+                        <tr>
+                            <th style="width:36px;"></th>
+                            <th>Task</th>
+                            <th>Repo</th>
+                            <th class="text-nowrap">Time</th>
+                            <th class="text-nowrap">Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach (array_slice($recentJobs, 0, 20) as $job):
+                        $jIcon = match($job['status']) {
+                            'completed' => 'check-circle-fill text-success',
+                            'failed' => 'x-circle-fill text-danger',
+                            'running' => 'arrow-repeat text-info',
+                            'queued','sent' => 'hourglass-split text-warning',
+                            default => 'dash-circle text-secondary',
+                        };
+                        $d = (int) ($job['duration_seconds'] ?? 0);
+                        $durStr = $d >= 3600 ? floor($d / 3600) . 'h ' . floor(($d % 3600) / 60) . 'm'
+                            : ($d >= 60 ? floor($d / 60) . 'm ' . ($d % 60) . 's'
+                                : ($d > 0 ? $d . 's' : '--'));
+                        $when = $job['completed_at'] ?? $job['started_at'] ?? $job['queued_at'];
+                        $iconTitle = '';
+                        if ($job['status'] === 'failed' && !empty($job['error_log'])) {
+                            $iconTitle = mb_substr($job['error_log'], 0, 500);
+                        }
+                    ?>
+                        <tr>
+                            <td class="text-center"<?= $iconTitle ? ' title="' . htmlspecialchars($iconTitle) . '"' : '' ?>>
+                                <i class="bi bi-<?= $jIcon ?>"></i>
+                            </td>
+                            <td><?= ucfirst($job['task_type']) ?></td>
+                            <td class="text-truncate" style="max-width:240px;" title="<?= htmlspecialchars($job['repo_name'] ?? '') ?>">
+                                <?= htmlspecialchars($job['repo_name'] ?? '—') ?>
+                            </td>
+                            <td class="text-nowrap text-muted"><?= $durStr ?></td>
+                            <td class="text-nowrap text-muted"><?= $when ? \BBS\Core\TimeHelper::format($when, 'M j g:ia') : '—' ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
             </div>
             <?php endif; ?>
         </div>
