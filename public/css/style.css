@@ -1,13 +1,21 @@
-/* Card header gradient — site-wide. Used on dashboard and anywhere else that
-   wants the signature blue header. Promoted out of the dashboard's .v2 scope
-   so other pages (archive detail, etc.) can adopt it without wrapping. */
+/* Card header gradient — used on dashboard / schedules / archive detail.
+   In DARK mode this is the signature deep-navy hero header; in LIGHT mode
+   it intentionally collapses to the same neutral surface as the standard
+   .card-header so the page palette stays cohesive — no jarring dark
+   block sitting in an otherwise light layout. */
 .card-head-gradient {
+    background-color: #f1f3f5;
+    color: var(--bs-body-color);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+.card-head-gradient i { color: var(--bs-primary); }
+[data-bs-theme="dark"] .card-head-gradient {
     background: linear-gradient(135deg, #1e293b 0%, #243a6b 50%, #2b4d8c 100%);
     color: #fff;
     border-bottom: 1px solid rgba(0, 0, 0, 0.25);
 }
-.card-head-gradient .text-muted { color: rgba(255, 255, 255, 0.7) !important; }
-.card-head-gradient i { color: #9ec5fe; }
+[data-bs-theme="dark"] .card-head-gradient .text-muted { color: rgba(255, 255, 255, 0.7) !important; }
+[data-bs-theme="dark"] .card-head-gradient i { color: #9ec5fe; }
 
 /* Metric tile — site-wide stat block with colored variant backgrounds.
    Lifted from the dashboard .v2 scope so archive detail and other pages
@@ -210,6 +218,21 @@ html, body {
     left: 0;
     overflow-y: auto;
     z-index: 1020;
+}
+
+/* Version pill at the bottom of the sidebar. The sidebar background is
+   always dark navy regardless of theme (--bbs-nav-bg = #2c3e50 light /
+   #16191d dark), so the pill uses light-on-dark colors hardcoded. The
+   previous Bootstrap text-body-secondary token resolved to a midtone
+   gray in light mode, which read as illegible against the dark navy. */
+.sidebar-version-pill {
+    color: rgba(255, 255, 255, 0.78);
+    background-color: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    font-weight: 500;
+    font-size: 0.65rem;
+    padding: 3px 9px;
+    letter-spacing: 0.02em;
 }
 
 .sidebar-link {
@@ -455,8 +478,16 @@ body.bg-body-secondary {
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06), 0 0 12px rgba(0, 0, 0, 0.03);
 }
 
+/* Standard card-header — subtle neutral surface in both themes so every
+   card on every page has the same visual treatment unless it's an
+   explicit "hero" card (.card-head-gradient) or a status alert
+   (.bg-warning / .bg-danger). Was previously inconsistent: settings used
+   bg-primary bg-opacity-10 (light blue), clients used bg-body
+   (transparent), dashboard used card-head-gradient (dark navy). */
 .card-header {
-    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    background-color: #f1f3f5;
+    color: var(--bs-body-color);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .card.card-no-outline {
@@ -946,8 +977,9 @@ body.bg-body-secondary {
 }
 
 [data-bs-theme="dark"] .card-header {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    background-color: #212529;
+    background-color: #1f2429;
+    color: var(--bs-body-color);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 [data-bs-theme="dark"] .table th {

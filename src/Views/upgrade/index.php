@@ -90,7 +90,7 @@ $stepIcon = function(string $status): string {
 ?>
 
 <div class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-primary bg-opacity-10 fw-semibold d-flex justify-content-between align-items-center">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
         <span><i class="bi bi-cloud-arrow-down me-1"></i> System Upgrade</span>
         <?php if ($target): ?>
         <span class="badge bg-primary"><?= htmlspecialchars($target) ?></span>
@@ -176,7 +176,7 @@ $stepIcon = function(string $status): string {
 
 <?php if (!empty($release['notes'])): ?>
 <div class="card border-0 shadow-sm">
-    <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+    <div class="card-header fw-semibold">
         <i class="bi bi-journal-text me-1"></i> Release Notes
         <?php if (!empty($release['url'])): ?>
         <a href="<?= htmlspecialchars($release['url']) ?>" target="_blank" class="float-end small">

@@ -199,8 +199,7 @@
                 $bbsVersionForSidebar = (new \BBS\Services\UpdateService())->getCurrentVersion();
             ?>
             <div class="text-center pb-2">
-                <span class="badge rounded-pill text-body-secondary border"
-                      style="font-weight:500;font-size:0.65rem;padding:3px 9px;background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.12) !important;">
+                <span class="badge rounded-pill sidebar-version-pill">
                     v<?= htmlspecialchars($bbsVersionForSidebar) ?>
                 </span>
             </div>

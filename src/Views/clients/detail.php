@@ -383,7 +383,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
         <!-- Backup Duration Chart -->
         <div class="col-lg-7">
             <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-body fw-semibold">
+                <div class="card-header fw-semibold">
                     <i class="bi bi-bar-chart me-1"></i> Backup Duration (Last 30)
                 </div>
                 <div class="card-body">
@@ -400,7 +400,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
         <!-- Storage by Repository -->
         <div class="col-lg-5">
             <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-body fw-semibold">
+                <div class="card-header fw-semibold">
                     <i class="bi bi-pie-chart me-1"></i> Storage by Repository
                 </div>
                 <div class="card-body">
@@ -432,7 +432,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
 
     <!-- Row 3: Recent Activity Timeline -->
     <div class="card border-0 shadow-sm">
-        <div class="card-header bg-body fw-semibold">
+        <div class="card-header fw-semibold">
             <i class="bi bi-clock-history me-1"></i> Recent Activity
         </div>
         <div class="card-body p-0">
@@ -856,7 +856,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
     <!-- Create new repo -->
     <div id="create-repo-section" style="display:none;">
     <div class="card border-0 shadow-sm">
-        <div class="card-header bg-body fw-semibold d-flex justify-content-between align-items-center">
+        <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
             <span><i class="bi bi-plus-circle me-1"></i> Create New Repository</span>
             <button type="button" class="btn btn-sm btn-outline-secondary" onclick="hideCreateRepo()"><i class="bi bi-arrow-left me-1"></i>Back</button>
         </div>
@@ -967,7 +967,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
     <!-- Import existing repo -->
     <div id="import-repo-section" style="display:none;">
     <div class="card border-0 shadow-sm">
-        <div class="card-header bg-body fw-semibold d-flex justify-content-between align-items-center">
+        <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
             <span><i class="bi bi-box-arrow-in-down me-1"></i> Import Existing Repository</span>
             <button type="button" class="btn btn-sm btn-outline-secondary" onclick="hideImportRepo()"><i class="bi bi-arrow-left me-1"></i>Back</button>
         </div>
@@ -1093,7 +1093,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
     <?php if (!empty($s3Orphans)): ?>
     <!-- S3 Offsite Backups (Orphaned) -->
     <div class="card border-0 shadow-sm mt-4">
-        <div class="card-header bg-body fw-semibold d-flex justify-content-between align-items-center">
+        <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
             <span><i class="bi bi-cloud text-info me-1"></i> Offsite Backups</span>
             <span class="badge text-bg-info"><?= count($s3Orphans) ?> available to restore</span>
         </div>
@@ -1303,7 +1303,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
     ?>
     <div class="collapse edit-plan-panel" id="edit-plan-<?= $plan['id'] ?>">
         <div class="card border-0 shadow-sm mb-4 border-primary">
-            <div class="card-header bg-body fw-semibold d-flex justify-content-between">
+            <div class="card-header fw-semibold d-flex justify-content-between">
                 <span><i class="bi bi-pencil me-1"></i> Edit: <?= htmlspecialchars($plan['name']) ?></span>
                 <button type="button" class="btn-close" data-bs-toggle="collapse" data-bs-target="#edit-plan-<?= $plan['id'] ?>"></button>
             </div>
@@ -1615,7 +1615,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
     <div class="alert alert-warning">You need to <a href="?tab=repos">create a repository</a> before adding a backup schedule.</div>
     <?php else: ?>
     <div class="card border-0 shadow-sm">
-        <div class="card-header bg-body fw-semibold d-flex justify-content-between align-items-center">
+        <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
             <span><i class="bi bi-plus-circle me-1"></i> Create New Backup Plan</span>
             <button type="button" class="btn btn-sm btn-outline-secondary" onclick="hideCreatePlan()"><i class="bi bi-arrow-left me-1"></i>Back</button>
         </div>
@@ -2285,7 +2285,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
     ?>
     <div class="card border-0 shadow-sm mb-3">
         <!-- Plugin Header Row -->
-        <div class="card-header bg-body d-flex align-items-center gap-3 py-3">
+        <div class="card-header d-flex align-items-center gap-3 py-3">
             <?php if ($logo): ?>
                 <img src="<?= $logo ?>" alt="" style="width:36px;height:36px;object-fit:contain;flex-shrink:0;">
             <?php elseif ($plugin['slug'] === 'shell_hook'): ?>
@@ -2562,7 +2562,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                             <?php if ($plugin['slug'] === 'mysql_dump'): ?>
                             <div class="col-lg-6 mt-3 mt-lg-0">
                                 <div class="card border-0 bg-body shadow-sm h-100">
-                                    <div class="card-header bg-body fw-semibold small py-2"><i class="bi bi-terminal me-1"></i> MySQL Setup</div>
+                                    <div class="card-header fw-semibold small py-2"><i class="bi bi-terminal me-1"></i> MySQL Setup</div>
                                     <div class="card-body small">
                                         <p class="text-muted mb-2">Create a MySQL user on the client for backups:</p>
                                         <strong>Backup Only</strong> <span class="text-muted">(recommended)</span>
@@ -2581,7 +2581,7 @@ FLUSH PRIVILEGES;</pre>
                             <?php elseif ($plugin['slug'] === 'pg_dump'): ?>
                             <div class="col-lg-6 mt-3 mt-lg-0">
                                 <div class="card border-0 bg-body shadow-sm h-100">
-                                    <div class="card-header bg-body fw-semibold small py-2"><i class="bi bi-terminal me-1"></i> PostgreSQL Setup</div>
+                                    <div class="card-header fw-semibold small py-2"><i class="bi bi-terminal me-1"></i> PostgreSQL Setup</div>
                                     <div class="card-body small">
                                         <p class="text-muted mb-2">Create a PostgreSQL role on the client for backups:</p>
                                         <strong>Backup Only</strong> <span class="text-muted">(recommended)</span>

@@ -65,7 +65,7 @@
 <div class="row g-3 mb-4">
     <div class="col-md-6">
         <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-body fw-semibold border-0">
+            <div class="card-header fw-semibold border-0">
                 <i class="bi bi-bar-chart me-1"></i> Activity (7 days)
             </div>
             <div class="card-body py-2">
@@ -75,7 +75,7 @@
     </div>
     <div class="col-md-6">
         <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-body fw-semibold border-0">
+            <div class="card-header fw-semibold border-0">
                 <i class="bi bi-pie-chart me-1"></i> Storage by Client
             </div>
             <div class="card-body py-2 d-flex align-items-center justify-content-center">

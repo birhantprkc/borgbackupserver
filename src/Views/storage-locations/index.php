@@ -23,7 +23,7 @@ $section = $_GET['section'] ?? '';
     <div class="row g-4">
         <div class="col-lg-6">
             <div class="card border-0 shadow-sm">
-                <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+                <div class="card-header fw-semibold">
                     <i class="bi bi-cloud-arrow-up me-1"></i> Global S3 Settings
                 </div>
                 <div class="card-body">
@@ -135,7 +135,7 @@ $section = $_GET['section'] ?? '';
 
         <div class="col-lg-6">
             <div class="card border-0 shadow-sm">
-                <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+                <div class="card-header fw-semibold">
                     <i class="bi bi-info-circle me-1"></i> How It Works
                 </div>
                 <div class="card-body">

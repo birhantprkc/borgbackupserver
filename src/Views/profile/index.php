@@ -35,7 +35,7 @@
 <div class="row justify-content-center">
     <div class="col-lg-8">
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-body fw-semibold">
+            <div class="card-header fw-semibold">
                 <i class="bi bi-person me-1"></i> Account Information
             </div>
             <div class="card-body">
@@ -107,7 +107,7 @@
 
         <!-- Per-user storage alert threshold (#156) -->
         <div class="card border-0 shadow-sm mt-4">
-            <div class="card-header bg-body fw-semibold">
+            <div class="card-header fw-semibold">
                 <i class="bi bi-hdd-stack me-1"></i> Low-Storage Alerts
             </div>
             <div class="card-body">
@@ -166,7 +166,7 @@
 <div class="row justify-content-center">
     <div class="col-lg-8">
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-body fw-semibold">
+            <div class="card-header fw-semibold">
                 <i class="bi bi-key me-1"></i> Change Password
             </div>
             <div class="card-body">
@@ -205,7 +205,7 @@
     <?php if (!$twoFactorEnabled): ?>
         <!-- 2FA Disabled -->
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-body fw-semibold">
+            <div class="card-header fw-semibold">
                 <i class="bi bi-shield-x me-1"></i> Two-Factor Authentication
             </div>
             <div class="card-body">
@@ -228,7 +228,7 @@
     <?php else: ?>
         <!-- 2FA Enabled -->
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-body fw-semibold">
+            <div class="card-header fw-semibold">
                 <i class="bi bi-shield-check me-1 text-success"></i> Two-Factor Authentication
             </div>
             <div class="card-body">
@@ -288,7 +288,7 @@
     $qrSvg = $twoFactorSvc->generateQrCode($user['username'], $setupSecret);
     ?>
     <div class="card border-0 shadow-sm">
-        <div class="card-header bg-body fw-semibold">
+        <div class="card-header fw-semibold">
             <i class="bi bi-qr-code me-1"></i> Set Up Two-Factor Authentication
         </div>
         <div class="card-body">
@@ -397,7 +397,7 @@
             <!-- Preferences -->
             <div class="col-md-6">
                 <div class="card border-0 shadow-sm">
-                    <div class="card-header bg-body fw-semibold">
+                    <div class="card-header fw-semibold">
                         <i class="bi bi-gear me-1"></i> Report Settings
                     </div>
                     <div class="card-body">
@@ -449,7 +449,7 @@
             <!-- Actions -->
             <div class="col-md-6">
                 <div class="card border-0 shadow-sm">
-                    <div class="card-header bg-body fw-semibold">
+                    <div class="card-header fw-semibold">
                         <i class="bi bi-lightning me-1"></i> Actions
                     </div>
                     <div class="card-body">
@@ -483,7 +483,7 @@
         <!-- Past Reports -->
         <?php if (!empty($recentReports ?? [])): ?>
         <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-body fw-semibold d-flex justify-content-between align-items-center">
+            <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-clock-history me-1"></i> Recent Reports</span>
             </div>
             <div class="card-body p-0">
@@ -511,7 +511,7 @@
         <!-- Report Viewer -->
         <?php if ($selectedReport ?? null): ?>
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-body fw-semibold">
+            <div class="card-header fw-semibold">
                 <i class="bi bi-file-earmark-bar-graph me-1"></i>
                 Report: <?= date('M j, Y', strtotime($selectedReport['report_date'])) ?> — <?= \BBS\Core\TimeHelper::format($selectedReport['created_at'], 'g:i A T') ?>
             </div>

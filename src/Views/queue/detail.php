@@ -248,7 +248,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
 <div class="row g-4 mb-4">
     <div class="col-lg-7">
         <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-body fw-semibold">
+            <div class="card-header fw-semibold">
                 <i class="bi bi-info-circle me-1"></i> Job Details
             </div>
             <div class="card-body p-0">
@@ -317,7 +317,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
     <div class="col-lg-5">
         <div class="card border-0 shadow-sm h-100">
             <?php if ($job['task_type'] === 'prune' && !empty($pruneStats)): ?>
-            <div class="card-header bg-body fw-semibold">
+            <div class="card-header fw-semibold">
                 <i class="bi bi-scissors me-1"></i> Prune Stats
             </div>
             <div class="card-body p-0">
@@ -365,7 +365,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
                 </table>
             </div>
             <?php else: ?>
-            <div class="card-header bg-body fw-semibold">
+            <div class="card-header fw-semibold">
                 <i class="bi bi-bar-chart me-1"></i> Stats
             </div>
             <div class="card-body p-0">
@@ -410,7 +410,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
 <!-- Error Log (if failed) -->
 <?php if ($job['status'] === 'failed' && $job['error_log']): ?>
 <div id="error-section" class="card border-0 shadow-sm mb-4 border-danger">
-    <div class="card-header bg-body fw-semibold text-danger">
+    <div class="card-header fw-semibold text-danger">
         <i class="bi bi-exclamation-triangle me-1"></i> Error Log
     </div>
     <div class="card-body">
@@ -420,7 +420,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
 <?php elseif ($job['status'] === 'completed' && !empty($job['had_warnings'])): ?>
 <!-- Warning Log (completed with warnings — e.g. a configured source path didn't exist, #203) -->
 <div id="warning-section" class="card border-0 shadow-sm mb-4 border-warning">
-    <div class="card-header bg-body fw-semibold text-warning">
+    <div class="card-header fw-semibold text-warning">
         <i class="bi bi-exclamation-triangle me-1"></i> Backup Completed with Warnings
     </div>
     <div class="card-body">
@@ -436,7 +436,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
 <div id="log-section" <?= empty($logs) ? 'style="display:none"' : '' ?>>
 <?php if (!empty($logs)): ?>
 <div class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-body fw-semibold">
+    <div class="card-header fw-semibold">
         <i class="bi bi-journal-text me-1"></i> Activity Log
     </div>
     <div class="card-body p-0">
@@ -675,7 +675,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
                         if (logEl) logEl.parentNode.insertBefore(errSection, logEl);
                     }
                     errSection.id = 'error-section';
-                    errSection.innerHTML = '<div class="card border-0 shadow-sm mb-4 border-danger"><div class="card-header bg-body fw-semibold text-danger"><i class="bi bi-exclamation-triangle me-1"></i> Error Log</div><div class="card-body"><pre class="mb-0 small text-danger" style="white-space:pre-wrap;word-break:break-all;overflow-wrap:anywhere;">' + esc(job.error_log) + '</pre></div></div>';
+                    errSection.innerHTML = '<div class="card border-0 shadow-sm mb-4 border-danger"><div class="card-header fw-semibold text-danger"><i class="bi bi-exclamation-triangle me-1"></i> Error Log</div><div class="card-body"><pre class="mb-0 small text-danger" style="white-space:pre-wrap;word-break:break-all;overflow-wrap:anywhere;">' + esc(job.error_log) + '</pre></div></div>';
                 } else if (job.status === 'completed' && job.had_warnings) {
                     let warnSection = document.getElementById('warning-section') || document.getElementById('error-section');
                     if (!warnSection) {
@@ -687,7 +687,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
                     const body = job.error_log
                         ? '<pre class="mb-0 small text-warning-emphasis" style="white-space:pre-wrap;word-break:break-all;overflow-wrap:anywhere;">' + esc(job.error_log) + '</pre>'
                         : '';
-                    warnSection.innerHTML = '<div class="card border-0 shadow-sm mb-4 border-warning"><div class="card-header bg-body fw-semibold text-warning"><i class="bi bi-exclamation-triangle me-1"></i> Backup Completed with Warnings</div><div class="card-body"><p class="small text-muted mb-2">borg created the archive but reported one or more warnings — check that every source path actually exists on the client.</p>' + body + '</div></div>';
+                    warnSection.innerHTML = '<div class="card border-0 shadow-sm mb-4 border-warning"><div class="card-header fw-semibold text-warning"><i class="bi bi-exclamation-triangle me-1"></i> Backup Completed with Warnings</div><div class="card-body"><p class="small text-muted mb-2">borg created the archive but reported one or more warnings — check that every source path actually exists on the client.</p>' + body + '</div></div>';
                 }
 
                 // Decide whether to keep polling

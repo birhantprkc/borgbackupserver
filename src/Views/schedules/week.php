@@ -448,14 +448,22 @@ function bbs_histogram_ticks(int $max): array
 .sched-ctxmenu button i { width: 18px; text-align: center; }
 .sched-ctxmenu .divider { height: 1px; background: var(--bs-border-color); margin: 4px 0; }
 
-/* Accent header for the primary schedule cards — subdued navy gradient */
+/* Accent header for the primary schedule cards. Dark navy gradient in
+   dark mode; collapses to the standard neutral header in light mode so
+   we don't leave a dark block on a light page. */
 .sched-accent-header {
+    background-color: #f1f3f5 !important;
+    color: var(--bs-body-color) !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+.sched-accent-header i { color: var(--bs-primary); }
+[data-bs-theme="dark"] .sched-accent-header {
     background: linear-gradient(135deg, #1e293b 0%, #243a6b 50%, #2b4d8c 100%) !important;
     color: #fff !important;
     border-bottom: 1px solid rgba(0, 0, 0, 0.25);
 }
-.sched-accent-header .text-muted { color: rgba(255, 255, 255, 0.7) !important; }
-.sched-accent-header i { color: #9ec5fe; }
+[data-bs-theme="dark"] .sched-accent-header .text-muted { color: rgba(255, 255, 255, 0.7) !important; }
+[data-bs-theme="dark"] .sched-accent-header i { color: #9ec5fe; }
 
 /* Mobile: thin the x-axis labels so they don't crash together, and drop
    the per-block plan/time column so the client name can breathe. */
@@ -707,7 +715,7 @@ function bbs_histogram_ticks(int $max): array
 
     <?php if (!empty($continuous)): ?>
     <div class="card border-0 shadow-sm mb-3">
-        <div class="card-header bg-body fw-semibold">
+        <div class="card-header fw-semibold">
             <i class="bi bi-arrow-repeat me-1"></i>Continuous schedules
         </div>
         <div class="card-body">
@@ -729,7 +737,7 @@ function bbs_histogram_ticks(int $max): array
 
     <?php if (!empty($otherSchedules)): ?>
     <div class="card border-0 shadow-sm mb-3">
-        <div class="card-header bg-body fw-semibold">
+        <div class="card-header fw-semibold">
             <i class="bi bi-calendar-month me-1"></i>Monthly schedules
         </div>
         <div class="card-body">
