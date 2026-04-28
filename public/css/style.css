@@ -488,6 +488,12 @@ body.bg-body-secondary {
     background-color: #f1f3f5;
     color: var(--bs-body-color);
     border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    /* Shrunk from Bootstrap's default 1rem to ~14px (0.875rem) site-wide
+       per UX feedback — the previous size felt too heavy for headers
+       that mostly carry a title + an icon. Applies to all pages
+       (dashboard, schedules, settings, etc.); wins over Bootstrap's
+       default without per-card overrides. */
+    font-size: 0.875rem;
 }
 
 .card.card-no-outline {
