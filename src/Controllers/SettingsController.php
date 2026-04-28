@@ -266,6 +266,20 @@ class SettingsController extends Controller
             }
         }
 
+        // Handle app icon (browser tab + apple touch + PWA — single source,
+        // dynamically resized at request time via /branding/icon/{size}).
+        if (!empty($_POST['remove_branding_app_icon'])) {
+            $this->db->query("DELETE FROM settings WHERE `key` = 'branding_app_icon'");
+            $saved[] = 'App icon removed';
+        } elseif (!empty($_POST['branding_app_icon_data'])) {
+            $data = $_POST['branding_app_icon_data'];
+            $decoded = base64_decode($data, true);
+            if ($decoded && substr($decoded, 0, 4) === "\x89PNG") {
+                $this->saveSetting('branding_app_icon', $data);
+                $saved[] = 'App icon updated';
+            }
+        }
+
         // Login page theme override
         $loginTheme = $_POST['branding_login_theme'] ?? 'default';
         if (in_array($loginTheme, ['default', 'dark', 'light'])) {

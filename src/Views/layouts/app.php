@@ -9,15 +9,15 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="/css/style.css?v=<?= filemtime(__DIR__ . '/../../../public/css/style.css') ?>" rel="stylesheet">
     <link rel="manifest" href="/manifest.json">
-    <!-- Favicons + apple-touch-icon. PNG sizes cover modern browsers and
-         Android Chrome; the .ico at the public root catches legacy
-         /favicon.ico auto-requests. apple-touch-icon (180px) covers iOS
-         home-screen pinning. All generated from public/images/favicon.png. -->
-    <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="96x96" href="/images/favicon-96x96.png">
+    <!-- Favicons + apple-touch-icon. Served by BrandingController, which
+         resizes a single uploaded source (or the bundled mascot default)
+         to whatever size the browser asks for. The legacy /favicon.ico
+         at the public root still catches old auto-requests. -->
+    <link rel="icon" type="image/png" sizes="16x16" href="/branding/icon/16">
+    <link rel="icon" type="image/png" sizes="32x32" href="/branding/icon/32">
+    <link rel="icon" type="image/png" sizes="96x96" href="/branding/icon/96">
     <link rel="shortcut icon" href="/favicon.ico">
-    <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/branding/icon/180">
     <meta name="theme-color" content="#2c3e50">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">

@@ -1551,12 +1551,19 @@ document.getElementById('oidcNewUserPolicy').addEventListener('change', function
             <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
             <input type="hidden" name="branding_icon_data" id="brandingIconData">
             <input type="hidden" name="branding_login_logo_data" id="brandingLoginLogoData">
+            <input type="hidden" name="branding_app_icon_data" id="brandingAppIconData">
 
             <!-- Navbar Icon -->
             <div class="row mb-4">
                 <div class="col-md-7">
                     <h6><i class="bi bi-image me-1"></i> Navbar Icon</h6>
-                    <p class="text-muted small">Transparent PNG shown in the top-left corner of every page. Wide landscape artwork works best — it sits in a ~115×100px slot and overflows slightly into the page header. Will be resized to fit within 360×200 pixels max.</p>
+                    <p class="text-muted small">
+                        Transparent PNG shown in the top-left corner of every page (sits in a ~115×100px slot
+                        and overflows slightly into the page header). Also reused as the small header logo on
+                        the <strong>mobile login screen</strong>, since the wider Login Page Logo would crowd a
+                        phone-width pane. Wide landscape artwork works best. Will be resized to fit within
+                        360×200 pixels max.
+                    </p>
                     <input type="file" class="form-control form-control-sm" id="iconFileInput" accept="image/png">
                     <div class="small text-muted mt-1" id="iconDimensions"></div>
                     <?php if (!empty($settings['branding_icon'])): ?>
@@ -1610,15 +1617,51 @@ document.getElementById('oidcNewUserPolicy').addEventListener('change', function
                 </div>
             </div>
 
-            <?php /*
-            Login Page Theme override commented out — the new login design is
-            built specifically for dark and only works in dark. Re-enable
-            this block once light styling exists.
+            <hr>
+
+            <!-- App Icon / Favicon — single source for browser tab, Apple
+                 home-screen, and PWA. Resized on the fly by BrandingController. -->
+            <div class="row mb-4">
+                <div class="col-md-7">
+                    <h6><i class="bi bi-app-indicator me-1"></i> App Icon / Favorite Icon</h6>
+                    <p class="text-muted small">
+                        Square <strong>transparent PNG</strong> used as the app icon everywhere a browser or
+                        OS asks for one — browser tab favicon, Apple home-screen icon, Android / PWA install
+                        tile. Upload one high-resolution image; BBS resizes it on demand to every required
+                        size (16, 32, 48, 96, 180, 192, 512). <strong>Recommended: 512×512 transparent PNG.</strong>
+                        Anything smaller will look soft on retina screens.
+                    </p>
+                    <input type="file" class="form-control form-control-sm" id="appIconFileInput" accept="image/png">
+                    <div class="small text-muted mt-1" id="appIconDimensions"></div>
+                    <?php if (!empty($settings['branding_app_icon'])): ?>
+                    <div class="form-check mt-2">
+                        <input class="form-check-input" type="checkbox" name="remove_branding_app_icon" value="1" id="removeAppIcon">
+                        <label class="form-check-label small" for="removeAppIcon">Remove custom app icon (revert to default)</label>
+                    </div>
+                    <?php endif; ?>
+                </div>
+                <div class="col-md-5 text-center">
+                    <label class="form-label small text-muted">Preview</label>
+                    <div class="p-3 rounded bg-dark d-flex align-items-center justify-content-center" style="min-height: 200px;">
+                        <img id="appIconPreview"
+                             src="<?= !empty($settings['branding_app_icon']) ? 'data:image/png;base64,' . $settings['branding_app_icon'] : '/branding/icon/192' ?>"
+                             alt="App icon preview"
+                             style="max-width: 160px; max-height: 160px; width: auto; height: auto;">
+                    </div>
+                    <?php if (empty($settings['branding_app_icon'])): ?>
+                    <div class="text-muted small mt-1" id="appIconDefaultLabel">Default — Borg Backup Server mascot</div>
+                    <?php endif; ?>
+                </div>
+            </div>
 
             <hr>
+
             <div class="mb-4">
                 <h6><i class="bi bi-moon-stars me-1"></i> Login Page Theme</h6>
-                <p class="text-muted small">Override the login page theme independently. Useful when your logo only works well on a specific background.</p>
+                <p class="text-muted small">
+                    Override the login page theme independently. Useful when your branding only reads well on
+                    a specific background. The default ("Use Default Theme") follows the system theme.
+                </p>
                 <select class="form-select" name="branding_login_theme" style="max-width: 300px;">
                     <?php $loginTheme = $settings['branding_login_theme'] ?? 'default'; ?>
                     <option value="default" <?= $loginTheme === 'default' ? 'selected' : '' ?>>Use Default Theme</option>
@@ -1626,7 +1669,6 @@ document.getElementById('oidcNewUserPolicy').addEventListener('change', function
                     <option value="light" <?= $loginTheme === 'light' ? 'selected' : '' ?>>Always Light</option>
                 </select>
             </div>
-            */ ?>
 
             <button type="submit" class="btn btn-primary">
                 <i class="bi bi-check-lg me-1"></i> Save Branding
@@ -1685,6 +1727,20 @@ document.getElementById('loginLogoFileInput').addEventListener('change', functio
         document.getElementById('brandingLoginLogoData').value = dataUrl.split(',')[1];
         document.getElementById('loginLogoDimensions').textContent = 'Resized to ' + w + 'x' + h + 'px';
         var lbl = document.getElementById('loginLogoDefaultLabel');
+        if (lbl) lbl.style.display = 'none';
+    });
+});
+
+document.getElementById('appIconFileInput').addEventListener('change', function() {
+    if (!this.files[0]) return;
+    // 512×512 cap matches our biggest derived size (PWA icon-512). Anything
+    // larger than that just bloats the DB row without improving rendering.
+    resizeImage(this.files[0], 512, 512, function(dataUrl, w, h) {
+        var preview = document.getElementById('appIconPreview');
+        preview.src = dataUrl;
+        document.getElementById('brandingAppIconData').value = dataUrl.split(',')[1];
+        document.getElementById('appIconDimensions').textContent = 'Resized to ' + w + 'x' + h + 'px';
+        var lbl = document.getElementById('appIconDefaultLabel');
         if (lbl) lbl.style.display = 'none';
     });
 });

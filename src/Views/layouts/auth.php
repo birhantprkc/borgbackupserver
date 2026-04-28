@@ -1,10 +1,9 @@
 <!DOCTYPE html>
-<!-- Auth pages are always dark — the split-pane design with the navy
-     gradient and binary-stream background only works in dark. The
-     branding "Login Page Theme" override is currently disabled in
-     settings; re-enable both if/when a light variant exists. -->
-<html lang="en" data-bs-theme="dark">
+<html lang="en" data-bs-theme="<?= htmlspecialchars($defaultTheme ?? 'dark') ?>">
 <head>
+    <?php if (empty($loginThemeForced)): ?>
+    <script>(function(){var t=localStorage.getItem('bbs-theme');if(t)document.documentElement.setAttribute('data-bs-theme',t);})()</script>
+    <?php endif; ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($pageTitle ?? 'Login') ?> - Borg Backup Server</title>
@@ -13,11 +12,11 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="/css/style.css" rel="stylesheet">
     <link rel="manifest" href="/manifest.json">
-    <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="96x96" href="/images/favicon-96x96.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/branding/icon/16">
+    <link rel="icon" type="image/png" sizes="32x32" href="/branding/icon/32">
+    <link rel="icon" type="image/png" sizes="96x96" href="/branding/icon/96">
     <link rel="shortcut icon" href="/favicon.ico">
-    <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/branding/icon/180">
     <meta name="theme-color" content="#07101f">
     <style>
         html, body { height: 100%; }
@@ -174,6 +173,68 @@
         /* Mobile-only header logo. Hidden on desktop where the split-pane
            art carries the brand; shown above the form on mobile. */
         .auth-mobile-logo { display: none; }
+
+        /* ----------------------------------------------------------------
+           Light theme overrides. Same split-pane layout, but warmer
+           backgrounds and dark text so the login still works for users
+           whose branding reads better on light. The art pane keeps its
+           navy radial since that's what the mascot artwork is composed
+           against; the form pane goes light.
+           ---------------------------------------------------------------- */
+        [data-bs-theme="light"] body.auth-split {
+            background:
+                radial-gradient(ellipse 60% 50% at 50% 50%, rgba(35, 75, 165, 0.05), transparent 70%),
+                #eef1f5;
+            color: #1f2937;
+        }
+        [data-bs-theme="light"] .auth-frame {
+            background: #ffffff;
+            box-shadow:
+                0 0 0 1px rgba(15, 23, 42, 0.06),
+                0 0 30px rgba(78, 167, 255, 0.15),
+                0 0 80px rgba(78, 167, 255, 0.08),
+                0 24px 60px rgba(15, 23, 42, 0.18);
+        }
+        [data-bs-theme="light"] .auth-art {
+            /* Keep the dark navy on the art side — the mascot artwork
+               itself is composed against deep blue, lifting it off a
+               white background looks washed out. The divider then reads
+               clearly against the form pane's lighter surface. */
+            background:
+                radial-gradient(ellipse at center, rgba(35, 75, 165, 0.22), transparent 60%),
+                linear-gradient(180deg, #07101f 0%, #050a14 100%);
+            border-right: 1px solid rgba(15, 23, 42, 0.08);
+        }
+        [data-bs-theme="light"] .auth-form-pane {
+            background: linear-gradient(180deg, #ffffff 0%, #f4f6fa 100%);
+        }
+        [data-bs-theme="light"] .auth-form-inner h1 { color: #0f172a; }
+        [data-bs-theme="light"] .auth-subtitle      { color: #5b6473; }
+        [data-bs-theme="light"] .auth-form-inner .form-label {
+            color: #1f2937;
+        }
+        [data-bs-theme="light"] .auth-form-inner .form-control,
+        [data-bs-theme="light"] .auth-form-inner .input-group-text {
+            background-color: #ffffff;
+            border-color: rgba(15, 23, 42, 0.18);
+            color: #0f172a;
+        }
+        [data-bs-theme="light"] .auth-form-inner .input-group-text {
+            color: #5b6473;
+        }
+        [data-bs-theme="light"] .auth-form-inner .form-control::placeholder {
+            color: rgba(15, 23, 42, 0.35);
+        }
+        [data-bs-theme="light"] .auth-form-inner .form-control:focus {
+            background-color: #ffffff;
+            border-color: rgba(99, 161, 255, 0.6);
+            box-shadow: 0 0 0 0.2rem rgba(99, 161, 255, 0.15);
+            color: #0f172a;
+        }
+        [data-bs-theme="light"] .auth-footer        { color: #5b6473; }
+        [data-bs-theme="light"] .auth-footer a      { color: #5b6473; }
+        /* Drifting binary stream is composed for dark — hide on light. */
+        [data-bs-theme="light"] .bg-binary { display: none; }
 
         /* Background binary-stream layer. A tiny, slow drift of 0/1 glyphs
            across the page — sparse on purpose. Keeps the page from feeling
