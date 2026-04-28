@@ -174,6 +174,20 @@
            art carries the brand; shown above the form on mobile. */
         .auth-mobile-logo { display: none; }
 
+        /* When the art pane is suppressed (e.g. the upgrade page passes
+           hideAuthArt=true via #222), the form pane should fill the entire
+           frame so the upgrade log gets the full reading width. The mobile
+           logo also stays hidden — this isn't a login screen, no branding
+           cue needed. */
+        body.auth-no-art .auth-frame { max-width: 1000px; }
+        body.auth-no-art .auth-form-pane {
+            flex: 1 1 100%;
+            padding: 40px 56px 28px;
+        }
+        body.auth-no-art .auth-form-inner { max-width: none; }
+        body.auth-no-art .auth-footer     { max-width: none; }
+        body.auth-no-art .auth-mobile-logo { display: none !important; }
+
         /* ----------------------------------------------------------------
            Light theme overrides. Same split-pane layout, but warmer
            backgrounds and dark text so the login still works for users
@@ -312,9 +326,12 @@
         }
     </style>
 </head>
-<body class="auth-split">
+<body class="auth-split <?= !empty($hideAuthArt) ? 'auth-no-art' : '' ?>">
+    <?php if (empty($hideAuthArt)): ?>
     <div class="bg-binary" aria-hidden="true"></div>
+    <?php endif; ?>
     <div class="auth-frame">
+    <?php if (empty($hideAuthArt)): ?>
     <div class="auth-art">
         <?php if (!empty($loginLogo)): ?>
             <img src="data:image/png;base64,<?= $loginLogo ?>" alt="Logo" class="auth-art-logo">
@@ -345,6 +362,7 @@
             </div>
         </div>
     </div>
+    <?php endif; ?>
 
     <div class="auth-form-pane">
         <?php

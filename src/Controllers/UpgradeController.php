@@ -23,6 +23,7 @@ class UpgradeController extends Controller
         $this->authView('upgrade/index', [
             'pageTitle' => 'System Upgrade',
             'authColClass' => 'col-md-8',
+            'hideAuthArt' => true, // Suppress the login mascot/art pane (#222)
             'status' => $status,
             'release' => $release,
         ]);
