@@ -102,7 +102,7 @@ $eventColors = [
 <!-- Add Service Form (Collapse) -->
 <div class="collapse mb-4" id="addServiceForm">
     <div class="card border-0 shadow-sm">
-        <div class="card-header bg-body fw-semibold">
+        <div class="card-header fw-semibold">
             <i class="bi bi-plus-circle me-1"></i> Add Notification Service
         </div>
         <div class="card-body">

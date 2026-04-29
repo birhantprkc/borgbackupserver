@@ -78,7 +78,7 @@ $updateAvailable = $updateService->isUpdateAvailable();
     <div class="row g-4">
         <div class="col-lg-6">
             <div class="card border-0 shadow-sm">
-                <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+                <div class="card-header fw-semibold">
                     <i class="bi bi-server me-1"></i> Server
                 </div>
                 <div class="card-body">
@@ -124,7 +124,7 @@ $updateAvailable = $updateService->isUpdateAvailable();
             </div>
 
             <div class="card border-0 shadow-sm mt-4">
-                <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+                <div class="card-header fw-semibold">
                     <i class="bi bi-incognito me-1"></i> Agent
                 </div>
                 <div class="card-body">
@@ -144,7 +144,7 @@ $updateAvailable = $updateService->isUpdateAvailable();
 
         <div class="col-lg-6">
             <div class="card border-0 shadow-sm">
-                <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+                <div class="card-header fw-semibold">
                     <i class="bi bi-shield-lock me-1"></i> Security
                 </div>
                 <div class="card-body">
@@ -191,7 +191,7 @@ $updateAvailable = $updateService->isUpdateAvailable();
             </div>
 
             <div class="card border-0 shadow-sm mt-4">
-                <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+                <div class="card-header fw-semibold">
                     <i class="bi bi-shield-check me-1"></i> Server Backups
                 </div>
                 <div class="card-body">
@@ -240,7 +240,7 @@ $updateAvailable = $updateService->isUpdateAvailable();
     </div>
 
     <div class="card border-0 shadow-sm mt-4">
-        <div class="card-header bg-body fw-semibold">
+        <div class="card-header fw-semibold">
             <i class="bi bi-bar-chart me-1"></i> Usage Statistics
         </div>
         <div class="card-body">
@@ -270,7 +270,7 @@ $updateAvailable = $updateService->isUpdateAvailable();
 <div class="row g-4">
     <div class="col-lg-7">
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+            <div class="card-header fw-semibold">
                 <i class="bi bi-envelope me-1"></i> SMTP Configuration
             </div>
             <div class="card-body">
@@ -341,7 +341,7 @@ $updateAvailable = $updateService->isUpdateAvailable();
 
     <div class="col-lg-5">
         <div class="card border-0 shadow-sm mb-3">
-            <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+            <div class="card-header fw-semibold">
                 <i class="bi bi-bell me-1"></i> In-App Notifications
             </div>
             <div class="card-body">
@@ -494,7 +494,7 @@ unset($ns);
 <!-- Add Service Form (Collapse) -->
 <div class="collapse mb-4" id="addServiceForm">
     <div class="card border-0 shadow-sm">
-        <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+        <div class="card-header fw-semibold">
             <i class="bi bi-plus-circle me-1"></i> Add Notification Service
         </div>
         <div class="card-body">
@@ -1207,7 +1207,7 @@ function updateBuiltUrl(containerId, schema, prefix) {
 <!-- Templates Tab -->
 <?php if ($activeTab === 'templates'): ?>
 <div class="card border-0 shadow-sm">
-    <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+    <div class="card-header fw-semibold">
         <i class="bi bi-clipboard-check me-1"></i> Backup Templates
     </div>
     <div class="card-body">
@@ -1433,7 +1433,7 @@ function updateBuiltUrl(containerId, schema, prefix) {
 <!-- Authentication Tab -->
 <?php if ($activeTab === 'auth'): ?>
 <div class="card border-0 shadow-sm">
-    <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+    <div class="card-header fw-semibold">
         <i class="bi bi-shield-lock me-1"></i> Single Sign-On (OIDC)
     </div>
     <div class="card-body">
@@ -1541,7 +1541,7 @@ document.getElementById('oidcNewUserPolicy').addEventListener('change', function
 <!-- Branding Tab -->
 <?php if ($activeTab === 'branding'): ?>
 <div class="card border-0 shadow-sm">
-    <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+    <div class="card-header fw-semibold">
         <i class="bi bi-palette me-1"></i> Branding
     </div>
     <div class="card-body">
@@ -1750,7 +1750,7 @@ document.getElementById('appIconFileInput').addEventListener('change', function(
 <!-- API Tab -->
 <?php if ($activeTab === 'api'): ?>
 <div class="card border-0 shadow-sm">
-    <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+    <div class="card-header fw-semibold">
         <i class="bi bi-key me-1"></i> API Tokens
     </div>
     <div class="card-body">
@@ -1821,7 +1821,7 @@ document.getElementById('appIconFileInput').addEventListener('change', function(
 </div>
 
 <div class="card border-0 shadow-sm mt-4">
-    <div class="card-header bg-body fw-semibold">
+    <div class="card-header fw-semibold">
         <i class="bi bi-book me-1"></i> API Reference
     </div>
     <div class="card-body">
@@ -1921,7 +1921,7 @@ sudo /var/www/bbs/bin/bbs-token revoke "ansible"</code></pre>
 <div class="row g-4">
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+            <div class="card-header fw-semibold">
                 <i class="bi bi-box-seam me-1"></i> Borg Version Updater
             </div>
             <div class="card-body">
@@ -2035,7 +2035,7 @@ sudo /var/www/bbs/bin/bbs-token revoke "ansible"</code></pre>
 
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-primary bg-opacity-10 fw-semibold d-flex justify-content-between align-items-center">
+            <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-pc-display me-1"></i> Client Borg Versions</span>
                 <?php if (!empty($allAgents)): ?>
                 <form method="POST" action="/settings/borg/update-all"
@@ -2126,7 +2126,7 @@ sudo /var/www/bbs/bin/bbs-token revoke "ansible"</code></pre>
         <?php if ($updateMode === 'server' && !empty($serverVersions)): ?>
         <!-- Server-hosted binaries info -->
         <div class="card border-0 shadow-sm mt-4">
-            <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+            <div class="card-header fw-semibold">
                 <i class="bi bi-hdd me-1"></i> Available Server Binaries
             </div>
             <div class="card-body">
@@ -2262,7 +2262,7 @@ $outdatedCount = count($outdatedAgents);
 <div class="row g-4">
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+            <div class="card-header fw-semibold">
                 Borg Backup Server Version
             </div>
             <div class="card-body">
@@ -2336,7 +2336,7 @@ docker compose up -d</pre>
         <div id="agent-updates-card">
         <?php if ($bundledAgentVersion): ?>
         <div class="card border-0 shadow-sm mt-4">
-            <div class="card-header bg-primary bg-opacity-10 fw-semibold d-flex justify-content-between align-items-center">
+            <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-pc-display me-1"></i> BBS Client</span>
                 <span class="badge bg-success" id="agent-bundled-ver">v<?= htmlspecialchars($bundledAgentVersion) ?></span>
             </div>
@@ -2378,7 +2378,7 @@ docker compose up -d</pre>
     <?php if (!empty($latest['notes'])): ?>
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+            <div class="card-header fw-semibold">
                 <i class="bi bi-journal-text me-1"></i> Release Notes
                 <?php if (!empty($latest['url'])): ?>
                     <a href="<?= htmlspecialchars($latest['url']) ?>" target="_blank" class="float-end small text-decoration-none">
@@ -2400,7 +2400,7 @@ docker compose up -d</pre>
 <div class="row g-4">
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+            <div class="card-header fw-semibold">
                 <i class="bi bi-git me-1"></i> Developer Sync
             </div>
             <div class="card-body">
@@ -2422,7 +2422,7 @@ docker compose up -d</pre>
 
 <?php if ($upgradeResult): ?>
 <div class="card border-0 shadow-sm mt-4">
-    <div class="card-header bg-primary bg-opacity-10 fw-semibold">
+    <div class="card-header fw-semibold">
         <i class="bi bi-terminal me-1"></i> Upgrade Log
     </div>
     <div class="card-body">

@@ -21,7 +21,7 @@ $columnLabels = [
 
     <!-- Basic Info -->
     <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-body border-0">
+        <div class="card-header border-0">
             <h6 class="mb-0"><i class="bi bi-person me-2"></i>Account Information</h6>
         </div>
         <div class="card-body">
@@ -72,7 +72,7 @@ $columnLabels = [
 
     <!-- Client Access & Permissions (hidden for admins) -->
     <div class="card border-0 shadow-sm mb-4" id="clientAccessCard" style="<?= $user['role'] === 'admin' ? 'display:none' : '' ?>">
-        <div class="card-header bg-body border-0">
+        <div class="card-header border-0">
             <h6 class="mb-0"><i class="bi bi-pc-display me-2"></i>Client Access & Permissions</h6>
         </div>
         <div class="card-body">

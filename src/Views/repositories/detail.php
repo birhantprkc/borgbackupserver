@@ -102,7 +102,7 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
     <div class="col-lg-6">
         <?php if (($repo['storage_type'] ?? 'local') !== 'remote_ssh' && $s3SyncInfo): ?>
         <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-body fw-semibold d-flex justify-content-between align-items-center">
+            <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-cloud text-info me-1"></i> S3 Offsite Mirror</span>
                 <form method="POST" action="/clients/<?= $agentId ?>/repo/<?= $repo['id'] ?>/s3-config/delete" class="d-inline" data-confirm="Disable S3 sync?&#10;&#10;The repository will no longer sync to S3 after backups. Data already in S3 will remain.">
                     <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
@@ -159,7 +159,7 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
         </div>
         <?php elseif (($repo['storage_type'] ?? 'local') !== 'remote_ssh' && !empty($s3PluginConfigs)): ?>
         <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-body fw-semibold">
+            <div class="card-header fw-semibold">
                 <i class="bi bi-cloud text-muted me-1"></i> S3 Offsite Mirror
             </div>
             <div class="card-body">
@@ -188,7 +188,7 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
 
         <!-- Repository Info -->
         <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-body fw-semibold">
+            <div class="card-header fw-semibold">
                 <i class="bi bi-info-circle me-1"></i> Repository Info
             </div>
             <div class="card-body">
@@ -301,7 +301,7 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
         <!-- Recent Jobs -->
         <?php if (!empty($recentJobs)): ?>
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-body fw-semibold">
+            <div class="card-header fw-semibold">
                 <i class="bi bi-clock-history me-1"></i> Recent Jobs
             </div>
             <div class="card-body p-0">
@@ -356,7 +356,7 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
     <!-- Maintenance Actions (Right) -->
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-body fw-semibold">
+            <div class="card-header fw-semibold">
                 <i class="bi bi-tools me-1"></i> Maintenance
             </div>
             <div class="card-body">
@@ -467,7 +467,7 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
 
 <!-- Archives -->
 <div class="card border-0 shadow-sm mt-4" id="archives-section">
-    <div class="card-header bg-body fw-semibold d-flex justify-content-between align-items-center">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
         <span><i class="bi bi-stack me-1"></i> Recovery Points (<?= $archiveCount ?>)</span>
     </div>
     <div class="card-body p-0">
@@ -558,7 +558,7 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
 <?php if ($this->isAdmin()): ?>
 <hr class="mt-4 mb-0">
 <div class="card border-0 shadow-sm mt-4 border-danger">
-    <div class="card-header bg-body fw-semibold text-danger">
+    <div class="card-header fw-semibold text-danger">
         <i class="bi bi-exclamation-triangle me-1"></i> Danger Zone
     </div>
     <div class="card-body">

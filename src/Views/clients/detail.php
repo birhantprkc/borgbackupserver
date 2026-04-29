@@ -34,7 +34,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
         <div class="d-flex justify-content-between align-items-start mb-3">
             <div class="flex-fill">
                 <div class="d-flex flex-wrap align-items-center gap-2">
-                    <h3 class="mb-0">
+                    <h3 class="mb-0" style="font-size:18px;">
                         <i class="bi bi-display me-2 text-primary"></i><?= htmlspecialchars($agent['name']) ?>
                     </h3>
                     <span class="badge bg-<?= $statusClass ?>" id="agent-status-badge"><?= ucfirst($agent['status']) ?></span>
@@ -383,7 +383,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
         <!-- Backup Duration Chart -->
         <div class="col-lg-7">
             <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-body fw-semibold">
+                <div class="card-header fw-semibold">
                     <i class="bi bi-bar-chart me-1"></i> Backup Duration (Last 30)
                 </div>
                 <div class="card-body">
@@ -400,7 +400,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
         <!-- Storage by Repository -->
         <div class="col-lg-5">
             <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-body fw-semibold">
+                <div class="card-header fw-semibold">
                     <i class="bi bi-pie-chart me-1"></i> Storage by Repository
                 </div>
                 <div class="card-body">
@@ -430,54 +430,59 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
         </div>
     </div>
 
-    <!-- Row 3: Recent Activity Timeline -->
+    <!-- Row 3: Recent Activity (table) -->
     <div class="card border-0 shadow-sm">
-        <div class="card-header bg-body fw-semibold">
+        <div class="card-header fw-semibold">
             <i class="bi bi-clock-history me-1"></i> Recent Activity
         </div>
         <div class="card-body p-0">
             <?php if (empty($recentJobs)): ?>
             <div class="p-4 text-muted text-center">No activity yet.</div>
             <?php else: ?>
-            <div class="list-group list-group-flush">
-                <?php foreach (array_slice($recentJobs, 0, 10) as $job): ?>
-                <?php
-                $jIcon = match($job['status']) {
-                    'completed' => 'check-circle-fill text-success',
-                    'failed' => 'x-circle-fill text-danger',
-                    'running' => 'arrow-repeat text-info',
-                    'queued','sent' => 'hourglass-split text-warning',
-                    default => 'dash-circle text-secondary',
-                };
-                $d = $job['duration_seconds'] ?? 0;
-                $durStr = $d >= 60 ? floor($d / 60) . 'm ' . ($d % 60) . 's' : ($d > 0 ? $d . 's' : '--');
-                ?>
-                <div class="list-group-item d-flex align-items-center py-2 px-3">
-                    <i class="bi bi-<?= $jIcon ?> fs-5 me-3"></i>
-                    <div class="flex-grow-1">
-                        <div class="d-flex justify-content-between">
-                            <span class="fw-semibold"><?= ucfirst($job['task_type']) ?></span>
-                            <small class="text-muted"><?= \BBS\Core\TimeHelper::format($job['completed_at'] ?? $job['started_at'] ?? $job['queued_at'], 'M j g:ia') ?></small>
-                        </div>
-                        <div class="small text-muted">
-                            <?= htmlspecialchars($job['repo_name'] ?? '') ?>
-                            <?php if ($job['files_total']): ?>
-                                &middot; <?= number_format($job['files_total']) ?> files
-                            <?php endif; ?>
-                            &middot; <?= $durStr ?>
-                            <?php if ($job['status'] === 'failed' && $job['error_log']): ?>
-                                <?php
-                                $errFull = $job['error_log'];
-                                $errShort = mb_strlen($errFull) > 80 ? mb_substr($errFull, 0, 80) . '…' : $errFull;
-                                ?>
-                                <span class="text-danger ms-1" title="<?= htmlspecialchars(mb_substr($errFull, 0, 500)) ?>">
-                                    &middot; <i class="bi bi-exclamation-triangle"></i> <?= htmlspecialchars($errShort) ?>
-                                </span>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                </div>
-                <?php endforeach; ?>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0" style="font-size: 0.875rem;">
+                    <thead>
+                        <tr>
+                            <th style="width:36px;"></th>
+                            <th>Task</th>
+                            <th>Repo</th>
+                            <th class="text-nowrap">Time</th>
+                            <th class="text-nowrap">Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach (array_slice($recentJobs, 0, 20) as $job):
+                        $jIcon = match($job['status']) {
+                            'completed' => 'check-circle-fill text-success',
+                            'failed' => 'x-circle-fill text-danger',
+                            'running' => 'arrow-repeat text-info',
+                            'queued','sent' => 'hourglass-split text-warning',
+                            default => 'dash-circle text-secondary',
+                        };
+                        $d = (int) ($job['duration_seconds'] ?? 0);
+                        $durStr = $d >= 3600 ? floor($d / 3600) . 'h ' . floor(($d % 3600) / 60) . 'm'
+                            : ($d >= 60 ? floor($d / 60) . 'm ' . ($d % 60) . 's'
+                                : ($d > 0 ? $d . 's' : '--'));
+                        $when = $job['completed_at'] ?? $job['started_at'] ?? $job['queued_at'];
+                        $iconTitle = '';
+                        if ($job['status'] === 'failed' && !empty($job['error_log'])) {
+                            $iconTitle = mb_substr($job['error_log'], 0, 500);
+                        }
+                    ?>
+                        <tr>
+                            <td class="text-center"<?= $iconTitle ? ' title="' . htmlspecialchars($iconTitle) . '"' : '' ?>>
+                                <i class="bi bi-<?= $jIcon ?>"></i>
+                            </td>
+                            <td><?= ucfirst($job['task_type']) ?></td>
+                            <td class="text-truncate" style="max-width:240px;" title="<?= htmlspecialchars($job['repo_name'] ?? '') ?>">
+                                <?= htmlspecialchars($job['repo_name'] ?? '—') ?>
+                            </td>
+                            <td class="text-nowrap text-muted"><?= $durStr ?></td>
+                            <td class="text-nowrap text-muted"><?= $when ? \BBS\Core\TimeHelper::format($when, 'M j g:ia') : '—' ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
             </div>
             <?php endif; ?>
         </div>
@@ -856,7 +861,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
     <!-- Create new repo -->
     <div id="create-repo-section" style="display:none;">
     <div class="card border-0 shadow-sm">
-        <div class="card-header bg-body fw-semibold d-flex justify-content-between align-items-center">
+        <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
             <span><i class="bi bi-plus-circle me-1"></i> Create New Repository</span>
             <button type="button" class="btn btn-sm btn-outline-secondary" onclick="hideCreateRepo()"><i class="bi bi-arrow-left me-1"></i>Back</button>
         </div>
@@ -967,7 +972,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
     <!-- Import existing repo -->
     <div id="import-repo-section" style="display:none;">
     <div class="card border-0 shadow-sm">
-        <div class="card-header bg-body fw-semibold d-flex justify-content-between align-items-center">
+        <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
             <span><i class="bi bi-box-arrow-in-down me-1"></i> Import Existing Repository</span>
             <button type="button" class="btn btn-sm btn-outline-secondary" onclick="hideImportRepo()"><i class="bi bi-arrow-left me-1"></i>Back</button>
         </div>
@@ -1093,7 +1098,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
     <?php if (!empty($s3Orphans)): ?>
     <!-- S3 Offsite Backups (Orphaned) -->
     <div class="card border-0 shadow-sm mt-4">
-        <div class="card-header bg-body fw-semibold d-flex justify-content-between align-items-center">
+        <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
             <span><i class="bi bi-cloud text-info me-1"></i> Offsite Backups</span>
             <span class="badge text-bg-info"><?= count($s3Orphans) ?> available to restore</span>
         </div>
@@ -1303,7 +1308,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
     ?>
     <div class="collapse edit-plan-panel" id="edit-plan-<?= $plan['id'] ?>">
         <div class="card border-0 shadow-sm mb-4 border-primary">
-            <div class="card-header bg-body fw-semibold d-flex justify-content-between">
+            <div class="card-header fw-semibold d-flex justify-content-between">
                 <span><i class="bi bi-pencil me-1"></i> Edit: <?= htmlspecialchars($plan['name']) ?></span>
                 <button type="button" class="btn-close" data-bs-toggle="collapse" data-bs-target="#edit-plan-<?= $plan['id'] ?>"></button>
             </div>
@@ -1615,7 +1620,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
     <div class="alert alert-warning">You need to <a href="?tab=repos">create a repository</a> before adding a backup schedule.</div>
     <?php else: ?>
     <div class="card border-0 shadow-sm">
-        <div class="card-header bg-body fw-semibold d-flex justify-content-between align-items-center">
+        <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
             <span><i class="bi bi-plus-circle me-1"></i> Create New Backup Plan</span>
             <button type="button" class="btn btn-sm btn-outline-secondary" onclick="hideCreatePlan()"><i class="bi bi-arrow-left me-1"></i>Back</button>
         </div>
@@ -2285,7 +2290,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
     ?>
     <div class="card border-0 shadow-sm mb-3">
         <!-- Plugin Header Row -->
-        <div class="card-header bg-body d-flex align-items-center gap-3 py-3">
+        <div class="card-header d-flex align-items-center gap-3 py-3">
             <?php if ($logo): ?>
                 <img src="<?= $logo ?>" alt="" style="width:36px;height:36px;object-fit:contain;flex-shrink:0;">
             <?php elseif ($plugin['slug'] === 'shell_hook'): ?>
@@ -2562,7 +2567,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                             <?php if ($plugin['slug'] === 'mysql_dump'): ?>
                             <div class="col-lg-6 mt-3 mt-lg-0">
                                 <div class="card border-0 bg-body shadow-sm h-100">
-                                    <div class="card-header bg-body fw-semibold small py-2"><i class="bi bi-terminal me-1"></i> MySQL Setup</div>
+                                    <div class="card-header fw-semibold small py-2"><i class="bi bi-terminal me-1"></i> MySQL Setup</div>
                                     <div class="card-body small">
                                         <p class="text-muted mb-2">Create a MySQL user on the client for backups:</p>
                                         <strong>Backup Only</strong> <span class="text-muted">(recommended)</span>
@@ -2581,7 +2586,7 @@ FLUSH PRIVILEGES;</pre>
                             <?php elseif ($plugin['slug'] === 'pg_dump'): ?>
                             <div class="col-lg-6 mt-3 mt-lg-0">
                                 <div class="card border-0 bg-body shadow-sm h-100">
-                                    <div class="card-header bg-body fw-semibold small py-2"><i class="bi bi-terminal me-1"></i> PostgreSQL Setup</div>
+                                    <div class="card-header fw-semibold small py-2"><i class="bi bi-terminal me-1"></i> PostgreSQL Setup</div>
                                     <div class="card-body small">
                                         <p class="text-muted mb-2">Create a PostgreSQL role on the client for backups:</p>
                                         <strong>Backup Only</strong> <span class="text-muted">(recommended)</span>

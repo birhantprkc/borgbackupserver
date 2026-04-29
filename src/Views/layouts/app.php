@@ -49,12 +49,12 @@
             $navIcon = $navIcons[$pageTitle ?? ''] ?? '';
             $badge = $pageTitleBadge ?? '';
             ?>
-            <span class="navbar-text fw-semibold ms-3 d-none d-sm-inline" style="font-size:1.25rem;color:rgba(255,255,255,0.75);">
+            <span class="navbar-text fw-semibold ms-3 d-none d-sm-inline" style="font-size:1.125rem;color:rgba(255,255,255,0.75);">
                 <?php if ($navIcon): ?><i class="bi <?= $navIcon ?> me-2"></i><?php endif; ?>
                 <?= htmlspecialchars($pageTitle ?? '') ?>
                 <?php if ($badge): ?><span class="badge bg-primary bg-opacity-25 text-primary ms-2" style="font-size:0.55rem;vertical-align:middle;"><?= htmlspecialchars($badge) ?></span><?php endif; ?>
             </span>
-            <span class="navbar-text fw-semibold ms-2 d-sm-none" style="font-size:1.1rem;color:rgba(255,255,255,0.75);">
+            <span class="navbar-text fw-semibold ms-2 d-sm-none" style="font-size:1rem;color:rgba(255,255,255,0.75);">
                 <?php if ($navIcon): ?><i class="bi <?= $navIcon ?> me-1"></i><?php endif; ?>
                 <?= htmlspecialchars($pageTitle ?? '') ?>
             </span>
@@ -113,7 +113,7 @@
                 </a>
                 <?php endif; ?>
                 <div class="dropdown">
-                    <a class="btn btn-link text-white dropdown-toggle text-decoration-none p-1" href="#" role="button" data-bs-toggle="dropdown">
+                    <a class="btn btn-link text-white dropdown-toggle text-decoration-none p-1" href="#" role="button" data-bs-toggle="dropdown" style="font-size:0.875rem;">
                         <i class="bi bi-person-circle"></i>
                         <span class="d-none d-md-inline ms-1"><?= htmlspecialchars($_SESSION['username'] ?? 'User') ?></span>
                     </a>
@@ -199,8 +199,7 @@
                 $bbsVersionForSidebar = (new \BBS\Services\UpdateService())->getCurrentVersion();
             ?>
             <div class="text-center pb-2">
-                <span class="badge rounded-pill text-body-secondary border"
-                      style="font-weight:500;font-size:0.65rem;padding:3px 9px;background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.12) !important;">
+                <span class="badge rounded-pill sidebar-version-pill">
                     v<?= htmlspecialchars($bbsVersionForSidebar) ?>
                 </span>
             </div>
