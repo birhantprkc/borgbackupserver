@@ -236,6 +236,90 @@ class DashboardController extends Controller
     }
 
     /**
+     * GET /dashboard/active-json — fast poll (~10s) for the things the user
+     * watches in real time: active/queued job table + the top tile counts
+     * (clients online, running/queued, errors). Trimmed payload — no charts,
+     * no recent jobs, no archive totals — so it's cheap to call frequently.
+     */
+    public function apiActiveJson(): void
+    {
+        $this->requireAuth();
+
+        [$agentWhere, $agentParams] = $this->getAgentWhereClause('a');
+        $jobScope = $agentWhere === '1=1' ? '' : "AND {$agentWhere}";
+
+        $agentCount = (int) ($this->db->fetchOne(
+            "SELECT COUNT(*) as cnt FROM agents a WHERE {$agentWhere}",
+            $agentParams
+        )['cnt'] ?? 0);
+
+        $onlineCount = (int) ($this->db->fetchOne(
+            "SELECT COUNT(*) as cnt FROM agents a WHERE status = 'online' AND {$agentWhere}",
+            $agentParams
+        )['cnt'] ?? 0);
+
+        $activeJobs = $this->db->fetchAll("
+            SELECT bj.id, bj.task_type, bj.status, bj.files_total, bj.files_processed,
+                   a.name as agent_name, r.name as repo_name
+            FROM backup_jobs bj
+            JOIN agents a ON a.id = bj.agent_id
+            LEFT JOIN repositories r ON r.id = bj.repository_id
+            WHERE bj.status IN ('queued', 'running', 'sent') {$jobScope}
+            ORDER BY bj.queued_at ASC
+        ", $agentParams);
+
+        $runningJobs = 0;
+        $queuedJobs = 0;
+        foreach ($activeJobs as $j) {
+            if ($j['status'] === 'running' || $j['status'] === 'sent') $runningJobs++;
+            else $queuedJobs++;
+        }
+
+        // Error count mirrors the dashboard's main getDashboardData() query —
+        // log errors + failed jobs + unresolved alerts in the last 24h.
+        $errorCountQuery = "SELECT COUNT(*) as cnt FROM server_log sl LEFT JOIN agents a ON a.id = sl.agent_id WHERE sl.level = 'error' AND sl.created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)";
+        if ($agentWhere !== '1=1') {
+            $errorCountQuery .= " AND ({$agentWhere} OR sl.agent_id IS NULL)";
+        }
+        $logErrorCount = (int) ($this->db->fetchOne($errorCountQuery, $agentParams)['cnt'] ?? 0);
+        $failedJobCount = (int) ($this->db->fetchOne(
+            "SELECT COUNT(*) as cnt FROM backup_jobs bj JOIN agents a ON a.id = bj.agent_id
+             WHERE bj.status = 'failed' AND bj.completed_at > DATE_SUB(NOW(), INTERVAL 24 HOUR) {$jobScope}",
+            $agentParams
+        )['cnt'] ?? 0);
+        $alertScope = $agentWhere === '1=1' ? '' : "AND ({$agentWhere} OR n.agent_id IS NULL)";
+        $alertCount = (int) ($this->db->fetchOne(
+            "SELECT COUNT(*) as cnt FROM notifications n LEFT JOIN agents a ON a.id = n.agent_id
+             WHERE n.type IN ('agent_offline', 'missed_schedule')
+               AND n.resolved_at IS NULL
+               AND n.last_occurred_at > DATE_SUB(NOW(), INTERVAL 24 HOUR) {$alertScope}",
+            $agentParams
+        )['cnt'] ?? 0);
+        $errorCount = $logErrorCount + $failedJobCount + $alertCount;
+
+        $this->json([
+            'agentCount'  => $agentCount,
+            'onlineCount' => $onlineCount,
+            'runningJobs' => $runningJobs,
+            'queuedJobs'  => $queuedJobs,
+            'errorCount'  => $errorCount,
+            'activeJobs'  => array_map(static function ($j) {
+                $pct = ((int) ($j['files_total'] ?? 0)) > 0
+                    ? (int) round(((int) $j['files_processed'] / (int) $j['files_total']) * 100)
+                    : null;
+                return [
+                    'id'          => (int) $j['id'],
+                    'agent_name'  => $j['agent_name'],
+                    'task_type'   => $j['task_type'],
+                    'repo_name'   => $j['repo_name'],
+                    'status'      => $j['status'],
+                    'percent'     => $pct,
+                ];
+            }, $activeJobs),
+        ]);
+    }
+
+    /**
      * GET /api/toasts — global live event toasts (polled every 8s).
      */
     public function toasts(): void

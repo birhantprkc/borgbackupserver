@@ -92,6 +92,7 @@ class App
         $this->router->map('GET', '/dashboard/json', 'DashboardController@apiJson');
         $this->router->map('GET', '/dashboard/stats-json', 'DashboardController@apiStatsJson');
         $this->router->map('GET', '/dashboard/health-json', 'DashboardController@apiHealthJson');
+        $this->router->map('GET', '/dashboard/active-json', 'DashboardController@apiActiveJson');
 
         // Clients (Agents)
         $this->router->map('GET', '/clients', 'ClientController@index');

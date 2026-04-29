@@ -199,15 +199,18 @@ $dfFix = function (string $s): string {
         <div class="col-xl-3 col-md-6">
             <a href="/clients" class="text-decoration-none metric-tile primary d-block">
                 <div class="label"><i class="bi bi-display me-1"></i>Clients</div>
-                <div class="value"><?= $agentCount ?></div>
-                <div class="sub"><span class="text-success fw-semibold"><?= $onlineCount ?></span> online · <?= max(0, $agentCount - $onlineCount) ?> offline</div>
+                <div class="value" id="tile-agent-count"><?= $agentCount ?></div>
+                <div class="sub">
+                    <span class="text-success fw-semibold" id="tile-online-count"><?= $onlineCount ?></span>
+                    online · <span id="tile-offline-count"><?= max(0, $agentCount - $onlineCount) ?></span> offline
+                </div>
             </a>
         </div>
         <div class="col-xl-3 col-md-6">
             <a href="/queue" class="text-decoration-none metric-tile success d-block">
                 <div class="label"><i class="bi bi-arrow-repeat me-1"></i>Running</div>
-                <div class="value"><?= $runningJobs ?></div>
-                <div class="sub">active · <?= $queuedJobs ?> queued</div>
+                <div class="value" id="tile-running-count"><?= $runningJobs ?></div>
+                <div class="sub">active · <span id="tile-queued-count"><?= $queuedJobs ?></span> queued</div>
             </a>
         </div>
         <div class="col-xl-3 col-md-6">
@@ -218,9 +221,9 @@ $dfFix = function (string $s): string {
             </a>
         </div>
         <div class="col-xl-3 col-md-6">
-            <a href="/log?level=error" class="text-decoration-none metric-tile <?= $errorCount > 0 ? 'danger' : 'success' ?> d-block">
+            <a href="/log?level=error" id="tile-errors-link" class="text-decoration-none metric-tile <?= $errorCount > 0 ? 'danger' : 'success' ?> d-block">
                 <div class="label"><i class="bi bi-exclamation-circle me-1"></i>Errors (24h)</div>
-                <div class="value"><?= $errorCount ?></div>
+                <div class="value" id="tile-error-count"><?= $errorCount ?></div>
                 <div class="sub">check logs</div>
             </a>
         </div>
@@ -854,6 +857,83 @@ document.addEventListener('DOMContentLoaded', function () {
         setInterval(poll, 15000);
     })();
     <?php endif; ?>
+
+    // --- Active & Queued + top-tile counts: 10s poll ---------------------
+    // The Active/Queued table and the four hero tiles change in real time
+    // as jobs queue, run, and complete. Was previously a snapshot at page
+    // render and never updated. Polls a small JSON endpoint every 10s.
+    (function () {
+        const tileAgentCount  = document.getElementById('tile-agent-count');
+        const tileOnlineCount = document.getElementById('tile-online-count');
+        const tileOfflineCount = document.getElementById('tile-offline-count');
+        const tileRunning     = document.getElementById('tile-running-count');
+        const tileQueued      = document.getElementById('tile-queued-count');
+        const tileErrorCount  = document.getElementById('tile-error-count');
+        const tileErrorsLink  = document.getElementById('tile-errors-link');
+        const activeContainer = document.getElementById('active-jobs');
+        if (!activeContainer) return;
+
+        function escHtml(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+        function ucfirst(s) { return (s || '').charAt(0).toUpperCase() + (s || '').slice(1); }
+
+        function renderActive(jobs) {
+            if (!jobs || !jobs.length) {
+                activeContainer.innerHTML = ''
+                    + '<div class="p-5 text-muted text-center">'
+                    + '<i class="bi bi-hourglass d-block mb-2" style="font-size:1.8rem;opacity:0.4;"></i>'
+                    + '<div>No Active Jobs</div></div>';
+                return;
+            }
+            let html = '<div class="table-responsive"><table class="table table-hover mb-0 small">'
+                + '<thead><tr><th>Client</th><th>Task</th><th class="d-th-md">Repo</th><th>Status</th></tr></thead><tbody>';
+            jobs.forEach(j => {
+                const badgeClass = j.status === 'queued' ? 'text-bg-warning' : 'text-bg-primary';
+                let statusHtml;
+                if (j.percent !== null && j.percent !== undefined && j.status === 'running') {
+                    statusHtml = '<div class="progress" style="height:18px;min-width:60px;">'
+                        + '<div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width:'
+                        + j.percent + '%">' + j.percent + '%</div></div>';
+                } else {
+                    statusHtml = '<span class="badge ' + badgeClass + '">' + escHtml(ucfirst(j.status)) + '</span>';
+                }
+                html += '<tr style="cursor:pointer" onclick="window.location=\'/queue/' + j.id + '\'">'
+                    + '<td>' + escHtml(j.agent_name) + '</td>'
+                    + '<td>' + escHtml(ucfirst(j.task_type)) + '</td>'
+                    + '<td class="d-table-cell-md">' + escHtml(j.repo_name || '--') + '</td>'
+                    + '<td>' + statusHtml + '</td></tr>';
+            });
+            html += '</tbody></table></div>';
+            activeContainer.innerHTML = html;
+        }
+
+        async function pollActive() {
+            try {
+                const resp = await fetch('/dashboard/active-json', { credentials: 'same-origin' });
+                if (!resp.ok) return;
+                const d = await resp.json();
+                if (tileAgentCount)  tileAgentCount.textContent  = d.agentCount;
+                if (tileOnlineCount) tileOnlineCount.textContent = d.onlineCount;
+                if (tileOfflineCount) tileOfflineCount.textContent = Math.max(0, d.agentCount - d.onlineCount);
+                if (tileRunning)     tileRunning.textContent     = d.runningJobs;
+                if (tileQueued)      tileQueued.textContent      = d.queuedJobs;
+                if (tileErrorCount)  tileErrorCount.textContent  = d.errorCount;
+                // Repaint the errors tile color (danger ↔ success) when the count
+                // crosses zero, since the server picks the class on first render.
+                if (tileErrorsLink) {
+                    if (d.errorCount > 0) {
+                        tileErrorsLink.classList.remove('success');
+                        tileErrorsLink.classList.add('danger');
+                    } else {
+                        tileErrorsLink.classList.remove('danger');
+                        tileErrorsLink.classList.add('success');
+                    }
+                }
+                renderActive(d.activeJobs || []);
+            } catch (e) { /* silent */ }
+        }
+
+        setInterval(pollActive, 10000);
+    })();
 
     // --- Recently Completed: task-type filter ----------------------------
     (function () {
