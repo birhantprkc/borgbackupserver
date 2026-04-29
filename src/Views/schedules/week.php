@@ -458,7 +458,9 @@ function bbs_histogram_ticks(int $max): array
 }
 .sched-accent-header i { color: var(--bs-primary); }
 [data-bs-theme="dark"] .sched-accent-header {
-    background: linear-gradient(135deg, #1e293b 0%, #243a6b 50%, #2b4d8c 100%) !important;
+    /* Flat — matches the universal #1e293b header color used by
+       .card-header and .card-head-gradient in dark mode. No gradient. */
+    background: #1e293b !important;
     color: #fff !important;
     border-bottom: 1px solid rgba(0, 0, 0, 0.25);
 }
