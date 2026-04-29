@@ -10,14 +10,11 @@
 }
 .card-head-gradient i { color: var(--bs-primary); }
 [data-bs-theme="dark"] .card-head-gradient {
-    /* Flat — no gradient. The rest of the app has zero gradients, so this
-       was visually out of place. Uses the darkest stop from the previous
-       gradient (#1e293b) as the new universal dark-mode header color,
-       applied identically to .card-header and .sched-accent-header
-       below so every header matches. */
-    background: #1e293b;
+    /* Flat — same #202b3f used by .card-header in dark mode so every
+       header on every page is visually identical. */
+    background: #202b3f;
     color: #fff;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.25);
+    border-bottom: 1px solid rgb(24 24 25);
 }
 [data-bs-theme="dark"] .card-head-gradient .text-muted { color: rgba(255, 255, 255, 0.7) !important; }
 [data-bs-theme="dark"] .card-head-gradient i { color: #9ec5fe; }
@@ -989,24 +986,24 @@ body.bg-body-secondary {
 [data-bs-theme="dark"] .card {
     border: 1px solid rgba(255, 255, 255, 0.05) !important;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-    background-color: #212529;
+    background-color: #111214;
 }
 
 [data-bs-theme="dark"] .card-header {
-    /* Universal dark-mode header color — same #1e293b that .card-head-gradient
-       and .sched-accent-header use, so every card header on every page is
-       visually identical. */
-    background-color: #1e293b;
+    /* Universal dark-mode header color — also applied to
+       .card-head-gradient and .sched-accent-header below, plus .table th,
+       so every header on every page is visually identical. */
+    background-color: #202b3f;
     color: #fff;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.25);
+    border-bottom: 1px solid rgb(24 24 25);
 }
 
 [data-bs-theme="dark"] .table th {
     /* Match the card header color so a table on a page reads as a
        continuation of the header above it. */
-    background-color: #1e293b;
+    background-color: #202b3f;
     color: #d6dbe1;
-    border-bottom-color: rgba(0, 0, 0, 0.25);
+    border-bottom-color: rgb(24 24 25);
 }
 
 [data-bs-theme="dark"] .table-light {

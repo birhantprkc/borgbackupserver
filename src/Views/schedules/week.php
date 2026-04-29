@@ -458,11 +458,11 @@ function bbs_histogram_ticks(int $max): array
 }
 .sched-accent-header i { color: var(--bs-primary); }
 [data-bs-theme="dark"] .sched-accent-header {
-    /* Flat — matches the universal #1e293b header color used by
-       .card-header and .card-head-gradient in dark mode. No gradient. */
-    background: #1e293b !important;
+    /* Flat — matches the universal #202b3f header color used by
+       .card-header and .card-head-gradient in dark mode. */
+    background: #202b3f !important;
     color: #fff !important;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.25);
+    border-bottom: 1px solid rgb(24 24 25);
 }
 [data-bs-theme="dark"] .sched-accent-header .text-muted { color: rgba(255, 255, 255, 0.7) !important; }
 [data-bs-theme="dark"] .sched-accent-header i { color: #9ec5fe; }
