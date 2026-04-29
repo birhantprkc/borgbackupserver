@@ -436,15 +436,18 @@ a .stat-card {
     cursor: pointer;
 }
 
-/* Tables. Headers AND body cells both use 0.875rem (14px) site-wide so
-   tables read at the same visual weight as the card-header above them.
-   Headers are mixed case (not ALL CAPS) per design feedback. */
+/* Tables. Headers AND body cells both use 0.775rem site-wide; cell padding
+   tightened from Bootstrap's default 0.5rem to 0.3rem so rows pack denser
+   without changing the row layout. Headers are mixed case (not ALL CAPS). */
 .table {
-    font-size: 0.875rem;
+    font-size: 0.775rem;
+}
+.table > :not(caption) > * > * {
+    padding: 0.3rem 0.3rem;
 }
 .table th {
     font-weight: 600;
-    font-size: 0.875rem;
+    font-size: 0.775rem;
     text-transform: none;
     letter-spacing: 0;
     color: #6c757d;
