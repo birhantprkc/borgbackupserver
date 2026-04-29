@@ -264,7 +264,7 @@ function bbs_histogram_ticks(int $max): array
 .hist-event {
     position: absolute;
     height: 24px;
-    min-width: 46px;
+    min-width: var(--timeline-block-min-width, 46px);
     padding: 0;
     border-radius: 5px;
     border-left: 3px solid var(--agent-accent);
@@ -667,7 +667,7 @@ function bbs_histogram_ticks(int $max): array
 .sched-tooltip .tt-meta { opacity: 0.7; font-size: 0.7rem; margin-bottom: 6px; }
 .sched-tooltip ul { margin: 0; padding-left: 16px; font-size: 0.72rem; }
 .sched-tooltip.timeline-tooltip {
-    max-width: 440px;
+    max-width: min(440px, calc(100vw - 24px));
     padding: 14px 16px;
     font-size: 0.95rem;
     line-height: 1.55;
@@ -728,30 +728,37 @@ function bbs_histogram_ticks(int $max): array
         var(--bs-body-bg);
 }
 
-/* Mobile: thin the x-axis labels so they don't crash together, and drop
-   the per-block plan/time column so the client name can breathe. */
+/* Mobile: thin the x-axis labels and keep time-based block widths honest. */
 @media (max-width: 767.98px) {
     .hist-xaxis .xl[data-hour]:not([data-hour="0"]):not([data-hour="4"]):not([data-hour="8"]):not([data-hour="12"]):not([data-hour="16"]):not([data-hour="20"]) {
         display: none;
     }
-    .day-block {
-        gap: 5px;
-        padding-left: 6px;
-        padding-right: 6px;
-    }
-    .day-block .agent {
-        flex: 0 1 30%;
-        max-width: 30%;
-        font-size: 0.7rem;
-        text-align: left;
-    }
-    .day-block .side {
-        gap: 5px;
-    }
-    .day-block .side .plan { font-size: 0.66rem; }
-    .day-block .side .when { font-size: 0.62rem; }
     .hist-event {
-        min-width: 42px;
+        --timeline-block-min-width: 0px;
+        min-width: 0;
+        border-left-width: 2px;
+    }
+    .hist-seg:hover {
+        transform: none;
+        filter: brightness(1.12);
+    }
+    .day-block {
+        gap: 0;
+        padding: 0;
+        min-width: 6px;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+    }
+    .day-block::before {
+        align-self: stretch;
+        width: 6px;
+        height: auto;
+        border-radius: 0;
+        margin: 0;
+    }
+    .day-block .agent,
+    .day-block .side {
+        display: none;
     }
 }
 </style>
@@ -867,7 +874,7 @@ function bbs_histogram_ticks(int $max): array
                              data-time="<?= htmlspecialchars($b['time_label']) ?>"
                              data-duration="<?= htmlspecialchars($timelineDurLabel) ?>"
                              data-frequency="<?= htmlspecialchars($b['frequency']) ?>"
-                             style="top: <?= $laneTop ?>px; left: <?= round($startPct, 4) ?>%; width: max(46px, <?= round($durationPct, 4) ?>%); max-width: calc(100% - <?= round($startPct, 4) ?>%); --agent-accent: <?= bbs_agent_color((int) $b['agent_id']) ?>; --past-pct: <?= round($timelinePastPct, 2) ?>%;">
+                             style="top: <?= $laneTop ?>px; left: <?= round($startPct, 4) ?>%; width: max(var(--timeline-block-min-width, 46px), <?= round($durationPct, 4) ?>%); max-width: calc(100% - <?= round($startPct, 4) ?>%); --agent-accent: <?= bbs_agent_color((int) $b['agent_id']) ?>; --past-pct: <?= round($timelinePastPct, 2) ?>%;">
                         </div>
                     <?php endforeach; ?>
                     <?php if (empty($blocksByDay[$dIdx])): ?>
@@ -1180,21 +1187,79 @@ document.addEventListener('DOMContentLoaded', function () {
     function hideTooltip() { tooltip.style.display = 'none'; }
 
     function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+    const mobileScheduleQuery = window.matchMedia('(hover: none), (pointer: coarse)');
+    function isMobileScheduleMode() { return mobileScheduleQuery.matches; }
+    function scheduleTooltipHtml(el) {
+        return '<div class="tt-title">' + esc(el.dataset.planName) + '</div>' +
+            '<div class="tt-title">' + esc(el.dataset.agentName) + '</div>' +
+            '<div class="tt-meta">' + esc(el.dataset.frequency) + '</div>' +
+            'Starts: <strong>' + esc(el.dataset.time) + '</strong><br>' +
+            'Est. duration: <strong>' + esc(el.dataset.duration || '') + '</strong>' +
+            (el.dataset.estimated === '1' ? ' <span style="opacity:.6">(no history — default)</span>' : '') +
+            '<div class="tt-hint">' + (isMobileScheduleMode() && el.classList.contains('day-block') ? 'Long press for options' : 'Click for options') + '</div>';
+    }
+    function showSchedulePopup(el, ev) {
+        showTimelineTooltip(scheduleTooltipHtml(el), ev);
+    }
+
+    const dayBlockLongPressMs = 560;
+    let dayBlockLongPressTimer = null;
+    let suppressNextDayBlockClick = false;
+    let dayBlockPressPoint = null;
+    function clearDayBlockLongPress() {
+        if (dayBlockLongPressTimer) {
+            window.clearTimeout(dayBlockLongPressTimer);
+            dayBlockLongPressTimer = null;
+        }
+    }
+    function openScheduleContext(el, point) {
+        ctxScheduleId = Number(el.dataset.scheduleId);
+        ctxAgentId = Number(el.dataset.agentId);
+        hideTooltip();
+        openCtxMenu(point);
+    }
+    function suppressNextDayBlockTap() {
+        suppressNextDayBlockClick = true;
+        window.setTimeout(() => { suppressNextDayBlockClick = false; }, 1200);
+    }
 
     // Day-block hover tooltip
     document.querySelectorAll('.day-block').forEach(b => {
         b.addEventListener('mouseenter', ev => {
-            const html = '<div class="tt-title">' + esc(b.dataset.planName) + '</div>' +
-                '<div class="tt-title">' + esc(b.dataset.agentName) + '</div>' +
-                '<div class="tt-meta">' + esc(b.dataset.frequency) + '</div>' +
-                'Starts: <strong>' + esc(b.dataset.time) + '</strong><br>' +
-                'Est. duration: <strong>' + esc(b.dataset.duration) + '</strong>' +
-                (b.dataset.estimated === '1' ? ' <span style="opacity:.6">(no history — default)</span>' : '') +
-                '<div class="tt-hint">Click for options</div>';
-            showTimelineTooltip(html, ev);
+            if (isMobileScheduleMode()) return;
+            showSchedulePopup(b, ev);
         });
         b.addEventListener('mousemove', moveTooltip);
         b.addEventListener('mouseleave', hideTooltip);
+        b.addEventListener('pointerdown', ev => {
+            if (!isMobileScheduleMode() || ev.pointerType === 'mouse') return;
+            clearDayBlockLongPress();
+            suppressNextDayBlockClick = false;
+            dayBlockPressPoint = { clientX: ev.clientX, clientY: ev.clientY };
+            dayBlockLongPressTimer = window.setTimeout(() => {
+                dayBlockLongPressTimer = null;
+                suppressNextDayBlockTap();
+                openScheduleContext(b, dayBlockPressPoint);
+            }, dayBlockLongPressMs);
+        });
+        b.addEventListener('pointermove', ev => {
+            if (!dayBlockLongPressTimer || !dayBlockPressPoint) return;
+            const dx = ev.clientX - dayBlockPressPoint.clientX;
+            const dy = ev.clientY - dayBlockPressPoint.clientY;
+            if (Math.hypot(dx, dy) > 10) clearDayBlockLongPress();
+        });
+        b.addEventListener('pointerup', clearDayBlockLongPress);
+        b.addEventListener('pointercancel', clearDayBlockLongPress);
+        b.addEventListener('pointerleave', clearDayBlockLongPress);
+        b.addEventListener('contextmenu', ev => {
+            if (!isMobileScheduleMode()) return;
+            ev.preventDefault();
+            suppressNextDayBlockTap();
+            const point = (ev.clientX || ev.clientY)
+                ? { clientX: ev.clientX, clientY: ev.clientY }
+                : (dayBlockPressPoint || { clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 });
+            openScheduleContext(b, point);
+        });
     });
 
     // Timeline blocks — each one = one schedule, width ~= estimated duration.
@@ -1202,13 +1267,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // (same actions as the day-block click).
     document.querySelectorAll('.hist-seg').forEach(seg => {
         seg.addEventListener('mouseenter', ev => {
-            const html = '<div class="tt-title">' + esc(seg.dataset.planName) + '</div>' +
-                '<div class="tt-title">' + esc(seg.dataset.agentName) + '</div>' +
-                '<div class="tt-meta">' + esc(seg.dataset.frequency) + '</div>' +
-                'Starts: <strong>' + esc(seg.dataset.time) + '</strong><br>' +
-                'Est. duration: <strong>' + esc(seg.dataset.duration || '') + '</strong>' +
-                '<div class="tt-hint">Click for options</div>';
-            showTimelineTooltip(html, ev);
+            showSchedulePopup(seg, ev);
         });
         seg.addEventListener('mousemove', moveTooltip);
         seg.addEventListener('mouseleave', hideTooltip);
@@ -1230,10 +1289,17 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.day-block').forEach(b => {
         b.addEventListener('click', ev => {
             ev.preventDefault();
-            ctxScheduleId = Number(b.dataset.scheduleId);
-            ctxAgentId = Number(b.dataset.agentId);
-            hideTooltip();
-            openCtxMenu(ev);
+            if (isMobileScheduleMode()) {
+                ev.stopPropagation();
+                if (suppressNextDayBlockClick) {
+                    suppressNextDayBlockClick = false;
+                    return;
+                }
+                closeCtxMenu();
+                showSchedulePopup(b, ev);
+                return;
+            }
+            openScheduleContext(b, ev);
         });
     });
 
@@ -1249,6 +1315,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function closeCtxMenu() { ctx.style.display = 'none'; }
     document.addEventListener('click', ev => {
         if (!ctx.contains(ev.target) && !ev.target.closest('.day-block') && !ev.target.closest('.hist-seg')) closeCtxMenu();
+        if (isMobileScheduleMode() && !ev.target.closest('.day-block') && !ev.target.closest('.hist-seg')) hideTooltip();
     });
     document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { closeCtxMenu(); hideTooltip(); } });
 
