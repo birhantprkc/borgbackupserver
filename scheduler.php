@@ -1444,12 +1444,21 @@ foreach ($serverJobs as $sj) {
     }
 
     $now = date('Y-m-d H:i:s');
-    $db->update('backup_jobs', [
-        'status' => $result,
-        'completed_at' => $now,
-        'duration_seconds' => max(0, strtotime($now) - strtotime($startedAt)),
-        'error_log' => $errorOutput ?: null,
-    ], 'id = ?', [$sj['id']]);
+    // Only finalize jobs we still own (status='running'). If an external
+    // flow flipped the row to failed/cancelled while borg was running,
+    // don't clobber that with a 'completed' here (#227 — stall-detect
+    // marked the job abandoned 9s after we started, and the long delete
+    // run then overwrote 'failed' with 'completed').
+    $finalize = $db->query(
+        "UPDATE backup_jobs SET status = ?, completed_at = ?, duration_seconds = ?, error_log = ?
+         WHERE id = ? AND status = 'running'",
+        [$result, $now, max(0, strtotime($now) - strtotime($startedAt)), $errorOutput ?: null, $sj['id']]
+    );
+    if ($finalize->rowCount() === 0) {
+        $current = $db->fetchOne("SELECT status FROM backup_jobs WHERE id = ?", [$sj['id']]);
+        echo date('Y-m-d H:i:s') . " Job #{$sj['id']} ({$sj['task_type']}) finished but row was already '{$current['status']}' — leaving as-is\n";
+        continue;
+    }
 
     $level = $result === 'completed' ? 'info' : 'error';
     $db->insert('server_log', [

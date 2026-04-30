@@ -89,6 +89,10 @@ $stepIcon = function(string $status): string {
 };
 ?>
 
+<!-- Cap width on wide displays so the step list and release-notes paragraphs
+     don't stretch into one-line-of-2560px walls of text (#226). -->
+<div class="mx-auto" style="max-width: 1100px;">
+
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
         <span><i class="bi bi-cloud-arrow-down me-1"></i> System Upgrade</span>
@@ -189,6 +193,8 @@ $stepIcon = function(string $status): string {
     </div>
 </div>
 <?php endif; ?>
+
+</div><!-- /max-width wrapper (#226) -->
 
 <?php if ($inProgress): ?>
 <script>

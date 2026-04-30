@@ -59,6 +59,16 @@ class OidcService
             }
         }
 
+        // jumbojett/openid-connect-php hasn't fully migrated to PHP 8.4's
+        // explicit-nullable parameter typing yet, so PHP 8.4 prints a
+        // deprecation warning for every method on the class. Those warnings
+        // hit the response body before the library writes its redirect
+        // Location header, which then triggers the real "headers already
+        // sent" error and breaks the login flow (#231). Drop E_DEPRECATED
+        // for the lifetime of the OIDC call so the upstream noise stays
+        // out of our output.
+        error_reporting(error_reporting() & ~E_DEPRECATED);
+
         $oidc = new OpenIDConnectClient($providerUrl, $clientId, $clientSecret);
         $oidc->setRedirectURL($redirectUri);
 

@@ -282,6 +282,14 @@ html, body {
 
 .main-content {
     margin-top: 64px;
+    /* Without min-width:0 a flex child default-sizes to its content's
+       intrinsic width, so a single long unbreakable string (a borg file
+       path, a sidebar progress message) anywhere on the page can blow
+       the column past the viewport and trigger horizontal scroll
+       (#108, #209, #233). min-width:0 lets the column shrink and lets
+       descendants like .text-truncate / overflow-wrap actually do their
+       jobs. */
+    min-width: 0;
 }
 
 .topbar .navbar-text {

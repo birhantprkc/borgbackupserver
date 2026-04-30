@@ -3136,28 +3136,27 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
                                 catalog_ssh = None
                             break
 
-                elif msg_type == "progress_percent":
-                    # Borg emits these during long operations when --progress
-                    # is passed — in particular for extract/restore where the
-                    # old backup-centric "archive_progress" handler never
-                    # fires. Forward "current / total" to /api/agent/progress
-                    # so the restore UI shows a live bar instead of staying
-                    # pinned at "Starting task..." (#168).
+                elif msg_type == "progress_percent" and task_type != "backup":
+                    # Borg emits progress_percent during extract/restore where
+                    # the backup-centric archive_progress handler never fires.
+                    # Forward "current / total" as bytes so the restore UI
+                    # shows a live bar instead of staying pinned at
+                    # "Starting task..." (#168).
+                    #
+                    # During BACKUP borg 1.4+ also fires progress_percent for
+                    # internal phases like chunk-index rebuild where current/
+                    # total are item counts, not bytes. Sending those as
+                    # bytes_total stomps the real archive size with a tiny
+                    # number ("83 GB of 17 B processed", #234), so the whole
+                    # branch is skipped on backup — archive_progress drives
+                    # the UI for backups.
                     cur = entry.get("current")
                     tot = entry.get("total")
                     if cur is not None and tot not in (None, 0):
-                        # For extract these are byte offsets, not file
-                        # counts — track them as bytes. File counts are
-                        # driven separately by file_status events below.
-                        if task_type != "backup":
-                            bytes_processed = int(cur)
-                            bytes_total = int(tot)
+                        bytes_processed = int(cur)
+                        bytes_total = int(tot)
                         now = time.time()
                         if now - last_progress_time >= 3:
-                            # For backup we never hit this branch (archive_progress
-                            # drives the UI), so the "cur/tot as files" usage
-                            # below is restore-only and is actually bytes —
-                            # sent as bytes_* to the server.
                             api_request(config, "/api/agent/progress", method="POST", data={
                                 "job_id": job_id,
                                 "bytes_total": int(tot),

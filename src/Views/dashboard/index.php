@@ -221,7 +221,7 @@ $dfFix = function (string $s): string {
             </a>
         </div>
         <div class="col-xl-3 col-md-6">
-            <a href="/log?level=error" id="tile-errors-link" class="text-decoration-none metric-tile <?= $errorCount > 0 ? 'danger' : 'success' ?> d-block">
+            <a href="/log?level=error&hours=24" id="tile-errors-link" class="text-decoration-none metric-tile <?= $errorCount > 0 ? 'danger' : 'success' ?> d-block">
                 <div class="label"><i class="bi bi-exclamation-circle me-1"></i>Errors (24h)</div>
                 <div class="value" id="tile-error-count"><?= $errorCount ?></div>
                 <div class="sub">check logs</div>
