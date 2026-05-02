@@ -309,39 +309,6 @@ class ScheduleController extends Controller
             $shownAgents[(int) $o['agent_id']] = $o['agent_name'];
         }
 
-        // Per-day histograms with 60-minute buckets. The day-view timeline
-        // handles 30-minute resolution where it actually matters.
-        $histBucketMin = 60;
-        $histBucketCount = 1440 / $histBucketMin; // 24
-        $histograms = [];
-        for ($d = 0; $d < 7; $d++) {
-            $histograms[$d] = [];
-            for ($b = 0; $b < $histBucketCount; $b++) {
-                $histograms[$d][$b] = ['total' => 0, 'schedules' => []];
-            }
-        }
-        foreach ($blocks as $blk) {
-            $d = $blk['day_idx'];
-            $bIdx = (int) floor($blk['start_min'] / $histBucketMin);
-            $histograms[$d][$bIdx]['total']++;
-            $histograms[$d][$bIdx]['schedules'][] = [
-                'schedule_id' => $blk['schedule_id'],
-                'agent_id' => $blk['agent_id'],
-                'agent_name' => $blk['agent_name'],
-                'plan_name' => $blk['plan_name'],
-                'time' => $blk['time_label'],
-                'frequency' => $blk['frequency'],
-            ];
-        }
-        // Compute global max across all days so the y-axis scale is consistent
-        // when switching days (otherwise bars jump around visually).
-        $histMax = 0;
-        foreach ($histograms as $day) {
-            foreach ($day as $bucket) {
-                if ($bucket['total'] > $histMax) $histMax = $bucket['total'];
-            }
-        }
-
         // Raw schedule map for the "Change Time" modal. Keyed by schedule id.
         $scheduleMap = [];
         foreach ($schedules as $s) {
@@ -360,10 +327,6 @@ class ScheduleController extends Controller
         $this->view('schedules/week', [
             'pageTitle' => 'Schedules',
             'blocks' => $blocks,
-            'histograms' => $histograms,
-            'histBucketCount' => $histBucketCount,
-            'histBucketMin' => $histBucketMin,
-            'histMax' => $histMax,
             'is24h' => \BBS\Core\TimeHelper::is24h(),
             'scheduleMap' => $scheduleMap,
             'continuous' => $continuous,
