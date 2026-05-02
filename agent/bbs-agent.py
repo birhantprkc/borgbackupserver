@@ -45,7 +45,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.29.10"
+AGENT_VERSION = "2.29.11"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -233,9 +233,14 @@ def load_config():
 def api_request(config, endpoint, method="GET", data=None, timeout=60):
     """Make an authenticated request to the BBS server."""
     url = "{}{}".format(config['server_url'], endpoint)
+    # Cloudflare blocks Python's default "Python-urllib/3.x" User-Agent with
+    # a 1010 challenge, so a BBS server fronted by Cloudflare returns 403 to
+    # every agent request and the registration loop gives up (#237). A
+    # named UA also makes our traffic identifiable in server access logs.
     headers = {
         "Authorization": "Bearer {}".format(config['api_key']),
         "Content-Type": "application/json",
+        "User-Agent": "BBS-Agent/{}".format(AGENT_VERSION),
     }
 
     body = None
@@ -1132,6 +1137,7 @@ def execute_update_agent(config, task):
         url = "{}/api/agent/download?file=bbs-agent.py".format(config['server_url'])
         headers = {
             "Authorization": "Bearer {}".format(config['api_key']),
+            "User-Agent": "BBS-Agent/{}".format(AGENT_VERSION),
         }
         req = urllib.request.Request(url, headers=headers, method="GET")
 
