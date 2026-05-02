@@ -1455,8 +1455,18 @@ foreach ($serverJobs as $sj) {
         [$result, $now, max(0, strtotime($now) - strtotime($startedAt)), $errorOutput ?: null, $sj['id']]
     );
     if ($finalize->rowCount() === 0) {
+        // Surface the race in the activity log too, not just stdout, so an
+        // admin can see why a long-running server-side job ended without a
+        // matching "Server-side X completed" entry (PR #228, credit @SAY-5).
         $current = $db->fetchOne("SELECT status FROM backup_jobs WHERE id = ?", [$sj['id']]);
-        echo date('Y-m-d H:i:s') . " Job #{$sj['id']} ({$sj['task_type']}) finished but row was already '{$current['status']}' — leaving as-is\n";
+        $existingStatus = $current['status'] ?? 'unknown';
+        $db->insert('server_log', [
+            'agent_id' => $sj['agent_id'],
+            'backup_job_id' => $sj['id'],
+            'level' => 'warning',
+            'message' => "Server-side {$sj['task_type']} job #{$sj['id']} finished, but its status was already '{$existingStatus}' (likely an abandoned/cancelled report came in mid-flight); not overwriting.",
+        ]);
+        echo date('Y-m-d H:i:s') . " Job #{$sj['id']} ({$sj['task_type']}) finished but row was already '{$existingStatus}' — leaving as-is\n";
         continue;
     }
 
