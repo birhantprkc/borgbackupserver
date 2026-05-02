@@ -45,7 +45,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.29.9"
+AGENT_VERSION = "2.29.10"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -3324,6 +3324,16 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
                     "file changed while we backed it up", # active mysql / mailspool / log
                     "file vanished while we backed it up",# transient files
                     "stat: [Errno 2]",                    # file deleted between scan and read
+                    # OS-level "you can't read this" errors on files we don't
+                    # control — registry hives on Windows, system caches on
+                    # macOS, iCloud-synced folders. The user can't grant the
+                    # backup process access, so flagging every backup with
+                    # had_warnings just adds noise (#236). Error codes in
+                    # brackets are locale-independent.
+                    "[WinError 5]",                       # Windows: Access denied (NTUSER.DAT, special folders)
+                    "[Errno 13]",                         # POSIX: Permission denied
+                    "[Errno 1]",                          # POSIX: Operation not permitted (macOS SIP)
+                    "[Errno 11]",                         # POSIX: Resource (deadlock) — common in macOS iCloud
                 )
                 warning_lines = [
                     ln for ln in error_output.splitlines() if ln.strip()

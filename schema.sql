@@ -281,7 +281,7 @@ CREATE TABLE server_log (
 
 CREATE TABLE settings (
     `key` VARCHAR(100) PRIMARY KEY,
-    `value` TEXT DEFAULT NULL
+    `value` MEDIUMTEXT DEFAULT NULL
 );
 
 INSERT INTO settings (`key`, `value`) VALUES

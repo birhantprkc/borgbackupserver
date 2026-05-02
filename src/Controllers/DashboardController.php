@@ -275,27 +275,13 @@ class DashboardController extends Controller
             else $queuedJobs++;
         }
 
-        // Error count mirrors the dashboard's main getDashboardData() query —
-        // log errors + failed jobs + unresolved alerts in the last 24h.
+        // Tile links to /log?level=error&hours=24, so count only what that
+        // page renders. See getDashboardData() for the rationale (#235).
         $errorCountQuery = "SELECT COUNT(*) as cnt FROM server_log sl LEFT JOIN agents a ON a.id = sl.agent_id WHERE sl.level = 'error' AND sl.created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)";
         if ($agentWhere !== '1=1') {
             $errorCountQuery .= " AND ({$agentWhere} OR sl.agent_id IS NULL)";
         }
-        $logErrorCount = (int) ($this->db->fetchOne($errorCountQuery, $agentParams)['cnt'] ?? 0);
-        $failedJobCount = (int) ($this->db->fetchOne(
-            "SELECT COUNT(*) as cnt FROM backup_jobs bj JOIN agents a ON a.id = bj.agent_id
-             WHERE bj.status = 'failed' AND bj.completed_at > DATE_SUB(NOW(), INTERVAL 24 HOUR) {$jobScope}",
-            $agentParams
-        )['cnt'] ?? 0);
-        $alertScope = $agentWhere === '1=1' ? '' : "AND ({$agentWhere} OR n.agent_id IS NULL)";
-        $alertCount = (int) ($this->db->fetchOne(
-            "SELECT COUNT(*) as cnt FROM notifications n LEFT JOIN agents a ON a.id = n.agent_id
-             WHERE n.type IN ('agent_offline', 'missed_schedule')
-               AND n.resolved_at IS NULL
-               AND n.last_occurred_at > DATE_SUB(NOW(), INTERVAL 24 HOUR) {$alertScope}",
-            $agentParams
-        )['cnt'] ?? 0);
-        $errorCount = $logErrorCount + $failedJobCount + $alertCount;
+        $errorCount = (int) ($this->db->fetchOne($errorCountQuery, $agentParams)['cnt'] ?? 0);
 
         $this->json([
             'agentCount'  => $agentCount,
@@ -416,38 +402,22 @@ class DashboardController extends Controller
         $queuedJobs = $this->db->fetchOne(
             "SELECT COUNT(*) as cnt FROM backup_jobs bj JOIN agents a ON a.id = bj.agent_id WHERE bj.status = 'queued' {$jobScope}", $jobParams
         )['cnt'];
+        // The "Errors (24h)" tile links straight to /log?level=error&hours=24,
+        // so the count must match what that page renders — otherwise the tile
+        // says "5 errors" and the linked page is empty (#235). Failed jobs
+        // already write a level=error server_log row from the agent status
+        // endpoint and the scheduler's stale/zombie sweepers, so they're
+        // captured here without a separate count. Operational alerts
+        // (agent_offline, missed_schedule) live in /notifications.
         $errorCountQuery = "SELECT COUNT(*) as cnt FROM server_log sl LEFT JOIN agents a ON a.id = sl.agent_id WHERE sl.level = 'error' AND sl.created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)";
         if ($agentWhere !== '1=1') {
             $errorCountQuery .= " AND ({$agentWhere} OR sl.agent_id IS NULL)";
         }
-        $logErrorCount = (int) $this->db->fetchOne($errorCountQuery, $jobParams)['cnt'];
+        $errorCount = (int) $this->db->fetchOne($errorCountQuery, $jobParams)['cnt'];
 
-        $failedJobCount = (int) $this->db->fetchOne(
-            "SELECT COUNT(*) as cnt
-             FROM backup_jobs bj
-             JOIN agents a ON a.id = bj.agent_id
-             WHERE bj.status = 'failed'
-               AND bj.completed_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
-               {$jobScope}",
-            $jobParams
-        )['cnt'];
-
-        // Operational alerts such as an offline client missing a schedule do not
-        // always create a failed backup_job row, but they are still dashboard
-        // errors the user needs to notice.
+        // Still computed for the activity chart below, which segments the
+        // hourly bar by job-failures and alerts.
         $alertScope = $agentWhere === '1=1' ? '' : "AND ({$agentWhere} OR n.agent_id IS NULL)";
-        $operationalAlertCount = (int) $this->db->fetchOne(
-            "SELECT COUNT(*) as cnt
-             FROM notifications n
-             LEFT JOIN agents a ON a.id = n.agent_id
-             WHERE n.type IN ('agent_offline', 'missed_schedule')
-               AND n.resolved_at IS NULL
-               AND n.last_occurred_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
-               {$alertScope}",
-            $jobParams
-        )['cnt'];
-
-        $errorCount = $logErrorCount + $failedJobCount + $operationalAlertCount;
 
         // Optional task-type filter for the Recently Completed list. Accepts
         // a comma-separated list of category keys (backup, restore, prune,
