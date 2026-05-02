@@ -1002,8 +1002,8 @@ body.bg-body-secondary {
 
 [data-bs-theme="dark"] .card-header {
     /* Universal dark-mode header color — also applied to
-       .card-head-gradient and .sched-accent-header below, plus .table th,
-       so every header on every page is visually identical. */
+       .card-head-gradient below, plus .table th, so every header on
+       every page is visually identical. */
     background-color: #202b3f;
     color: #fff;
     border-bottom: 1px solid rgb(24 24 25);

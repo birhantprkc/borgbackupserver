@@ -53,12 +53,37 @@ $currentTimeLabel = $is24h ? $nowInUserTz->format('H:i') : $nowInUserTz->format(
 
 function bbs_agent_color(int $id): string
 {
-    // Per-agent hue (137° spacing keeps adjacent IDs visually distinct).
-    // Saturation/lightness pulled down from (55%, 45%) → (32%, 38%) so
-    // the schedule blocks sit in the dark-navy palette of the rest of
-    // the app instead of looking like a saturated bar chart.
+    // Per-agent accent only. Blocks keep the dashboard-blue base color;
+    // this hue is used as a thin identity stripe/dot so clients stay distinct.
     $hue = ($id * 137) % 360;
-    return "hsl({$hue}, 32%, 38%)";
+    return "hsl({$hue}, 58%, 56%)";
+}
+
+function bbs_day_block_progress_pct(int $dayIdx, int $startMin, float $heightPx, int $todayIdx, int $currentMinuteOfDay, int $pxPerHour): float
+{
+    if ($dayIdx < $todayIdx) return 100.0;
+    if ($dayIdx > $todayIdx) return 0.0;
+
+    $topPx = $startMin * ($pxPerHour / 60);
+    $linePx = $currentMinuteOfDay * ($pxPerHour / 60);
+    $pastPx = $linePx - $topPx;
+
+    return min(100.0, max(0.0, ($pastPx / max(1.0, $heightPx)) * 100));
+}
+
+function bbs_schedule_progress_pct(int $dayIdx, int $startMin, int $durationMin, int $todayIdx, int $currentMinuteOfDay): float
+{
+    if ($dayIdx < $todayIdx) return 100.0;
+    if ($dayIdx > $todayIdx) return 0.0;
+
+    return min(100.0, max(0.0, (($currentMinuteOfDay - $startMin) / max(1, $durationMin)) * 100));
+}
+
+function bbs_day_block_phase(float $pastPct): string
+{
+    if ($pastPct >= 99.9) return 'past';
+    if ($pastPct <= 0.0) return 'future';
+    return 'active';
 }
 
 // Pick a set of "nice" y-axis tick values for the histogram, including 0 and
@@ -78,13 +103,43 @@ function bbs_histogram_ticks(int $max): array
 ?>
 
 <style>
+:root {
+    --schedule-laser: #0d6efd;
+    --schedule-laser-hot: #36a2eb;
+    --schedule-laser-core: #eaf6ff;
+    --schedule-flow-trail: rgba(13, 110, 253, 0.14);
+    --schedule-flow-trail-strong: rgba(54, 162, 235, 0.26);
+    --schedule-grid-bg: linear-gradient(180deg, rgba(13, 110, 253, 0.04), var(--bs-tertiary-bg));
+    --schedule-block-bg: #2f73c9;
+    --schedule-block-bg-2: #224f93;
+    --schedule-concrete-bg: #c5cad2;
+    --schedule-concrete-bg-2: #9da6b2;
+    --schedule-concrete-ink: #1f2933;
+    --schedule-concrete-line: rgba(43, 50, 60, 0.14);
+}
+[data-bs-theme="dark"] {
+    --schedule-laser: #36a2ff;
+    --schedule-laser-hot: #79e7ff;
+    --schedule-laser-core: #f0fbff;
+    --schedule-flow-trail: rgba(54, 162, 255, 0.12);
+    --schedule-flow-trail-strong: rgba(13, 202, 240, 0.28);
+    --schedule-grid-bg: linear-gradient(180deg, rgba(54, 162, 255, 0.055), #1f252d);
+    --schedule-block-bg: #1e63ad;
+    --schedule-block-bg-2: #17395f;
+    --schedule-concrete-bg: #56616e;
+    --schedule-concrete-bg-2: #333b45;
+    --schedule-concrete-ink: #f1f5f9;
+    --schedule-concrete-line: rgba(255, 255, 255, 0.08);
+}
+.schedule-shell {
+    color-scheme: light dark;
+}
 .hist-container {
     position: relative;
     height: 170px;
-    display: grid;
-    column-gap: 1px;
-    align-items: end;
+    display: block;
     padding-bottom: 4px;
+    isolation: isolate;
 }
 .hist-gridlines {
     position: absolute;
@@ -93,6 +148,7 @@ function bbs_histogram_ticks(int $max): array
     left: 56px;   /* start after the yaxis column */
     right: 0;
     pointer-events: none;
+    z-index: 1;
 }
 .hist-gridlines .hline {
     position: absolute;
@@ -115,9 +171,10 @@ function bbs_histogram_ticks(int $max): array
     top: 0;
     bottom: 18px;
     width: 0;
-    border-left: 2px solid var(--bs-danger);
-    z-index: 3;
+    border-left: 2px solid var(--schedule-laser-core);
+    z-index: 5;
     pointer-events: none;
+    filter: drop-shadow(0 0 8px var(--schedule-laser-hot));
 }
 .hist-current-time-line::before {
     content: "";
@@ -127,22 +184,27 @@ function bbs_histogram_ticks(int $max): array
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: var(--bs-danger);
+    background: var(--schedule-laser-core);
+    box-shadow:
+        0 0 0 3px rgba(54, 162, 255, 0.18),
+        0 0 18px var(--schedule-laser-hot),
+        0 0 34px var(--schedule-laser);
 }
 .hist-current-time-line .current-time-label {
     position: absolute;
     top: 2px;
     left: 8px;
-    padding: 1px 6px;
-    border-radius: 4px;
-    background: var(--bs-danger);
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, var(--schedule-laser), #243a6b);
     color: #fff;
     font-size: 0.68rem;
     line-height: 1.25;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    box-shadow: 0 0 18px rgba(54, 162, 255, 0.38), 0 1px 4px rgba(0, 0, 0, 0.25);
 }
 .hist-current-time-line.near-end .current-time-label {
     left: auto;
@@ -155,7 +217,7 @@ function bbs_histogram_ticks(int $max): array
     justify-content: flex-end;
     height: 100%;
     padding-bottom: 18px;
-    z-index: 1;
+    z-index: 2;
 }
 .hist-bar {
     width: 100%;
@@ -171,12 +233,96 @@ function bbs_histogram_ticks(int $max): array
     flex: 1 1 0;
     min-height: 6px;
     cursor: pointer;
+    background:
+        linear-gradient(90deg, var(--agent-accent), rgba(255, 255, 255, 0.24) 8%, transparent 26%),
+        linear-gradient(180deg, var(--schedule-laser-hot), var(--schedule-block-bg));
     transition: filter 0.1s, transform 0.1s;
+}
+.hist-timeline-axis {
+    position: absolute;
+    top: 8px;
+    bottom: 22px;
+    left: 0;
+    width: 50px;
+    color: var(--bs-secondary-color);
+    font-size: 0.66rem;
+    line-height: 1.15;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    text-align: right;
+    padding-right: 6px;
+}
+.hist-timeline-area {
+    position: absolute;
+    top: 8px;
+    bottom: 22px;
+    left: 56px;
+    right: 0;
+    z-index: 2;
+}
+.hist-event {
+    position: absolute;
+    height: 24px;
+    min-width: var(--timeline-block-min-width, 46px);
+    padding: 0;
+    border-radius: 5px;
+    border-left: 3px solid var(--agent-accent);
+    color: #fff;
+    overflow: hidden;
+    text-decoration: none;
+    background:
+        radial-gradient(circle at 0% 50%, rgba(255, 255, 255, 0.2), transparent 42px),
+        linear-gradient(135deg, var(--schedule-block-bg), var(--schedule-block-bg-2));
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+.hist-event::before {
+    display: none;
+}
+.hist-event::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: var(--past-pct, 0%);
+    pointer-events: none;
+    z-index: 1;
+    background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(0, 0, 0, 0.16)),
+        repeating-linear-gradient(45deg, var(--schedule-concrete-line) 0 1px, transparent 1px 7px),
+        repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 11px),
+        linear-gradient(135deg, var(--schedule-concrete-bg), var(--schedule-concrete-bg-2));
+}
+.hist-event.is-future::after {
+    display: none;
+}
+.hist-event.is-past {
+    color: var(--schedule-concrete-ink);
+    text-shadow: none;
+}
+.hist-seg.is-past {
+    background:
+        repeating-linear-gradient(45deg, var(--schedule-concrete-line) 0 1px, transparent 1px 6px),
+        linear-gradient(180deg, var(--schedule-concrete-bg), var(--schedule-concrete-bg-2));
+    border-left: 2px solid var(--agent-accent);
 }
 .hist-seg:hover {
     filter: brightness(1.25);
     transform: scaleX(1.4);
     z-index: 5;
+}
+.hist-time-trail {
+    position: absolute;
+    top: 0;
+    bottom: 18px;
+    left: 56px;
+    z-index: 0;
+    pointer-events: none;
+    background:
+        linear-gradient(90deg, rgba(54, 162, 255, 0), var(--schedule-flow-trail), var(--schedule-flow-trail-strong)),
+        repeating-linear-gradient(90deg, transparent 0 18px, rgba(255, 255, 255, 0.06) 18px 19px);
+    box-shadow: inset -18px 0 24px rgba(54, 162, 255, 0.16);
 }
 .hist-xaxis {
     position: absolute;
@@ -218,7 +364,7 @@ function bbs_histogram_ticks(int $max): array
     flex-wrap: wrap;
 }
 .day-pill {
-    padding: 4px 14px;
+    padding: 5px 14px;
     border-radius: 999px;
     border: 1px solid var(--bs-border-color);
     background: var(--bs-body-bg);
@@ -230,13 +376,14 @@ function bbs_histogram_ticks(int $max): array
     transition: all 0.12s;
 }
 .day-pill:hover {
-    border-color: var(--bs-primary);
-    color: var(--bs-primary);
+    border-color: var(--schedule-laser);
+    color: var(--schedule-laser);
 }
 .day-pill.active {
-    background: var(--bs-primary);
+    background: linear-gradient(135deg, #243a6b, var(--schedule-laser));
     color: #fff;
-    border-color: var(--bs-primary);
+    border-color: rgba(54, 162, 235, 0.55);
+    box-shadow: 0 0 18px rgba(54, 162, 255, 0.2);
 }
 .day-pill.today {
     border-color: rgba(54, 162, 235, 0.7);
@@ -282,9 +429,10 @@ function bbs_histogram_ticks(int $max): array
 .day-col {
     position: relative;
     border-left: 1px solid var(--bs-border-color);
-    background: var(--bs-tertiary-bg);
+    background: var(--schedule-grid-bg);
     border-radius: 4px;
     overflow: hidden;
+    isolation: isolate;
 }
 .day-col .hour-line {
     position: absolute;
@@ -299,50 +447,111 @@ function bbs_histogram_ticks(int $max): array
     position: absolute;
     left: 0;
     right: 0;
-    height: 0;
-    border-top: 2px solid var(--bs-danger);
+    height: 3px;
+    border-top: 0;
+    background: linear-gradient(90deg, rgba(54, 162, 255, 0), var(--schedule-laser-hot), var(--schedule-laser-core), var(--schedule-laser));
     z-index: 20;
     pointer-events: none;
+    box-shadow:
+        0 0 8px var(--schedule-laser-hot),
+        0 0 22px rgba(54, 162, 255, 0.55),
+        0 0 42px rgba(13, 202, 240, 0.22);
 }
 .current-time-line::before {
     content: "";
     position: absolute;
-    left: -5px;
+    left: -6px;
     top: -5px;
-    width: 10px;
-    height: 10px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
-    background: var(--bs-danger);
+    background: var(--schedule-laser-core);
+    box-shadow:
+        0 0 0 4px rgba(54, 162, 255, 0.15),
+        0 0 22px var(--schedule-laser-hot),
+        0 0 44px var(--schedule-laser);
 }
 .current-time-line .current-time-label {
     position: absolute;
     right: 8px;
-    top: -11px;
-    padding: 1px 6px;
-    border-radius: 4px;
-    background: var(--bs-danger);
+    top: -13px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, var(--schedule-laser), #243a6b);
     color: #fff;
     font-size: 0.68rem;
     line-height: 1.25;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    box-shadow: 0 0 18px rgba(54, 162, 255, 0.42), 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+.time-flow-trail {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1;
+    pointer-events: none;
+    background:
+        linear-gradient(180deg, rgba(54, 162, 255, 0), var(--schedule-flow-trail) 54%, var(--schedule-flow-trail-strong)),
+        repeating-linear-gradient(135deg, transparent 0 18px, rgba(255, 255, 255, 0.035) 18px 19px);
+    box-shadow: inset 0 -20px 28px rgba(54, 162, 255, 0.12);
 }
 .day-block {
     position: absolute;
-    padding: 1px 8px;
+    padding: 2px 8px;
     border-radius: 5px;
     color: #fff;
     overflow: hidden;
     cursor: pointer;
-    border-left: 4px solid rgba(0, 0, 0, 0.35);
-    transition: opacity 0.15s, transform 0.15s;
+    border-left: 4px solid var(--agent-accent);
+    transition: opacity 0.15s, transform 0.15s, filter 0.15s;
     text-decoration: none;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    background:
+        radial-gradient(circle at 0% 50%, rgba(255, 255, 255, 0.22), transparent 44px),
+        linear-gradient(135deg, var(--schedule-block-bg), var(--schedule-block-bg-2));
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.12);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 6px;
+    gap: 7px;
+    z-index: 5;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.62);
+}
+.day-block > * {
+    position: relative;
+    z-index: 2;
+}
+.day-block::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--agent-accent);
+    box-shadow: 0 0 8px var(--agent-accent);
+    flex: 0 0 auto;
+    position: relative;
+    z-index: 2;
+}
+.day-block::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--past-pct, 0%);
+    pointer-events: none;
+    z-index: 1;
+    background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(0, 0, 0, 0.16)),
+        repeating-linear-gradient(45deg, var(--schedule-concrete-line) 0 1px, transparent 1px 7px),
+        repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 11px),
+        linear-gradient(135deg, var(--schedule-concrete-bg), var(--schedule-concrete-bg-2));
+    box-shadow: inset 0 -10px 22px rgba(0, 0, 0, 0.14);
+}
+.day-block.is-future::after {
+    display: none;
 }
 .day-block:hover {
     /* No transform: scale — it enlarged the text inside the block's fixed
@@ -350,38 +559,64 @@ function bbs_histogram_ticks(int $max): array
        rest (#171). Stronger box-shadow alone gives the lift cue. */
     z-index: 10;
     color: #fff;
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+    filter: brightness(1.08);
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.36), 0 0 22px rgba(54, 162, 255, 0.18);
+}
+.day-block.is-past:hover {
+    color: var(--schedule-concrete-ink);
+}
+.day-block.is-past {
+    color: var(--schedule-concrete-ink);
+    text-shadow: none;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.12),
+        inset 0 -10px 22px rgba(0, 0, 0, 0.16),
+        0 1px 3px rgba(0, 0, 0, 0.16);
+}
+.day-block.is-active {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.78), 0 0 5px rgba(0, 0, 0, 0.42);
+}
+.day-block.is-past::before {
+    background: var(--agent-accent);
+    box-shadow: none;
+    opacity: 0.9;
 }
 .day-block.estimated {
-    background-image: repeating-linear-gradient(
-        45deg,
-        transparent,
-        transparent 8px,
-        rgba(255, 255, 255, 0.12) 8px,
-        rgba(255, 255, 255, 0.12) 16px
-    );
+    background-image:
+        repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.12) 8px, transparent 8px, transparent 16px),
+        radial-gradient(circle at 0% 50%, rgba(255, 255, 255, 0.22), transparent 44px),
+        linear-gradient(135deg, var(--schedule-block-bg), var(--schedule-block-bg-2));
+}
+.day-block.estimated.is-past {
+    background-image:
+        repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.12) 8px, transparent 8px, transparent 16px),
+        radial-gradient(circle at 0% 50%, rgba(255, 255, 255, 0.22), transparent 44px),
+        linear-gradient(135deg, var(--schedule-block-bg), var(--schedule-block-bg-2));
 }
 .day-block .agent {
-    font-weight: 600;
-    font-size: 0.74rem;
+    font-weight: 700;
+    font-size: 0.78rem;
     /* 1.2 (not 1.0) so descenders on letters like p/g/y aren't clipped
        by the day-block's overflow:hidden */
     line-height: 1.2;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    flex: 1 1 auto;
+    text-transform: uppercase;
+    flex: 0 1 34%;
+    max-width: 34%;
     min-width: 0;
 }
 .day-block .side {
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    justify-content: center;
-    text-align: right;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    text-align: left;
     line-height: 1.2;
-    flex: 0 0 auto;
-    max-width: 60%;
+    gap: 8px;
+    flex: 1 1 auto;
+    max-width: none;
     min-width: 0;
 }
 .day-block .side > div {
@@ -390,8 +625,23 @@ function bbs_histogram_ticks(int $max): array
     text-overflow: ellipsis;
     max-width: 100%;
 }
-.day-block .side .plan { font-weight: 500; font-size: 0.6rem; opacity: 0.95; }
-.day-block .side .when { font-size: 0.58rem; opacity: 0.8; font-variant-numeric: tabular-nums; }
+.day-block .side .plan {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-weight: 700;
+    font-size: 0.72rem;
+    opacity: 0.98;
+    text-transform: uppercase;
+}
+.day-block .side .when {
+    flex: 0 1 auto;
+    max-width: 48%;
+    min-width: 0;
+    font-size: 0.68rem;
+    font-weight: 600;
+    opacity: 0.92;
+    font-variant-numeric: tabular-nums;
+}
 .dim {
     opacity: 0.12 !important;
     pointer-events: none;
@@ -416,6 +666,28 @@ function bbs_histogram_ticks(int $max): array
 .sched-tooltip .tt-title { font-weight: 600; margin-bottom: 4px; }
 .sched-tooltip .tt-meta { opacity: 0.7; font-size: 0.7rem; margin-bottom: 6px; }
 .sched-tooltip ul { margin: 0; padding-left: 16px; font-size: 0.72rem; }
+.sched-tooltip.timeline-tooltip {
+    max-width: min(440px, calc(100vw - 24px));
+    padding: 14px 16px;
+    font-size: 0.95rem;
+    line-height: 1.55;
+}
+.sched-tooltip.timeline-tooltip .tt-title {
+    font-size: 1.05rem;
+    margin-bottom: 6px;
+}
+.sched-tooltip.timeline-tooltip .tt-title + .tt-title {
+    margin-top: -2px;
+}
+.sched-tooltip.timeline-tooltip .tt-meta {
+    font-size: 0.82rem;
+    margin-bottom: 10px;
+}
+.sched-tooltip.timeline-tooltip .tt-hint {
+    margin-top: 10px;
+    opacity: 0.62;
+    font-size: 0.78rem;
+}
 
 /* Context menu */
 .sched-ctxmenu {
@@ -448,37 +720,50 @@ function bbs_histogram_ticks(int $max): array
 .sched-ctxmenu button i { width: 18px; text-align: center; }
 .sched-ctxmenu .divider { height: 1px; background: var(--bs-border-color); margin: 4px 0; }
 
-/* Accent header for the primary schedule cards. Dark navy gradient in
-   dark mode; collapses to the standard neutral header in light mode so
-   we don't leave a dark block on a light page. */
-.sched-accent-header {
-    background-color: #f1f3f5 !important;
-    color: var(--bs-body-color) !important;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+/* Compact repeated items under the timeline keep the same blue/accent system. */
+.schedule-mini-card {
+    border-left: 3px solid var(--agent-accent) !important;
+    background:
+        linear-gradient(90deg, rgba(54, 162, 255, 0.08), transparent 48%),
+        var(--bs-body-bg);
 }
-.sched-accent-header i { color: var(--bs-primary); }
-[data-bs-theme="dark"] .sched-accent-header {
-    /* Flat — matches the universal #202b3f header color used by
-       .card-header and .card-head-gradient in dark mode. */
-    background: #202b3f !important;
-    color: #fff !important;
-    border-bottom: 1px solid rgb(24 24 25);
-}
-[data-bs-theme="dark"] .sched-accent-header .text-muted { color: rgba(255, 255, 255, 0.7) !important; }
-[data-bs-theme="dark"] .sched-accent-header i { color: #9ec5fe; }
 
-/* Mobile: thin the x-axis labels so they don't crash together, and drop
-   the per-block plan/time column so the client name can breathe. */
+/* Mobile: thin the x-axis labels and keep time-based block widths honest. */
 @media (max-width: 767.98px) {
     .hist-xaxis .xl[data-hour]:not([data-hour="0"]):not([data-hour="4"]):not([data-hour="8"]):not([data-hour="12"]):not([data-hour="16"]):not([data-hour="20"]) {
         display: none;
     }
-    .day-block .side { display: none; }
-    .day-block .agent { flex: 1 1 100%; text-align: left; }
+    .hist-event {
+        --timeline-block-min-width: 0px;
+        min-width: 0;
+        border-left-width: 2px;
+    }
+    .hist-seg:hover {
+        transform: none;
+        filter: brightness(1.12);
+    }
+    .day-block {
+        gap: 0;
+        padding: 0;
+        min-width: 6px;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+    }
+    .day-block::before {
+        align-self: stretch;
+        width: 6px;
+        height: auto;
+        border-radius: 0;
+        margin: 0;
+    }
+    .day-block .agent,
+    .day-block .side {
+        display: none;
+    }
 }
 </style>
 
-<div class="container-fluid py-3">
+<div class="schedule-shell container-fluid py-3">
     <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
         <div class="text-muted small">Times shown in <?= htmlspecialchars($userTz) ?></div>
         <div class="d-flex align-items-center gap-3 flex-wrap">
@@ -514,13 +799,12 @@ function bbs_histogram_ticks(int $max): array
     </div>
     <?php else: ?>
 
-    <!-- Histogram: hour-of-day load for the selected day. 30-minute buckets
-         so 6:00 and 6:30 are distinguishable. Each 1-unit segment = one
-         schedule, hoverable and clickable. -->
+    <!-- Compact day timeline. Blocks are positioned by start time and sized by
+         the same estimated duration used by the main day view. -->
     <div class="card border-0 shadow-sm mb-3">
-        <div class="card-header sched-accent-header fw-semibold d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-bar-chart me-2"></i>Load By Hour</span>
-            <span class="text-muted small">Peak: <?= $histMax ?> <?= $histMax === 1 ? 'schedule' : 'schedules' ?></span>
+        <div class="card-header card-head-gradient fw-semibold d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-bar-chart me-2"></i>Backup Timeline</span>
+            <span class="text-muted small"><?= count($blocks) ?> <?= count($blocks) === 1 ? 'run' : 'runs' ?></span>
         </div>
         <div class="card-body py-3">
             <?php
@@ -536,23 +820,23 @@ function bbs_histogram_ticks(int $max): array
                 };
             ?>
             <?php
-                $yTicks = bbs_histogram_ticks($histMax);
                 // Hour labels every 2 hours on the x-axis. Every 6 hours gets
                 // bold weight as a "major" reference.
                 $xLabelStep = 2;
             ?>
             <?php for ($dIdx = 0; $dIdx < 7; $dIdx++): ?>
+            <?php
+                $laneCountForDay = 1;
+                foreach ($blocksByDay[$dIdx] as $timelineBlock) {
+                    $laneCountForDay = max($laneCountForDay, (int) ($timelineBlock['lane_count'] ?? 1));
+                }
+                $timelineHeight = max(112, 46 + $laneCountForDay * 30);
+            ?>
             <div class="hist-container"
                  data-day-idx="<?= $dIdx ?>"
-                 style="<?= $dIdx === $todayIdx ? '' : 'display: none;' ?> grid-template-columns: 56px repeat(<?= $histBucketCount ?>, 1fr);">
+                 style="<?= $dIdx === $todayIdx ? '' : 'display: none;' ?> height: <?= $timelineHeight ?>px;">
 
-                <!-- Background grid: horizontal lines at y-tick positions, vertical lines at each hour -->
                 <div class="hist-gridlines">
-                    <?php foreach ($yTicks as $tick): ?>
-                        <?php if ($tick === 0) continue; // bottom is already the axis baseline ?>
-                        <?php $topPct = $histMax > 0 ? (1 - $tick / $histMax) * 100 : 100; ?>
-                        <div class="hline" style="top: <?= $topPct ?>%;"></div>
-                    <?php endforeach; ?>
                     <?php for ($h = 1; $h < 24; $h++): ?>
                         <?php $leftPct = ($h / 24) * 100; ?>
                         <div class="vline" style="left: <?= $leftPct ?>%;"></div>
@@ -560,46 +844,43 @@ function bbs_histogram_ticks(int $max): array
                 </div>
                 <?php if ($dIdx === $todayIdx): ?>
                     <?php $nowLeftPct = ($currentMinuteOfDay / 1440) * 100; ?>
+                    <div class="hist-time-trail"
+                         style="width: calc((100% - 56px) * <?= $nowLeftPct / 100 ?>);"></div>
                     <div class="hist-current-time-line <?= $nowLeftPct > 80 ? 'near-end' : '' ?>"
                          style="left: calc(56px + ((100% - 56px) * <?= $nowLeftPct / 100 ?>));"
                          title="Current time in <?= htmlspecialchars($userTz) ?>">
-                        <span class="current-time-label">Now time: <?= htmlspecialchars($currentTimeLabel) ?></span>
+                        <span class="current-time-label">Time now: <?= htmlspecialchars($currentTimeLabel) ?></span>
                     </div>
                 <?php endif; ?>
 
-                <div class="hist-yaxis">
-                    <?php foreach ($yTicks as $tick): ?>
+                <div class="hist-timeline-axis">Runs</div>
+                <div class="hist-timeline-area">
+                    <?php foreach ($blocksByDay[$dIdx] as $b): ?>
                         <?php
-                        $topPct = $histMax > 0 ? (1 - $tick / $histMax) * 100 : 100;
-                        // Slight nudge at extremes to keep labels inside the chart box
-                        $extraStyle = $tick === 0 ? 'transform: translateY(-100%);' : ($tick === $histMax ? 'transform: translateY(0);' : '');
+                        $startPct = max(0, min(100, ($b['start_min'] / 1440) * 100));
+                        $durationPct = max(0.25, min(100, ($b['duration_min'] / 1440) * 100));
+                        $laneTop = (int) ($b['lane'] ?? 0) * 30;
+                        $timelinePastPct = bbs_schedule_progress_pct((int) $b['day_idx'], (int) $b['start_min'], (int) $b['duration_min'], $todayIdx, $currentMinuteOfDay);
+                        $timelinePhase = bbs_day_block_phase($timelinePastPct);
+                        $timelineDurLabel = $b['duration_min'] >= 60
+                            ? floor($b['duration_min'] / 60) . 'h ' . ($b['duration_min'] % 60) . 'm'
+                            : $b['duration_min'] . 'm';
                         ?>
-                        <span style="top: <?= $topPct ?>%; <?= $extraStyle ?>"><?= $tick ?></span>
+                        <div class="hist-seg hist-event is-<?= $timelinePhase ?>"
+                             data-schedule-id="<?= $b['schedule_id'] ?>"
+                             data-agent-id="<?= (int) $b['agent_id'] ?>"
+                             data-plan-name="<?= htmlspecialchars($b['plan_name']) ?>"
+                             data-agent-name="<?= htmlspecialchars($b['agent_name']) ?>"
+                             data-time="<?= htmlspecialchars($b['time_label']) ?>"
+                             data-duration="<?= htmlspecialchars($timelineDurLabel) ?>"
+                             data-frequency="<?= htmlspecialchars($b['frequency']) ?>"
+                             style="top: <?= $laneTop ?>px; left: <?= round($startPct, 4) ?>%; width: max(var(--timeline-block-min-width, 46px), <?= round($durationPct, 4) ?>%); max-width: calc(100% - <?= round($startPct, 4) ?>%); --agent-accent: <?= bbs_agent_color((int) $b['agent_id']) ?>; --past-pct: <?= round($timelinePastPct, 2) ?>%;">
+                        </div>
                     <?php endforeach; ?>
+                    <?php if (empty($blocksByDay[$dIdx])): ?>
+                    <div class="d-flex align-items-center text-muted small h-100" style="font-style: italic;">No scheduled runs.</div>
+                    <?php endif; ?>
                 </div>
-
-                <?php for ($b = 0; $b < $histBucketCount; $b++): ?>
-                <?php
-                    $bar = $histograms[$dIdx][$b];
-                    $total = $bar['total'];
-                    $barHeightPct = $histMax > 0 ? ($total / $histMax) * 100 : 0;
-                    $hour = $b; // 60-minute buckets — bucket index equals hour
-                ?>
-                <div class="hist-bar-wrap" data-bucket="<?= $b ?>" data-minute="<?= $hour * 60 ?>">
-                    <div class="hist-bar" style="height: <?= $barHeightPct ?>%;">
-                        <?php foreach ($bar['schedules'] as $sch): ?>
-                        <div class="hist-seg"
-                             data-schedule-id="<?= $sch['schedule_id'] ?>"
-                             data-agent-id="<?= (int) $sch['agent_id'] ?>"
-                             data-plan-name="<?= htmlspecialchars($sch['plan_name']) ?>"
-                             data-agent-name="<?= htmlspecialchars($sch['agent_name']) ?>"
-                             data-time="<?= htmlspecialchars($sch['time']) ?>"
-                             data-frequency="<?= htmlspecialchars($sch['frequency']) ?>"
-                             style="background: <?= bbs_agent_color((int) $sch['agent_id']) ?>;"></div>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
-                <?php endfor; ?>
 
                 <!-- Dedicated x-axis row below bars, spans the full bar area
                      so edge labels can be aligned flush without clipping. -->
@@ -625,7 +906,7 @@ function bbs_histogram_ticks(int $max): array
 
     <!-- Day timeline (day picker is in the page header, shared with histogram) -->
     <div class="card border-0 shadow-sm mb-3">
-        <div class="card-header sched-accent-header fw-semibold">
+        <div class="card-header card-head-gradient fw-semibold">
             <i class="bi bi-calendar-day me-2"></i>Day View
             <span class="text-muted small ms-2" id="day-view-label"></span>
         </div>
@@ -659,10 +940,12 @@ function bbs_histogram_ticks(int $max): array
                     <?php for ($dIdx = 0; $dIdx < 7; $dIdx++): ?>
                     <div class="day-content" data-day-idx="<?= $dIdx ?>" style="<?= $dIdx === $todayIdx ? '' : 'display: none;' ?>">
                         <?php if ($dIdx === $todayIdx): ?>
+                        <div class="time-flow-trail"
+                             style="height: <?= $currentMinuteOfDay * ($pxPerHour / 60) ?>px;"></div>
                         <div class="current-time-line"
                              style="top: <?= $currentMinuteOfDay * ($pxPerHour / 60) ?>px;"
                              title="Current time in <?= htmlspecialchars($userTz) ?>">
-                            <span class="current-time-label">Now time: <?= htmlspecialchars($currentTimeLabel) ?></span>
+                            <span class="current-time-label">Time now: <?= htmlspecialchars($currentTimeLabel) ?></span>
                         </div>
                         <?php endif; ?>
                         <?php foreach ($blocksByDay[$dIdx] as $b): ?>
@@ -672,6 +955,8 @@ function bbs_histogram_ticks(int $max): array
                             $laneWidth = 100 / $b['lane_count'];
                             $left = $b['lane'] * $laneWidth;
                             $color = bbs_agent_color($b['agent_id']);
+                            $pastPct = bbs_day_block_progress_pct((int) $b['day_idx'], (int) $b['start_min'], (float) $height, $todayIdx, $currentMinuteOfDay, $pxPerHour);
+                            $phase = bbs_day_block_phase($pastPct);
                             $durLabel = $b['duration_min'] >= 60
                                 ? floor($b['duration_min'] / 60) . 'h ' . ($b['duration_min'] % 60) . 'm'
                                 : $b['duration_min'] . 'm';
@@ -685,7 +970,7 @@ function bbs_histogram_ticks(int $max): array
                                 $b['estimated'] ? ' (no history)' : ''
                             );
                             ?>
-                        <div class="day-block <?= $b['estimated'] ? 'estimated' : '' ?>"
+                        <div class="day-block <?= $b['estimated'] ? 'estimated' : '' ?> is-<?= $phase ?>"
                              data-agent-id="<?= $b['agent_id'] ?>"
                              data-schedule-id="<?= $b['schedule_id'] ?>"
                              data-plan-id="<?= $b['plan_id'] ?>"
@@ -695,11 +980,11 @@ function bbs_histogram_ticks(int $max): array
                              data-time="<?= htmlspecialchars($b['time_label']) ?>"
                              data-duration="<?= htmlspecialchars($durLabel) ?>"
                              data-estimated="<?= $b['estimated'] ? '1' : '0' ?>"
-                             style="top: <?= $top ?>px; height: <?= $height ?>px; left: calc(<?= $left ?>% + 4px); width: calc(<?= $laneWidth ?>% - 8px); background: <?= $color ?>;">
+                             style="top: <?= $top ?>px; height: <?= $height ?>px; left: calc(<?= $left ?>% + 4px); width: calc(<?= $laneWidth ?>% - 8px); --agent-accent: <?= $color ?>; --past-pct: <?= round($pastPct, 2) ?>%;">
                             <div class="agent"><?= htmlspecialchars($b['agent_name']) ?></div>
                             <div class="side">
                                 <div class="plan"><?= htmlspecialchars($b['plan_name']) ?></div>
-                                <div class="when"><?= htmlspecialchars($b['time_label']) ?> · <?= htmlspecialchars($durLabel) ?><?= $b['estimated'] ? ' est' : '' ?></div>
+                                <div class="when"><?= htmlspecialchars($b['time_label']) ?> · ~<?= htmlspecialchars($durLabel) ?><?= $b['estimated'] ? ' est' : '' ?></div>
                             </div>
                         </div>
                         <?php endforeach; ?>
@@ -717,7 +1002,7 @@ function bbs_histogram_ticks(int $max): array
 
     <?php if (!empty($continuous)): ?>
     <div class="card border-0 shadow-sm mb-3">
-        <div class="card-header fw-semibold">
+        <div class="card-header card-head-gradient fw-semibold">
             <i class="bi bi-arrow-repeat me-1"></i>Continuous schedules
         </div>
         <div class="card-body">
@@ -725,8 +1010,8 @@ function bbs_histogram_ticks(int $max): array
                 <?php foreach ($continuous as $c): ?>
                 <?php $s = $c['schedule']; ?>
                 <div class="col-md-6 col-lg-4" data-agent-id="<?= (int) $s['agent_id'] ?>">
-                    <a href="/clients/<?= (int) $s['agent_id'] ?>?tab=schedules" class="d-block p-2 rounded text-decoration-none border"
-                       style="border-left: 3px solid <?= bbs_agent_color((int) $s['agent_id']) ?> !important;">
+                    <a href="/clients/<?= (int) $s['agent_id'] ?>?tab=schedules" class="schedule-mini-card d-block p-2 rounded text-decoration-none border"
+                       style="--agent-accent: <?= bbs_agent_color((int) $s['agent_id']) ?>;">
                         <div class="fw-semibold"><?= htmlspecialchars($s['plan_name']) ?></div>
                         <div class="text-muted">Runs every <?= htmlspecialchars($c['interval_label']) ?> · <?= htmlspecialchars($s['agent_name']) ?></div>
                     </a>
@@ -739,15 +1024,15 @@ function bbs_histogram_ticks(int $max): array
 
     <?php if (!empty($otherSchedules)): ?>
     <div class="card border-0 shadow-sm mb-3">
-        <div class="card-header fw-semibold">
+        <div class="card-header card-head-gradient fw-semibold">
             <i class="bi bi-calendar-month me-1"></i>Monthly schedules
         </div>
         <div class="card-body">
             <div class="row g-2 small">
                 <?php foreach ($otherSchedules as $s): ?>
                 <div class="col-md-6 col-lg-4" data-agent-id="<?= (int) $s['agent_id'] ?>">
-                    <a href="/clients/<?= (int) $s['agent_id'] ?>?tab=schedules" class="d-block p-2 rounded text-decoration-none border"
-                       style="border-left: 3px solid <?= bbs_agent_color((int) $s['agent_id']) ?> !important;">
+                    <a href="/clients/<?= (int) $s['agent_id'] ?>?tab=schedules" class="schedule-mini-card d-block p-2 rounded text-decoration-none border"
+                       style="--agent-accent: <?= bbs_agent_color((int) $s['agent_id']) ?>;">
                         <div class="fw-semibold"><?= htmlspecialchars($s['plan_name']) ?></div>
                         <div class="text-muted">
                             <?= htmlspecialchars($s['agent_name']) ?>
@@ -879,6 +1164,13 @@ document.addEventListener('DOMContentLoaded', function () {
     // ----------------- Tooltip ---------------------------------------------
     const tooltip = document.getElementById('sched-tooltip');
     function showTooltip(html, ev) {
+        tooltip.className = 'sched-tooltip';
+        tooltip.innerHTML = html;
+        tooltip.style.display = 'block';
+        moveTooltip(ev);
+    }
+    function showTimelineTooltip(html, ev) {
+        tooltip.className = 'sched-tooltip timeline-tooltip';
         tooltip.innerHTML = html;
         tooltip.style.display = 'block';
         moveTooltip(ev);
@@ -895,32 +1187,87 @@ document.addEventListener('DOMContentLoaded', function () {
     function hideTooltip() { tooltip.style.display = 'none'; }
 
     function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+    const mobileScheduleQuery = window.matchMedia('(hover: none), (pointer: coarse)');
+    function isMobileScheduleMode() { return mobileScheduleQuery.matches; }
+    function scheduleTooltipHtml(el) {
+        return '<div class="tt-title">' + esc(el.dataset.planName) + '</div>' +
+            '<div class="tt-title">' + esc(el.dataset.agentName) + '</div>' +
+            '<div class="tt-meta">' + esc(el.dataset.frequency) + '</div>' +
+            'Starts: <strong>' + esc(el.dataset.time) + '</strong><br>' +
+            'Est. duration: <strong>' + esc(el.dataset.duration || '') + '</strong>' +
+            (el.dataset.estimated === '1' ? ' <span style="opacity:.6">(no history — default)</span>' : '') +
+            '<div class="tt-hint">' + (isMobileScheduleMode() && el.classList.contains('day-block') ? 'Long press for options' : 'Click for options') + '</div>';
+    }
+    function showSchedulePopup(el, ev) {
+        showTimelineTooltip(scheduleTooltipHtml(el), ev);
+    }
+
+    const dayBlockLongPressMs = 560;
+    let dayBlockLongPressTimer = null;
+    let suppressNextDayBlockClick = false;
+    let dayBlockPressPoint = null;
+    function clearDayBlockLongPress() {
+        if (dayBlockLongPressTimer) {
+            window.clearTimeout(dayBlockLongPressTimer);
+            dayBlockLongPressTimer = null;
+        }
+    }
+    function openScheduleContext(el, point) {
+        ctxScheduleId = Number(el.dataset.scheduleId);
+        ctxAgentId = Number(el.dataset.agentId);
+        hideTooltip();
+        openCtxMenu(point);
+    }
+    function suppressNextDayBlockTap() {
+        suppressNextDayBlockClick = true;
+        window.setTimeout(() => { suppressNextDayBlockClick = false; }, 1200);
+    }
 
     // Day-block hover tooltip
     document.querySelectorAll('.day-block').forEach(b => {
         b.addEventListener('mouseenter', ev => {
-            const html = '<div class="tt-title">' + esc(b.dataset.planName) + '</div>' +
-                '<div class="tt-meta">' + esc(b.dataset.agentName) + ' · ' + esc(b.dataset.frequency) + '</div>' +
-                'Starts: <strong>' + esc(b.dataset.time) + '</strong><br>' +
-                'Est. duration: <strong>' + esc(b.dataset.duration) + '</strong>' +
-                (b.dataset.estimated === '1' ? ' <span style="opacity:.6">(no history — default)</span>' : '') +
-                '<div style="margin-top:6px;opacity:.6;font-size:.7rem;">Click for options</div>';
-            showTooltip(html, ev);
+            if (isMobileScheduleMode()) return;
+            showSchedulePopup(b, ev);
         });
         b.addEventListener('mousemove', moveTooltip);
         b.addEventListener('mouseleave', hideTooltip);
+        b.addEventListener('pointerdown', ev => {
+            if (!isMobileScheduleMode() || ev.pointerType === 'mouse') return;
+            clearDayBlockLongPress();
+            suppressNextDayBlockClick = false;
+            dayBlockPressPoint = { clientX: ev.clientX, clientY: ev.clientY };
+            dayBlockLongPressTimer = window.setTimeout(() => {
+                dayBlockLongPressTimer = null;
+                suppressNextDayBlockTap();
+                openScheduleContext(b, dayBlockPressPoint);
+            }, dayBlockLongPressMs);
+        });
+        b.addEventListener('pointermove', ev => {
+            if (!dayBlockLongPressTimer || !dayBlockPressPoint) return;
+            const dx = ev.clientX - dayBlockPressPoint.clientX;
+            const dy = ev.clientY - dayBlockPressPoint.clientY;
+            if (Math.hypot(dx, dy) > 10) clearDayBlockLongPress();
+        });
+        b.addEventListener('pointerup', clearDayBlockLongPress);
+        b.addEventListener('pointercancel', clearDayBlockLongPress);
+        b.addEventListener('pointerleave', clearDayBlockLongPress);
+        b.addEventListener('contextmenu', ev => {
+            if (!isMobileScheduleMode()) return;
+            ev.preventDefault();
+            suppressNextDayBlockTap();
+            const point = (ev.clientX || ev.clientY)
+                ? { clientX: ev.clientX, clientY: ev.clientY }
+                : (dayBlockPressPoint || { clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 });
+            openScheduleContext(b, point);
+        });
     });
 
-    // Histogram segments — each one = one schedule firing in that hour.
+    // Timeline blocks — each one = one schedule, width ~= estimated duration.
     // Hover shows a tooltip for that schedule; click opens the context menu
     // (same actions as the day-block click).
     document.querySelectorAll('.hist-seg').forEach(seg => {
         seg.addEventListener('mouseenter', ev => {
-            const html = '<div class="tt-title">' + esc(seg.dataset.planName) + '</div>' +
-                '<div class="tt-meta">' + esc(seg.dataset.agentName) + ' · ' + esc(seg.dataset.frequency) + '</div>' +
-                'Starts: <strong>' + esc(seg.dataset.time) + '</strong>' +
-                '<div style="margin-top:6px;opacity:.6;font-size:.7rem;">Click for options</div>';
-            showTooltip(html, ev);
+            showSchedulePopup(seg, ev);
         });
         seg.addEventListener('mousemove', moveTooltip);
         seg.addEventListener('mouseleave', hideTooltip);
@@ -942,10 +1289,17 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.day-block').forEach(b => {
         b.addEventListener('click', ev => {
             ev.preventDefault();
-            ctxScheduleId = Number(b.dataset.scheduleId);
-            ctxAgentId = Number(b.dataset.agentId);
-            hideTooltip();
-            openCtxMenu(ev);
+            if (isMobileScheduleMode()) {
+                ev.stopPropagation();
+                if (suppressNextDayBlockClick) {
+                    suppressNextDayBlockClick = false;
+                    return;
+                }
+                closeCtxMenu();
+                showSchedulePopup(b, ev);
+                return;
+            }
+            openScheduleContext(b, ev);
         });
     });
 
@@ -961,6 +1315,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function closeCtxMenu() { ctx.style.display = 'none'; }
     document.addEventListener('click', ev => {
         if (!ctx.contains(ev.target) && !ev.target.closest('.day-block') && !ev.target.closest('.hist-seg')) closeCtxMenu();
+        if (isMobileScheduleMode() && !ev.target.closest('.day-block') && !ev.target.closest('.hist-seg')) hideTooltip();
     });
     document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { closeCtxMenu(); hideTooltip(); } });
 
