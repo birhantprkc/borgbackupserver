@@ -116,25 +116,57 @@ fi
 detect_os() {
     print_step "Detecting operating system..."
 
-    if [ -f /etc/os-release ]; then
+    local os_version=''
+    local os_pretty=''
+
+    # First check for Enigma2-based set-top boxes (e.g. Dreambox) which have a unique environment
+    # and are not detected properly by standard methods
+    if [ -f /proc/stb/info/model ] || [ -d /proc/stb/video ]; then  # Hardware indicators of Enigma2
+        local distro=''
+        OS="enigma2"
+        # /etc/image-version (OE-Alliance Standard)
+        if [ -f /etc/image-version ]; then
+            distro=$(grep "^creator=" /etc/image-version 2>/dev/null | cut -d= -f2 | tr -d '\r')
+            os_version=$(grep "^version=" /etc/image-version 2>/dev/null | cut -d= -f2 | tr -d '\r')
+            os_pretty="$distro $os_version"
+        fi
+        # /usr/lib/enigma.info (OpenATV-specific)
+        if [ -z "$distro" ] && [ -f /usr/lib/enigma.info ]; then
+            distro=$(grep "^displaydistro=" /usr/lib/enigma.info 2>/dev/null | cut -d= -f2 | tr -d "'\r")
+            os_version=$(grep "^imgversion=" /usr/lib/enigma.info 2>/dev/null | cut -d= -f2 | tr -d "'\r")
+            os_pretty="$distro $os_version"
+        fi
+        # If still unknown, try Python boxbranding which is more robust and works across more images
+        if [ -z "$distro" ] && [ -f /usr/lib/enigma2/python/boxbranding.py ]; then
+            os_pretty=$(python3 -c "
+import sys
+sys.path.append('/usr/lib/enigma2/python')
+try:
+    from boxbranding import getImageDistro, getImageVersion
+    print('%s %s' % (getImageDistro(), getImageVersion()))
+except:
+    pass
+" 2>/dev/null)
+        fi
+    elif [ -f /etc/os-release ]; then
         . /etc/os-release
         OS=$ID
-        OS_VERSION=$VERSION_ID
-        OS_PRETTY=$PRETTY_NAME
+        os_version=$VERSION_ID
+        os_pretty=$PRETTY_NAME
     elif [ "$(uname)" = "Darwin" ]; then
         OS="macos"
-        OS_VERSION=$(sw_vers -productVersion 2>/dev/null || echo "unknown")
-        OS_PRETTY="macOS $OS_VERSION"
+        os_version=$(sw_vers -productVersion 2>/dev/null || echo "unknown")
+        os_pretty="macOS $os_version"
     elif [ "$(uname)" = "FreeBSD" ]; then
         OS="freebsd"
-        OS_VERSION=$(freebsd-version 2>/dev/null || uname -r)
-        OS_PRETTY="FreeBSD $OS_VERSION"
+        os_version=$(freebsd-version 2>/dev/null || uname -r)
+        os_pretty="FreeBSD $os_version"
     else
         OS="unknown"
-        OS_PRETTY="Unknown OS"
+        os_pretty="Unknown OS"
     fi
 
-    print_success "Detected: ${BOLD}$OS_PRETTY${NC}"
+    print_success "Detected: ${BOLD}$os_pretty${NC}"
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
