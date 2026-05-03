@@ -179,6 +179,15 @@
            frame so the upgrade log gets the full reading width. The mobile
            logo also stays hidden — this isn't a login screen, no branding
            cue needed. */
+        body.auth-no-art {
+            /* Login pages center vertically with align-items: center because
+               their content always fits in the viewport. The upgrade page's
+               step list + release notes can be much taller than the viewport,
+               and align-items: center pushes the top of the content above
+               the viewport with no way to scroll up to it (#239). Anchor at
+               the top so everything is reachable. */
+            align-items: flex-start;
+        }
         body.auth-no-art .auth-frame { max-width: 1000px; }
         body.auth-no-art .auth-form-pane {
             flex: 1 1 100%;

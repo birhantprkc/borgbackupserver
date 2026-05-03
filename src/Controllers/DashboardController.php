@@ -415,10 +415,6 @@ class DashboardController extends Controller
         }
         $errorCount = (int) $this->db->fetchOne($errorCountQuery, $jobParams)['cnt'];
 
-        // Still computed for the activity chart below, which segments the
-        // hourly bar by job-failures and alerts.
-        $alertScope = $agentWhere === '1=1' ? '' : "AND ({$agentWhere} OR n.agent_id IS NULL)";
-
         // Optional task-type filter for the Recently Completed list. Accepts
         // a comma-separated list of category keys (backup, restore, prune,
         // compact, s3, other) — see self::RECENT_JOB_CATEGORIES for the
@@ -492,30 +488,20 @@ class DashboardController extends Controller
             ORDER BY hour
         ", $jobParams);
 
-        $failedJobsChart = $this->db->fetchAll("
-            SELECT DATE_FORMAT(bj.completed_at, '%Y-%m-%d %H:00') as hour,
-                   COUNT(*) as count
-            FROM backup_jobs bj
-            JOIN agents a ON a.id = bj.agent_id
-            WHERE bj.status = 'failed'
-              AND bj.completed_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
-              {$jobScope}
-            GROUP BY hour
-            ORDER BY hour
-        ", $jobParams);
-
-        $alertChart = $this->db->fetchAll("
-            SELECT DATE_FORMAT(n.last_occurred_at, '%Y-%m-%d %H:00') as hour,
-                   COUNT(*) as count
-            FROM notifications n
-            LEFT JOIN agents a ON a.id = n.agent_id
-            WHERE n.type IN ('agent_offline', 'missed_schedule')
-              AND n.resolved_at IS NULL
-              AND n.last_occurred_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
-              {$alertScope}
-            GROUP BY hour
-            ORDER BY hour
-        ", $jobParams);
+        // Hourly error bars must come from the same source as the "Errors (24h)"
+        // tile and the linked /log page (#240) — counting failed_jobs and
+        // unresolved alerts here meant the chart showed red bars at hours that
+        // had no corresponding entries on the Log page.
+        $logErrorsChartQuery = "SELECT DATE_FORMAT(sl.created_at, '%Y-%m-%d %H:00') as hour, COUNT(*) as count
+                                  FROM server_log sl
+                                  LEFT JOIN agents a ON a.id = sl.agent_id
+                                 WHERE sl.level = 'error'
+                                   AND sl.created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)";
+        if ($agentWhere !== '1=1') {
+            $logErrorsChartQuery .= " AND ({$agentWhere} OR sl.agent_id IS NULL)";
+        }
+        $logErrorsChartQuery .= " GROUP BY hour ORDER BY hour";
+        $logErrorsChart = $this->db->fetchAll($logErrorsChartQuery, $jobParams);
 
         // Group task types into 3 categories
         $categoryMap = [
@@ -530,10 +516,7 @@ class DashboardController extends Controller
             if ($cat === null) continue;
             $hourCounts[$row['hour']][$cat] = ($hourCounts[$row['hour']][$cat] ?? 0) + (int) $row['count'];
         }
-        foreach ($failedJobsChart as $row) {
-            $hourCounts[$row['hour']]['errors'] = ($hourCounts[$row['hour']]['errors'] ?? 0) + (int) $row['count'];
-        }
-        foreach ($alertChart as $row) {
+        foreach ($logErrorsChart as $row) {
             $hourCounts[$row['hour']]['errors'] = ($hourCounts[$row['hour']]['errors'] ?? 0) + (int) $row['count'];
         }
 
