@@ -6,13 +6,13 @@
     $avgDur = $avgSec > 0 ? formatDurationLabel((int) $avgSec) : '--';
     $maxCompletedDuration = max(array_map(fn($j) => (int) ($j['duration_seconds'] ?? 0), $completed ?: [['duration_seconds' => 0]]));
 
-    function durationBarHtml(int $duration, int $maxDuration): string {
+    function durationBarHtml(int $duration, int $maxDuration, string $status = ''): string {
         $pct = $maxDuration > 0 ? min(100, round(($duration / $maxDuration) * 100)) : 0;
-        $hue = 120 - round($pct * 1.2);
         $label = formatDurationLabel($duration);
-        return '<div class="progress position-relative" style="height:20px;min-width:120px;" title="' . htmlspecialchars($label) . '">'
-            . '<div class="progress-bar" style="width:' . $pct . '%;background-color:hsl(' . $hue . ',70%,45%);"></div>'
-            . '<span class="position-absolute top-50 start-50 translate-middle small fw-semibold px-2 rounded bg-body text-body border text-nowrap">' . htmlspecialchars($label) . '</span>'
+        $toneClass = $status === 'failed' ? ' queue-duration-danger' : '';
+        return '<div class="progress queue-duration-progress' . $toneClass . ' position-relative" title="' . htmlspecialchars($label) . '" style="--duration-pct:' . $pct . '%;">'
+            . '<div class="progress-bar queue-duration-bar" style="width:' . $pct . '%;"></div>'
+            . '<span class="progress-label">' . htmlspecialchars($label) . '</span>'
             . '</div>';
     }
 
@@ -36,11 +36,169 @@
         };
     }
 ?>
+<style>
+:root {
+    --queue-laser: #0d6efd;
+    --queue-laser-hot: #36a2eb;
+    --queue-flow-trail: rgba(13, 110, 253, 0.12);
+    --queue-row-accent: #2f73c9;
+}
+[data-bs-theme="dark"] {
+    --queue-laser: #36a2ff;
+    --queue-laser-hot: #79e7ff;
+    --queue-flow-trail: rgba(54, 162, 255, 0.12);
+    --queue-row-accent: #1e63ad;
+}
+.queue-shell { color-scheme: light dark; }
+.queue-topline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.queue-pills {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+.queue-pill {
+    padding: 5px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--bs-border-color);
+    background: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-decoration: none;
+}
+.queue-pill.active {
+    background: linear-gradient(135deg, #243a6b, var(--queue-laser));
+    color: #fff;
+    border-color: rgba(54, 162, 235, 0.55);
+    box-shadow: 0 0 18px rgba(54, 162, 255, 0.18);
+}
+.queue-metric {
+    position: relative;
+    overflow: hidden;
+    border-left: 3px solid var(--queue-accent, var(--queue-row-accent));
+}
+.queue-metric::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        linear-gradient(90deg, rgba(54, 162, 255, 0.08), transparent 48%),
+        radial-gradient(circle at 0 50%, rgba(255, 255, 255, 0.16), transparent 76px);
+}
+.queue-metric .card-body { position: relative; z-index: 1; }
+.queue-table-card .card-header {
+    min-height: 48px;
+}
+.queue-table-card .table {
+    --bs-table-hover-bg: rgba(54, 162, 255, 0.06);
+}
+.queue-table-card tbody tr {
+    border-left: 3px solid transparent;
+}
+.queue-table-card tbody tr:hover {
+    border-left-color: var(--queue-laser-hot);
+}
+.queue-progress {
+    background: var(--bs-tertiary-bg);
+}
+.queue-duration-progress {
+    --queue-duration-laser: var(--queue-laser);
+    --queue-duration-hot: var(--queue-laser-hot);
+    --queue-duration-core: #eaf6ff;
+    --queue-duration-fill-start: rgba(54, 162, 255, 0.12);
+    --queue-duration-fill-glow: rgba(54, 162, 255, 0.38);
+    height: 20px;
+    min-width: 120px;
+    overflow: hidden;
+    border: 1px solid rgba(54, 162, 255, 0.28);
+    background:
+        linear-gradient(90deg, rgba(54, 162, 255, 0), var(--queue-flow-trail), rgba(54, 162, 255, 0.06)),
+        repeating-linear-gradient(90deg, transparent 0 18px, rgba(255, 255, 255, 0.055) 18px 19px),
+        var(--bs-tertiary-bg);
+    box-shadow: inset 0 0 18px rgba(54, 162, 255, 0.08);
+}
+.queue-duration-progress.queue-duration-danger {
+    --queue-duration-laser: #dc3545;
+    --queue-duration-hot: #ff6b7a;
+    --queue-duration-core: #fff0f2;
+    --queue-duration-fill-start: rgba(220, 53, 69, 0.14);
+    --queue-duration-fill-glow: rgba(220, 53, 69, 0.42);
+    border-color: rgba(220, 53, 69, 0.36);
+    background:
+        linear-gradient(90deg, rgba(220, 53, 69, 0), rgba(220, 53, 69, 0.13), rgba(220, 53, 69, 0.06)),
+        repeating-linear-gradient(90deg, transparent 0 18px, rgba(255, 255, 255, 0.055) 18px 19px),
+        var(--bs-tertiary-bg);
+    box-shadow: inset 0 0 18px rgba(220, 53, 69, 0.1);
+}
+.queue-duration-progress::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--duration-pct, 0%);
+    width: 2px;
+    transform: translateX(-1px);
+    pointer-events: none;
+    background: linear-gradient(180deg, transparent, var(--queue-duration-core), var(--queue-duration-hot), transparent);
+    box-shadow:
+        0 0 8px var(--queue-duration-hot),
+        0 0 22px var(--queue-duration-fill-glow),
+        0 0 42px var(--queue-duration-fill-glow);
+}
+.queue-duration-bar {
+    background:
+        linear-gradient(90deg, var(--queue-duration-fill-start), var(--queue-duration-hot), var(--queue-duration-laser));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.26),
+        0 0 16px var(--queue-duration-fill-glow);
+}
+.queue-duration-progress .progress-label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 0.66rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 2px 3px rgba(0,0,0,0.9), 0 2px 6px rgba(0,0,0,0.9);
+    pointer-events: none;
+}
+.queue-empty {
+    background:
+        linear-gradient(180deg, rgba(54, 162, 255, 0.05), transparent),
+        var(--bs-body-bg);
+}
+@media (max-width: 767.98px) {
+    .queue-topline { align-items: stretch; }
+    .queue-pills { width: 100%; }
+    .queue-pill { flex: 1 1 auto; text-align: center; }
+}
+</style>
+
+<div class="queue-shell container-fluid px-0">
+<div class="queue-topline mb-3">
+    <div class="text-muted small">Live queue refreshes every 10 seconds</div>
+    <div class="queue-pills">
+        <a class="queue-pill active" href="#queue-in-progress"><i class="bi bi-activity me-1"></i>Active <?= count($inProgress) ?></a>
+        <a class="queue-pill" href="#queue-completed"><i class="bi bi-check2-circle me-1"></i>Completed <?= count($completed) ?></a>
+        <a class="queue-pill" href="/schedules"><i class="bi bi-calendar-week me-1"></i>Schedules</a>
+    </div>
+</div>
+
 <div class="row g-3 mb-4">
     <div class="col-xl-3 col-md-6">
-        <div class="card border-0 shadow-sm h-100 metric-card-blue">
+        <div class="card border-0 shadow-sm h-100 metric-card-blue queue-metric" style="--queue-accent: #0d6efd;">
             <div class="card-body d-flex align-items-center">
-                <div class="stat-icon bg-primary bg-opacity-10 text-primary rounded-3 p-3 me-3">
+                <div class="stat-icon bg-primary text-primary rounded-3 p-3 me-3" style="--bs-bg-opacity: .2;">
                     <i class="bi bi-hourglass-split fs-3"></i>
                 </div>
                 <div>
@@ -52,9 +210,9 @@
         </div>
     </div>
     <div class="col-xl-3 col-md-6">
-        <div class="card border-0 shadow-sm h-100 metric-card-success">
+        <div class="card border-0 shadow-sm h-100 metric-card-success queue-metric" style="--queue-accent: #198754;">
             <div class="card-body d-flex align-items-center">
-                <div class="stat-icon bg-success bg-opacity-10 text-success rounded-3 p-3 me-3">
+                <div class="stat-icon bg-success text-success rounded-3 p-3 me-3" style="--bs-bg-opacity: .2;">
                     <i class="bi bi-check-circle fs-3"></i>
                 </div>
                 <div>
@@ -67,9 +225,9 @@
     </div>
     <div class="col-xl-3 col-md-6">
         <?php $failBs = $failed24h > 0 ? 'danger' : 'success'; ?>
-        <div class="card border-0 shadow-sm h-100 metric-card-<?= $failBs ?>">
+        <div class="card border-0 shadow-sm h-100 metric-card-<?= $failBs ?> queue-metric" style="--queue-accent: <?= $failed24h > 0 ? '#dc3545' : '#198754' ?>;">
             <div class="card-body d-flex align-items-center">
-                <div class="stat-icon bg-<?= $failBs ?> bg-opacity-10 text-<?= $failBs ?> rounded-3 p-3 me-3">
+                <div class="stat-icon bg-<?= $failBs ?> text-<?= $failBs ?> rounded-3 p-3 me-3" style="--bs-bg-opacity: .2;">
                     <i class="bi bi-<?= $failed24h > 0 ? 'x-circle' : 'check-circle' ?> fs-3"></i>
                 </div>
                 <div>
@@ -81,9 +239,9 @@
         </div>
     </div>
     <div class="col-xl-3 col-md-6">
-        <div class="card border-0 shadow-sm h-100 metric-card-cyan">
+        <div class="card border-0 shadow-sm h-100 metric-card-cyan queue-metric" style="--queue-accent: #0dcaf0;">
             <div class="card-body d-flex align-items-center">
-                <div class="stat-icon bg-info bg-opacity-10 text-info rounded-3 p-3 me-3">
+                <div class="stat-icon bg-info text-info rounded-3 p-3 me-3" style="--bs-bg-opacity: .2;">
                     <i class="bi bi-speedometer2 fs-3"></i>
                 </div>
                 <div>
@@ -96,11 +254,17 @@
     </div>
 </div>
 
-<h6 class="mb-3">In Progress <span class="text-muted fw-normal small">(Max: <?= $maxQueue ?> Concurrent)</span></h6>
-<div class="card border-0 shadow-sm mb-4">
+<div class="card border-0 shadow-sm mb-4 queue-table-card">
+    <div class="card-header card-head-gradient fw-semibold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-activity me-2"></i>In Progress</span>
+        <span class="text-muted small"><?= $runningCount ?>/<?= $maxQueue ?> slots used</span>
+    </div>
     <div class="card-body p-0" id="queue-in-progress">
         <?php if (empty($inProgress)): ?>
-        <div class="p-4 text-muted text-center">No jobs in progress.</div>
+        <div class="p-5 text-muted text-center queue-empty">
+            <i class="bi bi-hourglass-bottom fs-1 d-block mb-2"></i>
+            No jobs in progress.
+        </div>
         <?php else: ?>
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
@@ -128,7 +292,7 @@
                                 <span class="text-muted">Waiting</span>
                             <?php elseif (($job['files_total'] ?? 0) > 0): ?>
                                 <?php $pct = round(($job['files_processed'] / $job['files_total']) * 100); ?>
-                                <div class="progress" style="height: 18px; min-width: 80px;">
+                                <div class="progress queue-progress" style="height: 18px; min-width: 80px;">
                                     <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width: <?= $pct ?>%">
                                         <?= $pct ?>%
                                     </div>
@@ -136,7 +300,7 @@
                             <?php elseif (!empty($job['status_message'])): ?>
                                 <span class="text-info small"><?= htmlspecialchars($job['status_message']) ?></span>
                             <?php else: ?>
-                                <div class="progress" style="height: 18px; min-width: 80px;">
+                                <div class="progress queue-progress" style="height: 18px; min-width: 80px;">
                                     <div class="progress-bar progress-bar-striped progress-bar-animated bg-info" style="width: 100%">
                                         Preparing...
                                     </div>
@@ -175,11 +339,17 @@
     </div>
 </div>
 
-<h6 class="mb-3">Recently Completed</h6>
-<div class="card border-0 shadow-sm">
+<div class="card border-0 shadow-sm queue-table-card">
+    <div class="card-header card-head-gradient fw-semibold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-clock-history me-2"></i>Recently Completed</span>
+        <span class="text-muted small">Last 24 hours: <?= $completed24h ?> completed, <?= $failed24h ?> failed</span>
+    </div>
     <div class="card-body p-0" id="queue-completed">
         <?php if (empty($completed)): ?>
-        <div class="p-4 text-muted text-center">No completed jobs yet.</div>
+        <div class="p-5 text-muted text-center queue-empty">
+            <i class="bi bi-check2-circle fs-1 d-block mb-2"></i>
+            No completed jobs yet.
+        </div>
         <?php else: ?>
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
@@ -206,7 +376,7 @@
                         <td class="d-none d-md-table-cell">
                             <?php
                             $d = $job['duration_seconds'] ?? 0;
-                            echo durationBarHtml((int) $d, $maxCompletedDuration);
+                            echo durationBarHtml((int) $d, $maxCompletedDuration, $job['status'] ?? '');
                             ?>
                         </td>
                         <td class="text-center">
@@ -241,6 +411,7 @@
         <?php endif; ?>
     </div>
 </div>
+</div>
 
 <script>
 // Enable tooltips for error messages
@@ -266,15 +437,15 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
         return s >= 3600 ? Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm ' + (s % 60) + 's' : (s >= 60 ? Math.floor(s / 60) + 'm ' + (s % 60) + 's' : s + 's');
     }
 
-    function durationBar(s, maxS) {
+    function durationBar(s, maxS, status) {
         s = parseInt(s) || 0;
         maxS = parseInt(maxS) || 0;
         const pct = maxS > 0 ? Math.min(100, Math.round((s / maxS) * 100)) : 0;
-        const hue = 120 - Math.round(pct * 1.2);
         const label = formatDuration(s);
-        return '<div class="progress position-relative" style="height:20px;min-width:120px;" title="' + esc(label) + '">' +
-            '<div class="progress-bar" style="width:' + pct + '%;background-color:hsl(' + hue + ',70%,45%);"></div>' +
-            '<span class="position-absolute top-50 start-50 translate-middle small fw-semibold px-2 rounded bg-body text-body border text-nowrap">' + esc(label) + '</span></div>';
+        const tone = status === 'failed' ? ' queue-duration-danger' : '';
+        return '<div class="progress queue-duration-progress' + tone + ' position-relative" title="' + esc(label) + '" style="--duration-pct:' + pct + '%;">' +
+            '<div class="progress-bar queue-duration-bar" style="width:' + pct + '%;"></div>' +
+            '<span class="progress-label">' + esc(label) + '</span></div>';
     }
 
     function statusBadge(status) {
@@ -307,12 +478,12 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
             progress = '<span class="text-muted">Waiting</span>';
         } else if ((job.files_total || 0) > 0) {
             const pct = Math.round((job.files_processed / job.files_total) * 100);
-            progress = '<div class="progress" style="height:18px;min-width:80px;">' +
+            progress = '<div class="progress queue-progress" style="height:18px;min-width:80px;">' +
                 '<div class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width:' + pct + '%">' + pct + '%</div></div>';
         } else if (job.status_message) {
             progress = '<span class="text-info small">' + esc(job.status_message) + '</span>';
         } else {
-            progress = '<div class="progress" style="height:18px;min-width:80px;">' +
+            progress = '<div class="progress queue-progress" style="height:18px;min-width:80px;">' +
                 '<div class="progress-bar progress-bar-striped progress-bar-animated bg-info" style="width:100%">Preparing...</div></div>';
         }
 
@@ -360,7 +531,7 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
             '<td class="text-nowrap">' + jobTypeIcon(job.task_type) + esc(job.task_type) + '</td>' +
             '<td class="d-none d-md-table-cell">' + Number(job.files_total || 0).toLocaleString() + '</td>' +
             '<td class="d-none d-md-table-cell">' + esc(job.repo_name || '--') + '</td>' +
-            '<td class="d-none d-md-table-cell">' + durationBar(job.duration_seconds, maxDuration) + '</td>' +
+            '<td class="d-none d-md-table-cell">' + durationBar(job.duration_seconds, maxDuration, job.status) + '</td>' +
             '<td class="text-center">' + statusHtml + '</td>' +
             '<td class="text-end" onclick="event.stopPropagation()">' + actions + '</td></tr>';
     }
@@ -372,7 +543,7 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
                 // Update In Progress section
                 const ipCard = document.getElementById('queue-in-progress');
                 if (data.inProgress.length === 0) {
-                    ipCard.innerHTML = '<div class="p-4 text-muted text-center">No jobs in progress.</div>';
+                    ipCard.innerHTML = '<div class="p-5 text-muted text-center queue-empty"><i class="bi bi-hourglass-bottom fs-1 d-block mb-2"></i>No jobs in progress.</div>';
                 } else {
                     let html = '<div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr>' +
                         '<th>Date</th><th>Client</th><th>Task</th><th class="d-none d-md-table-cell">Files</th><th>Progress</th><th class="d-none d-md-table-cell">Repo</th><th>Status</th><th style="width:80px;"></th>' +
@@ -385,7 +556,7 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
                 // Update Completed section
                 const cCard = document.getElementById('queue-completed');
                 if (data.completed.length === 0) {
-                    cCard.innerHTML = '<div class="p-4 text-muted text-center">No completed jobs yet.</div>';
+                    cCard.innerHTML = '<div class="p-5 text-muted text-center queue-empty"><i class="bi bi-check2-circle fs-1 d-block mb-2"></i>No completed jobs yet.</div>';
                 } else {
                     let html = '<div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr>' +
                         '<th>Date</th><th>Client</th><th>Task</th><th class="d-none d-md-table-cell">Files</th><th class="d-none d-md-table-cell">Repo</th><th class="d-none d-md-table-cell">Duration</th><th class="text-center">Status</th><th style="width:80px;"></th>' +

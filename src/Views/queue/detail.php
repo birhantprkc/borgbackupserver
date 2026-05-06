@@ -34,8 +34,72 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
 ?>
 
 <style>
+    :root {
+        --queue-laser: #0d6efd;
+        --queue-laser-hot: #36a2eb;
+        --queue-flow-trail: rgba(13, 110, 253, 0.12);
+        --queue-block-bg: #2f73c9;
+        --queue-block-bg-2: #224f93;
+    }
+    [data-bs-theme="dark"] {
+        --queue-laser: #36a2ff;
+        --queue-laser-hot: #79e7ff;
+        --queue-flow-trail: rgba(54, 162, 255, 0.12);
+        --queue-block-bg: #1e63ad;
+        --queue-block-bg-2: #17395f;
+    }
+    .queue-shell { color-scheme: light dark; }
+    .queue-detail-hero {
+        position: relative;
+        overflow: hidden;
+        border-left: 4px solid var(--queue-laser-hot);
+        background:
+            linear-gradient(90deg, var(--queue-flow-trail), transparent 46%),
+            var(--bs-body-bg);
+    }
+    .queue-detail-hero::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: radial-gradient(circle at 0 50%, rgba(255, 255, 255, 0.18), transparent 84px);
+    }
+    .queue-detail-hero > * {
+        position: relative;
+        z-index: 1;
+    }
+    .queue-meta-strip {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+    .queue-meta-pill {
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--bs-border-color);
+        background: var(--bs-body-bg);
+        color: var(--bs-secondary-color);
+        font-size: 0.78rem;
+        font-weight: 600;
+    }
+    .queue-panel .card-header {
+        min-height: 46px;
+    }
+    [data-bs-theme="dark"] .queue-stats-panel {
+        background-color: #1a1d21;
+    }
+    .queue-progress-panel {
+        background:
+            radial-gradient(circle at 0 50%, rgba(255, 255, 255, 0.16), transparent 84px),
+            linear-gradient(135deg, var(--queue-block-bg), var(--queue-block-bg-2)) !important;
+    }
+    .queue-detail-table td {
+        padding-top: 0.68rem;
+        padding-bottom: 0.68rem;
+    }
     /* Force long paths and command lines to wrap inside table cells / log entries */
     .job-detail-wrap {
+        font-size: 1em;
         word-break: break-all;
         overflow-wrap: anywhere;
         white-space: normal;
@@ -67,18 +131,37 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
     }
 </style>
 
-<div class="d-flex align-items-center mb-4">
-    <a href="/queue" class="btn btn-sm btn-outline-secondary me-3"><i class="bi bi-arrow-left"></i> Queue</a>
-    <h4 class="mb-0">
-        Job #<?= $job['id'] ?>
-        <span class="badge text-bg-<?= $statusClass ?> fs-6 ms-2"><?= htmlspecialchars($statusLabel) ?></span>
-    </h4>
+<div class="queue-shell container-fluid px-0">
+<div class="card border-0 shadow-sm queue-detail-hero mb-4">
+    <div class="card-body d-flex align-items-center justify-content-between flex-wrap gap-3">
+        <div class="d-flex align-items-center gap-3">
+            <a href="/queue" class="btn btn-sm btn-outline-secondary" title="Back to Queue"><i class="bi bi-arrow-left"></i></a>
+            <div>
+                <h4 class="mb-1">
+                    Job #<?= $job['id'] ?>
+                    <span class="badge text-bg-<?= $statusClass ?> fs-6 ms-2"><?= htmlspecialchars($statusLabel) ?></span>
+                </h4>
+                <div class="queue-meta-strip">
+                    <span class="queue-meta-pill"><i class="bi bi-cpu me-1"></i><?= htmlspecialchars($taskLabel) ?></span>
+                    <span class="queue-meta-pill"><i class="bi bi-pc-display me-1"></i><?= htmlspecialchars($job['agent_name']) ?></span>
+                    <span class="queue-meta-pill"><i class="bi bi-archive me-1"></i><?= htmlspecialchars($job['repo_name'] ?? '--') ?></span>
+                    <?php if ($queuePosition): ?>
+                    <span class="queue-meta-pill"><i class="bi bi-list-ol me-1"></i>Position #<?= $queuePosition ?></span>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        <div class="text-end small text-muted">
+            <div>Queued <?= $job['queued_at'] ? \BBS\Core\TimeHelper::ago($job['queued_at']) : '--' ?></div>
+            <div><?= $activeCount ?>/<?= $maxQueue ?> queue slots used</div>
+        </div>
+    </div>
 </div>
 
 <div id="progress-section">
 <!-- Progress Bar (for active jobs) -->
 <?php if ($isActive): ?>
-<div class="card border-0 shadow-sm mb-4" style="background-color: #2c3e50;">
+<div class="card border-0 shadow-sm mb-4 queue-progress-panel" style="background-color: #2c3e50;">
     <div class="card-body py-3">
         <?php if ($isServerSide && $job['status'] === 'running'): ?>
             <div class="text-white fw-semibold mb-1"><i class="bi bi-hdd me-1"></i> <?= ucfirst($job['task_type']) ?> running on server...</div>
@@ -247,12 +330,12 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
 <!-- Job Details -->
 <div class="row g-4 mb-4">
     <div class="col-lg-7">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-header fw-semibold">
+        <div class="card border-0 shadow-sm h-100 queue-panel">
+            <div class="card-header card-head-gradient fw-semibold">
                 <i class="bi bi-info-circle me-1"></i> Job Details
             </div>
             <div class="card-body p-0">
-                <table class="table table-borderless mb-0">
+                <table class="table table-borderless mb-0 queue-detail-table">
                     <tbody>
                         <tr>
                             <td class="text-muted fw-semibold ps-3" style="width: 160px;">Client</td>
@@ -315,9 +398,9 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
     </div>
 
     <div class="col-lg-5">
-        <div class="card border-0 shadow-sm h-100">
+        <div class="card border-0 shadow-sm h-100 queue-panel queue-stats-panel">
             <?php if ($job['task_type'] === 'prune' && !empty($pruneStats)): ?>
-            <div class="card-header fw-semibold">
+            <div class="card-header card-head-gradient fw-semibold">
                 <i class="bi bi-scissors me-1"></i> Prune Stats
             </div>
             <div class="card-body p-0">
@@ -365,7 +448,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
                 </table>
             </div>
             <?php else: ?>
-            <div class="card-header fw-semibold">
+            <div class="card-header card-head-gradient fw-semibold">
                 <i class="bi bi-bar-chart me-1"></i> Stats
             </div>
             <div class="card-body p-0">
@@ -410,7 +493,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
 <!-- Error Log (if failed) -->
 <?php if ($job['status'] === 'failed' && $job['error_log']): ?>
 <div id="error-section" class="card border-0 shadow-sm mb-4 border-danger">
-    <div class="card-header fw-semibold text-danger">
+    <div class="card-header card-head-gradient fw-semibold text-danger">
         <i class="bi bi-exclamation-triangle me-1"></i> Error Log
     </div>
     <div class="card-body">
@@ -420,7 +503,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
 <?php elseif ($job['status'] === 'completed' && !empty($job['had_warnings'])): ?>
 <!-- Warning Log (completed with warnings — e.g. a configured source path didn't exist, #203) -->
 <div id="warning-section" class="card border-0 shadow-sm mb-4 border-warning">
-    <div class="card-header fw-semibold text-warning">
+    <div class="card-header card-head-gradient fw-semibold text-warning">
         <i class="bi bi-exclamation-triangle me-1"></i> Backup Completed with Warnings
     </div>
     <div class="card-body">
@@ -436,7 +519,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
 <div id="log-section" <?= empty($logs) ? 'style="display:none"' : '' ?>>
 <?php if (!empty($logs)): ?>
 <div class="card border-0 shadow-sm mb-4">
-    <div class="card-header fw-semibold">
+    <div class="card-header card-head-gradient fw-semibold">
         <i class="bi bi-journal-text me-1"></i> Activity Log
     </div>
     <div class="card-body p-0">
@@ -485,6 +568,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
         Job Stalled? Cancel and retry, or check the agent status on the <a href="/clients/<?= $job['agent_id'] ?>">client page</a>.
     </div>
     <?php endif; ?>
+</div>
 </div>
 
 <script>
