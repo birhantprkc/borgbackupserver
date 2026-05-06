@@ -34,6 +34,71 @@ class AdminApiController extends Controller
         $this->json(['clients' => $agents]);
     }
 
+    public function summary(): void
+    {
+        $this->requireApiToken();
+
+        $rows = $this->db->fetchAll("
+            SELECT
+                a.id AS client_id,
+                a.name AS client_name,
+                a.status AS client_status,
+                bp.id AS backup_plan_id,
+                bp.name AS backup_plan_name,
+                bj.id AS last_backup_job_id,
+                bj.status AS last_backup_result,
+                bj.duration_seconds AS last_backup_duration_seconds,
+                bj.queued_at AS last_backup_queued_at,
+                bj.started_at AS last_backup_started_at,
+                bj.completed_at AS last_backup_completed_at
+            FROM agents a
+            LEFT JOIN backup_plans bp ON bp.agent_id = a.id
+            LEFT JOIN backup_jobs bj ON bj.id = (
+                SELECT bj2.id
+                FROM backup_jobs bj2
+                WHERE bj2.backup_plan_id = bp.id
+                  AND bj2.task_type = 'backup'
+                ORDER BY COALESCE(bj2.completed_at, bj2.started_at, bj2.queued_at) DESC, bj2.id DESC
+                LIMIT 1
+            )
+            ORDER BY a.name, bp.name
+        ");
+
+        $clients = [];
+        foreach ($rows as $row) {
+            $clientId = (int) $row['client_id'];
+            if (!isset($clients[$clientId])) {
+                $clients[$clientId] = [
+                    'id' => $clientId,
+                    'name' => $row['client_name'],
+                    'status' => $row['client_status'],
+                    'backup_plans' => [],
+                ];
+            }
+
+            if ($row['backup_plan_id'] === null) {
+                continue;
+            }
+
+            $clients[$clientId]['backup_plans'][] = [
+                'id' => (int) $row['backup_plan_id'],
+                'name' => $row['backup_plan_name'],
+                'last_backup' => $row['last_backup_job_id'] === null ? null : [
+                    'job_id' => (int) $row['last_backup_job_id'],
+                    'result' => $row['last_backup_result'],
+                    'duration_seconds' => $row['last_backup_duration_seconds'] !== null ? (int) $row['last_backup_duration_seconds'] : null,
+                    'queued_at' => $row['last_backup_queued_at'],
+                    'started_at' => $row['last_backup_started_at'],
+                    'completed_at' => $row['last_backup_completed_at'],
+                ],
+            ];
+        }
+
+        $this->json([
+            'clients' => array_values($clients),
+        ]);
+    }
+
     public function getClient(int $id): void
     {
         $this->requireApiToken();

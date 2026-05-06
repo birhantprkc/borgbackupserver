@@ -1832,6 +1832,7 @@ document.getElementById('appIconFileInput').addEventListener('change', function(
                 <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
             </thead>
             <tbody>
+                <tr><td><span class="badge bg-success">GET</span></td><td><code>/api/v1/summary</code></td><td>Summary of each client's backup plans and latest backup result</td></tr>
                 <tr><td><span class="badge bg-success">GET</span></td><td><code>/api/v1/clients</code></td><td>List all clients</td></tr>
                 <tr><td><span class="badge bg-primary">POST</span></td><td><code>/api/v1/clients</code></td><td>Create a client (returns api_key for agent install)</td></tr>
                 <tr><td><span class="badge bg-success">GET</span></td><td><code>/api/v1/clients/{id}</code></td><td>Get client details with repos &amp; plans</td></tr>
@@ -1870,6 +1871,12 @@ document.getElementById('appIconFileInput').addEventListener('change', function(
   -H "Authorization: Bearer bbs_tok_..." \
   -H "Content-Type: application/json" \
   -d '{"name": "web-server-01"}'</code></pre>
+        </div>
+
+        <div class="mt-3">
+            <p class="small text-muted mb-1"><strong>Example: Backup summary</strong></p>
+            <pre class="bg-body-secondary p-2 rounded small mb-0"><code>curl https://your-server/api/v1/summary \
+  -H "Authorization: Bearer bbs_tok_..."</code></pre>
         </div>
 
         <div class="mt-3">
