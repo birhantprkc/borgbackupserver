@@ -75,7 +75,7 @@ foreach ($staleJobs as $sj) {
     $db->insert('server_log', [
         'agent_id' => $sj['agent_id'],
         'backup_job_id' => $sj['id'],
-        'level' => 'warning',
+        'level' => 'error',
         'message' => "Job #{$sj['id']} ({$sj['task_type']}) failed — agent \"{$sj['agent_name']}\" went offline",
     ]);
 
@@ -777,10 +777,17 @@ foreach ($serverJobs as $sj) {
                 echo date('Y-m-d H:i:s') . "   Catalog sync {$archiveCount}/{$totalArchiveCount}: {$archiveName}\n";
             }
 
-            // Update repo stats
+            // Repo size: prefer borg's own dedup-aware unique_csize over the
+            // sum of per-archive deduplicated_size, which is the *incremental*
+            // contribution at archive-creation time and goes wrong as soon as
+            // anything is pruned/compacted (#258).
+            $sshUnixUser = $sj['ssh_unix_user'] ?? null;
+            $repoUniqueSize = \BBS\Services\RepositorySizeService::fetchRepoUniqueCsize($csRepo, $sshUnixUser);
+            $sizeForRepo = $repoUniqueSize ?? $totalSize;
+
             $db->update('repositories', [
                 'archive_count' => $archiveCount,
-                'size_bytes' => $totalSize,
+                'size_bytes' => $sizeForRepo,
             ], 'id = ?', [$csRepo['id']]);
 
             $db->update('backup_jobs', [
