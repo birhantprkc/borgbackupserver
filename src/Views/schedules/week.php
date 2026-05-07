@@ -945,10 +945,14 @@ function bbs_histogram_ticks(int $max): array
                         $timelineWidthPct = ((int) $b['day_idx'] === $todayIdx && $timelinePhase !== 'future')
                             ? $actualDurationPct
                             : $durationPct;
-                        $timelineMinWidth = ((int) $b['day_idx'] === $todayIdx && $timelinePhase !== 'future')
+                        $timelineIsError = !empty($b['has_error']);
+                        // Today's lane normally allows shrinking to 0 so the
+                        // bar visually contracts as the run finishes; failed
+                        // blocks need to stay clickable regardless of how
+                        // little time elapsed before they errored.
+                        $timelineMinWidth = ((int) $b['day_idx'] === $todayIdx && $timelinePhase !== 'future' && !$timelineIsError)
                             ? '0px'
                             : null;
-                        $timelineIsError = !empty($b['has_error']);
                         $timelineDurLabel = $b['duration_min'] >= 60
                             ? floor($b['duration_min'] / 60) . 'h ' . ($b['duration_min'] % 60) . 'm'
                             : $b['duration_min'] . 'm';

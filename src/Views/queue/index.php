@@ -188,7 +188,7 @@
 <div class="queue-topline mb-3">
     <div class="text-muted small">Live queue refreshes every 10 seconds</div>
     <div class="queue-pills">
-        <a class="queue-pill active" href="#queue-in-progress"><i class="bi bi-activity me-1"></i>Active <span id="qm-pill-active"><?= count($inProgress) ?></span></a>
+        <a class="queue-pill" href="#queue-in-progress"><i class="bi bi-activity me-1"></i>Active <span id="qm-pill-active"><?= count($inProgress) ?></span></a>
         <a class="queue-pill" href="#queue-completed"><i class="bi bi-check2-circle me-1"></i>Completed <span id="qm-pill-completed"><?= count($completed) ?></span></a>
         <a class="queue-pill" href="/schedules"><i class="bi bi-calendar-week me-1"></i>Schedules</a>
     </div>
@@ -198,7 +198,7 @@
     <div class="col-xl-3 col-md-6">
         <div class="card border-0 shadow-sm h-100 metric-card-blue queue-metric" style="--queue-accent: #0d6efd;">
             <div class="card-body d-flex align-items-center">
-                <div class="stat-icon bg-primary text-primary rounded-3 p-3 me-3" style="--bs-bg-opacity: .2;">
+                <div class="stat-icon bg-primary text-primary bg-opacity-10 rounded-3 p-3 me-3">
                     <i class="bi bi-hourglass-split fs-3"></i>
                 </div>
                 <div>
@@ -212,7 +212,7 @@
     <div class="col-xl-3 col-md-6">
         <div class="card border-0 shadow-sm h-100 metric-card-success queue-metric" style="--queue-accent: #198754;">
             <div class="card-body d-flex align-items-center">
-                <div class="stat-icon bg-success text-success rounded-3 p-3 me-3" style="--bs-bg-opacity: .2;">
+                <div class="stat-icon bg-success text-success bg-opacity-10 rounded-3 p-3 me-3">
                     <i class="bi bi-check-circle fs-3"></i>
                 </div>
                 <div>
@@ -227,7 +227,7 @@
         <?php $failBs = $failed24h > 0 ? 'danger' : 'success'; ?>
         <div class="card border-0 shadow-sm h-100 metric-card-<?= $failBs ?> queue-metric" id="qm-failed-card" style="--queue-accent: <?= $failed24h > 0 ? '#dc3545' : '#198754' ?>;">
             <div class="card-body d-flex align-items-center">
-                <div class="stat-icon bg-<?= $failBs ?> text-<?= $failBs ?> rounded-3 p-3 me-3" id="qm-failed-icon-wrap" style="--bs-bg-opacity: .2;">
+                <div class="stat-icon bg-<?= $failBs ?> text-<?= $failBs ?> bg-opacity-10 rounded-3 p-3 me-3" id="qm-failed-icon-wrap">
                     <i class="bi bi-<?= $failed24h > 0 ? 'x-circle' : 'check-circle' ?> fs-3" id="qm-failed-icon"></i>
                 </div>
                 <div>
@@ -241,7 +241,7 @@
     <div class="col-xl-3 col-md-6">
         <div class="card border-0 shadow-sm h-100 metric-card-cyan queue-metric" style="--queue-accent: #0dcaf0;">
             <div class="card-body d-flex align-items-center">
-                <div class="stat-icon bg-info text-info rounded-3 p-3 me-3" style="--bs-bg-opacity: .2;">
+                <div class="stat-icon bg-info text-info bg-opacity-10 rounded-3 p-3 me-3">
                     <i class="bi bi-speedometer2 fs-3"></i>
                 </div>
                 <div>
@@ -285,7 +285,7 @@
                     <tr style="cursor: pointer;" onclick="window.location='/queue/<?= $job['id'] ?>'">
                         <td class="small text-nowrap"><?= \BBS\Core\TimeHelper::format($job['queued_at'], 'M j, g:i A') ?></td>
                         <td><?= htmlspecialchars($job['agent_name']) ?></td>
-                        <td class="text-nowrap"><?= jobTypeIcon($job['task_type']) ?><?= $job['task_type'] ?></td>
+                        <td class="text-nowrap"><?= jobTypeIcon($job['task_type']) ?><?= htmlspecialchars(ucfirst(str_replace('_', ' ', $job['task_type']))) ?></td>
                         <td class="d-none d-md-table-cell"><?= number_format($job['files_total'] ?? 0) ?></td>
                         <td>
                             <?php if ($job['status'] === 'queued'): ?>
@@ -370,7 +370,7 @@
                     <tr style="cursor: pointer;" onclick="window.location='/queue/<?= $job['id'] ?>'">
                         <td class="small text-nowrap" title="<?= \BBS\Core\TimeHelper::format($job['completed_at'], 'M j, Y g:i A') ?>"><?= \BBS\Core\TimeHelper::ago($job['completed_at']) ?></td>
                         <td><?= htmlspecialchars($job['agent_name']) ?></td>
-                        <td class="text-nowrap"><?= jobTypeIcon($job['task_type']) ?><?= $job['task_type'] ?></td>
+                        <td class="text-nowrap"><?= jobTypeIcon($job['task_type']) ?><?= htmlspecialchars(ucfirst(str_replace('_', ' ', $job['task_type']))) ?></td>
                         <td class="d-none d-md-table-cell"><?= number_format($job['files_total'] ?? 0) ?></td>
                         <td class="d-none d-md-table-cell"><?= htmlspecialchars($job['repo_name'] ?? '--') ?></td>
                         <td class="d-none d-md-table-cell">
@@ -450,7 +450,12 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
 
     function statusBadge(status) {
         const colors = { running: 'primary', sent: 'primary', queued: 'warning', completed: 'success', failed: 'danger' };
-        return '<span class="badge text-bg-' + (colors[status] || 'secondary') + '">' + status + '</span>';
+        return '<span class="badge text-bg-' + (colors[status] || 'secondary') + '">' + esc(status) + '</span>';
+    }
+
+    function taskTypeLabel(type) {
+        const s = String(type || '').replace(/_/g, ' ');
+        return s.charAt(0).toUpperCase() + s.slice(1);
     }
 
     function jobTypeIcon(type) {
@@ -497,7 +502,7 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
         return '<tr style="cursor:pointer;" onclick="window.location=\'/queue/' + job.id + '\'">' +
             '<td class="small text-nowrap">' + formatDate(job.queued_at) + '</td>' +
             '<td>' + esc(job.agent_name) + '</td>' +
-            '<td class="text-nowrap">' + jobTypeIcon(job.task_type) + esc(job.task_type) + '</td>' +
+            '<td class="text-nowrap">' + jobTypeIcon(job.task_type) + esc(taskTypeLabel(job.task_type)) + '</td>' +
             '<td class="d-none d-md-table-cell">' + Number(job.files_total || 0).toLocaleString() + '</td>' +
             '<td>' + progress + '</td>' +
             '<td class="d-none d-md-table-cell">' + esc(job.repo_name || '--') + '</td>' +
@@ -528,7 +533,7 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
         return '<tr style="cursor:pointer;" onclick="window.location=\'/queue/' + job.id + '\'">' +
             '<td class="small text-nowrap">' + formatDate(job.completed_at) + '</td>' +
             '<td>' + esc(job.agent_name) + '</td>' +
-            '<td class="text-nowrap">' + jobTypeIcon(job.task_type) + esc(job.task_type) + '</td>' +
+            '<td class="text-nowrap">' + jobTypeIcon(job.task_type) + esc(taskTypeLabel(job.task_type)) + '</td>' +
             '<td class="d-none d-md-table-cell">' + Number(job.files_total || 0).toLocaleString() + '</td>' +
             '<td class="d-none d-md-table-cell">' + esc(job.repo_name || '--') + '</td>' +
             '<td class="d-none d-md-table-cell">' + durationBar(job.duration_seconds, maxDuration, job.status) + '</td>' +

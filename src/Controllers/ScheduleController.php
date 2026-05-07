@@ -183,26 +183,34 @@ class ScheduleController extends Controller
             ORDER BY a.name, bp.name
         ", $agentParams);
 
-        // Median-duration estimate per plan: last 10 successful backup jobs.
-        $planIds = array_unique(array_map(fn($s) => (int) $s['backup_plan_id'], $schedules));
+        // Median-duration estimate per plan: last 10 successful backup jobs
+        // within the last 30 days. Bounded so this scales on long-running
+        // installs with thousands of historical jobs.
+        $planIds = array_values(array_unique(array_map(fn($s) => (int) $s['backup_plan_id'], $schedules)));
         $durations = [];
         if (!empty($planIds)) {
             $placeholders = implode(',', array_fill(0, count($planIds), '?'));
             $rows = $this->db->fetchAll("
                 SELECT backup_plan_id, duration_seconds
-                FROM backup_jobs
-                WHERE backup_plan_id IN ({$placeholders})
-                  AND status = 'completed' AND task_type = 'backup'
-                  AND duration_seconds IS NOT NULL AND duration_seconds > 0
-                ORDER BY completed_at DESC
+                FROM (
+                    SELECT backup_plan_id, duration_seconds,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY backup_plan_id
+                               ORDER BY completed_at DESC
+                           ) AS rn
+                    FROM backup_jobs
+                    WHERE backup_plan_id IN ({$placeholders})
+                      AND status = 'completed' AND task_type = 'backup'
+                      AND duration_seconds IS NOT NULL AND duration_seconds > 0
+                      AND completed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                ) ranked
+                WHERE rn <= 10
             ", $planIds);
             $byPlan = [];
             foreach ($rows as $r) {
                 $pid = (int) $r['backup_plan_id'];
                 if (!isset($byPlan[$pid])) $byPlan[$pid] = [];
-                if (count($byPlan[$pid]) < 10) {
-                    $byPlan[$pid][] = (int) $r['duration_seconds'];
-                }
+                $byPlan[$pid][] = (int) $r['duration_seconds'];
             }
             foreach ($byPlan as $pid => $ds) {
                 sort($ds);
@@ -210,29 +218,34 @@ class ScheduleController extends Controller
             }
         }
 
-        // Latest terminal backup result per plan. Duration estimates still use
-        // successful jobs only; this is presentation state for completed blocks.
+        // Latest terminal backup result per plan. Bounded to the last 30 days
+        // and limited to one row per plan via ROW_NUMBER().
         $latestJobs = [];
         if (!empty($planIds)) {
             $placeholders = implode(',', array_fill(0, count($planIds), '?'));
             $rows = $this->db->fetchAll("
                 SELECT id, backup_plan_id, status, completed_at
-                FROM backup_jobs
-                WHERE backup_plan_id IN ({$placeholders})
-                  AND task_type = 'backup'
-                  AND status IN ('completed', 'failed')
-                  AND completed_at IS NOT NULL
-                ORDER BY completed_at DESC
+                FROM (
+                    SELECT id, backup_plan_id, status, completed_at,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY backup_plan_id
+                               ORDER BY completed_at DESC, id DESC
+                           ) AS rn
+                    FROM backup_jobs
+                    WHERE backup_plan_id IN ({$placeholders})
+                      AND task_type = 'backup'
+                      AND status IN ('completed', 'failed')
+                      AND completed_at IS NOT NULL
+                      AND completed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                ) ranked
+                WHERE rn = 1
             ", $planIds);
             foreach ($rows as $r) {
-                $pid = (int) $r['backup_plan_id'];
-                if (!isset($latestJobs[$pid])) {
-                    $latestJobs[$pid] = [
-                        'id' => (int) $r['id'],
-                        'status' => $r['status'],
-                        'completed_at' => $r['completed_at'],
-                    ];
-                }
+                $latestJobs[(int) $r['backup_plan_id']] = [
+                    'id' => (int) $r['id'],
+                    'status' => $r['status'],
+                    'completed_at' => $r['completed_at'],
+                ];
             }
         }
 

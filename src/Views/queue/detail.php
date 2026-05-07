@@ -85,13 +85,10 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
     .queue-panel .card-header {
         min-height: 46px;
     }
-    [data-bs-theme="dark"] .queue-stats-panel {
-        background-color: #1a1d21;
-    }
     .queue-progress-panel {
         background:
             radial-gradient(circle at 0 50%, rgba(255, 255, 255, 0.16), transparent 84px),
-            linear-gradient(135deg, var(--queue-block-bg), var(--queue-block-bg-2)) !important;
+            linear-gradient(135deg, var(--queue-block-bg), var(--queue-block-bg-2));
     }
     .queue-detail-table td {
         padding-top: 0.68rem;
@@ -161,7 +158,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
 <div id="progress-section">
 <!-- Progress Bar (for active jobs) -->
 <?php if ($isActive): ?>
-<div class="card border-0 shadow-sm mb-4 queue-progress-panel" style="background-color: #2c3e50;">
+<div class="card border-0 shadow-sm mb-4 queue-progress-panel">
     <div class="card-body py-3">
         <?php if ($isServerSide && $job['status'] === 'running'): ?>
             <div class="text-white fw-semibold mb-1"><i class="bi bi-hdd me-1"></i> <?= ucfirst($job['task_type']) ?> running on server...</div>
@@ -330,7 +327,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
 <!-- Job Details -->
 <div class="row g-4 mb-4">
     <div class="col-lg-7">
-        <div class="card border-0 shadow-sm h-100 queue-panel">
+        <div class="card border-0 shadow-sm queue-panel">
             <div class="card-header card-head-gradient fw-semibold">
                 <i class="bi bi-info-circle me-1"></i> Job Details
             </div>
@@ -398,7 +395,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
     </div>
 
     <div class="col-lg-5">
-        <div class="card border-0 shadow-sm h-100 queue-panel queue-stats-panel">
+        <div class="card border-0 shadow-sm queue-panel queue-stats-panel">
             <?php if ($job['task_type'] === 'prune' && !empty($pruneStats)): ?>
             <div class="card-header card-head-gradient fw-semibold">
                 <i class="bi bi-scissors me-1"></i> Prune Stats
@@ -652,7 +649,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
                 else if (fileEl && !currentFile) { fileEl.textContent = ''; }
             } else {
                 // Full replace (transitioning from pre-progress state)
-                container.innerHTML = '<div class="card border-0 shadow-sm mb-4" style="background-color:#2c3e50"><div class="card-body py-3">' +
+                container.innerHTML = '<div class="card border-0 shadow-sm mb-4 queue-progress-panel"><div class="card-body py-3">' +
                     '<div class="d-flex justify-content-between text-white mb-1"><span class="fw-semibold">' + esc(taskLabel) + '... ' + pct + '%</span><span class="small text-white-50">' + bytesText + '</span></div>' +
                     '<div class="progress mb-1" style="height:22px;background-color:rgba(255,255,255,0.15)"><div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width:' + pct + '%;background-color:#5b9bd5">' + Number(job.files_processed).toLocaleString() + ' / ' + Number(job.files_total).toLocaleString() + ' files</div></div>' +
                     fileHtml + '</div></div>';
@@ -662,7 +659,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
             var taskLabel2 = (job.task_type || 'backup').replace('_',' ').replace(/^\w/, c => c.toUpperCase());
             var msg = job.status_message ? esc(job.status_message) : taskLabel2 + ' in progress...';
             var sub = job.status_message ? '' : '<div class="text-white-50 small">' + (isServerSide ? 'Running on server...' : 'Waiting for progress data from agent...') + '</div>';
-            container.innerHTML = '<div class="card border-0 shadow-sm mb-4" style="background-color:#2c3e50"><div class="card-body py-3">' +
+            container.innerHTML = '<div class="card border-0 shadow-sm mb-4 queue-progress-panel"><div class="card-body py-3">' +
                 '<div class="text-white fw-semibold mb-1">' + msg + '</div>' +
                 '<div class="progress mb-1" style="height:22px;background-color:rgba(255,255,255,0.15)"><div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width:100%;background-color:#5b9bd5">Running</div></div>' +
                 sub + '</div></div>';
