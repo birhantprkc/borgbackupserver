@@ -327,11 +327,20 @@ class ScheduleController extends Controller
             }
         }
 
+        // The blocks above are laid out in the *current* week. If the latest
+        // failure happened in a previous week, every block's scheduled_at_utc
+        // will sit after $completedTs and the strict "scheduled before failure"
+        // filter would lose the error state. Fall back to the most recent past
+        // block (relative to now) for the plan — a later success would have
+        // already displaced this entry from $latestJobs.
+        $nowTs = time();
         foreach ($latestJobs as $planId => $job) {
             if (($job['status'] ?? '') !== 'failed') continue;
             $completedTs = strtotime($job['completed_at'] ?? '') ?: 0;
             $bestIdx = null;
             $bestTs = null;
+            $fallbackIdx = null;
+            $fallbackTs = null;
 
             foreach ($blocks as $idx => $block) {
                 if ((int) $block['plan_id'] !== (int) $planId) continue;
@@ -340,12 +349,17 @@ class ScheduleController extends Controller
                     $bestIdx = $idx;
                     $bestTs = $scheduledTs;
                 }
+                if ($scheduledTs <= $nowTs && ($fallbackTs === null || $scheduledTs > $fallbackTs)) {
+                    $fallbackIdx = $idx;
+                    $fallbackTs = $scheduledTs;
+                }
             }
 
-            if ($bestIdx !== null) {
-                $blocks[$bestIdx]['job_status'] = 'failed';
-                $blocks[$bestIdx]['failed_job_id'] = (int) $job['id'];
-                $blocks[$bestIdx]['has_error'] = true;
+            $targetIdx = $bestIdx ?? $fallbackIdx;
+            if ($targetIdx !== null) {
+                $blocks[$targetIdx]['job_status'] = 'failed';
+                $blocks[$targetIdx]['failed_job_id'] = (int) $job['id'];
+                $blocks[$targetIdx]['has_error'] = true;
             }
         }
 

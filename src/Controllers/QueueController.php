@@ -34,7 +34,17 @@ class QueueController extends Controller
             LIMIT 25
         ", $agentParams);
 
-        // Queue stats (scoped to accessible agents)
+        $stats = $this->collectQueueStats($agentWhere, $agentParams);
+
+        $this->view('queue/index', [
+            'pageTitle' => 'Queue',
+            'inProgress' => $inProgress,
+            'completed' => $completed,
+        ] + $stats);
+    }
+
+    private function collectQueueStats(string $agentWhere, array $agentParams): array
+    {
         $queuedCount = (int) ($this->db->fetchOne("
             SELECT COUNT(*) AS cnt FROM backup_jobs bj
             JOIN agents a ON a.id = bj.agent_id
@@ -69,17 +79,14 @@ class QueueController extends Controller
 
         $maxQueue = (int) ($this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'max_queue'")['value'] ?? 4);
 
-        $this->view('queue/index', [
-            'pageTitle' => 'Queue',
-            'inProgress' => $inProgress,
-            'completed' => $completed,
+        return [
             'queuedCount' => $queuedCount,
             'runningCount' => $runningCount,
             'completed24h' => $completed24h,
             'failed24h' => $failed24h,
             'avgSec' => $avgSec,
             'maxQueue' => $maxQueue,
-        ]);
+        ];
     }
 
     public function indexJson(): void
@@ -109,10 +116,12 @@ class QueueController extends Controller
             LIMIT 25
         ", $agentParams);
 
+        $stats = $this->collectQueueStats($agentWhere, $agentParams);
+
         $this->json([
             'inProgress' => $inProgress,
             'completed' => $completed,
-        ]);
+        ] + $stats);
     }
 
     public function detail(int $id): void

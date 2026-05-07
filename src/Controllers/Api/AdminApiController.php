@@ -58,7 +58,8 @@ class AdminApiController extends Controller
                 FROM backup_jobs bj2
                 WHERE bj2.backup_plan_id = bp.id
                   AND bj2.task_type = 'backup'
-                ORDER BY COALESCE(bj2.completed_at, bj2.started_at, bj2.queued_at) DESC, bj2.id DESC
+                  AND bj2.status IN ('completed', 'failed')
+                ORDER BY bj2.completed_at DESC, bj2.id DESC
                 LIMIT 1
             )
             ORDER BY a.name, bp.name

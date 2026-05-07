@@ -188,8 +188,8 @@
 <div class="queue-topline mb-3">
     <div class="text-muted small">Live queue refreshes every 10 seconds</div>
     <div class="queue-pills">
-        <a class="queue-pill active" href="#queue-in-progress"><i class="bi bi-activity me-1"></i>Active <?= count($inProgress) ?></a>
-        <a class="queue-pill" href="#queue-completed"><i class="bi bi-check2-circle me-1"></i>Completed <?= count($completed) ?></a>
+        <a class="queue-pill active" href="#queue-in-progress"><i class="bi bi-activity me-1"></i>Active <span id="qm-pill-active"><?= count($inProgress) ?></span></a>
+        <a class="queue-pill" href="#queue-completed"><i class="bi bi-check2-circle me-1"></i>Completed <span id="qm-pill-completed"><?= count($completed) ?></span></a>
         <a class="queue-pill" href="/schedules"><i class="bi bi-calendar-week me-1"></i>Schedules</a>
     </div>
 </div>
@@ -203,8 +203,8 @@
                 </div>
                 <div>
                     <div class="text-muted small">In Queue</div>
-                    <div class="fs-4 fw-bold"><?= $queuedCount ?></div>
-                    <div class="text-muted small"><?= $runningCount ?> running</div>
+                    <div class="fs-4 fw-bold" id="qm-queued"><?= $queuedCount ?></div>
+                    <div class="text-muted small"><span id="qm-running"><?= $runningCount ?></span> running</div>
                 </div>
             </div>
         </div>
@@ -217,23 +217,23 @@
                 </div>
                 <div>
                     <div class="text-muted small">Completed (24h)</div>
-                    <div class="fs-4 fw-bold"><?= $completed24h ?></div>
-                    <div class="text-muted small">avg: <?= $avgDur ?></div>
+                    <div class="fs-4 fw-bold" id="qm-completed24h"><?= $completed24h ?></div>
+                    <div class="text-muted small">avg: <span id="qm-avg"><?= $avgDur ?></span></div>
                 </div>
             </div>
         </div>
     </div>
     <div class="col-xl-3 col-md-6">
         <?php $failBs = $failed24h > 0 ? 'danger' : 'success'; ?>
-        <div class="card border-0 shadow-sm h-100 metric-card-<?= $failBs ?> queue-metric" style="--queue-accent: <?= $failed24h > 0 ? '#dc3545' : '#198754' ?>;">
+        <div class="card border-0 shadow-sm h-100 metric-card-<?= $failBs ?> queue-metric" id="qm-failed-card" style="--queue-accent: <?= $failed24h > 0 ? '#dc3545' : '#198754' ?>;">
             <div class="card-body d-flex align-items-center">
-                <div class="stat-icon bg-<?= $failBs ?> text-<?= $failBs ?> rounded-3 p-3 me-3" style="--bs-bg-opacity: .2;">
-                    <i class="bi bi-<?= $failed24h > 0 ? 'x-circle' : 'check-circle' ?> fs-3"></i>
+                <div class="stat-icon bg-<?= $failBs ?> text-<?= $failBs ?> rounded-3 p-3 me-3" id="qm-failed-icon-wrap" style="--bs-bg-opacity: .2;">
+                    <i class="bi bi-<?= $failed24h > 0 ? 'x-circle' : 'check-circle' ?> fs-3" id="qm-failed-icon"></i>
                 </div>
                 <div>
                     <div class="text-muted small">Failed (24h)</div>
-                    <div class="fs-4 fw-bold"><?= $failed24h ?></div>
-                    <div class="text-muted small"><?= $failed24h > 0 ? 'check logs' : 'no failures' ?></div>
+                    <div class="fs-4 fw-bold" id="qm-failed24h"><?= $failed24h ?></div>
+                    <div class="text-muted small" id="qm-failed-label"><?= $failed24h > 0 ? 'check logs' : 'no failures' ?></div>
                 </div>
             </div>
         </div>
@@ -246,7 +246,7 @@
                 </div>
                 <div>
                     <div class="text-muted small">Avg Duration</div>
-                    <div class="fs-4 fw-bold"><?= $avgDur ?></div>
+                    <div class="fs-4 fw-bold" id="qm-avg-dur"><?= $avgDur ?></div>
                     <div class="text-muted small">last 24 hours</div>
                 </div>
             </div>
@@ -257,7 +257,7 @@
 <div class="card border-0 shadow-sm mb-4 queue-table-card">
     <div class="card-header card-head-gradient fw-semibold d-flex justify-content-between align-items-center">
         <span><i class="bi bi-activity me-2"></i>In Progress</span>
-        <span class="text-muted small"><?= $runningCount ?>/<?= $maxQueue ?> slots used</span>
+        <span class="text-muted small"><span id="qm-running-slots"><?= $runningCount ?></span>/<span id="qm-max-queue"><?= $maxQueue ?></span> slots used</span>
     </div>
     <div class="card-body p-0" id="queue-in-progress">
         <?php if (empty($inProgress)): ?>
@@ -342,7 +342,7 @@
 <div class="card border-0 shadow-sm queue-table-card">
     <div class="card-header card-head-gradient fw-semibold d-flex justify-content-between align-items-center">
         <span><i class="bi bi-clock-history me-2"></i>Recently Completed</span>
-        <span class="text-muted small">Last 24 hours: <?= $completed24h ?> completed, <?= $failed24h ?> failed</span>
+        <span class="text-muted small">Last 24 hours: <span id="qm-completed24h-hdr"><?= $completed24h ?></span> completed, <span id="qm-failed24h-hdr"><?= $failed24h ?></span> failed</span>
     </div>
     <div class="card-body p-0" id="queue-completed">
         <?php if (empty($completed)): ?>
@@ -536,6 +536,56 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
             '<td class="text-end" onclick="event.stopPropagation()">' + actions + '</td></tr>';
     }
 
+    function setText(id, value) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+    }
+
+    function refreshMetrics(data) {
+        setText('qm-pill-active', data.inProgress.length);
+        setText('qm-pill-completed', data.completed.length);
+        if (typeof data.queuedCount !== 'undefined') setText('qm-queued', data.queuedCount);
+        if (typeof data.runningCount !== 'undefined') {
+            setText('qm-running', data.runningCount);
+            setText('qm-running-slots', data.runningCount);
+        }
+        if (typeof data.maxQueue !== 'undefined') setText('qm-max-queue', data.maxQueue);
+        if (typeof data.completed24h !== 'undefined') {
+            setText('qm-completed24h', data.completed24h);
+            setText('qm-completed24h-hdr', data.completed24h);
+        }
+        if (typeof data.failed24h !== 'undefined') {
+            setText('qm-failed24h', data.failed24h);
+            setText('qm-failed24h-hdr', data.failed24h);
+            setText('qm-failed-label', data.failed24h > 0 ? 'check logs' : 'no failures');
+            // Swap card accent / icon between danger/success
+            const card = document.getElementById('qm-failed-card');
+            const iconWrap = document.getElementById('qm-failed-icon-wrap');
+            const icon = document.getElementById('qm-failed-icon');
+            const isFail = data.failed24h > 0;
+            if (card) {
+                card.classList.toggle('metric-card-danger', isFail);
+                card.classList.toggle('metric-card-success', !isFail);
+                card.style.setProperty('--queue-accent', isFail ? '#dc3545' : '#198754');
+            }
+            if (iconWrap) {
+                iconWrap.classList.toggle('bg-danger', isFail);
+                iconWrap.classList.toggle('text-danger', isFail);
+                iconWrap.classList.toggle('bg-success', !isFail);
+                iconWrap.classList.toggle('text-success', !isFail);
+            }
+            if (icon) {
+                icon.classList.toggle('bi-x-circle', isFail);
+                icon.classList.toggle('bi-check-circle', !isFail);
+            }
+        }
+        if (typeof data.avgSec !== 'undefined') {
+            const avgLabel = data.avgSec > 0 ? formatDuration(data.avgSec) : '--';
+            setText('qm-avg', avgLabel);
+            setText('qm-avg-dur', avgLabel);
+        }
+    }
+
     function refreshQueue() {
         fetch('/queue/json', { credentials: 'same-origin' })
             .then(r => r.json())
@@ -566,6 +616,8 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
                     html += '</tbody></table></div>';
                     cCard.innerHTML = html;
                 }
+
+                refreshMetrics(data);
 
                 // Re-init tooltips
                 document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootstrap.Tooltip(el));
