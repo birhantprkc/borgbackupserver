@@ -384,6 +384,16 @@ if command -v clickhouse-server &>/dev/null; then
     if [ -f "/var/www/bbs/config/clickhouse-server-override.xml" ]; then
         cp /var/www/bbs/config/clickhouse-server-override.xml /etc/clickhouse-server/config.d/bbs-override.xml
     fi
+    # Self-heal: if a previous run left stderr.log/stdout.log oversized
+    # (clickhouse-server writes its own stderr there in --daemon mode and
+    # certain Poco logger states cause runaway growth — see #79, #252),
+    # truncate them on startup so we never inherit a near-full volume.
+    for f in /var/log/clickhouse-server/stderr.log /var/log/clickhouse-server/stdout.log; do
+        if [ -f "$f" ] && [ "$(stat -c%s "$f" 2>/dev/null || echo 0)" -gt 104857600 ]; then
+            echo "  Truncating oversized $(basename "$f") ($(du -h "$f" | cut -f1))"
+            : > "$f"
+        fi
+    done
     # Point ClickHouse data to persistent volume so it survives container recreation
     cat > /etc/clickhouse-server/config.d/bbs-docker-paths.xml << 'CHXML'
 <clickhouse>
@@ -707,6 +717,13 @@ TMPDIR=/var/bbs/tmp
 * * * * * www-data cd /var/www/bbs && /usr/local/bin/php scheduler.php >> /var/log/bbs-scheduler.log 2>&1
 # Save UIDs for any user home dirs that have .ssh/ but no .uid file yet
 */5 * * * * root for d in /var/bbs/home/*/; do [ -d "$d/.ssh" ] && [ ! -f "$d/.uid" ] && stat -c \%u "$d" > "$d/.uid" 2>/dev/null; done
+# Cap ClickHouse stderr/stdout at ~50MB. ClickHouse runs as --daemon and
+# inherits stderr/stdout to these files; a Poco logger rotation glitch can
+# cause a tight loop of multi-line stack traces (#79, #252). Truncate
+# rather than rotate — ClickHouse holds the FD open and we don't want to
+# orphan it. We keep the file (so the next write goes to offset 0 cleanly)
+# instead of unlinking it.
+*/5 * * * * root for f in /var/log/clickhouse-server/stderr.log /var/log/clickhouse-server/stdout.log; do [ -f "$f" ] && [ "$(stat -c\%s "$f" 2>/dev/null || echo 0)" -gt 52428800 ] && : > "$f"; done
 CRON
 chmod 644 /etc/cron.d/bbs-scheduler
 cron
