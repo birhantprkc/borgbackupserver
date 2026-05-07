@@ -65,6 +65,7 @@ a.metric-tile:hover { transform: translateY(-1px); filter: brightness(1.1); }
 /* Font & nav color variables */
 :root {
     --bs-body-font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    --bs-box-shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.375);
     --bbs-nav-bg: #2c3e50;
     --bbs-nav-color: rgba(255, 255, 255, 0.7);
     --bbs-nav-hover-bg: rgba(255, 255, 255, 0.1);

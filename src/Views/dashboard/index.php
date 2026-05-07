@@ -93,7 +93,7 @@ $dfFix = function (string $s): string {
     align-items: center;
     justify-content: center;
     color: #fff;
-    text-shadow: 0 0 3px rgba(0,0,0,0.7), 0 0 1px rgba(0,0,0,0.9);
+    text-shadow: 0 2px 3px rgba(0,0,0,0.9), 0 2px 6px rgba(0,0,0,0.9);
     pointer-events: none;
 }
 /* Right column also fixed-width so the bar's right edge is consistent

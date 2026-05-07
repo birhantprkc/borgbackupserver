@@ -116,6 +116,20 @@ function bbs_histogram_ticks(int $max): array
     --schedule-concrete-bg-2: #9da6b2;
     --schedule-concrete-ink: #1f2933;
     --schedule-concrete-line: rgba(43, 50, 60, 0.14);
+    --schedule-error-bg: #cf5b5f;
+    --schedule-error-bg-2: #8f2732;
+    --schedule-error-hot: #ff777d;
+    --schedule-error-ink: #fff3f4;
+    --schedule-error-crack: rgba(70, 6, 14, 0.5);
+    --schedule-error-cracked:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(65, 4, 12, 0.46)),
+        linear-gradient(23deg, transparent 0 18%, rgba(255, 205, 210, 0.42) 18% 19%, transparent 19% 100%),
+        linear-gradient(31deg, transparent 0 35%, var(--schedule-error-crack) 35% 38%, transparent 38% 100%),
+        linear-gradient(151deg, transparent 0 58%, rgba(255, 210, 214, 0.42) 58% 59.5%, transparent 59.5% 100%),
+        linear-gradient(104deg, transparent 0 44%, rgba(50, 0, 8, 0.5) 44% 46%, transparent 46% 100%),
+        repeating-linear-gradient(112deg, transparent 0 10px, rgba(78, 0, 12, 0.42) 10px 12px, transparent 12px 23px),
+        repeating-linear-gradient(36deg, transparent 0 18px, rgba(255, 195, 200, 0.18) 18px 19px, transparent 19px 37px),
+        linear-gradient(135deg, var(--schedule-error-bg), var(--schedule-error-bg-2));
 }
 [data-bs-theme="dark"] {
     --schedule-laser: #36a2ff;
@@ -130,11 +144,18 @@ function bbs_histogram_ticks(int $max): array
     --schedule-concrete-bg-2: #333b45;
     --schedule-concrete-ink: #f1f5f9;
     --schedule-concrete-line: rgba(255, 255, 255, 0.08);
+    --schedule-error-bg: #9f2f39;
+    --schedule-error-bg-2: #451018;
+    --schedule-error-hot: #ff5c66;
+    --schedule-error-ink: #fff5f6;
+    --schedule-error-crack: rgba(12, 0, 3, 0.68);
 }
 .schedule-shell {
     color-scheme: light dark;
 }
 .hist-container {
+    --hist-axis-offset: 56px;
+    --timeline-block-min-width: 46px;
     position: relative;
     height: 170px;
     display: block;
@@ -145,7 +166,7 @@ function bbs_histogram_ticks(int $max): array
     position: absolute;
     top: 0;
     bottom: 18px; /* match bar-wrap padding-bottom so we don't draw over the x-labels */
-    left: 56px;   /* start after the yaxis column */
+    left: var(--hist-axis-offset);   /* start after the yaxis column */
     right: 0;
     pointer-events: none;
     z-index: 1;
@@ -179,7 +200,7 @@ function bbs_histogram_ticks(int $max): array
 .hist-current-time-line::before {
     content: "";
     position: absolute;
-    left: -5px;
+    left: -6px;
     top: -5px;
     width: 10px;
     height: 10px;
@@ -192,7 +213,7 @@ function bbs_histogram_ticks(int $max): array
 }
 .hist-current-time-line .current-time-label {
     position: absolute;
-    top: 2px;
+    top: -20px;
     left: 8px;
     padding: 2px 8px;
     border-radius: 999px;
@@ -233,6 +254,7 @@ function bbs_histogram_ticks(int $max): array
     flex: 1 1 0;
     min-height: 6px;
     cursor: pointer;
+    touch-action: manipulation;
     background:
         linear-gradient(90deg, var(--agent-accent), rgba(255, 255, 255, 0.24) 8%, transparent 26%),
         linear-gradient(180deg, var(--schedule-laser-hot), var(--schedule-block-bg));
@@ -257,14 +279,14 @@ function bbs_histogram_ticks(int $max): array
     position: absolute;
     top: 8px;
     bottom: 22px;
-    left: 56px;
+    left: var(--hist-axis-offset);
     right: 0;
     z-index: 2;
 }
 .hist-event {
     position: absolute;
     height: 24px;
-    min-width: var(--timeline-block-min-width, 46px);
+    min-width: var(--timeline-block-min-width);
     padding: 0;
     border-radius: 5px;
     border-left: 3px solid var(--agent-accent);
@@ -300,12 +322,25 @@ function bbs_histogram_ticks(int $max): array
 .hist-event.is-past {
     color: var(--schedule-concrete-ink);
     text-shadow: none;
+    z-index: inherit;
+}
+.hist-event.is-error::after {
+    background: var(--schedule-error-cracked);
+    box-shadow: inset 0 0 14px rgba(54, 0, 8, 0.28);
+}
+.hist-event.is-error.is-past {
+    color: var(--schedule-error-ink);
 }
 .hist-seg.is-past {
     background:
         repeating-linear-gradient(45deg, var(--schedule-concrete-line) 0 1px, transparent 1px 6px),
         linear-gradient(180deg, var(--schedule-concrete-bg), var(--schedule-concrete-bg-2));
-    border-left: 2px solid var(--agent-accent);
+    border-left: 5px solid var(--agent-accent);
+    z-index: -1;
+}
+.hist-seg.is-error.is-past {
+    background: var(--schedule-error-cracked);
+    border-left-color: var(--schedule-error-hot);
 }
 .hist-seg:hover {
     filter: brightness(1.25);
@@ -316,7 +351,8 @@ function bbs_histogram_ticks(int $max): array
     position: absolute;
     top: 0;
     bottom: 18px;
-    left: 56px;
+    left: var(--hist-axis-offset);
+    width: calc((100% - var(--hist-axis-offset)) * var(--now-pct, 0));
     z-index: 0;
     pointer-events: none;
     background:
@@ -326,7 +362,7 @@ function bbs_histogram_ticks(int $max): array
 }
 .hist-xaxis {
     position: absolute;
-    left: 56px;
+    left: var(--hist-axis-offset);
     right: 0;
     bottom: 0;
     height: 16px;
@@ -474,7 +510,7 @@ function bbs_histogram_ticks(int $max): array
 .current-time-line .current-time-label {
     position: absolute;
     right: 8px;
-    top: -13px;
+    top: -8px;
     padding: 2px 8px;
     border-radius: 999px;
     background: linear-gradient(135deg, var(--schedule-laser), #243a6b);
@@ -505,7 +541,7 @@ function bbs_histogram_ticks(int $max): array
     color: #fff;
     overflow: hidden;
     cursor: pointer;
-    border-left: 4px solid var(--agent-accent);
+    border-left: 5px solid var(--agent-accent);
     transition: opacity 0.15s, transform 0.15s, filter 0.15s;
     text-decoration: none;
     background:
@@ -576,10 +612,20 @@ function bbs_histogram_ticks(int $max): array
 .day-block.is-active {
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.78), 0 0 5px rgba(0, 0, 0, 0.42);
 }
+.day-block.is-error::after {
+    background: var(--schedule-error-cracked);
+    box-shadow: inset 0 -10px 22px rgba(54, 0, 8, 0.25);
+}
+.day-block.is-error.is-past {
+    color: var(--schedule-error-ink);
+}
 .day-block.is-past::before {
     background: var(--agent-accent);
     box-shadow: none;
     opacity: 0.9;
+}
+.day-block.is-error.is-past::before {
+    background: var(--schedule-error-hot);
 }
 .day-block.estimated {
     background-image:
@@ -744,8 +790,9 @@ function bbs_histogram_ticks(int $max): array
     }
     .day-block {
         gap: 0;
-        padding: 0;
+        padding: 0 4px 0 0;
         min-width: 6px;
+        border-left: 1px solid var(--agent-accent);
         touch-action: manipulation;
         -webkit-tap-highlight-color: transparent;
     }
@@ -754,10 +801,42 @@ function bbs_histogram_ticks(int $max): array
         width: 6px;
         height: auto;
         border-radius: 0;
-        margin: 0;
+        margin: 0 3px 0 0;
     }
-    .day-block .agent,
+    .day-block .agent {
+        display: block;
+        flex: 1 1 auto;
+        max-width: none;
+        min-width: 0;
+        font-size: 0.62rem;
+        line-height: 1;
+    }
     .day-block .side {
+        display: none;
+    }
+}
+
+/* Tablet/medium: keep backup timeline blocks proportional without the desktop minimum. */
+@media (min-width: 768px) and (max-width: 1199.98px) {
+    .hist-container {
+        --hist-axis-offset: 0px;
+        --timeline-block-min-width: 1px;
+    }
+    .hist-timeline-axis {
+        display: none;
+    }
+    .hist-event {
+        min-width: var(--timeline-block-min-width, 1px);
+    }
+}
+
+/* Phone-only: keep the backup timeline compact; tablets retain labels/axis. */
+@media (max-width: 575.98px) {
+    .hist-container {
+        --hist-axis-offset: 0px;
+    }
+    .hist-current-time-line .current-time-label,
+    .hist-timeline-axis {
         display: none;
     }
 }
@@ -845,9 +924,9 @@ function bbs_histogram_ticks(int $max): array
                 <?php if ($dIdx === $todayIdx): ?>
                     <?php $nowLeftPct = ($currentMinuteOfDay / 1440) * 100; ?>
                     <div class="hist-time-trail"
-                         style="width: calc((100% - 56px) * <?= $nowLeftPct / 100 ?>);"></div>
+                         style="--now-pct: <?= $nowLeftPct / 100 ?>;"></div>
                     <div class="hist-current-time-line <?= $nowLeftPct > 80 ? 'near-end' : '' ?>"
-                         style="left: calc(56px + ((100% - 56px) * <?= $nowLeftPct / 100 ?>));"
+                         style="left: calc(var(--hist-axis-offset) + ((100% - var(--hist-axis-offset)) * <?= $nowLeftPct / 100 ?>));"
                          title="Current time in <?= htmlspecialchars($userTz) ?>">
                         <span class="current-time-label">Time now: <?= htmlspecialchars($currentTimeLabel) ?></span>
                     </div>
@@ -858,15 +937,23 @@ function bbs_histogram_ticks(int $max): array
                     <?php foreach ($blocksByDay[$dIdx] as $b): ?>
                         <?php
                         $startPct = max(0, min(100, ($b['start_min'] / 1440) * 100));
-                        $durationPct = max(0.25, min(100, ($b['duration_min'] / 1440) * 100));
+                        $actualDurationPct = max(0.001, min(100, ($b['duration_min'] / 1440) * 100));
+                        $durationPct = max(0.25, $actualDurationPct);
                         $laneTop = (int) ($b['lane'] ?? 0) * 30;
                         $timelinePastPct = bbs_schedule_progress_pct((int) $b['day_idx'], (int) $b['start_min'], (int) $b['duration_min'], $todayIdx, $currentMinuteOfDay);
                         $timelinePhase = bbs_day_block_phase($timelinePastPct);
+                        $timelineWidthPct = ((int) $b['day_idx'] === $todayIdx && $timelinePhase !== 'future')
+                            ? $actualDurationPct
+                            : $durationPct;
+                        $timelineMinWidth = ((int) $b['day_idx'] === $todayIdx && $timelinePhase !== 'future')
+                            ? '0px'
+                            : null;
+                        $timelineIsError = !empty($b['has_error']);
                         $timelineDurLabel = $b['duration_min'] >= 60
                             ? floor($b['duration_min'] / 60) . 'h ' . ($b['duration_min'] % 60) . 'm'
                             : $b['duration_min'] . 'm';
                         ?>
-                        <div class="hist-seg hist-event is-<?= $timelinePhase ?>"
+                        <div class="hist-seg hist-event is-<?= $timelinePhase ?> <?= $timelineIsError ? 'is-error' : '' ?>"
                              data-schedule-id="<?= $b['schedule_id'] ?>"
                              data-agent-id="<?= (int) $b['agent_id'] ?>"
                              data-plan-name="<?= htmlspecialchars($b['plan_name']) ?>"
@@ -874,7 +961,9 @@ function bbs_histogram_ticks(int $max): array
                              data-time="<?= htmlspecialchars($b['time_label']) ?>"
                              data-duration="<?= htmlspecialchars($timelineDurLabel) ?>"
                              data-frequency="<?= htmlspecialchars($b['frequency']) ?>"
-                             style="top: <?= $laneTop ?>px; left: <?= round($startPct, 4) ?>%; width: max(var(--timeline-block-min-width, 46px), <?= round($durationPct, 4) ?>%); max-width: calc(100% - <?= round($startPct, 4) ?>%); --agent-accent: <?= bbs_agent_color((int) $b['agent_id']) ?>; --past-pct: <?= round($timelinePastPct, 2) ?>%;">
+                             data-job-status="<?= htmlspecialchars($b['job_status'] ?? '') ?>"
+                             data-failed-job-id="<?= (int) ($b['failed_job_id'] ?? 0) ?>"
+                             style="top: <?= $laneTop ?>px; left: <?= round($startPct, 4) ?>%; width: max(var(--timeline-block-min-width), <?= round($timelineWidthPct, 4) ?>%); max-width: calc(100% - <?= round($startPct, 4) ?>%); --agent-accent: <?= bbs_agent_color((int) $b['agent_id']) ?>; --past-pct: <?= round($timelinePastPct, 2) ?>%;<?= $timelineMinWidth !== null ? ' --timeline-block-min-width: ' . $timelineMinWidth . ';' : '' ?>">
                         </div>
                     <?php endforeach; ?>
                     <?php if (empty($blocksByDay[$dIdx])): ?>
@@ -957,6 +1046,7 @@ function bbs_histogram_ticks(int $max): array
                             $color = bbs_agent_color($b['agent_id']);
                             $pastPct = bbs_day_block_progress_pct((int) $b['day_idx'], (int) $b['start_min'], (float) $height, $todayIdx, $currentMinuteOfDay, $pxPerHour);
                             $phase = bbs_day_block_phase($pastPct);
+                            $isError = !empty($b['has_error']);
                             $durLabel = $b['duration_min'] >= 60
                                 ? floor($b['duration_min'] / 60) . 'h ' . ($b['duration_min'] % 60) . 'm'
                                 : $b['duration_min'] . 'm';
@@ -970,7 +1060,7 @@ function bbs_histogram_ticks(int $max): array
                                 $b['estimated'] ? ' (no history)' : ''
                             );
                             ?>
-                        <div class="day-block <?= $b['estimated'] ? 'estimated' : '' ?> is-<?= $phase ?>"
+                        <div class="day-block <?= $b['estimated'] ? 'estimated' : '' ?> is-<?= $phase ?> <?= $isError ? 'is-error' : '' ?>"
                              data-agent-id="<?= $b['agent_id'] ?>"
                              data-schedule-id="<?= $b['schedule_id'] ?>"
                              data-plan-id="<?= $b['plan_id'] ?>"
@@ -980,6 +1070,8 @@ function bbs_histogram_ticks(int $max): array
                              data-time="<?= htmlspecialchars($b['time_label']) ?>"
                              data-duration="<?= htmlspecialchars($durLabel) ?>"
                              data-estimated="<?= $b['estimated'] ? '1' : '0' ?>"
+                             data-job-status="<?= htmlspecialchars($b['job_status'] ?? '') ?>"
+                             data-failed-job-id="<?= (int) ($b['failed_job_id'] ?? 0) ?>"
                              style="top: <?= $top ?>px; height: <?= $height ?>px; left: calc(<?= $left ?>% + 4px); width: calc(<?= $laneWidth ?>% - 8px); --agent-accent: <?= $color ?>; --past-pct: <?= round($pastPct, 2) ?>%;">
                             <div class="agent"><?= htmlspecialchars($b['agent_name']) ?></div>
                             <div class="side">
@@ -1056,6 +1148,9 @@ function bbs_histogram_ticks(int $max): array
 
 <!-- Block context menu -->
 <div id="sched-ctxmenu" class="sched-ctxmenu">
+    <button type="button" id="ctx-retry" style="display: none;">
+        <i class="bi bi-arrow-repeat"></i><span>Retry</span>
+    </button>
     <button type="button" id="ctx-change-time">
         <i class="bi bi-clock"></i><span>Change Time</span>
     </button>
@@ -1195,8 +1290,9 @@ document.addEventListener('DOMContentLoaded', function () {
             '<div class="tt-meta">' + esc(el.dataset.frequency) + '</div>' +
             'Starts: <strong>' + esc(el.dataset.time) + '</strong><br>' +
             'Est. duration: <strong>' + esc(el.dataset.duration || '') + '</strong>' +
+            (el.dataset.jobStatus === 'failed' ? '<br>Result: <strong>Error</strong>' : '') +
             (el.dataset.estimated === '1' ? ' <span style="opacity:.6">(no history — default)</span>' : '') +
-            '<div class="tt-hint">' + (isMobileScheduleMode() && el.classList.contains('day-block') ? 'Long press for options' : 'Click for options') + '</div>';
+            '<div class="tt-hint">' + (isMobileScheduleMode() && (el.classList.contains('day-block') || el.classList.contains('hist-seg')) ? 'Long press for options' : 'Click for options') + '</div>';
     }
     function showSchedulePopup(el, ev) {
         showTimelineTooltip(scheduleTooltipHtml(el), ev);
@@ -1215,12 +1311,27 @@ document.addEventListener('DOMContentLoaded', function () {
     function openScheduleContext(el, point) {
         ctxScheduleId = Number(el.dataset.scheduleId);
         ctxAgentId = Number(el.dataset.agentId);
+        ctxFailedJobId = el.dataset.jobStatus === 'failed' ? Number(el.dataset.failedJobId || 0) : null;
         hideTooltip();
         openCtxMenu(point);
     }
     function suppressNextDayBlockTap() {
         suppressNextDayBlockClick = true;
         window.setTimeout(() => { suppressNextDayBlockClick = false; }, 1200);
+    }
+    const histSegLongPressMs = 560;
+    let histSegLongPressTimer = null;
+    let suppressNextHistSegClick = false;
+    let histSegPressPoint = null;
+    function clearHistSegLongPress() {
+        if (histSegLongPressTimer) {
+            window.clearTimeout(histSegLongPressTimer);
+            histSegLongPressTimer = null;
+        }
+    }
+    function suppressNextHistSegTap() {
+        suppressNextHistSegClick = true;
+        window.setTimeout(() => { suppressNextHistSegClick = false; }, 1200);
     }
 
     // Day-block hover tooltip
@@ -1267,24 +1378,62 @@ document.addEventListener('DOMContentLoaded', function () {
     // (same actions as the day-block click).
     document.querySelectorAll('.hist-seg').forEach(seg => {
         seg.addEventListener('mouseenter', ev => {
+            if (isMobileScheduleMode()) return;
             showSchedulePopup(seg, ev);
         });
         seg.addEventListener('mousemove', moveTooltip);
         seg.addEventListener('mouseleave', hideTooltip);
+        seg.addEventListener('pointerdown', ev => {
+            if (!isMobileScheduleMode() || ev.pointerType === 'mouse') return;
+            clearHistSegLongPress();
+            suppressNextHistSegClick = false;
+            histSegPressPoint = { clientX: ev.clientX, clientY: ev.clientY };
+            histSegLongPressTimer = window.setTimeout(() => {
+                histSegLongPressTimer = null;
+                suppressNextHistSegTap();
+                openScheduleContext(seg, histSegPressPoint);
+            }, histSegLongPressMs);
+        });
+        seg.addEventListener('pointermove', ev => {
+            if (!histSegLongPressTimer || !histSegPressPoint) return;
+            const dx = ev.clientX - histSegPressPoint.clientX;
+            const dy = ev.clientY - histSegPressPoint.clientY;
+            if (Math.hypot(dx, dy) > 10) clearHistSegLongPress();
+        });
+        seg.addEventListener('pointerup', clearHistSegLongPress);
+        seg.addEventListener('pointercancel', clearHistSegLongPress);
+        seg.addEventListener('pointerleave', clearHistSegLongPress);
+        seg.addEventListener('contextmenu', ev => {
+            if (!isMobileScheduleMode()) return;
+            ev.preventDefault();
+            suppressNextHistSegTap();
+            const point = (ev.clientX || ev.clientY)
+                ? { clientX: ev.clientX, clientY: ev.clientY }
+                : (histSegPressPoint || { clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 });
+            openScheduleContext(seg, point);
+        });
         seg.addEventListener('click', ev => {
             ev.preventDefault();
             ev.stopPropagation();
-            ctxScheduleId = Number(seg.dataset.scheduleId);
-            ctxAgentId = Number(seg.dataset.agentId);
-            hideTooltip();
-            openCtxMenu(ev);
+            if (isMobileScheduleMode()) {
+                if (suppressNextHistSegClick) {
+                    suppressNextHistSegClick = false;
+                    return;
+                }
+                closeCtxMenu();
+                showSchedulePopup(seg, ev);
+                return;
+            }
+            openScheduleContext(seg, ev);
         });
     });
 
     // ----------------- Context menu ----------------------------------------
     const ctx = document.getElementById('sched-ctxmenu');
+    const ctxRetry = document.getElementById('ctx-retry');
     let ctxScheduleId = null;
     let ctxAgentId = null;
+    let ctxFailedJobId = null;
 
     document.querySelectorAll('.day-block').forEach(b => {
         b.addEventListener('click', ev => {
@@ -1304,6 +1453,9 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     function openCtxMenu(ev) {
+        if (ctxRetry) {
+            ctxRetry.style.display = ctxFailedJobId ? 'flex' : 'none';
+        }
         ctx.style.display = 'block';
         let x = ev.clientX, y = ev.clientY;
         const rect = ctx.getBoundingClientRect();
@@ -1318,6 +1470,19 @@ document.addEventListener('DOMContentLoaded', function () {
         if (isMobileScheduleMode() && !ev.target.closest('.day-block') && !ev.target.closest('.hist-seg')) hideTooltip();
     });
     document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { closeCtxMenu(); hideTooltip(); } });
+
+    ctxRetry.addEventListener('click', () => {
+        if (!ctxFailedJobId) return;
+        if (!confirm('Retry this failed job?')) return;
+        const f = document.createElement('form');
+        f.method = 'POST';
+        f.action = '/queue/' + ctxFailedJobId + '/retry';
+        const c = document.createElement('input');
+        c.type = 'hidden'; c.name = 'csrf_token'; c.value = csrfToken;
+        f.appendChild(c);
+        document.body.appendChild(f);
+        f.submit();
+    });
 
     document.getElementById('ctx-edit-plan').addEventListener('click', () => {
         if (!ctxScheduleId) return;
