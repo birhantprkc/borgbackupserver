@@ -23,7 +23,14 @@ class NotificationService
         's3_sync_done',
     ];
 
-    public function notify(string $type, ?int $agentId, ?int $referenceId, string $message, string $severity = 'warning', ?int $userId = null): void
+    /**
+     * Re-emit dedup'd email after this many seconds of silent accumulation.
+     * Without this, every backup_failed after the first is silently swallowed
+     * (just bumps occurrence_count) and users think no email was sent (#249).
+     */
+    private const EMAIL_ESCALATION_INTERVAL_SECONDS = 21600; // 6 hours
+
+    public function notify(string $type, ?int $agentId, ?int $referenceId, string $message, string $severity = 'warning', ?int $userId = null, bool $forceEmail = false): void
     {
         $alwaysSend = in_array($type, self::ALWAYS_SEND_EVENTS, true);
 
@@ -61,19 +68,21 @@ class NotificationService
         if ($userId !== null) $params[] = $userId;
 
         $existing = $this->db->fetchOne(
-            "SELECT id FROM notifications WHERE type = ? AND {$agentClause} AND {$refClause} AND {$userClause} AND resolved_at IS NULL",
+            "SELECT id, last_emailed_at FROM notifications WHERE type = ? AND {$agentClause} AND {$refClause} AND {$userClause} AND resolved_at IS NULL",
             $params
         );
 
         $isNew = false;
+        $notificationId = null;
 
         if ($existing) {
             $this->db->query(
                 "UPDATE notifications SET occurrence_count = occurrence_count + 1, last_occurred_at = NOW(), message = ?, severity = ?, read_at = NULL WHERE id = ?",
                 [$message, $severity, $existing['id']]
             );
+            $notificationId = (int) $existing['id'];
         } else {
-            $this->db->insert('notifications', [
+            $notificationId = (int) $this->db->insert('notifications', [
                 'type' => $type,
                 'agent_id' => $agentId,
                 'reference_id' => $referenceId,
@@ -84,12 +93,30 @@ class NotificationService
             $isNew = true;
         }
 
-        // Send push/email notifications on first occurrence (failure events deduplicate,
-        // success events always create a new record so they always send)
-        if ($isNew) {
-            $this->sendEmailIfEnabled($type, $message, $userId);
+        // Email/push fire on first occurrence; on every Nth occurrence
+        // afterwards we re-emit so an ongoing failure can't go silent
+        // (#249 — dedup was hiding repeated failures from the user); or
+        // unconditionally when the caller sets $forceEmail (e.g. retry
+        // exhaustion needs to break through dedup regardless).
+        $shouldEmail = $isNew || $forceEmail || $this->shouldReEmit($existing['last_emailed_at'] ?? null);
+        if ($shouldEmail) {
+            $emailed = $this->sendEmailIfEnabled($type, $message, $userId);
             $this->sendAppriseIfEnabled($type, $message, $agentId);
+            if ($emailed) {
+                $this->db->update('notifications', ['last_emailed_at' => $this->db->now()], 'id = ?', [$notificationId]);
+            }
         }
+    }
+
+    private function shouldReEmit(?string $lastEmailedAt): bool
+    {
+        if ($lastEmailedAt === null) {
+            // Existing record has never emailed (predates this column or
+            // was created via a path that didn't email) — emit now.
+            return true;
+        }
+        $age = time() - strtotime($lastEmailedAt);
+        return $age >= self::EMAIL_ESCALATION_INTERVAL_SECONDS;
     }
 
     /**
@@ -120,18 +147,23 @@ class NotificationService
         ];
     }
 
-    private function sendEmailIfEnabled(string $type, string $message, ?int $userId = null): void
+    /**
+     * Returns true if at least one email was actually sent (so the caller
+     * can stamp last_emailed_at), false if the gate was closed (toggle off,
+     * SMTP not configured, no recipients) or sending threw.
+     */
+    private function sendEmailIfEnabled(string $type, string $message, ?int $userId = null): bool
     {
         $settingKey = 'email_on_' . $type;
         $setting = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = ?", [$settingKey]);
 
         if (($setting['value'] ?? '0') !== '1') {
-            return;
+            return false;
         }
 
         try {
             $mailer = new Mailer();
-            if (!$mailer->isEnabled()) return;
+            if (!$mailer->isEnabled()) return false;
 
             $labels = self::getEventLabels();
             $subject = '[BBS] ' . ($labels[$type] ?? ucfirst($type));
@@ -140,16 +172,20 @@ class NotificationService
             // send to just that user. Otherwise fall back to every admin.
             if ($userId !== null) {
                 $user = $this->db->fetchOne("SELECT email, timezone FROM users WHERE id = ? AND email != ''", [$userId]);
-                if ($user) $mailer->send($user['email'], $subject, $this->buildEmailBody($message, $user['timezone'] ?? 'UTC'));
-                return;
+                if (!$user) return false;
+                $mailer->send($user['email'], $subject, $this->buildEmailBody($message, $user['timezone'] ?? 'UTC'));
+                return true;
             }
 
             $admins = $this->db->fetchAll("SELECT email, timezone FROM users WHERE role = 'admin' AND email != ''");
+            if (empty($admins)) return false;
             foreach ($admins as $admin) {
                 $mailer->send($admin['email'], $subject, $this->buildEmailBody($message, $admin['timezone'] ?? 'UTC'));
             }
+            return true;
         } catch (\Exception $e) {
             // Don't let email failures break notification flow
+            return false;
         }
     }
 

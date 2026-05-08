@@ -138,6 +138,23 @@ $updateAvailable = $updateService->isUpdateAvailable();
                         <input type="number" class="form-control" name="stall_timeout_minutes" value="<?= htmlspecialchars($settings['stall_timeout_minutes'] ?? '120') ?>" min="10" max="1440">
                         <div class="form-text">Kill backup jobs with no progress after this many minutes. Set higher for large files. Default: 120 (2 hours).</div>
                     </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="auto_retry_failed_backups" value="1"
+                                   id="autoRetryFailed" <?= (($settings['auto_retry_failed_backups'] ?? '1') === '1') ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-semibold" for="autoRetryFailed">
+                                Auto-retry backups when agent goes offline
+                            </label>
+                        </div>
+                        <div class="form-text">
+                            If a backup fails because the agent disconnects mid-run (laptop closed, network drop), automatically re-queue it so it picks up when the agent reconnects. Real errors (borg path missing, repo locked, etc.) are not retried.
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Max Retry Attempts</label>
+                        <input type="number" class="form-control" name="auto_retry_max_attempts" value="<?= htmlspecialchars($settings['auto_retry_max_attempts'] ?? '3') ?>" min="1" max="10">
+                        <div class="form-text">Cap on offline-induced retries per plan. Once exhausted, a final email is sent (bypassing dedup) so persistent failures aren't hidden. Default: 3.</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -267,6 +284,15 @@ $updateAvailable = $updateService->isUpdateAvailable();
 
 <!-- Email Settings Tab -->
 <?php if ($activeTab === 'notifications'): ?>
+<?php if (!empty($smtpWarning)): ?>
+<div class="alert alert-warning d-flex align-items-start mb-4" role="alert">
+    <i class="bi bi-exclamation-triangle-fill me-2 mt-1"></i>
+    <div>
+        <strong>Email notifications won't actually send.</strong>
+        One or more <em>Email on …</em> toggles below are enabled, but SMTP isn't configured yet — failure events fire the in-app notification only and the email is silently skipped. Fill in the SMTP card below and click <em>Test SMTP</em> to verify.
+    </div>
+</div>
+<?php endif; ?>
 <div class="row g-4">
     <div class="col-lg-7">
         <div class="card border-0 shadow-sm">

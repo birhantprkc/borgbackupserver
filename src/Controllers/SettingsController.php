@@ -27,12 +27,26 @@ class SettingsController extends Controller
             ORDER BY t.created_at
         ");
 
+        // SMTP-not-configured warning (#249): if any email_on_* toggle is on
+        // but Mailer can't actually send, the user thinks emails are firing
+        // when they're being silently skipped at NotificationService.php:134.
+        $emailToggleEnabled = false;
+        foreach ($settings as $key => $value) {
+            if (str_starts_with($key, 'email_on_') && $value === '1') {
+                $emailToggleEnabled = true;
+                break;
+            }
+        }
+        $smtpReady = (new \BBS\Services\Mailer())->isEnabled();
+        $smtpWarning = $emailToggleEnabled && !$smtpReady;
+
         $this->view('settings/index', [
             'pageTitle' => 'Settings',
             'settings' => $settings,
             'templates' => $templates,
             'apiTokens' => $apiTokens,
             'oidcUsers' => $oidcUsers,
+            'smtpWarning' => $smtpWarning,
         ]);
     }
 
@@ -90,7 +104,7 @@ class SettingsController extends Controller
         $this->requireAdmin();
         $this->verifyCsrf();
 
-        $allowed = ['max_queue', 'server_host', 'ssh_port', 'agent_poll_interval', 'stall_timeout_minutes', 'session_timeout_hours', 'default_theme', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_secure', 'smtp_from', 'notification_retention_days', 'storage_alert_threshold', 'apprise_urls', 'self_backup_retention'];
+        $allowed = ['max_queue', 'server_host', 'ssh_port', 'agent_poll_interval', 'stall_timeout_minutes', 'session_timeout_hours', 'default_theme', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_secure', 'smtp_from', 'notification_retention_days', 'storage_alert_threshold', 'apprise_urls', 'self_backup_retention', 'auto_retry_max_attempts'];
 
         foreach ($allowed as $key) {
             if (isset($_POST[$key])) {
@@ -110,7 +124,7 @@ class SettingsController extends Controller
         }
 
         // Checkbox toggles: unchecked = not posted, so explicitly save '0'
-        $checkboxKeys = ['maintenance_mode', 'email_on_backup_failed', 'email_on_backup_warning', 'email_on_agent_offline', 'email_on_storage_low', 'email_on_missed_schedule', 'apprise_on_backup_failed', 'apprise_on_backup_warning', 'apprise_on_agent_offline', 'apprise_on_storage_low', 'apprise_on_missed_schedule', 'force_2fa', 'debug_mode', 'self_backup_enabled', 'self_backup_catalogs', 'telemetry_opt_out', 'inapp_notify_success_events'];
+        $checkboxKeys = ['maintenance_mode', 'email_on_backup_failed', 'email_on_backup_warning', 'email_on_agent_offline', 'email_on_storage_low', 'email_on_missed_schedule', 'apprise_on_backup_failed', 'apprise_on_backup_warning', 'apprise_on_agent_offline', 'apprise_on_storage_low', 'apprise_on_missed_schedule', 'force_2fa', 'debug_mode', 'self_backup_enabled', 'self_backup_catalogs', 'telemetry_opt_out', 'inapp_notify_success_events', 'auto_retry_failed_backups'];
         foreach ($checkboxKeys as $key) {
             $value = isset($_POST[$key]) ? '1' : '0';
             $existing = $this->db->fetchOne("SELECT `key` FROM settings WHERE `key` = ?", [$key]);
