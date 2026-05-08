@@ -61,17 +61,27 @@ class AppriseService
             // Update last_used_at
             $this->db->update('notification_services', ['last_used_at' => date('Y-m-d H:i:s')], 'id = ?', [$serviceId]);
 
-            // Log the send attempt (with agent_id so it shows up in per-client log filter)
+            // Log the send attempt (with agent_id so it shows up in per-client
+            // log filter). Failures log at WARNING — a push delivery problem
+            // is operational noise about a notification service, not a backup
+            // error, and shouldn't pollute the dashboard's Errors tile/chart
+            // alongside actual job failures. The notification-services page
+            // is the right surface for delivery health.
             $serviceName = $service['name'];
             $logRow = [
-                'level' => $exitCode === 0 ? 'info' : 'error',
+                'level' => $exitCode === 0 ? 'info' : 'warning',
             ];
             if ($agentId !== null) $logRow['agent_id'] = $agentId;
             if ($exitCode === 0) {
                 $logRow['message'] = "Push notification sent via \"{$serviceName}\": {$title}";
             } else {
-                $outputStr = implode("\n", $output);
-                $logRow['message'] = "Push notification failed via \"{$serviceName}\": {$title} — " . substr($outputStr, 0, 500);
+                $outputStr = trim(implode("\n", $output));
+                // Apprise frequently exits non-zero with no stdout/stderr
+                // (it logs to its own log path, not the calling process).
+                // Surface the exit code at minimum so the user has something
+                // to investigate when nothing else came back.
+                $detail = $outputStr !== '' ? substr($outputStr, 0, 500) : "apprise exited with code {$exitCode} (no output — run `apprise -vv` against the service URL to see the actual error)";
+                $logRow['message'] = "Push notification failed via \"{$serviceName}\": {$title} — " . $detail;
             }
             $this->db->insert('server_log', $logRow);
 

@@ -93,18 +93,26 @@ class NotificationService
             $isNew = true;
         }
 
-        // Email/push fire on first occurrence; on every Nth occurrence
+        // Apprise fires on first occurrence only — push services like
+        // Pushover/Slack/Discord prefer one ping per state change, not
+        // periodic re-pings. Configured-but-broken Apprise URLs would
+        // otherwise log a delivery failure on every escalation tick.
+        if ($isNew) {
+            $this->sendAppriseIfEnabled($type, $message, $agentId);
+        }
+
+        // Email fires on first occurrence; on every Nth occurrence
         // afterwards we re-emit so an ongoing failure can't go silent
         // (#249 — dedup was hiding repeated failures from the user); or
         // unconditionally when the caller sets $forceEmail (e.g. retry
-        // exhaustion needs to break through dedup regardless).
+        // exhaustion needs to break through dedup). last_emailed_at is
+        // stamped regardless of whether the SMTP send actually succeeded
+        // — otherwise a misconfigured mailer would never throttle and
+        // we'd retry every occurrence.
         $shouldEmail = $isNew || $forceEmail || $this->shouldReEmit($existing['last_emailed_at'] ?? null);
         if ($shouldEmail) {
-            $emailed = $this->sendEmailIfEnabled($type, $message, $userId);
-            $this->sendAppriseIfEnabled($type, $message, $agentId);
-            if ($emailed) {
-                $this->db->update('notifications', ['last_emailed_at' => $this->db->now()], 'id = ?', [$notificationId]);
-            }
+            $this->sendEmailIfEnabled($type, $message, $userId);
+            $this->db->update('notifications', ['last_emailed_at' => $this->db->now()], 'id = ?', [$notificationId]);
         }
     }
 
