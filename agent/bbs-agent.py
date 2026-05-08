@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import platform
+import re
 import shlex
 import signal
 import socket
@@ -45,7 +46,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.29.11"
+AGENT_VERSION = "2.29.12"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -109,6 +110,61 @@ if IS_WINDOWS:
             SSH_CMD = _ssh_path.replace("\\", "/")
     except (FileNotFoundError, OSError):
         pass
+
+
+def _detect_dropbear():
+    """Detect Dropbear's dbclient (common on Enigma2 boxes, BusyBox, embedded
+    Linux). Dropbear ignores OpenSSH-only options like UserKnownHostsFile and
+    LogLevel and prints "Ignoring unknown configuration option" warnings to
+    stderr — harmless but noisy in the agent log (#247). When detected, we
+    swap to Dropbear-equivalent flags (-y -y for hostkey, -q for quiet)."""
+    if IS_WINDOWS:
+        return False
+    try:
+        result = subprocess.run([SSH_CMD, "-V"], capture_output=True, timeout=3)
+        text = (result.stdout + result.stderr).decode("utf-8", errors="ignore").lower()
+        return "dropbear" in text
+    except Exception:
+        return False
+
+
+IS_DROPBEAR = _detect_dropbear()
+
+
+def _ssh_common_opts(connect_timeout=None):
+    """Argv fragment for non-interactive ssh: skip hostkey check, run in
+    batch mode, optionally cap connect time. Dropbear has none of the
+    OpenSSH `-o` options and complains about them — emit `-y -y` instead
+    (skips hostkey check + accepts new keys silently). BatchMode and
+    ConnectTimeout don't exist on Dropbear but its defaults are equivalent
+    when key-auth is set up, so we just omit them."""
+    if IS_DROPBEAR:
+        return ["-y", "-y"]
+    null = "NUL" if IS_WINDOWS else "/dev/null"
+    opts = [
+        "-o", "StrictHostKeyChecking=no",
+        "-o", "UserKnownHostsFile={}".format(null),
+        "-o", "BatchMode=yes",
+        "-o", "LogLevel=ERROR",
+    ]
+    if connect_timeout:
+        opts.extend(["-o", "ConnectTimeout={}".format(int(connect_timeout))])
+    return opts
+
+
+def _rewrite_borg_rsh_for_dropbear(rsh):
+    """Server-built BORG_RSH strings include OpenSSH-only `-o` options that
+    Dropbear logs warnings for (#247). Strip them and add Dropbear's `-y -y`
+    so the connection still skips hostkey verification."""
+    # Drop `-o key=value` and `-o key=val` whether quoted or not
+    rsh = re.sub(r'\s+-o\s+\S+', '', rsh)
+    # Insert -y -y right after the ssh command (handles quoted ssh paths too)
+    if rsh.startswith('"'):
+        # quoted ssh path: "C:/path/ssh.exe" rest...
+        end = rsh.find('"', 1)
+        if end > 0:
+            return rsh[:end + 1] + ' -y -y' + rsh[end + 1:]
+    return rsh.replace('ssh ', 'ssh -y -y ', 1)
 
 
 def _lockdown_key_windows(path):
@@ -587,19 +643,10 @@ def test_ssh_connection(config):
         'Permission denied' means auth actually failed (key mismatch).
         """
         try:
-            known_hosts_null = "NUL" if IS_WINDOWS else "/dev/null"
             proc = subprocess.Popen(
-                [
-                    SSH_CMD,
-                    "-i", SSH_KEY_PATH,
-                    "-p", ssh_port,
-                    "-o", "StrictHostKeyChecking=no",
-                    "-o", "UserKnownHostsFile={}".format(known_hosts_null),
-                    "-o", "BatchMode=yes",
-                    "-o", "ConnectTimeout=10",
-                    "{}@{}".format(ssh_user, server_host),
-                    "ping",
-                ],
+                [SSH_CMD, "-i", SSH_KEY_PATH, "-p", ssh_port]
+                + _ssh_common_opts(connect_timeout=10)
+                + ["{}@{}".format(ssh_user, server_host), "ping"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
@@ -2990,6 +3037,13 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
         if SSH_CMD != "ssh" and env["BORG_RSH"].startswith("ssh "):
             env["BORG_RSH"] = '"' + SSH_CMD + '"' + env["BORG_RSH"][3:]
 
+    # Server-built BORG_RSH carries OpenSSH-only `-o` options. Dropbear logs
+    # "Ignoring unknown configuration option" warnings for each one (#247).
+    # Strip them and switch to Dropbear's `-y -y` so the connection still
+    # skips hostkey verification.
+    if IS_DROPBEAR and "BORG_RSH" in env:
+        env["BORG_RSH"] = _rewrite_borg_rsh_for_dropbear(env["BORG_RSH"])
+
     # Always allow relocated repos - common after S3 restore or copying repositories
     # This prevents "repository was previously located at X" interactive prompts
     env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
@@ -3024,15 +3078,10 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
         ssh_info = load_ssh_info()
         if ssh_info and ssh_info.get("ssh_unix_user") and ssh_info.get("server_host"):
             try:
-                known_hosts_null = "NUL" if IS_WINDOWS else "/dev/null"
                 catalog_ssh = subprocess.Popen(
-                    [
-                        SSH_CMD,
-                        "-i", SSH_KEY_PATH,
-                        "-p", str(ssh_info.get("ssh_port", 22)),
-                        "-o", "StrictHostKeyChecking=no",
-                        "-o", "UserKnownHostsFile={}".format(known_hosts_null),
-                        "-o", "BatchMode=yes",
+                    [SSH_CMD, "-i", SSH_KEY_PATH, "-p", str(ssh_info.get("ssh_port", 22))]
+                    + _ssh_common_opts()
+                    + [
                         "{}@{}".format(ssh_info['ssh_unix_user'], ssh_info['server_host']),
                         "catalog-write {}".format(job_id),
                     ],
@@ -3603,6 +3652,8 @@ def main():
     logger.info("BBS Agent v{} starting".format(AGENT_VERSION))
     if IS_WINDOWS and SSH_CMD != "ssh":
         logger.info("Using bundled SSH: {}".format(SSH_CMD))
+    if IS_DROPBEAR:
+        logger.info("Detected Dropbear SSH client; using Dropbear-compatible options")
 
     signal.signal(signal.SIGINT, signal_handler)
     if IS_WINDOWS:
