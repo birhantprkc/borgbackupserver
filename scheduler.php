@@ -36,15 +36,45 @@ $stale = $db->query(
 
 if ($stale->rowCount() > 0) {
     echo date('Y-m-d H:i:s') . " Marked {$stale->rowCount()} agent(s) offline (no heartbeat in {$threshold}s)\n";
+}
 
-    // Notify for each agent that just went offline
+// Hysteresis on agent_offline notifications: only fire once the agent has
+// been continuously offline for >= agent_offline_notify_minutes (default 5).
+// BBS isn't a real-time monitoring system — sub-minute detection is too
+// noisy on residential ISPs and laptops, where short network blips cause
+// status to flap several times an hour. The agent's *status* still flips
+// to offline at the 90s threshold above (so dashboards and queues react
+// quickly), but the user-visible notification + push/email dispatch waits
+// for the longer threshold. Only fires once per outage by checking for
+// an unresolved agent_offline notification for the agent.
+$notifyMinutes = max(1, (int) ($db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'agent_offline_notify_minutes'")['value'] ?? 5));
+$notifyThresholdSec = $notifyMinutes * 60;
+$notifyCutoff = date('Y-m-d H:i:s', time() - $notifyThresholdSec);
+
+$candidates = $db->fetchAll(
+    "SELECT a.id, a.name
+       FROM agents a
+       LEFT JOIN notifications n
+         ON n.type = 'agent_offline'
+        AND n.agent_id = a.id
+        AND n.resolved_at IS NULL
+      WHERE a.status = 'offline'
+        AND a.last_heartbeat IS NOT NULL
+        AND a.last_heartbeat < ?
+        AND n.id IS NULL",
+    [$notifyCutoff]
+);
+
+if (!empty($candidates)) {
     $notificationService = new NotificationService();
-    $offlineAgents = $db->fetchAll(
-        "SELECT id, name FROM agents WHERE status = 'offline' AND last_heartbeat IS NOT NULL AND last_heartbeat < ?",
-        [$cutoff]
-    );
-    foreach ($offlineAgents as $offAgent) {
-        $notificationService->notify('agent_offline', $offAgent['id'], null, "Client \"{$offAgent['name']}\" is offline (no heartbeat in {$threshold}s)", 'warning');
+    foreach ($candidates as $offAgent) {
+        $notificationService->notify(
+            'agent_offline',
+            $offAgent['id'],
+            null,
+            "Client \"{$offAgent['name']}\" has been offline for at least {$notifyMinutes} minute" . ($notifyMinutes === 1 ? '' : 's'),
+            'warning'
+        );
     }
 }
 
