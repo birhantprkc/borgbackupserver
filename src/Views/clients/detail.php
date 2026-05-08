@@ -469,7 +469,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                             $iconTitle = mb_substr($job['error_log'], 0, 500);
                         }
                     ?>
-                        <tr>
+                        <tr style="cursor: pointer;" onclick="window.location='/queue/<?= (int) $job['id'] ?>'">
                             <td class="text-center"<?= $iconTitle ? ' title="' . htmlspecialchars($iconTitle) . '"' : '' ?>>
                                 <i class="bi bi-<?= $jIcon ?>"></i>
                             </td>
