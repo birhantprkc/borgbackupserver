@@ -88,18 +88,20 @@ class QueueManager
         // Get queued jobs ordered by queued_at (FIFO)
         // No LIMIT — we may skip busy-repo jobs and need to see more candidates
         $queuedJobs = $this->db->fetchAll("
-            SELECT bj.*, bj.plugin_config_id, bp.directories, bp.excludes, bp.advanced_options,
+            SELECT bj.*, bj.plugin_config_id, bp.name as plan_name, bp.directories, bp.excludes, bp.advanced_options,
                    bp.prune_minutes, bp.prune_hours, bp.prune_days,
                    bp.prune_weeks, bp.prune_months, bp.prune_years,
                    r.path as repo_path, r.encryption, r.passphrase_encrypted, r.name as repo_name,
                    r.agent_id as repo_agent_id, r.storage_type, r.remote_ssh_config_id,
                    rsc.remote_host, rsc.remote_port, rsc.remote_user, rsc.remote_base_path,
                    rsc.ssh_private_key_encrypted as remote_ssh_key_encrypted,
-                   rsc.borg_remote_path
+                   rsc.borg_remote_path,
+                   a.name as agent_name
             FROM backup_jobs bj
             LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
             LEFT JOIN repositories r ON r.id = bj.repository_id
             LEFT JOIN remote_ssh_configs rsc ON rsc.id = r.remote_ssh_config_id
+            LEFT JOIN agents a ON a.id = bj.agent_id
             WHERE bj.status = 'queued'
             ORDER BY
                 CASE WHEN bj.task_type IN ('catalog_rebuild', 'catalog_rebuild_full') THEN 1 ELSE 0 END,
@@ -218,6 +220,13 @@ class QueueManager
                     'job_id' => $job['id'],
                     'archive_name' => $archiveName,
                     'directories' => $plan['directories'],
+                    // Context exposed to shell_hook plugin scripts (#250).
+                    // The agent injects these as BBS_* env vars when running
+                    // pre/post hooks so scripts can target the right repo and
+                    // archive without parsing the borg command argv.
+                    'repo_path' => $repo['path'] ?? '',
+                    'plan_name' => $job['plan_name'] ?? '',
+                    'client_name' => $job['agent_name'] ?? '',
                 ];
                 if (!empty($plugins)) {
                     $extra['plugins'] = $plugins;
@@ -325,17 +334,19 @@ class QueueManager
     public function getTasksForAgent(int $agentId): array
     {
         $jobs = $this->db->fetchAll("
-            SELECT bj.*, bj.plugin_config_id, bp.directories, bp.excludes, bp.advanced_options,
+            SELECT bj.*, bj.plugin_config_id, bp.name as plan_name, bp.directories, bp.excludes, bp.advanced_options,
                    bp.prune_minutes, bp.prune_hours, bp.prune_days,
                    bp.prune_weeks, bp.prune_months, bp.prune_years,
                    r.path as repo_path, r.encryption, r.passphrase_encrypted, r.name as repo_name,
                    r.storage_type, r.remote_ssh_config_id,
                    rsc.remote_port, rsc.ssh_private_key_encrypted as remote_ssh_key_encrypted,
-                   rsc.borg_remote_path
+                   rsc.borg_remote_path,
+                   a.name as agent_name
             FROM backup_jobs bj
             LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
             LEFT JOIN repositories r ON r.id = bj.repository_id
             LEFT JOIN remote_ssh_configs rsc ON rsc.id = r.remote_ssh_config_id
+            LEFT JOIN agents a ON a.id = bj.agent_id
             WHERE bj.agent_id = ?
               AND bj.status = 'sent'
               AND bj.task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full')
@@ -395,6 +406,13 @@ class QueueManager
                     'job_id' => $job['id'],
                     'archive_name' => $archiveName,
                     'directories' => $plan['directories'],
+                    // Context exposed to shell_hook plugin scripts (#250).
+                    // The agent injects these as BBS_* env vars when running
+                    // pre/post hooks so scripts can target the right repo and
+                    // archive without parsing the borg command argv.
+                    'repo_path' => $repo['path'] ?? '',
+                    'plan_name' => $job['plan_name'] ?? '',
+                    'client_name' => $job['agent_name'] ?? '',
                 ];
                 if (!empty($plugins)) {
                     $extra['plugins'] = $plugins;

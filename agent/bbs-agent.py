@@ -46,7 +46,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.29.12"
+AGENT_VERSION = "2.29.13"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -1313,8 +1313,13 @@ PLUGIN_DISPLAY_NAMES = {
 }
 
 
-def execute_plugins(plugins, config=None, job_id=None):
-    """Execute pre-backup plugins. Returns dict of results keyed by slug."""
+def execute_plugins(plugins, config=None, job_id=None, task=None):
+    """Execute pre-backup plugins. Returns dict of results keyed by slug.
+
+    `task` is the full task dict from the server; passed through to plugins
+    that consume backup-context env vars (currently shell_hook only — see
+    #250). Other plugins ignore it.
+    """
     results = {}
     for plugin in plugins:
         slug = plugin.get("slug", "")
@@ -1331,7 +1336,13 @@ def execute_plugins(plugins, config=None, job_id=None):
         if not func:
             logger.warning("Plugin {} not implemented, skipping".format(slug))
             continue
-        result = func(cfg)
+        # shell_hook needs the task context to inject BBS_* env vars and
+        # (opt-in) BORG_PASSCOMMAND. Other plugins keep the simpler
+        # single-arg signature.
+        if slug == "shell_hook":
+            result = func(cfg, task)
+        else:
+            result = func(cfg)
         results[slug] = result
         logger.info("Plugin {} completed".format(slug))
 
@@ -1413,7 +1424,7 @@ def _format_size(bytes_val):
     return "{:.1f} PB".format(bytes_val)
 
 
-def cleanup_plugins(plugins, plugin_results, config=None, job_id=None, backup_result="completed"):
+def cleanup_plugins(plugins, plugin_results, config=None, job_id=None, backup_result="completed", task=None):
     """Run post-backup cleanup for plugins.
     Shell hook post-scripts always run (to restart services stopped by pre-scripts).
     File cleanup (dump deletion) only runs on successful backups.
@@ -1427,7 +1438,7 @@ def cleanup_plugins(plugins, plugin_results, config=None, job_id=None, backup_re
             func = globals().get("cleanup_plugin_shell_hook")
             if func:
                 try:
-                    cleanup_result = func(cfg, plugin_results.get(slug, {}))
+                    cleanup_result = func(cfg, plugin_results.get(slug, {}), task=task, backup_result=backup_result)
                     if config and job_id and cleanup_result:
                         log_to_server(config, job_id, "Shell hook post-script: {}".format(cleanup_result))
                 except Exception as e:
@@ -2100,7 +2111,71 @@ def _parse_script_command(value):
     return argv, argv[0]
 
 
-def execute_plugin_shell_hook(config):
+def _build_shell_hook_env(config, task, backup_status):
+    """Build the env dict for a shell_hook script. Returns (env, cleanup_fn).
+    cleanup_fn() must be called once the subprocess exits to remove the temp
+    passphrase file (when expose_passphrase is enabled). Cleanup is a no-op
+    when no temp file was written.
+
+    Wiki documents BBS_ARCHIVE_NAME, BBS_REPO_PATH, BBS_BACKUP_PLAN,
+    BBS_CLIENT_NAME, BBS_BACKUP_STATUS — all sourced from the task payload
+    the server now sends (#250). BBS_DIRECTORIES is bonus context.
+
+    For credentials, we use BORG_PASSCOMMAND pointing at a mode-0600 temp
+    file rather than putting BORG_PASSPHRASE in the env directly. Reason:
+    BORG_PASSCOMMAND is read by borg when it needs the passphrase, while
+    env vars are inherited by every subprocess the hook script spawns —
+    so BORG_PASSPHRASE in the env would leak the passphrase to every
+    binary the hook calls (curl, aws, ssh, etc.). The temp file only
+    exposes credentials to processes that actually shell out to `cat
+    <file>`, which is borg itself by design.
+    """
+    env = os.environ.copy()
+    if task is None:
+        task = {}
+
+    env["BBS_ARCHIVE_NAME"] = str(task.get("archive_name", ""))
+    env["BBS_REPO_PATH"] = str(task.get("repo_path", ""))
+    env["BBS_BACKUP_PLAN"] = str(task.get("plan_name", ""))
+    env["BBS_CLIENT_NAME"] = str(task.get("client_name", ""))
+    env["BBS_BACKUP_STATUS"] = str(backup_status or "")
+    env["BBS_DIRECTORIES"] = str(task.get("directories", ""))
+    env["BBS_JOB_ID"] = str(task.get("job_id", ""))
+
+    cleanup_fn = lambda: None
+
+    if config.get("expose_passphrase"):
+        passphrase = (task.get("env") or {}).get("BORG_PASSPHRASE", "")
+        if passphrase:
+            import tempfile
+            fd, pp_path = tempfile.mkstemp(prefix="bbs-pp-", suffix="")
+            try:
+                os.write(fd, (passphrase + "\n").encode("utf-8"))
+            finally:
+                os.close(fd)
+            try:
+                os.chmod(pp_path, 0o600)
+            except OSError:
+                pass
+            # Quote the path for the shell `cat` invocation. Tempfile
+            # paths from mkstemp don't normally contain special chars
+            # (just /tmp/bbs-pp-XXXXXX), but quoting costs nothing.
+            env["BORG_PASSCOMMAND"] = "cat {}".format(shlex.quote(pp_path))
+            env["BORG_REPO"] = env["BBS_REPO_PATH"]
+
+            def _cleanup():
+                try:
+                    os.unlink(pp_path)
+                except OSError:
+                    pass
+            cleanup_fn = _cleanup
+        else:
+            logger.warning("Shell hook expose_passphrase=true but no BORG_PASSPHRASE in task env; skipping credential exposure")
+
+    return env, cleanup_fn
+
+
+def execute_plugin_shell_hook(config, task=None):
     """Run pre-backup shell script hook."""
     pre_script = config.get("pre_script", "").strip()
     post_script = config.get("post_script", "").strip()
@@ -2134,36 +2209,42 @@ def execute_plugin_shell_hook(config):
         logger.warning(msg)
         return result
 
+    env, cleanup_fn = _build_shell_hook_env(config, task, "pending")
+
     logger.info("Shell hook: running pre-script {}".format(pre_script))
     try:
-        proc = subprocess.run(
-            pre_argv,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            timeout=timeout,
-            universal_newlines=True,
-        )
-        output = proc.stdout[:10240] if proc.stdout else ""
-        result["pre_output"] = output
-        result["pre_exit_code"] = proc.returncode
+        try:
+            proc = subprocess.run(
+                pre_argv,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=timeout,
+                universal_newlines=True,
+                env=env,
+            )
+            output = proc.stdout[:10240] if proc.stdout else ""
+            result["pre_output"] = output
+            result["pre_exit_code"] = proc.returncode
 
-        if proc.returncode != 0:
-            msg = "Pre-script exited with code {}: {}".format(proc.returncode, output)
+            if proc.returncode != 0:
+                msg = "Pre-script exited with code {}: {}".format(proc.returncode, output)
+                if abort_on_failure:
+                    raise Exception(msg)
+                logger.warning(msg)
+            else:
+                logger.info("Pre-script completed successfully (exit 0)")
+        except subprocess.TimeoutExpired:
+            msg = "Pre-script timed out after {}s: {}".format(timeout, pre_script)
             if abort_on_failure:
                 raise Exception(msg)
             logger.warning(msg)
-        else:
-            logger.info("Pre-script completed successfully (exit 0)")
-    except subprocess.TimeoutExpired:
-        msg = "Pre-script timed out after {}s: {}".format(timeout, pre_script)
-        if abort_on_failure:
-            raise Exception(msg)
-        logger.warning(msg)
+    finally:
+        cleanup_fn()
 
     return result
 
 
-def cleanup_plugin_shell_hook(config, plugin_result):
+def cleanup_plugin_shell_hook(config, plugin_result, task=None, backup_result=None):
     """Run post-backup shell script hook."""
     post_script = config.get("post_script", "").strip()
     timeout = int(config.get("timeout", 300))
@@ -2181,25 +2262,31 @@ def cleanup_plugin_shell_hook(config, plugin_result):
         logger.warning("Post-script not executable: {}".format(post_exe))
         return "{} not executable".format(post_exe)
 
+    env, cleanup_fn = _build_shell_hook_env(config, task, backup_result or "completed")
+
     logger.info("Shell hook: running post-script {}".format(post_script))
     try:
-        proc = subprocess.run(
-            post_argv,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            timeout=timeout,
-            universal_newlines=True,
-        )
-        output = proc.stdout[:10240] if proc.stdout else ""
-        if proc.returncode != 0:
-            logger.warning("Post-script exited with code {}: {}".format(proc.returncode, output))
-            return "{} exited {}: {}".format(post_script, proc.returncode, output[:500])
-        else:
-            logger.info("Post-script completed successfully (exit 0)")
-            return "{} completed (exit 0)".format(post_script) + (": {}".format(output[:500]) if output.strip() else "")
-    except subprocess.TimeoutExpired:
-        logger.warning("Post-script timed out after {}s: {}".format(timeout, post_script))
-        return "{} timed out after {}s".format(post_script, timeout)
+        try:
+            proc = subprocess.run(
+                post_argv,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=timeout,
+                universal_newlines=True,
+                env=env,
+            )
+            output = proc.stdout[:10240] if proc.stdout else ""
+            if proc.returncode != 0:
+                logger.warning("Post-script exited with code {}: {}".format(proc.returncode, output))
+                return "{} exited {}: {}".format(post_script, proc.returncode, output[:500])
+            else:
+                logger.info("Post-script completed successfully (exit 0)")
+                return "{} completed (exit 0)".format(post_script) + (": {}".format(output[:500]) if output.strip() else "")
+        except subprocess.TimeoutExpired:
+            logger.warning("Post-script timed out after {}s: {}".format(timeout, post_script))
+            return "{} timed out after {}s".format(post_script, timeout)
+    finally:
+        cleanup_fn()
 
 
 def test_plugin_shell_hook(config):
@@ -2988,7 +3075,7 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
     if task_type == "backup" and plugins:
         try:
             logger.info("Running {} pre-backup plugin(s)".format(len(plugins)))
-            plugin_results = execute_plugins(plugins, config, job_id)
+            plugin_results = execute_plugins(plugins, config, job_id, task=task)
         except Exception as e:
             logger.error("Pre-backup plugin failed: {}".format(e))
             report_status(config, {
@@ -3563,7 +3650,7 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
     # Run post-backup plugin cleanup (always run shell_hook post-scripts to
     # restart services even if backup failed; other cleanup only on success)
     if task_type == "backup" and plugins:
-        cleanup_plugins(plugins, plugin_results, config, job_id, backup_result=result)
+        cleanup_plugins(plugins, plugin_results, config, job_id, backup_result=result, task=task)
 
     # Clean up temporary SSH key for remote repos
     if remote_ssh_key and os.path.exists(remote_key_path):

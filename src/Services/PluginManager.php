@@ -717,6 +717,12 @@ class PluginManager
                     'default' => 300,
                     'help' => 'Maximum time each script is allowed to run before being killed.',
                 ],
+                'expose_passphrase' => [
+                    'type' => 'checkbox',
+                    'label' => 'Expose repository credentials to script (advanced)',
+                    'default' => false,
+                    'help' => '⚠️ When enabled, the script can run borg commands directly against the repository — useful for streaming dumps via `borg create --content-from-command`. The passphrase is exposed via BORG_PASSCOMMAND pointing at a temp file (not the BORG_PASSPHRASE env var) so it is NOT inherited by subprocesses the script spawns. Even so, only enable this for scripts you fully trust — a script that logs `env`, calls untrusted external tools, or shells out to remote services could leak credentials. The temp file is created mode 0600 and deleted as soon as the script exits.',
+                ],
             ],
         ];
 
