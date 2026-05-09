@@ -78,21 +78,6 @@
     border-color: rgba(54, 162, 235, 0.55);
     box-shadow: 0 0 18px rgba(54, 162, 255, 0.18);
 }
-.queue-metric {
-    position: relative;
-    overflow: hidden;
-    border-left: 3px solid var(--queue-accent, var(--queue-row-accent));
-}
-.queue-metric::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background:
-        linear-gradient(90deg, rgba(54, 162, 255, 0.08), transparent 48%),
-        radial-gradient(circle at 0 50%, rgba(255, 255, 255, 0.16), transparent 76px);
-}
-.queue-metric .card-body { position: relative; z-index: 1; }
 .queue-table-card .card-header {
     min-height: 48px;
 }
@@ -196,7 +181,7 @@
 
 <div class="row g-3 mb-4">
     <div class="col-xl-3 col-md-6">
-        <div class="card border-0 shadow-sm h-100 metric-card-blue queue-metric" style="--queue-accent: #0d6efd;">
+        <div class="card border-0 shadow-sm h-100 metric-card-blue">
             <div class="card-body d-flex align-items-center">
                 <div class="stat-icon bg-primary text-primary bg-opacity-10 rounded-3 p-3 me-3">
                     <i class="bi bi-hourglass-split fs-3"></i>
@@ -210,7 +195,7 @@
         </div>
     </div>
     <div class="col-xl-3 col-md-6">
-        <div class="card border-0 shadow-sm h-100 metric-card-success queue-metric" style="--queue-accent: #198754;">
+        <div class="card border-0 shadow-sm h-100 metric-card-success">
             <div class="card-body d-flex align-items-center">
                 <div class="stat-icon bg-success text-success bg-opacity-10 rounded-3 p-3 me-3">
                     <i class="bi bi-check-circle fs-3"></i>
@@ -225,7 +210,7 @@
     </div>
     <div class="col-xl-3 col-md-6">
         <?php $failBs = $failed24h > 0 ? 'danger' : 'success'; ?>
-        <div class="card border-0 shadow-sm h-100 metric-card-<?= $failBs ?> queue-metric" id="qm-failed-card" style="--queue-accent: <?= $failed24h > 0 ? '#dc3545' : '#198754' ?>;">
+        <div class="card border-0 shadow-sm h-100 metric-card-<?= $failBs ?>" id="qm-failed-card">
             <div class="card-body d-flex align-items-center">
                 <div class="stat-icon bg-<?= $failBs ?> text-<?= $failBs ?> bg-opacity-10 rounded-3 p-3 me-3" id="qm-failed-icon-wrap">
                     <i class="bi bi-<?= $failed24h > 0 ? 'x-circle' : 'check-circle' ?> fs-3" id="qm-failed-icon"></i>
@@ -239,7 +224,7 @@
         </div>
     </div>
     <div class="col-xl-3 col-md-6">
-        <div class="card border-0 shadow-sm h-100 metric-card-cyan queue-metric" style="--queue-accent: #0dcaf0;">
+        <div class="card border-0 shadow-sm h-100 metric-card-cyan">
             <div class="card-body d-flex align-items-center">
                 <div class="stat-icon bg-info text-info bg-opacity-10 rounded-3 p-3 me-3">
                     <i class="bi bi-speedometer2 fs-3"></i>
@@ -571,7 +556,6 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
             if (card) {
                 card.classList.toggle('metric-card-danger', isFail);
                 card.classList.toggle('metric-card-success', !isFail);
-                card.style.setProperty('--queue-accent', isFail ? '#dc3545' : '#198754');
             }
             if (iconWrap) {
                 iconWrap.classList.toggle('bg-danger', isFail);

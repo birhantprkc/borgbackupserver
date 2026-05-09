@@ -120,20 +120,34 @@ if ($savings >= 100 && $archive['deduplicated_size'] > 0) {
             </div>
         </div>
 
-        <!-- Stats Row (metric-tile style, matches dashboard visual language) -->
+        <!-- Stats Row — same icon-on-left pattern as /clients, /queue, dashboard -->
         <div class="row g-3 mt-3">
             <div class="col-6 col-md-3">
-                <div class="metric-tile primary h-100">
-                    <div class="label"><i class="bi bi-hdd me-1"></i>Total Size</div>
-                    <div class="value"><?= fmtSize($archive['original_size']) ?></div>
-                    <div class="sub">original, pre-dedup</div>
+                <div class="card border-0 shadow-sm h-100 metric-card-blue">
+                    <div class="card-body d-flex align-items-center">
+                        <div class="stat-icon bg-primary bg-opacity-10 text-primary rounded-3 p-3 me-3">
+                            <i class="bi bi-hdd fs-3"></i>
+                        </div>
+                        <div>
+                            <div class="text-muted small">Total Size</div>
+                            <div class="fs-4 fw-bold"><?= fmtSize($archive['original_size']) ?></div>
+                            <div class="text-muted small">original, pre-dedup</div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="col-6 col-md-3">
-                <div class="metric-tile success h-100">
-                    <div class="label"><i class="bi bi-archive me-1"></i>On Disk</div>
-                    <div class="value"><?= fmtSize($archive['deduplicated_size']) ?></div>
-                    <div class="sub"><?= $savings ?>% dedup savings</div>
+                <div class="card border-0 shadow-sm h-100 metric-card-success">
+                    <div class="card-body d-flex align-items-center">
+                        <div class="stat-icon bg-success bg-opacity-10 text-success rounded-3 p-3 me-3">
+                            <i class="bi bi-archive fs-3"></i>
+                        </div>
+                        <div>
+                            <div class="text-muted small">On Disk</div>
+                            <div class="fs-4 fw-bold"><?= fmtSize($archive['deduplicated_size']) ?></div>
+                            <div class="text-muted small"><?= $savings ?>% dedup savings</div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <?php
@@ -166,23 +180,37 @@ if ($savings >= 100 && $archive['deduplicated_size'] > 0) {
                 : "File count as recorded by borg when the archive was created.";
             ?>
             <div class="col-6 col-md-3">
-                <div class="metric-tile info h-100" title="<?= htmlspecialchars($tileTitle) ?>">
-                    <div class="label"><i class="bi bi-files me-1"></i>Files in Archive</div>
-                    <div class="value"><?= number_format($primaryCount) ?></div>
-                    <div class="sub">
-                        <?php if ($catalogCount > 0): ?>
-                            from catalog<?php if ($showBorgSub): ?> · borg: <?= number_format($borgFileCount) ?><?php endif; ?>
-                        <?php else: ?>
-                            from borg manifest
-                        <?php endif; ?>
+                <div class="card border-0 shadow-sm h-100 metric-card-cyan" title="<?= htmlspecialchars($tileTitle) ?>">
+                    <div class="card-body d-flex align-items-center">
+                        <div class="stat-icon bg-info bg-opacity-10 text-info rounded-3 p-3 me-3">
+                            <i class="bi bi-files fs-3"></i>
+                        </div>
+                        <div>
+                            <div class="text-muted small">Files in Archive</div>
+                            <div class="fs-4 fw-bold"><?= number_format($primaryCount) ?></div>
+                            <div class="text-muted small">
+                                <?php if ($catalogCount > 0): ?>
+                                    from catalog<?php if ($showBorgSub): ?> · borg: <?= number_format($borgFileCount) ?><?php endif; ?>
+                                <?php else: ?>
+                                    from borg manifest
+                                <?php endif; ?>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
             <div class="col-6 col-md-3">
-                <div class="metric-tile warning h-100">
-                    <div class="label"><i class="bi bi-clock-history me-1"></i>Duration</div>
-                    <div class="value"><?= htmlspecialchars($durLabel) ?></div>
-                    <div class="sub"><?= $jobInfo['completed_at'] ?? '' ? \BBS\Core\TimeHelper::ago($jobInfo['completed_at']) : '' ?></div>
+                <div class="card border-0 shadow-sm h-100 metric-card-warning">
+                    <div class="card-body d-flex align-items-center">
+                        <div class="stat-icon bg-warning bg-opacity-10 text-warning rounded-3 p-3 me-3">
+                            <i class="bi bi-clock-history fs-3"></i>
+                        </div>
+                        <div>
+                            <div class="text-muted small">Duration</div>
+                            <div class="fs-4 fw-bold"><?= htmlspecialchars($durLabel) ?></div>
+                            <div class="text-muted small"><?= $jobInfo['completed_at'] ?? '' ? \BBS\Core\TimeHelper::ago($jobInfo['completed_at']) : '' ?></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

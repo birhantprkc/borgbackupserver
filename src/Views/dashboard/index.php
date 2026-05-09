@@ -49,12 +49,6 @@ $dfFix = function (string $s): string {
 ?>
 
 <style>
-/* metric-tile styles are in public/css/style.css (global) since they're shared
-   with archive detail and other pages. Dashboard-specific value sizing: */
-.v2 .metric-tile .value { font-size: 1.75rem; line-height: 1.1; }
-.v2 .metric-tile .label { font-size: 0.75rem; }
-.v2 .metric-tile .sub   { font-size: 0.8rem; }
-
 .v2 .health-row {
     display: flex;
     align-items: center;
@@ -194,37 +188,74 @@ $dfFix = function (string $s): string {
 </style>
 
 <div class="v2 container-fluid px-0">
-    <!-- Row 1: Hero tiles -->
+    <!-- Row 1: Hero tiles — same icon-on-left pattern as /clients and /queue -->
+    <?php $errCls = $errorCount > 0 ? 'danger' : 'success'; ?>
     <div class="row g-3 mb-3">
         <div class="col-xl-3 col-md-6">
-            <a href="/clients" class="text-decoration-none metric-tile primary d-block">
-                <div class="label"><i class="bi bi-display me-1"></i>Clients</div>
-                <div class="value" id="tile-agent-count"><?= $agentCount ?></div>
-                <div class="sub">
-                    <span class="text-success fw-semibold" id="tile-online-count"><?= $onlineCount ?></span>
-                    online · <span id="tile-offline-count"><?= max(0, $agentCount - $onlineCount) ?></span> offline
+            <a href="/clients" class="text-decoration-none text-reset metric-card-link d-block">
+                <div class="card border-0 shadow-sm h-100 metric-card-blue">
+                    <div class="card-body d-flex align-items-center">
+                        <div class="stat-icon bg-primary bg-opacity-10 text-primary rounded-3 p-3 me-3">
+                            <i class="bi bi-display fs-3"></i>
+                        </div>
+                        <div>
+                            <div class="text-muted small">Clients</div>
+                            <div class="fs-4 fw-bold" id="tile-agent-count"><?= $agentCount ?></div>
+                            <div class="text-muted small">
+                                <span class="text-success fw-semibold" id="tile-online-count"><?= $onlineCount ?></span>
+                                online · <span id="tile-offline-count"><?= max(0, $agentCount - $onlineCount) ?></span> offline
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </a>
         </div>
         <div class="col-xl-3 col-md-6">
-            <a href="/queue" class="text-decoration-none metric-tile success d-block">
-                <div class="label"><i class="bi bi-arrow-repeat me-1"></i>Running</div>
-                <div class="value" id="tile-running-count"><?= $runningJobs ?></div>
-                <div class="sub">active · <span id="tile-queued-count"><?= $queuedJobs ?></span> queued</div>
+            <a href="/queue" class="text-decoration-none text-reset metric-card-link d-block">
+                <div class="card border-0 shadow-sm h-100 metric-card-success">
+                    <div class="card-body d-flex align-items-center">
+                        <div class="stat-icon bg-success bg-opacity-10 text-success rounded-3 p-3 me-3">
+                            <i class="bi bi-arrow-repeat fs-3"></i>
+                        </div>
+                        <div>
+                            <div class="text-muted small">Running</div>
+                            <div class="fs-4 fw-bold" id="tile-running-count"><?= $runningJobs ?></div>
+                            <div class="text-muted small">active · <span id="tile-queued-count"><?= $queuedJobs ?></span> queued</div>
+                        </div>
+                    </div>
+                </div>
             </a>
         </div>
         <div class="col-xl-3 col-md-6">
-            <a href="#recovery-points" class="text-decoration-none metric-tile warning d-block">
-                <div class="label"><i class="bi bi-archive me-1"></i>Recovery Points</div>
-                <div class="value"><?= $compact($totalArchiveCount) ?></div>
-                <div class="sub"><?= ServerStats::formatBytes($totalOriginalBytes) ?> protected · <?= ServerStats::formatBytes($totalDiskBytes) ?> on disk</div>
+            <a href="#recovery-points" class="text-decoration-none text-reset metric-card-link d-block">
+                <div class="card border-0 shadow-sm h-100 metric-card-warning">
+                    <div class="card-body d-flex align-items-center">
+                        <div class="stat-icon bg-warning bg-opacity-10 text-warning rounded-3 p-3 me-3">
+                            <i class="bi bi-archive fs-3"></i>
+                        </div>
+                        <div>
+                            <div class="text-muted small">Recovery Points</div>
+                            <div class="fs-4 fw-bold"><?= $compact($totalArchiveCount) ?></div>
+                            <div class="text-muted small"><?= ServerStats::formatBytes($totalOriginalBytes) ?> protected · <?= ServerStats::formatBytes($totalDiskBytes) ?> on disk</div>
+                        </div>
+                    </div>
+                </div>
             </a>
         </div>
         <div class="col-xl-3 col-md-6">
-            <a href="/log?level=error&hours=24" id="tile-errors-link" class="text-decoration-none metric-tile <?= $errorCount > 0 ? 'danger' : 'success' ?> d-block">
-                <div class="label"><i class="bi bi-exclamation-circle me-1"></i>Errors (24h)</div>
-                <div class="value" id="tile-error-count"><?= $errorCount ?></div>
-                <div class="sub">check logs</div>
+            <a href="/log?level=error&hours=24" id="tile-errors-link" class="text-decoration-none text-reset metric-card-link d-block">
+                <div class="card border-0 shadow-sm h-100 metric-card-<?= $errCls ?>" id="tile-errors-card">
+                    <div class="card-body d-flex align-items-center">
+                        <div class="stat-icon bg-<?= $errCls ?> bg-opacity-10 text-<?= $errCls ?> rounded-3 p-3 me-3" id="tile-errors-icon-wrap">
+                            <i class="bi bi-<?= $errorCount > 0 ? 'exclamation-circle' : 'check-circle' ?> fs-3" id="tile-errors-icon"></i>
+                        </div>
+                        <div>
+                            <div class="text-muted small">Errors (24h)</div>
+                            <div class="fs-4 fw-bold" id="tile-error-count"><?= $errorCount ?></div>
+                            <div class="text-muted small">check logs</div>
+                        </div>
+                    </div>
+                </div>
             </a>
         </div>
     </div>
@@ -917,15 +948,27 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (tileRunning)     tileRunning.textContent     = d.runningJobs;
                 if (tileQueued)      tileQueued.textContent      = d.queuedJobs;
                 if (tileErrorCount)  tileErrorCount.textContent  = d.errorCount;
-                // Repaint the errors tile color (danger ↔ success) when the count
-                // crosses zero, since the server picks the class on first render.
-                if (tileErrorsLink) {
-                    if (d.errorCount > 0) {
-                        tileErrorsLink.classList.remove('success');
-                        tileErrorsLink.classList.add('danger');
-                    } else {
-                        tileErrorsLink.classList.remove('danger');
-                        tileErrorsLink.classList.add('success');
+                // Repaint the errors tile (card bg + icon wrap colour + icon
+                // glyph) when the count crosses zero — the server picks the
+                // initial classes; the JS keeps them in sync after that.
+                {
+                    const isErr = d.errorCount > 0;
+                    const card = document.getElementById('tile-errors-card');
+                    const iconWrap = document.getElementById('tile-errors-icon-wrap');
+                    const icon = document.getElementById('tile-errors-icon');
+                    if (card) {
+                        card.classList.toggle('metric-card-danger', isErr);
+                        card.classList.toggle('metric-card-success', !isErr);
+                    }
+                    if (iconWrap) {
+                        iconWrap.classList.toggle('bg-danger', isErr);
+                        iconWrap.classList.toggle('text-danger', isErr);
+                        iconWrap.classList.toggle('bg-success', !isErr);
+                        iconWrap.classList.toggle('text-success', !isErr);
+                    }
+                    if (icon) {
+                        icon.classList.toggle('bi-exclamation-circle', isErr);
+                        icon.classList.toggle('bi-check-circle', !isErr);
                     }
                 }
                 renderActive(d.activeJobs || []);
