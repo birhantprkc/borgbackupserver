@@ -26,6 +26,7 @@ class RemoteSshConfigController extends Controller
         $sshPrivateKey = trim($_POST['ssh_private_key'] ?? '');
         $borgRemotePath = trim($_POST['borg_remote_path'] ?? '') ?: null;
         $appendRepoName = isset($_POST['append_repo_name']) ? 1 : 0;
+        $borgBaseFields = $this->borgBaseFieldsFromPost();
 
         if (empty($name) || empty($remoteHost) || empty($remoteUser) || empty($sshPrivateKey)) {
             $this->flash('danger', 'Name, host, user, and SSH private key are required.');
@@ -39,8 +40,12 @@ class RemoteSshConfigController extends Controller
         if (empty($remoteBasePath)) {
             $remoteBasePath = './';
         }
+        if ($provider === 'borgbase' && trim($_POST['borgbase_api_key'] ?? '') !== '' && empty($borgBaseFields['borgbase_repo_name'])) {
+            $this->flash('danger', 'BorgBase repository name is required when an API key is provided.');
+            $this->redirect('/storage-locations?section=wizard');
+        }
 
-        $this->db->insert('remote_ssh_configs', [
+        $data = [
             'name' => $name,
             'provider' => $provider,
             'remote_host' => $remoteHost,
@@ -50,7 +55,26 @@ class RemoteSshConfigController extends Controller
             'ssh_private_key_encrypted' => Encryption::encrypt($sshPrivateKey),
             'borg_remote_path' => $borgRemotePath,
             'append_repo_name' => $appendRepoName,
-        ]);
+        ];
+        $data = array_merge($data, $borgBaseFields);
+
+        if ($provider === 'borgbase' && !empty($borgBaseFields['borgbase_api_key_encrypted']) && !empty($borgBaseFields['borgbase_repo_name'])) {
+            $remoteSshService = new RemoteSshService();
+            $apiCheck = $remoteSshService->getBorgBaseApiUsage(
+                array_merge($data, ['remote_user' => $remoteUser]),
+                trim($_POST['borgbase_api_key'] ?? ''),
+                $borgBaseFields['borgbase_repo_name']
+            );
+            if (!$apiCheck['success']) {
+                $this->flash('danger', 'BorgBase API check failed: ' . $apiCheck['error']);
+                $this->redirect('/storage-locations?section=wizard');
+            }
+        }
+
+        $id = $this->db->insert('remote_ssh_configs', $data);
+        if ($provider === 'borgbase') {
+            (new RemoteSshService())->refreshBorgBaseDiskUsage(array_merge($data, ['id' => $id]));
+        }
 
         $this->db->insert('server_log', [
             'level' => 'info',
@@ -84,6 +108,8 @@ class RemoteSshConfigController extends Controller
         $sshPrivateKey = trim($_POST['ssh_private_key'] ?? '');
         $borgRemotePath = trim($_POST['borg_remote_path'] ?? '') ?: null;
         $appendRepoName = isset($_POST['append_repo_name']) ? 1 : 0;
+        $borgBaseFields = $this->borgBaseFieldsFromPost($existing);
+        $isBorgBase = (($existing['provider'] ?? '') === 'borgbase') || str_contains($remoteHost, '.repo.borgbase.com');
 
         if (empty($name) || empty($remoteHost) || empty($remoteUser)) {
             $this->flash('danger', 'Name, host, and user are required.');
@@ -107,13 +133,44 @@ class RemoteSshConfigController extends Controller
             'borg_remote_path' => $borgRemotePath,
             'append_repo_name' => $appendRepoName,
         ];
+        if ($isBorgBase) {
+            $data['provider'] = 'borgbase';
+        }
+        $data = array_merge($data, $borgBaseFields);
+        if ($isBorgBase && trim($_POST['borgbase_api_key'] ?? '') !== '' && empty($data['borgbase_repo_name'])) {
+            $this->flash('danger', 'BorgBase repository name is required when an API key is provided.');
+            $this->redirect('/storage-locations');
+        }
 
         // Only update SSH key if a new one was provided
         if (!empty($sshPrivateKey)) {
             $data['ssh_private_key_encrypted'] = Encryption::encrypt($sshPrivateKey);
         }
 
+        $borgBaseApiChanged = trim($_POST['borgbase_api_key'] ?? '') !== ''
+            || ($data['borgbase_repo_name'] ?? null) !== ($existing['borgbase_repo_name'] ?? null)
+            || $remoteUser !== ($existing['remote_user'] ?? '');
+        if ($isBorgBase && $borgBaseApiChanged && !empty($data['borgbase_api_key_encrypted']) && !empty($data['borgbase_repo_name'])) {
+            $remoteSshService = new RemoteSshService();
+            $apiKey = trim($_POST['borgbase_api_key'] ?? '');
+            if ($apiKey === '') {
+                $apiKey = $remoteSshService->getBorgBaseApiKey($existing) ?? '';
+            }
+            $apiCheck = $remoteSshService->getBorgBaseApiUsage(
+                array_merge($existing, $data, ['remote_user' => $remoteUser]),
+                $apiKey,
+                $data['borgbase_repo_name']
+            );
+            if (!$apiCheck['success']) {
+                $this->flash('danger', 'BorgBase API check failed: ' . $apiCheck['error']);
+                $this->redirect('/storage-locations');
+            }
+        }
+
         $this->db->update('remote_ssh_configs', $data, 'id = ?', [$id]);
+        if ($isBorgBase) {
+            (new RemoteSshService())->refreshBorgBaseDiskUsage(array_merge($existing, $data, ['id' => $id]));
+        }
 
         $this->db->insert('server_log', [
             'level' => 'info',
@@ -220,5 +277,82 @@ class RemoteSshConfigController extends Controller
         } else {
             $this->json(['status' => 'error', 'error' => $result['error'] ?? 'Connection failed']);
         }
+    }
+
+    /**
+     * Test optional BorgBase API configuration against SSH user + repo name.
+     */
+    public function testBorgBaseApi(): void
+    {
+        $this->requireAuth();
+        $this->requireAdmin();
+        $this->verifyCsrf();
+
+        $configId = (int) ($_POST['config_id'] ?? 0);
+        $remoteUser = trim($_POST['remote_user'] ?? '');
+        $repoName = trim($_POST['borgbase_repo_name'] ?? '');
+        $apiKey = trim($_POST['borgbase_api_key'] ?? '');
+
+        $config = ['remote_user' => $remoteUser];
+        $remoteSshService = new RemoteSshService();
+        if ($configId > 0) {
+            $existing = $remoteSshService->getById($configId);
+            if (!$existing) {
+                $this->json(['status' => 'error', 'error' => 'Config not found']);
+                return;
+            }
+            $config = array_merge($existing, $config);
+            if ($remoteUser === '') $config['remote_user'] = $existing['remote_user'];
+            if ($repoName === '') $repoName = (string) ($existing['borgbase_repo_name'] ?? '');
+            if ($apiKey === '') $apiKey = $remoteSshService->getBorgBaseApiKey($existing) ?? '';
+        }
+
+        if ($apiKey === '' || trim((string) ($config['remote_user'] ?? '')) === '' || $repoName === '') {
+            $this->json(['status' => 'error', 'error' => 'API key and BorgBase repository name are required']);
+            return;
+        }
+
+        $result = $remoteSshService->getBorgBaseApiUsage($config, $apiKey, $repoName);
+        if (!$result['success']) {
+            $this->json(['status' => 'error', 'error' => $result['error'] ?? 'BorgBase API check failed']);
+            return;
+        }
+
+        $repo = $result['repo'];
+        $this->json([
+            'status' => 'ok',
+            'repo' => [
+                'id' => $repo['id'] ?? '',
+                'name' => $repo['name'] ?? '',
+                'quota_gb' => isset($repo['quota']) ? round(((float) $repo['quota']) / 1000, 3) : null,
+                'current_usage_mb' => isset($repo['currentUsage']) ? round((float) $repo['currentUsage'], 3) : null,
+                'last_modified' => $repo['lastModified'] ?? null,
+            ],
+        ]);
+    }
+
+    private function borgBaseFieldsFromPost(?array $existing = null): array
+    {
+        $repoName = trim($_POST['borgbase_repo_name'] ?? '');
+        $manualQuota = trim($_POST['borgbase_manual_quota_gb'] ?? '');
+        $apiKey = trim($_POST['borgbase_api_key'] ?? '');
+        $clearApiKey = isset($_POST['borgbase_clear_api_key']);
+
+        $data = [
+            'borgbase_repo_name' => $repoName !== '' ? $repoName : null,
+            'borgbase_manual_quota_gb' => $manualQuota !== '' && is_numeric($manualQuota) && (float) $manualQuota > 0
+                ? (string) round((float) $manualQuota, 3)
+                : null,
+        ];
+
+        if ($apiKey !== '') {
+            $data['borgbase_api_key_encrypted'] = Encryption::encrypt($apiKey);
+        } elseif ($clearApiKey) {
+            $data['borgbase_api_key_encrypted'] = null;
+        } elseif ($existing && array_key_exists('borgbase_api_key_encrypted', $existing)) {
+            $data['borgbase_api_key_encrypted'] = $existing['borgbase_api_key_encrypted'];
+        }
+
+        return $data;
     }
 }

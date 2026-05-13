@@ -5,6 +5,17 @@ function formatStorageBytes(int $bytes): string {
     return ServerStats::formatBytes($bytes);
 }
 
+function formatStorageBytesDecimal(int $bytes): string {
+    $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    $i = 0;
+    $size = (float) $bytes;
+    while ($size >= 1000 && $i < count($units) - 1) {
+        $size /= 1000;
+        $i++;
+    }
+    return round($size, 1) . "\u{00A0}" . $units[$i];
+}
+
 $section = $_GET['section'] ?? '';
 ?>
 
@@ -301,6 +312,31 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
                     <div class="form-text">Paste the private key that matches the public key you added to BorgBase.</div>
                 </div>
 
+                <div class="border rounded p-3 mb-3">
+                    <div class="fw-semibold mb-2">Manual Quota</div>
+                    <label class="form-label fw-semibold">Quota <span class="text-muted fw-normal">(GB, optional)</span></label>
+                    <input type="number" class="form-control" name="borgbase_manual_quota_gb" id="bbManualQuota" min="0" step="0.001" placeholder="e.g., 10">
+                    <div class="form-text">Use this when you do not want to connect the BorgBase API.</div>
+                </div>
+
+                <div class="border rounded p-3 mb-3">
+                    <div class="fw-semibold mb-2">BorgBase API</div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" for="bbApiKey">API Key <span class="text-muted fw-normal">(optional)</span></label>
+                        <input type="text" class="form-control" name="borgbase_api_key" id="bbApiKey" value="" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" spellcheck="false" placeholder="Used only to sync quota and current usage">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" for="bbRepoName">BorgBase Repo Name <span class="text-danger d-none" id="bbRepoNameRequired">*</span></label>
+                        <input type="text" class="form-control" name="borgbase_repo_name" id="bbRepoName">
+                        <div class="invalid-feedback">Repository name is required when an API key is provided.</div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="bbApiTestBtn" onclick="testBorgbaseApiFromWizard()" disabled>
+                        <i class="bi bi-shield-check me-1"></i> Verify API
+                    </button>
+                    <div class="form-text mt-2">The API key is encrypted before storage. The API repository id is matched to the SSH username from the connection string, and the API name must match the repo name above.</div>
+                    <div id="bbApiTestResult" style="display:none" class="mt-2"></div>
+                </div>
+
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Name</label>
                     <input type="text" class="form-control" name="name" id="bbName" placeholder="e.g., BorgBase - my-repo" required>
@@ -493,6 +529,7 @@ scp ~/.ssh/rsyncnet.pub <span class="text-warning" id="rsnScpUser">USERNAME</spa
         <div class="modal-content">
             <form method="POST" action="/remote-ssh-configs/create">
                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                <input type="hidden" name="provider" value="">
                 <div class="modal-header">
                     <h5 class="modal-title">Add Remote SSH Host</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -556,9 +593,21 @@ scp ~/.ssh/rsyncnet.pub <span class="text-warning" id="rsnScpUser">USERNAME</spa
 </div>
 
 <script>
+function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, function(ch) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch];
+    });
+}
+
 function showWizardForm(provider) {
     document.getElementById('wizardProviders').style.display = 'none';
     document.getElementById('wizard' + provider.charAt(0).toUpperCase() + provider.slice(1)).style.display = 'block';
+    if (provider === 'borgbase') {
+        setTimeout(function() {
+            document.getElementById('bbApiKey').value = '';
+            updateBbSubmit();
+        }, 0);
+    }
 }
 function hideWizardForm() {
     document.querySelectorAll('[id^="wizard"]').forEach(function(el) {
@@ -571,8 +620,11 @@ function hideWizardForm() {
     document.getElementById('bbParsedDetails').style.display = 'none';
     document.getElementById('bbParseError').style.display = 'none';
     document.getElementById('bbTestBtn').disabled = true;
+    document.getElementById('bbApiKey').value = '';
+    document.getElementById('bbApiTestBtn').disabled = true;
     document.getElementById('bbSubmitBtn').style.display = 'none';
     document.getElementById('bbTestResult').style.display = 'none';
+    document.getElementById('bbApiTestResult').style.display = 'none';
     // Reset Hetzner form
     document.getElementById('hetznerWizardForm').reset();
     hzTestPassed = false;
@@ -649,8 +701,16 @@ function updateBbSubmit() {
     var host = document.getElementById('bbFieldHost').value;
     var key = document.getElementById('bbSshKey').value.trim();
     var name = document.getElementById('bbName').value.trim();
+    var apiKey = document.getElementById('bbApiKey').value.trim();
+    var repoName = document.getElementById('bbRepoName').value.trim();
+    var repoInput = document.getElementById('bbRepoName');
+    var repoRequired = document.getElementById('bbRepoNameRequired');
     var canTest = !!(host && key);
     document.getElementById('bbTestBtn').disabled = !canTest;
+    document.getElementById('bbApiTestBtn').disabled = !(apiKey && repoName && document.getElementById('bbFieldUser').value);
+    repoInput.required = !!apiKey;
+    repoInput.classList.toggle('is-invalid', !!apiKey && !repoName);
+    repoRequired.classList.toggle('d-none', !apiKey);
     if (!bbTestPassed) {
         document.getElementById('bbSubmitBtn').style.display = 'none';
         document.getElementById('bbTestResult').style.display = 'none';
@@ -660,6 +720,8 @@ function updateBbSubmit() {
 }
 document.getElementById('bbSshKey').addEventListener('input', function() { bbTestPassed = false; updateBbSubmit(); });
 document.getElementById('bbName').addEventListener('input', updateBbSubmit);
+document.getElementById('bbApiKey').addEventListener('input', updateBbSubmit);
+document.getElementById('bbRepoName').addEventListener('input', updateBbSubmit);
 
 function testBorgbaseConnection() {
     var btn = document.getElementById('bbTestBtn');
@@ -706,6 +768,45 @@ function testBorgbaseConnection() {
     .finally(function() {
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-plug me-1"></i> Test Connection';
+    });
+}
+
+function testBorgbaseApiFromWizard() {
+    var btn = document.getElementById('bbApiTestBtn');
+    var resultDiv = document.getElementById('bbApiTestResult');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Checking...';
+    resultDiv.style.display = 'none';
+
+    var formData = new URLSearchParams();
+    formData.append('csrf_token', document.querySelector('#borgbaseWizardForm [name=csrf_token]').value);
+    formData.append('remote_user', document.getElementById('bbFieldUser').value);
+    formData.append('borgbase_repo_name', document.getElementById('bbRepoName').value.trim());
+    formData.append('borgbase_api_key', document.getElementById('bbApiKey').value);
+
+    fetch('/remote-ssh-configs/borgbase-api-test', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: formData.toString()
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        resultDiv.style.display = 'block';
+        if (data.status === 'ok') {
+            var repo = data.repo || {};
+            resultDiv.innerHTML = '<div class="alert alert-success small py-2 px-3 mb-0"><i class="bi bi-check-circle me-1"></i> Verified — quota ' + escapeHtml(String(repo.quota_gb)) + ' GB, current usage ' + escapeHtml(String(repo.current_usage_mb)) + ' MB</div>';
+        } else {
+            resultDiv.innerHTML = '<div class="alert alert-danger small py-2 px-3 mb-0"><i class="bi bi-x-circle me-1"></i> ' + escapeHtml(data.error || 'BorgBase API check failed') + '</div>';
+        }
+    })
+    .catch(function() {
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = '<div class="alert alert-danger small py-2 px-3 mb-0"><i class="bi bi-x-circle me-1"></i> Request failed</div>';
+    })
+    .finally(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-shield-check me-1"></i> Verify API';
+        updateBbSubmit();
     });
 }
 
@@ -959,6 +1060,8 @@ function applyRemotePreset(select, form) {
     var basePathField = form.querySelector('[name=remote_base_path]');
     var borgPathField = form.querySelector('[name=borg_remote_path]');
     var appendField = form.querySelector('[name=append_repo_name]');
+    var providerField = form.querySelector('[name=provider]');
+    if (providerField) providerField.value = preset;
 
     switch (preset) {
         case 'rsync.net':
@@ -1107,12 +1210,13 @@ function applyRemotePreset(select, form) {
 <?php else: ?>
 <div class="row g-3">
     <?php foreach ($remoteSshConfigs as $rsc): ?>
+    <?php $isBorgBase = (($rsc['provider'] ?? '') === 'borgbase') || str_contains((string)($rsc['remote_host'] ?? ''), '.repo.borgbase.com'); ?>
     <div class="col-xl-4 col-lg-6">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body">
                 <div class="d-flex align-items-start gap-2 mb-2">
                     <div class="flex-shrink-0 mt-1" style="font-size: 1.4rem;">
-                        <?php if (($rsc['provider'] ?? '') === 'borgbase'): ?>
+                        <?php if ($isBorgBase): ?>
                         <img src="/images/borgbase.svg" alt="" style="width:24px;height:24px;border-radius:50%">
                         <?php elseif (($rsc['provider'] ?? '') === 'hetzner'): ?>
                         <img src="/images/hetzner-h.png" alt="" style="width:24px;height:24px;border-radius:50%">
@@ -1168,18 +1272,25 @@ function applyRemotePreset(select, form) {
                     $rscFree = (int)$rsc['disk_free_bytes'];
                     $rscPct = $rscTotal > 0 ? round(($rscUsed / $rscTotal) * 100, 1) : 0;
                     $rscBarColor = $rscPct >= 90 ? 'danger' : ($rscPct >= 75 ? 'warning' : 'success');
+                    $useDecimalRemoteBytes = $isBorgBase && ($rsc['borgbase_usage_source'] ?? '') === 'borgbase_api';
+                    $formatRemoteBytes = fn(int $bytes): string => $useDecimalRemoteBytes
+                        ? formatStorageBytesDecimal($bytes)
+                        : \BBS\Services\ServerStats::formatBytes($bytes);
                     ?>
                     <div class="d-flex justify-content-between small text-muted mb-1">
-                        <span><?= \BBS\Services\ServerStats::formatBytes($rscUsed) ?> used</span>
-                        <span><?= \BBS\Services\ServerStats::formatBytes($rscFree) ?> free</span>
+                        <span><?= $formatRemoteBytes($rscUsed) ?> used</span>
+                        <span><?= $formatRemoteBytes($rscFree) ?> free</span>
                     </div>
                     <div class="progress" style="height: 6px;">
                         <div class="progress-bar bg-<?= $rscBarColor ?>" style="width: <?= $rscPct ?>%"></div>
                     </div>
-                    <div class="text-muted small mt-1"><?= \BBS\Services\ServerStats::formatBytes($rscTotal) ?> total &middot; <?= $rscPct ?>% used &middot; checked <?= \BBS\Core\TimeHelper::ago($rsc['disk_checked_at']) ?></div>
+                    <div class="text-muted small mt-1"><?= $formatRemoteBytes($rscTotal) ?> total &middot; <?= $rscPct ?>% used &middot; checked <?= \BBS\Core\TimeHelper::ago($rsc['disk_checked_at']) ?></div>
+                    <?php if ($isBorgBase && !empty($rsc['borgbase_usage_source'])): ?>
+                    <div class="text-muted small mt-1">Source: <?= $rsc['borgbase_usage_source'] === 'borgbase_api' ? 'BorgBase API' : 'manual quota' ?></div>
+                    <?php endif; ?>
                 </div>
                 <?php elseif ($wasChecked): ?>
-                <div class="mt-2 small text-muted"><i class="bi bi-exclamation-triangle me-1"></i>Quota unavailable — provider does not support disk usage queries</div>
+                <div class="mt-2 small text-muted"><i class="bi bi-exclamation-triangle me-1"></i><?= $isBorgBase ? 'Set quota manually or use API' : 'Quota unavailable — provider does not support disk usage queries' ?></div>
                 <?php endif; ?>
                 <div id="remoteSshTestResult<?= $rsc['id'] ?>" class="mt-2"></div>
             </div>
@@ -1235,6 +1346,38 @@ function applyRemotePreset(select, form) {
                             <label class="form-check-label" for="editAppendRepoName<?= $rsc['id'] ?>">Append repository name to base path</label>
                             <div class="form-text">Uncheck for providers like BorgBase where each SSH user maps to a single fixed repo path.</div>
                         </div>
+                        <?php if ($isBorgBase): ?>
+                        <hr>
+                        <div class="border rounded p-3 mb-3">
+                            <div class="fw-semibold mb-2">Manual Quota</div>
+                            <label class="form-label fw-semibold">Quota <span class="text-muted fw-normal">(GB, optional)</span></label>
+                            <input type="number" class="form-control" name="borgbase_manual_quota_gb" min="0" step="0.001" value="<?= htmlspecialchars((string)($rsc['borgbase_manual_quota_gb'] ?? '')) ?>">
+                            <div class="form-text">Use this when you do not want to connect the BorgBase API.</div>
+                        </div>
+                        <div class="border rounded p-3 mb-3">
+                            <div class="fw-semibold mb-2">BorgBase API</div>
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold" for="editBbApiKey<?= $rsc['id'] ?>">API Key <span class="text-muted fw-normal">(optional)</span></label>
+                                <input type="password" class="form-control" name="borgbase_api_key" id="editBbApiKey<?= $rsc['id'] ?>" autocomplete="off" data-has-saved-key="<?= !empty($rsc['borgbase_api_key_encrypted']) ? '1' : '0' ?>" placeholder="<?= !empty($rsc['borgbase_api_key_encrypted']) ? 'Leave blank to keep existing key' : 'Paste API key' ?>" oninput="updateEditBorgbaseApiRequirement(<?= $rsc['id'] ?>)">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold" for="editBbRepoName<?= $rsc['id'] ?>">BorgBase Repo Name <span class="text-danger d-none" id="editBbRepoNameRequired<?= $rsc['id'] ?>">*</span></label>
+                                <input type="text" class="form-control" name="borgbase_repo_name" id="editBbRepoName<?= $rsc['id'] ?>" value="<?= htmlspecialchars($rsc['borgbase_repo_name'] ?? '') ?>" oninput="updateEditBorgbaseApiRequirement(<?= $rsc['id'] ?>)">
+                                <div class="invalid-feedback">Repository name is required when an API key is provided.</div>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="testBorgbaseApiExisting(<?= $rsc['id'] ?>)">
+                                <i class="bi bi-shield-check me-1"></i> Verify API
+                            </button>
+                            <?php if (!empty($rsc['borgbase_api_key_encrypted'])): ?>
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox" name="borgbase_clear_api_key" value="1" id="clearBbApi<?= $rsc['id'] ?>">
+                                <label class="form-check-label" for="clearBbApi<?= $rsc['id'] ?>">Remove saved API key</label>
+                            </div>
+                            <?php endif; ?>
+                            <div class="form-text mt-2">The key is encrypted before storage and never shown again.</div>
+                            <div id="editBbApiTestResult<?= $rsc['id'] ?>" style="display:none" class="mt-2"></div>
+                        </div>
+                        <?php endif; ?>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -1332,6 +1475,84 @@ function testRemoteSsh(id, triggerEl) {
     .catch(function() {
         resultDiv.innerHTML = '<span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Request failed</span>';
     });
+}
+
+function testBorgbaseApiExisting(id) {
+    var resultDiv = document.getElementById('editBbApiTestResult' + id);
+    var repoInput = document.getElementById('editBbRepoName' + id);
+    var apiInput = document.getElementById('editBbApiKey' + id);
+    var modal = document.getElementById('editRemoteSshModal' + id);
+    var userInput = modal ? modal.querySelector('[name=remote_user]') : null;
+    var csrfInput = modal ? modal.querySelector('[name=csrf_token]') : null;
+    var fallbackCsrfInput = document.querySelector('input[name=csrf_token]');
+    var apiKey = apiInput ? apiInput.value.trim() : '';
+    var repoName = repoInput ? repoInput.value.trim() : '';
+    var hasSavedKey = apiInput && apiInput.dataset.hasSavedKey === '1';
+    var esc = function(value) {
+        return String(value).replace(/[&<>"']/g, function(ch) {
+            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch];
+        });
+    };
+
+    if (!apiKey && !hasSavedKey) {
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = '<div class="alert alert-danger small py-2 px-3 mb-0"><i class="bi bi-x-circle me-1"></i> Enter an API key to verify it before saving.</div>';
+        return;
+    }
+    if (!repoName) {
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = '<div class="alert alert-danger small py-2 px-3 mb-0"><i class="bi bi-x-circle me-1"></i> Enter a BorgBase repository name to verify the API key.</div>';
+        updateEditBorgbaseApiRequirement(id);
+        return;
+    }
+
+    resultDiv.style.display = 'block';
+    resultDiv.innerHTML = '<div class="alert alert-secondary small py-2 px-3 mb-0"><span class="spinner-border spinner-border-sm me-1"></span>Checking BorgBase API...</div>';
+
+    var formData = new URLSearchParams();
+    formData.append('csrf_token', csrfInput ? csrfInput.value : (fallbackCsrfInput ? fallbackCsrfInput.value : ''));
+    formData.append('config_id', String(id));
+    formData.append('remote_user', userInput ? userInput.value.trim() : '');
+    formData.append('borgbase_repo_name', repoName);
+    formData.append('borgbase_api_key', apiKey);
+
+    fetch('/remote-ssh-configs/borgbase-api-test', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: formData.toString()
+    })
+    .then(function(r) {
+        return r.text().then(function(text) {
+            try {
+                return JSON.parse(text || '{}');
+            } catch (e) {
+                throw new Error(text ? text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180) : 'Invalid server response');
+            }
+        });
+    })
+    .then(function(data) {
+        if (data.status === 'ok') {
+            var repo = data.repo || {};
+            resultDiv.innerHTML = '<div class="alert alert-success small py-2 px-3 mb-0"><i class="bi bi-check-circle me-1"></i>Verified - quota ' + esc(repo.quota_gb) + ' GB, current usage ' + esc(repo.current_usage_mb) + ' MB</div>';
+        } else {
+            resultDiv.innerHTML = '<div class="alert alert-danger small py-2 px-3 mb-0"><i class="bi bi-x-circle me-1"></i> ' + esc(data.error || 'BorgBase API check failed') + '</div>';
+        }
+    })
+    .catch(function(error) {
+        resultDiv.innerHTML = '<div class="alert alert-danger small py-2 px-3 mb-0"><i class="bi bi-x-circle me-1"></i> ' + esc(error && error.message ? error.message : 'Request failed') + '</div>';
+    });
+}
+
+function updateEditBorgbaseApiRequirement(id) {
+    var repoInput = document.getElementById('editBbRepoName' + id);
+    var apiInput = document.getElementById('editBbApiKey' + id);
+    var requiredMark = document.getElementById('editBbRepoNameRequired' + id);
+    if (!repoInput || !apiInput || !requiredMark) return;
+    var apiPresent = apiInput.value.trim() !== '';
+    var repoMissing = repoInput.value.trim() === '';
+    repoInput.required = apiPresent;
+    repoInput.classList.toggle('is-invalid', apiPresent && repoMissing);
+    requiredMark.classList.toggle('d-none', !apiPresent);
 }
 
 function deleteRemoteSsh(id, name) {

@@ -1792,12 +1792,16 @@ if ((int) date('i') % 15 === 0) {
     foreach ($remoteConfigs as $rc) {
         $rcFull = $remoteSshService->getDecrypted((int) $rc['id']);
         if ($rcFull) {
-            $diskData = $remoteSshService->getDiskUsage($rcFull);
-            $remoteSshService->updateDiskUsage((int) $rc['id'], $diskData);
+            if (($rcFull['provider'] ?? '') === 'borgbase' || str_contains((string)($rcFull['remote_host'] ?? ''), '.repo.borgbase.com')) {
+                $diskData = $remoteSshService->refreshBorgBaseDiskUsage($rcFull);
+            } else {
+                $diskData = $remoteSshService->getDiskUsage($rcFull);
+                $remoteSshService->updateDiskUsage((int) $rc['id'], $diskData, 'df');
+            }
             if ($diskData) {
                 echo date('Y-m-d H:i:s') . " Remote SSH \"{$rc['name']}\": {$diskData['percent']}% used\n";
             } else {
-                echo date('Y-m-d H:i:s') . " Remote SSH \"{$rc['name']}\": df unavailable\n";
+                echo date('Y-m-d H:i:s') . " Remote SSH \"{$rc['name']}\": usage unavailable\n";
             }
         }
     }

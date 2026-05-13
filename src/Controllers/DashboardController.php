@@ -83,7 +83,7 @@ class DashboardController extends Controller
 
         // --- Remote SSH storage ---
         $remotes = $this->db->fetchAll("
-            SELECT id, name, remote_host, remote_user, disk_total_bytes, disk_used_bytes, disk_free_bytes, disk_checked_at,
+            SELECT id, name, provider, remote_host, remote_user, disk_total_bytes, disk_used_bytes, disk_free_bytes, disk_checked_at, borgbase_usage_source,
                    (SELECT COUNT(*) FROM repositories r WHERE r.remote_ssh_config_id = remote_ssh_configs.id) AS repo_count,
                    (SELECT COALESCE(SUM(size_bytes), 0) FROM repositories r WHERE r.remote_ssh_config_id = remote_ssh_configs.id) AS repo_bytes
             FROM remote_ssh_configs
@@ -96,6 +96,7 @@ class DashboardController extends Controller
             $pct   = ($total && $used !== null) ? round(($used / $total) * 100, 1) : null;
             $storageLocations[] = [
                 'kind' => 'remote',
+                'provider' => $rc['provider'] ?? null,
                 'id' => (int) $rc['id'],
                 'label' => $rc['name'],
                 'path' => $rc['remote_user'] . '@' . $rc['remote_host'],
@@ -106,6 +107,7 @@ class DashboardController extends Controller
                 'disk_used' => $used,
                 'disk_free' => $free,
                 'disk_percent' => $pct,
+                'borgbase_usage_source' => $rc['borgbase_usage_source'] ?? null,
             ];
         }
 

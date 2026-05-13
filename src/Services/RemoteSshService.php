@@ -47,6 +47,21 @@ class RemoteSshService
     }
 
     /**
+     * Decrypt the optional BorgBase API key. Empty or invalid values are treated as absent.
+     */
+    public function getBorgBaseApiKey(array $config): ?string
+    {
+        $encrypted = $config['borgbase_api_key_encrypted'] ?? null;
+        if (empty($encrypted)) return null;
+
+        try {
+            return Encryption::decrypt($encrypted);
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
      * Build the SSH repo path for a given config and repo name.
      * Returns: ssh://user@host:port/base_path/repoName
      */
@@ -313,16 +328,180 @@ class RemoteSshService
     }
 
     /**
-     * Store disk usage data for a remote SSH config.
+     * Check BorgBase quota/usage via GraphQL and verify it belongs to this SSH user/repo name.
      */
-    public function updateDiskUsage(int $configId, ?array $diskData): void
+    public function getBorgBaseApiUsage(array $config, string $apiKey, ?string $repoName = null): array
+    {
+        $sshUser = trim((string) ($config['remote_user'] ?? ''));
+        $repoName = trim((string) ($repoName ?? $config['borgbase_repo_name'] ?? ''));
+
+        if ($sshUser === '' || $repoName === '') {
+            return ['success' => false, 'error' => 'BorgBase SSH user and repository name are required.'];
+        }
+
+        $response = $this->requestBorgBaseRepoList($apiKey);
+        if (!$response['success']) {
+            return $response;
+        }
+
+        foreach ($response['repos'] as $repo) {
+            $id = (string) ($repo['id'] ?? '');
+            $name = (string) ($repo['name'] ?? '');
+            if ($id !== $sshUser || $name !== $repoName) {
+                continue;
+            }
+
+            $quotaMb = (float) ($repo['quota'] ?? 0);
+            $usedMb = (float) ($repo['currentUsage'] ?? 0);
+            if ($quotaMb <= 0 || empty($repo['quotaEnabled'])) {
+                return ['success' => false, 'error' => 'No BorgBase quota set. Enable it in BorgBase or use Manual Quota.'];
+            }
+
+            // BorgBase returns quota and currentUsage as decimal MB.
+            $total = (int) round($quotaMb * 1000 * 1000);
+            $used = max(0, (int) round($usedMb * 1000 * 1000));
+            $free = max(0, $total - $used);
+
+            return [
+                'success' => true,
+                'repo' => $repo,
+                'disk' => [
+                    'total' => $total,
+                    'used' => $used,
+                    'free' => $free,
+                    'percent' => $total > 0 ? (int) round(($used / $total) * 100) : 0,
+                ],
+            ];
+        }
+
+        return ['success' => false, 'error' => 'No BorgBase repository matched both SSH user and repository name.'];
+    }
+
+    /**
+     * Use BorgBase-specific data when available. Falls back to manual quota + known repo sizes.
+     */
+    public function refreshBorgBaseDiskUsage(array $config): ?array
+    {
+        $apiKey = $this->getBorgBaseApiKey($config);
+        if ($apiKey && !empty($config['borgbase_repo_name'])) {
+            $usage = $this->getBorgBaseApiUsage($config, $apiKey, $config['borgbase_repo_name']);
+            if ($usage['success']) {
+                $this->updateDiskUsage((int) $config['id'], $usage['disk'], 'borgbase_api');
+                return $usage['disk'];
+            }
+        }
+
+        $manualGb = (float) ($config['borgbase_manual_quota_gb'] ?? 0);
+        if ($manualGb > 0) {
+            $total = (int) round($manualGb * 1024 * 1024 * 1024);
+            $row = $this->db->fetchOne(
+                "SELECT COALESCE(SUM(size_bytes), 0) as used FROM repositories WHERE remote_ssh_config_id = ?",
+                [(int) $config['id']]
+            );
+            $used = max(0, (int) ($row['used'] ?? 0));
+            $diskData = [
+                'total' => $total,
+                'used' => $used,
+                'free' => max(0, $total - $used),
+                'percent' => $total > 0 ? (int) round(($used / $total) * 100) : 0,
+            ];
+            $this->updateDiskUsage((int) $config['id'], $diskData, 'manual');
+            return $diskData;
+        }
+
+        $this->updateDiskUsage((int) $config['id'], null, null);
+        return null;
+    }
+
+    /**
+     * Store disk usage data for a remote SSH config, including the source when known.
+     */
+    public function updateDiskUsage(int $configId, ?array $diskData, ?string $source = null): void
     {
         $this->db->update('remote_ssh_configs', [
             'disk_total_bytes' => $diskData ? $diskData['total'] : null,
             'disk_used_bytes' => $diskData ? $diskData['used'] : null,
             'disk_free_bytes' => $diskData ? $diskData['free'] : null,
             'disk_checked_at' => $this->db->now(),
+            'borgbase_usage_source' => $source,
         ], 'id = ?', [$configId]);
+    }
+
+    private function requestBorgBaseRepoList(string $apiKey): array
+    {
+        $payload = json_encode([
+            'query' => '{ repoList { id name quota quotaEnabled currentUsage lastModified } }',
+        ]);
+        if ($payload === false) {
+            return ['success' => false, 'error' => 'Failed to build BorgBase API request.'];
+        }
+
+        $headers = [
+            'Authorization: Bearer ' . $apiKey,
+            'Content-Type: application/json',
+        ];
+
+        $code = 0;
+        if (function_exists('curl_init')) {
+            $ch = curl_init('https://api.borgbase.com/graphql');
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_POST => true,
+                CURLOPT_HTTPHEADER => $headers,
+                CURLOPT_POSTFIELDS => $payload,
+                CURLOPT_TIMEOUT => 15,
+            ]);
+            $body = curl_exec($ch);
+            $err = curl_error($ch);
+            $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($body === false) {
+                return ['success' => false, 'error' => $err ?: 'BorgBase API request failed.'];
+            }
+        } else {
+            $context = stream_context_create([
+                'http' => [
+                    'method' => 'POST',
+                    'header' => implode("\r\n", $headers),
+                    'content' => $payload,
+                    'timeout' => 15,
+                    'ignore_errors' => true,
+                ],
+            ]);
+            $body = @file_get_contents('https://api.borgbase.com/graphql', false, $context);
+            if ($body === false) {
+                return ['success' => false, 'error' => 'BorgBase API request failed.'];
+            }
+            foreach ($http_response_header ?? [] as $header) {
+                if (preg_match('#^HTTP/\S+\s+(\d{3})#', $header, $m)) {
+                    $code = (int) $m[1];
+                    break;
+                }
+            }
+        }
+
+        $json = json_decode($body, true);
+        if (!is_array($json)) {
+            if ($code !== 0 && ($code < 200 || $code >= 300)) {
+                return ['success' => false, 'error' => "BorgBase API returned HTTP {$code}."];
+            }
+            return ['success' => false, 'error' => 'BorgBase API returned invalid JSON.'];
+        }
+        if (!empty($json['errors'])) {
+            $message = $json['errors'][0]['message'] ?? 'BorgBase API returned an error.';
+            return ['success' => false, 'error' => $message];
+        }
+        if ($code !== 0 && ($code < 200 || $code >= 300)) {
+            return ['success' => false, 'error' => "BorgBase API returned HTTP {$code}."];
+        }
+
+        $repos = $json['data']['repoList'] ?? null;
+        if (!is_array($repos)) {
+            return ['success' => false, 'error' => 'BorgBase API response did not include repoList.'];
+        }
+
+        return ['success' => true, 'repos' => $repos];
     }
 
     /**
