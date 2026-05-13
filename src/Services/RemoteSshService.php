@@ -393,7 +393,11 @@ class RemoteSshService
 
         $manualGb = (float) ($config['borgbase_manual_quota_gb'] ?? 0);
         if ($manualGb > 0) {
-            $total = (int) round($manualGb * 1024 * 1024 * 1024);
+            // Use decimal GB (× 1000³) to match the API path's decimal-MB
+            // conversion. Otherwise the same "10 GB" plan reads as 10.00 GB
+            // when sourced from the BorgBase API but 10.74 GB when entered
+            // manually — same number on screen, different bytes underneath.
+            $total = (int) round($manualGb * 1000 * 1000 * 1000);
             $row = $this->db->fetchOne(
                 "SELECT COALESCE(SUM(size_bytes), 0) as used FROM repositories WHERE remote_ssh_config_id = ?",
                 [(int) $config['id']]

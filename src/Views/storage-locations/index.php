@@ -1533,13 +1533,13 @@ function testBorgbaseApiExisting(id) {
     .then(function(data) {
         if (data.status === 'ok') {
             var repo = data.repo || {};
-            resultDiv.innerHTML = '<div class="alert alert-success small py-2 px-3 mb-0"><i class="bi bi-check-circle me-1"></i>Verified - quota ' + esc(repo.quota_gb) + ' GB, current usage ' + esc(repo.current_usage_mb) + ' MB</div>';
+            resultDiv.innerHTML = '<div class="alert alert-success small py-2 px-3 mb-0"><i class="bi bi-check-circle me-1"></i>Verified - quota ' + escapeHtml(String(repo.quota_gb)) + ' GB, current usage ' + escapeHtml(String(repo.current_usage_mb)) + ' MB</div>';
         } else {
-            resultDiv.innerHTML = '<div class="alert alert-danger small py-2 px-3 mb-0"><i class="bi bi-x-circle me-1"></i> ' + esc(data.error || 'BorgBase API check failed') + '</div>';
+            resultDiv.innerHTML = '<div class="alert alert-danger small py-2 px-3 mb-0"><i class="bi bi-x-circle me-1"></i> ' + escapeHtml(data.error || 'BorgBase API check failed') + '</div>';
         }
     })
     .catch(function(error) {
-        resultDiv.innerHTML = '<div class="alert alert-danger small py-2 px-3 mb-0"><i class="bi bi-x-circle me-1"></i> ' + esc(error && error.message ? error.message : 'Request failed') + '</div>';
+        resultDiv.innerHTML = '<div class="alert alert-danger small py-2 px-3 mb-0"><i class="bi bi-x-circle me-1"></i> ' + escapeHtml(error && error.message ? error.message : 'Request failed') + '</div>';
     });
 }
 
