@@ -310,6 +310,20 @@ html, body {
     pointer-events: none;
 }
 
+/* Custom brand logos uploaded via Settings → Branding don't share the
+   default mascot's "peek over the edge of the topbar" geometry. They get
+   constrained to the navbar height and contained without distortion (#261). */
+.topbar-brand-logo {
+    max-height: 58px;
+    max-width: 92px;
+    height: auto;
+    width: auto;
+    padding: 3px;
+    object-fit: contain;
+    z-index: 1031;
+    pointer-events: none;
+}
+
 /* Mobile bottom navigation */
 .mobile-bottom-nav {
     position: fixed;

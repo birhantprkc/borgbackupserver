@@ -88,6 +88,14 @@
             z-index: 1;
             filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.5));
         }
+        /* Custom uploaded brand logos (#261). They don't share the default
+           Borg art's edge-to-edge framing — give them breathing room and
+           drop the drop-shadow, which looks wrong on logos that already
+           have their own shadow or a white background. */
+        .auth-art-brand {
+            padding: 24px;
+            filter: none;
+        }
         .auth-features {
             display: flex;
             gap: 8px;
@@ -343,7 +351,7 @@
     <?php if (empty($hideAuthArt)): ?>
     <div class="auth-art">
         <?php if (!empty($loginLogo)): ?>
-            <img src="data:image/png;base64,<?= $loginLogo ?>" alt="Logo" class="auth-art-logo">
+            <img src="data:image/png;base64,<?= $loginLogo ?>" alt="Logo" class="auth-art-logo auth-art-brand">
         <?php else: ?>
             <img src="/images/login-logo.png" alt="Borg Backup Server" class="auth-art-logo">
         <?php endif; ?>

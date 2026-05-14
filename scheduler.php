@@ -2297,9 +2297,26 @@ if ($hourOfDay === 3) {
             );
             $pendingIds = array_column($pending, 'agent_id');
 
+            // 24h backoff (#264): if a previous update_agent failed within
+            // the last day, don't keep retrying every minute. Without this,
+            // a transient network issue during the update produces one
+            // email per minute per agent indefinitely. Once the cooldown
+            // passes, we'll try once more — if it fails again, one fresh
+            // email, then another 24h of silence.
+            $recentlyFailed = $db->fetchAll(
+                "SELECT agent_id FROM backup_jobs
+                 WHERE task_type = 'update_agent'
+                   AND status = 'failed'
+                   AND completed_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)"
+            );
+            $recentlyFailedIds = array_column($recentlyFailed, 'agent_id');
+
             $queued = 0;
             foreach ($outdatedAgents as $agent) {
                 if (in_array($agent['id'], $pendingIds)) {
+                    continue;
+                }
+                if (in_array($agent['id'], $recentlyFailedIds)) {
                     continue;
                 }
 
