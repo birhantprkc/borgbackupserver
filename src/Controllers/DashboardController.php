@@ -34,18 +34,6 @@ class DashboardController extends Controller
         $this->view('dashboard/index', $data);
     }
 
-    /** Legacy dashboard preserved temporarily at /dashboard-legacy. */
-    public function legacy(): void
-    {
-        $this->requireAuth();
-
-        $data = $this->getDashboardData();
-        $data = array_merge($data, $this->getSlowStats());
-        $data['pageTitle'] = 'Dashboard';
-
-        $this->view('dashboard/index.v1.bak', $data);
-    }
-
     /** Data unique to the dashboard — per-location storage, server identity, global totals. */
     private function getDashboardExtras(): array
     {
