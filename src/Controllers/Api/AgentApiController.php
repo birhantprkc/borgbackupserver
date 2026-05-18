@@ -478,7 +478,7 @@ class AgentApiController extends Controller
         // Log the result
         $level = $result === 'completed' ? 'info' : 'error';
         $message = $result === 'completed'
-            ? "{$taskLabel} completed: job #{$jobId}" . (($data['files_total'] ?? 0) > 0 ? ", {$data['files_total']} files" : '') . ", " . $this->formatDuration($duration)
+            ? "{$taskLabel} completed: job #{$jobId}" . (($data['files_total'] ?? 0) > 0 ? ", {$data['files_total']} files" : '') . ", " . \BBS\Core\TimeHelper::duration($duration, '0s')
             : "{$taskLabel} failed: job #{$jobId} — " . ($input['error_log'] ?? 'unknown error');
 
         $this->db->insert('server_log', [
@@ -543,7 +543,7 @@ class AgentApiController extends Controller
                         $agent['id'],
                         (int)$job['backup_plan_id'],
                         "Backup completed for plan \"{$planName}\" on client \"{$agent['name']}\"" .
-                            (($data['files_total'] ?? 0) > 0 ? " — {$data['files_total']} files in " . $this->formatDuration($duration) : ''),
+                            (($data['files_total'] ?? 0) > 0 ? " — {$data['files_total']} files in " . \BBS\Core\TimeHelper::duration($duration, '0s') : ''),
                         'info'
                     );
                 }
@@ -1133,23 +1133,6 @@ class AgentApiController extends Controller
         $raw = file_get_contents('php://input');
         $data = json_decode($raw, true);
         return is_array($data) ? $data : [];
-    }
-
-    private function formatDuration(int $seconds): string
-    {
-        $d = intdiv($seconds, 86400);
-        $h = intdiv($seconds % 86400, 3600);
-        $m = intdiv($seconds % 3600, 60);
-        $s = $seconds % 60;
-
-        $parts = [];
-
-        if ($d > 0) $parts[] = "{$d}d";
-        if ($h > 0) $parts[] = "{$h}h";
-        if ($m > 0) $parts[] = "{$m}m";
-        if ($s > 0 || empty($parts)) $parts[] = "{$s}s";
-
-        return implode(' ', $parts);
     }
 
     private function formatBytesLog(int $bytes): string

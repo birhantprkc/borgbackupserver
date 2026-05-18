@@ -1,14 +1,10 @@
 <?php
-    function formatDurationLabel(int $s): string {
-        return $s >= 3600 ? floor($s / 3600) . 'h ' . floor(($s % 3600) / 60) . 'm ' . ($s % 60) . 's' : ($s >= 60 ? floor($s / 60) . 'm ' . ($s % 60) . 's' : $s . 's');
-    }
-
-    $avgDur = $avgSec > 0 ? formatDurationLabel((int) $avgSec) : '--';
+    $avgDur = $avgSec > 0 ? \BBS\Core\TimeHelper::duration((int) $avgSec) : '--';
     $maxCompletedDuration = max(array_map(fn($j) => (int) ($j['duration_seconds'] ?? 0), $completed ?: [['duration_seconds' => 0]]));
 
     function durationBarHtml(int $duration, int $maxDuration, string $status = ''): string {
         $pct = $maxDuration > 0 ? min(100, round(($duration / $maxDuration) * 100)) : 0;
-        $label = formatDurationLabel($duration);
+        $label = \BBS\Core\TimeHelper::duration($duration);
         $toneClass = $status === 'failed' ? ' queue-duration-danger' : '';
         return '<div class="progress queue-duration-progress' . $toneClass . ' position-relative" title="' . htmlspecialchars($label) . '" style="--duration-pct:' . $pct . '%;">'
             . '<div class="progress-bar queue-duration-bar" style="width:' . $pct . '%;"></div>'
@@ -417,16 +413,11 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
                ', ' + dt.toLocaleTimeString('en-US', tOpts);
     }
 
-    function formatDuration(s) {
-        s = parseInt(s) || 0;
-        return s >= 3600 ? Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm ' + (s % 60) + 's' : (s >= 60 ? Math.floor(s / 60) + 'm ' + (s % 60) + 's' : s + 's');
-    }
-
     function durationBar(s, maxS, status) {
         s = parseInt(s) || 0;
         maxS = parseInt(maxS) || 0;
         const pct = maxS > 0 ? Math.min(100, Math.round((s / maxS) * 100)) : 0;
-        const label = formatDuration(s);
+        const label = window.BBS.formatDuration(s);
         const tone = status === 'failed' ? ' queue-duration-danger' : '';
         return '<div class="progress queue-duration-progress' + tone + ' position-relative" title="' + esc(label) + '" style="--duration-pct:' + pct + '%;">' +
             '<div class="progress-bar queue-duration-bar" style="width:' + pct + '%;"></div>' +
@@ -569,7 +560,7 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
             }
         }
         if (typeof data.avgSec !== 'undefined') {
-            const avgLabel = data.avgSec > 0 ? formatDuration(data.avgSec) : '--';
+            const avgLabel = data.avgSec > 0 ? window.BBS.formatDuration(data.avgSec) : '--';
             setText('qm-avg', avgLabel);
             setText('qm-avg-dur', avgLabel);
         }

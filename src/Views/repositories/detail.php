@@ -339,8 +339,7 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
                                 </td>
                                 <td>
                                     <?php
-                                    $d = $job['duration_seconds'] ?? 0;
-                                    echo $d > 0 ? ($d >= 60 ? floor($d / 60) . 'm ' . ($d % 60) . 's' : $d . 's') : '--';
+                                    echo \BBS\Core\TimeHelper::duration((int) ($job['duration_seconds'] ?? 0));
                                     ?>
                                 </td>
                             </tr>

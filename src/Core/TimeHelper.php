@@ -4,6 +4,8 @@ namespace BBS\Core;
 
 class TimeHelper
 {
+    private static array $durationCache = [];
+
     /**
      * Format a UTC timestamp for display in the user's timezone.
      * Automatically converts 12h format tokens to 24h if the user prefers it.
@@ -54,6 +56,38 @@ class TimeHelper
             return floor($diff / 3600) . 'h ago';
         }
         return floor($diff / 86400) . 'd ago';
+    }
+
+    /**
+     * Return a compact duration label for elapsed seconds.
+     */
+    public static function duration(?int $seconds, string $zeroLabel = '--'): string
+    {
+        $seconds = max(0, (int) ($seconds ?? 0));
+        if ($seconds <= 0) {
+            return $zeroLabel;
+        }
+
+        if (isset(self::$durationCache[$seconds])) {
+            return self::$durationCache[$seconds];
+        }
+
+        $days = intdiv($seconds, 86400);
+        $hours = intdiv($seconds % 86400, 3600);
+        $minutes = intdiv($seconds % 3600, 60);
+        $secs = $seconds % 60;
+
+        if ($days > 0) {
+            $label = "{$days}d {$hours}h";
+        } elseif ($hours > 0) {
+            $label = "{$hours}h {$minutes}m";
+        } elseif ($minutes > 0) {
+            $label = "{$minutes}m {$secs}s";
+        } else {
+            $label = "{$secs}s";
+        }
+
+        return self::$durationCache[$seconds] = $label;
     }
 
     /**

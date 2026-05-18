@@ -10,9 +10,7 @@ $statusLabel = ($job['status'] === 'completed' && !empty($job['had_warnings']))
     ? 'Completed with warnings'
     : ucfirst($job['status']);
 
-$d = $job['duration_seconds'] ?? 0;
-$durLabel = $d >= 3600 ? floor($d / 3600) . 'h ' . floor(($d % 3600) / 60) . 'm'
-    : ($d >= 60 ? floor($d / 60) . 'm ' . ($d % 60) . 's' : ($d > 0 ? $d . 's' : '--'));
+$durLabel = \BBS\Core\TimeHelper::duration((int) ($job['duration_seconds'] ?? 0));
 
 $pct = 0;
 if (($job['files_total'] ?? 0) > 0 && $job['files_processed'] > 0) {
@@ -589,13 +587,6 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
                dt.toLocaleTimeString('en-US', tOpts);
     }
 
-    function fmtDur(s) {
-        if (!s || s <= 0) return '--';
-        if (s >= 3600) return Math.floor(s/3600) + 'h ' + Math.floor((s%3600)/60) + 'm';
-        if (s >= 60) return Math.floor(s/60) + 'm ' + (s%60) + 's';
-        return s + 's';
-    }
-
     function fmtBytes(b) {
         if (!b || b == 0) return '--';
         const units = ['B','KB','MB','GB','TB'];
@@ -617,12 +608,12 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
                 container.innerHTML = '<div class="card border-0 shadow-sm mb-4 bg-success-subtle"><div class="card-body py-3">' +
                     '<div class="fw-semibold text-success mb-1"><i class="bi bi-hdd me-1"></i> ' + esc(job.task_type[0].toUpperCase()+job.task_type.slice(1)) + ' Completed</div>' +
                     '<div class="progress mb-1" style="height:22px"><div class="progress-bar bg-success" style="width:100%">Server-side ' + esc(job.task_type) + ' finished</div></div>' +
-                    '<div class="text-muted small">Duration: ' + fmtDur(job.duration_seconds) + ' &middot; See activity log below for details</div></div></div>';
+                    '<div class="text-muted small">Duration: ' + window.BBS.formatDuration(job.duration_seconds) + ' &middot; See activity log below for details</div></div></div>';
             } else {
                 container.innerHTML = '<div class="card border-0 shadow-sm mb-4 bg-success-subtle"><div class="card-body py-3">' +
                     '<div class="fw-semibold text-success mb-1">Completed</div>' +
                     '<div class="progress mb-1" style="height:22px"><div class="progress-bar bg-success" style="width:100%">' + (job.files_total ? Number(job.files_total).toLocaleString() + ' files processed' : 'Done') + '</div></div>' +
-                    '<div class="text-muted small">' + fmtBytes(job.bytes_total) + ' total &middot; ' + fmtDur(job.duration_seconds) + '</div></div></div>';
+                    '<div class="text-muted small">' + fmtBytes(job.bytes_total) + ' total &middot; ' + window.BBS.formatDuration(job.duration_seconds) + '</div></div></div>';
             }
         } else if (job.status === 'failed') {
             container.innerHTML = '<div class="card border-0 shadow-sm mb-4 bg-danger-subtle"><div class="card-body py-3">' +
@@ -694,7 +685,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
             }
             if (key === 'Started At' && job.started_at) td.nextElementSibling.textContent = fmtDate(job.started_at);
             if (key === 'Completed At' && job.completed_at) td.nextElementSibling.textContent = fmtDate(job.completed_at);
-            if (key === 'Duration') td.nextElementSibling.textContent = fmtDur(job.duration_seconds);
+            if (key === 'Duration') td.nextElementSibling.textContent = window.BBS.formatDuration(job.duration_seconds);
         });
     }
 

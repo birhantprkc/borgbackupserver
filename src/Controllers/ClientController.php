@@ -577,8 +577,7 @@ class ClientController extends Controller
         }
 
         // Format avg duration
-        $avgDuration = (int) ($jobStats['avg_duration'] ?? 0);
-        $avgDurLabel = $avgDuration >= 60 ? floor($avgDuration / 60) . 'm ' . ($avgDuration % 60) . 's' : $avgDuration . 's';
+        $avgDurLabel = \BBS\Core\TimeHelper::duration((int) ($jobStats['avg_duration'] ?? 0));
 
         // Format last backup
         $lastBackupLabel = $lastJob ? \BBS\Core\TimeHelper::format($lastJob['completed_at'], 'M j g:ia') : '--';

@@ -29,12 +29,7 @@ $statusLabels = [
 // Non-file entry types — exclude from file counts and size totals
 $nonFileStatuses = ['D', 'S', 'H', 'X', 'B', 'F', 'E'];
 
-$durLabel = '--';
-if (!empty($jobInfo['duration_seconds'])) {
-    $d = (int) $jobInfo['duration_seconds'];
-    $durLabel = $d >= 3600 ? floor($d / 3600) . 'h ' . floor(($d % 3600) / 60) . 'm'
-        : ($d >= 60 ? floor($d / 60) . 'm ' . ($d % 60) . 's' : $d . 's');
-}
+$durLabel = \BBS\Core\TimeHelper::duration((int) ($jobInfo['duration_seconds'] ?? 0));
 
 // Separate file entries from non-file entries
 $fileRows = [];

@@ -8,6 +8,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="/css/style.css?v=<?= filemtime(__DIR__ . '/../../../public/css/style.css') ?>" rel="stylesheet">
+    <script src="/js/app-utils.js?v=<?= filemtime(__DIR__ . '/../../../public/js/app-utils.js') ?>"></script>
     <link rel="manifest" href="/manifest.json">
     <!-- Favicons + apple-touch-icon. Served by BrandingController, which
          resizes a single uploaded source (or the bundled mascot default)

@@ -257,8 +257,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
 <?php if ($tab === 'status'): ?>
     <?php
     // Compute status metrics
-    $avgDuration = (int) ($jobStats['avg_duration'] ?? 0);
-    $avgDurLabel = $avgDuration >= 60 ? floor($avgDuration / 60) . 'm ' . ($avgDuration % 60) . 's' : $avgDuration . 's';
+    $avgDurLabel = \BBS\Core\TimeHelper::duration((int) ($jobStats['avg_duration'] ?? 0));
     $successRate = ($jobStats['total'] ?? 0) > 0
         ? round(($jobStats['completed'] / $jobStats['total']) * 100)
         : 0;
@@ -459,10 +458,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                             'queued','sent' => 'hourglass-split text-warning',
                             default => 'dash-circle text-secondary',
                         };
-                        $d = (int) ($job['duration_seconds'] ?? 0);
-                        $durStr = $d >= 3600 ? floor($d / 3600) . 'h ' . floor(($d % 3600) / 60) . 'm'
-                            : ($d >= 60 ? floor($d / 60) . 'm ' . ($d % 60) . 's'
-                                : ($d > 0 ? $d . 's' : '--'));
+                        $durStr = \BBS\Core\TimeHelper::duration((int) ($job['duration_seconds'] ?? 0));
                         $when = $job['completed_at'] ?? $job['started_at'] ?? $job['queued_at'];
                         $iconTitle = '';
                         if ($job['status'] === 'failed' && !empty($job['error_log'])) {

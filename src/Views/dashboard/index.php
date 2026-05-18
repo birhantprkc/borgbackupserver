@@ -19,17 +19,6 @@ $fmtUptime = function (?int $s): string {
     if ($h > 0) return "{$h}h {$m}m";
     return "{$m}m";
 };
-$fmtDuration = function (?int $s): string {
-    if (!$s || $s <= 0) return '--';
-    $h = intdiv($s, 3600);
-    $s %= 3600;
-    $m = intdiv($s, 60);
-    $s %= 60;
-    if ($h > 0) return sprintf('%dh %02dm', $h, $m);
-    if ($m > 0) return sprintf('%dm %02ds', $m, $s);
-    return "{$s}s";
-};
-
 // Dedup savings % (original data vs actual disk footprint).
 // Clamp the displayed value at 99.9% when there's still bytes on disk —
 // round() lifts 99.95%+ to 100% which misrepresents a non-empty repo (#191).
@@ -599,7 +588,7 @@ $dfFix = function (string $s): string {
                             <td class="d-table-cell-md"><?= htmlspecialchars($j['plan_name'] ?? '--') ?></td>
                             <td class="d-table-cell-md"><?= htmlspecialchars($j['repo_name'] ?? '--') ?></td>
                             <td><?= TimeHelper::ago($j['completed_at']) ?></td>
-                            <td class="d-table-cell-md"><?= $fmtDuration((int) ($j['duration_seconds'] ?? 0)) ?></td>
+                            <td class="d-table-cell-md"><?= TimeHelper::duration((int) ($j['duration_seconds'] ?? 0)) ?></td>
                             <td class="text-center"><i class="bi <?= $statusIcon ?>"<?= $statusTitle ? ' data-bs-toggle="tooltip" title="' . htmlspecialchars($statusTitle) . '"' : '' ?>></i></td>
                         </tr>
                     <?php endforeach; ?>
@@ -1039,13 +1028,6 @@ document.addEventListener('DOMContentLoaded', function () {
             if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
             return Math.floor(diff/86400) + 'd ago';
         }
-        function fmtDur(s) {
-            s = parseInt(s) || 0;
-            if (s >= 3600) return Math.floor(s/3600) + 'h ' + String(Math.floor((s%3600)/60)).padStart(2, '0') + 'm';
-            if (s >= 60) return Math.floor(s/60) + 'm ' + String(s%60).padStart(2, '0') + 's';
-            return s > 0 ? s + 's' : '--';
-        }
-
         // Task-type icon map (mirrors the PHP one above and queue/index.php)
         const TASK_ICONS = {
             'backup':          'bi-box-seam text-warning',
@@ -1086,7 +1068,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     + '<td class="d-table-cell-md">' + esc(j.plan_name || '--') + '</td>'
                     + '<td class="d-table-cell-md">' + esc(j.repo_name || '--') + '</td>'
                     + '<td>' + timeAgo(j.completed_at) + '</td>'
-                    + '<td class="d-table-cell-md">' + fmtDur(j.duration_seconds) + '</td>'
+                    + '<td class="d-table-cell-md">' + window.BBS.formatDuration(j.duration_seconds) + '</td>'
                     + '<td class="text-center"><i class="bi ' + icon + '"></i></td>'
                     + '</tr>';
             });

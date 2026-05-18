@@ -953,9 +953,7 @@ function bbs_histogram_ticks(int $max): array
                         $timelineMinWidth = ((int) $b['day_idx'] === $todayIdx && $timelinePhase !== 'future' && !$timelineIsError)
                             ? '0px'
                             : null;
-                        $timelineDurLabel = $b['duration_min'] >= 60
-                            ? floor($b['duration_min'] / 60) . 'h ' . ($b['duration_min'] % 60) . 'm'
-                            : $b['duration_min'] . 'm';
+                        $timelineDurLabel = \BBS\Core\TimeHelper::duration((int) $b['duration_min'] * 60);
                         ?>
                         <div class="hist-seg hist-event is-<?= $timelinePhase ?> <?= $timelineIsError ? 'is-error' : '' ?>"
                              data-schedule-id="<?= $b['schedule_id'] ?>"
@@ -1051,9 +1049,7 @@ function bbs_histogram_ticks(int $max): array
                             $pastPct = bbs_day_block_progress_pct((int) $b['day_idx'], (int) $b['start_min'], (float) $height, $todayIdx, $currentMinuteOfDay, $pxPerHour);
                             $phase = bbs_day_block_phase($pastPct);
                             $isError = !empty($b['has_error']);
-                            $durLabel = $b['duration_min'] >= 60
-                                ? floor($b['duration_min'] / 60) . 'h ' . ($b['duration_min'] % 60) . 'm'
-                                : $b['duration_min'] . 'm';
+                            $durLabel = \BBS\Core\TimeHelper::duration((int) $b['duration_min'] * 60);
                             $title = sprintf(
                                 "%s\nClient: %s\nStarts: %s (%s)\nEstimated duration: %s%s",
                                 $b['plan_name'],

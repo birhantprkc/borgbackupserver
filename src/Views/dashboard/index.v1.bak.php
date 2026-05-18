@@ -455,8 +455,7 @@ $pieColors = ['#36a2eb', '#ff6384', '#ffce56', '#4bc0c0', '#9966ff', '#6c757d'];
                                 $elapsed = '';
                                 if ($job['started_at']) {
                                     $e = time() - strtotime($job['started_at'] . ' UTC');
-                                    $elapsed = $e >= 3600 ? floor($e / 3600) . 'h ' . floor(($e % 3600) / 60) . 'm'
-                                        : ($e >= 60 ? floor($e / 60) . 'm ' . ($e % 60) . 's' : $e . 's');
+                                    $elapsed = \BBS\Core\TimeHelper::duration($e);
                                 }
                             ?>
                             <tr style="cursor: pointer;" onclick="window.location='/queue/<?= $job['id'] ?>'">
@@ -591,9 +590,7 @@ $pieColors = ['#36a2eb', '#ff6384', '#ffce56', '#4bc0c0', '#9966ff', '#6c757d'];
                         <tbody class="small">
                             <?php foreach ($recentJobs as $job): ?>
                             <?php
-                                $d = $job['duration_seconds'] ?? 0;
-                                $durStr = $d >= 3600 ? floor($d / 3600) . 'h ' . floor(($d % 3600) / 60) . 'm'
-                                    : ($d >= 60 ? floor($d / 60) . 'm ' . ($d % 60) . 's' : ($d > 0 ? $d . 's' : '--'));
+                                $durStr = \BBS\Core\TimeHelper::duration((int) ($job['duration_seconds'] ?? 0));
                                 $sIcon = match($job['status']) {
                                     'completed' => '<i class="bi bi-check-circle-fill text-success"></i>',
                                     'failed' => '<i class="bi bi-x-circle-fill text-danger"></i>',
@@ -729,14 +726,6 @@ if (pieCanvas) {
 // Helper: escape HTML
 function esc(str) { const d = document.createElement('div'); d.textContent = str ?? ''; return d.innerHTML; }
 
-// Helper: format elapsed seconds
-function fmtDur(s) {
-    s = parseInt(s) || 0;
-    if (s >= 3600) return Math.floor(s/3600) + 'h ' + Math.floor((s%3600)/60) + 'm';
-    if (s >= 60) return Math.floor(s/60) + 'm ' + (s%60) + 's';
-    return s > 0 ? s + 's' : '--';
-}
-
 // Helper: format time diff for countdowns
 function fmtCountdown(diffSec) {
     if (diffSec < 0) return { text: 'Overdue', cls: 'text-danger fw-semibold' };
@@ -765,7 +754,7 @@ function renderActiveJobs(jobs) {
     let html = '<div class="table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>Client</th><th>Task</th><th class="d-th-md">Plan</th><th class="d-th-md">Repo</th><th>Progress</th><th class="d-th-md">Duration</th><th>Status</th></tr></thead><tbody class="small">';
     jobs.forEach(j => {
         let elapsed = '--';
-        if (j.started_at) { const e = now - Math.floor(new Date((j.started_at).replace(' ','T')+'Z').getTime()/1000); elapsed = fmtDur(e); }
+        if (j.started_at) { const e = now - Math.floor(new Date((j.started_at).replace(' ','T')+'Z').getTime()/1000); elapsed = window.BBS.formatDuration(e); }
         let progress = '';
         if (j.status === 'queued') { progress = '<span class="text-muted">Waiting</span>'; }
         else if ((j.files_total || 0) > 0) {
@@ -820,7 +809,7 @@ function renderRecentJobs(jobs) {
     if (!jobs || !jobs.length) { el.innerHTML = '<div class="p-4 text-muted text-center">No completed jobs yet</div>'; return; }
     let html = '<div class="table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>Client</th><th>Task</th><th class="d-th-md">Plan</th><th class="d-th-md">Repo</th><th>Completed</th><th class="d-th-md">Duration</th><th>Status</th></tr></thead><tbody class="small">';
     jobs.forEach(j => {
-        html += '<tr style="cursor:pointer" onclick="window.location=\'/queue/'+j.id+'\'"><td>'+esc(j.agent_name)+'</td><td>'+esc(j.task_type?.[0]?.toUpperCase()+j.task_type?.slice(1))+'</td><td class="d-table-cell-md">'+esc(j.plan_name||'--')+'</td><td class="d-table-cell-md">'+esc(j.repo_name||'--')+'</td><td title="'+esc(fmtDate(j.completed_at))+'">'+timeAgo(j.completed_at)+'</td><td class="d-table-cell-md text-nowrap">'+fmtDur(j.duration_seconds)+'</td><td class="text-center">'+statusIcon(j.status)+'</td></tr>';
+        html += '<tr style="cursor:pointer" onclick="window.location=\'/queue/'+j.id+'\'"><td>'+esc(j.agent_name)+'</td><td>'+esc(j.task_type?.[0]?.toUpperCase()+j.task_type?.slice(1))+'</td><td class="d-table-cell-md">'+esc(j.plan_name||'--')+'</td><td class="d-table-cell-md">'+esc(j.repo_name||'--')+'</td><td title="'+esc(fmtDate(j.completed_at))+'">'+timeAgo(j.completed_at)+'</td><td class="d-table-cell-md text-nowrap">'+window.BBS.formatDuration(j.duration_seconds)+'</td><td class="text-center">'+statusIcon(j.status)+'</td></tr>';
     });
     html += '</tbody></table></div>';
     el.innerHTML = html;
