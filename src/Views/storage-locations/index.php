@@ -19,6 +19,14 @@ function formatStorageBytesDecimal(int $bytes): string {
 $section = $_GET['section'] ?? '';
 ?>
 
+<script>
+function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, function(ch) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch];
+    });
+}
+</script>
+
 <?php if ($section === 's3'): ?>
 <!-- ==================== S3 Sync Settings ==================== -->
 <nav class="mb-4">
@@ -593,12 +601,6 @@ scp ~/.ssh/rsyncnet.pub <span class="text-warning" id="rsnScpUser">USERNAME</spa
 </div>
 
 <script>
-function escapeHtml(value) {
-    return String(value).replace(/[&<>"']/g, function(ch) {
-        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch];
-    });
-}
-
 function showWizardForm(provider) {
     document.getElementById('wizardProviders').style.display = 'none';
     document.getElementById('wizard' + provider.charAt(0).toUpperCase() + provider.slice(1)).style.display = 'block';
@@ -1488,11 +1490,6 @@ function testBorgbaseApiExisting(id) {
     var apiKey = apiInput ? apiInput.value.trim() : '';
     var repoName = repoInput ? repoInput.value.trim() : '';
     var hasSavedKey = apiInput && apiInput.dataset.hasSavedKey === '1';
-    var esc = function(value) {
-        return String(value).replace(/[&<>"']/g, function(ch) {
-            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch];
-        });
-    };
 
     if (!apiKey && !hasSavedKey) {
         resultDiv.style.display = 'block';
