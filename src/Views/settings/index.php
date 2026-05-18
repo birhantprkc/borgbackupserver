@@ -2548,7 +2548,7 @@ document.getElementById('btnTestSmtp')?.addEventListener('click', function() {
         .then(function(data) {
             btn.disabled = false;
             if (data.success) {
-                result.textContent = 'Success';
+                result.textContent = data.message || 'Success — test email sent';
                 result.className = 'ms-2 small text-success fw-semibold';
             } else {
                 result.textContent = 'Failed: ' + data.error;

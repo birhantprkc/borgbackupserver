@@ -456,10 +456,69 @@ class SettingsController extends Controller
                 }
             }
 
+            // Actually deliver a test message — previously the Test button
+            // only validated connection+auth and never issued MAIL FROM /
+            // RCPT TO / DATA, so a successful "Success" response could be
+            // returned even though end-to-end delivery (DNS, recipient
+            // routing, spam-filter acceptance) was untested (#249 follow-up).
+            $fromAddress = $from ?: $user;
+            $recipient = $this->db->fetchOne(
+                "SELECT email FROM users WHERE id = ? AND email != ''",
+                [$_SESSION['user_id'] ?? 0]
+            );
+            $recipientEmail = $recipient['email'] ?? '';
+            if ($recipientEmail === '' || $fromAddress === '') {
+                $this->smtpCmd($socket, "QUIT");
+                fclose($socket);
+                $this->json(['success' => false, 'error' => 'Cannot send test message — your user account has no email address, or smtp_from / smtp_user is empty.']);
+                return;
+            }
+
+            $resp = $this->smtpCmd($socket, "MAIL FROM:<{$fromAddress}>");
+            if (strpos($resp, '250') !== 0) {
+                fclose($socket);
+                $this->json(['success' => false, 'error' => 'MAIL FROM rejected: ' . trim($resp)]);
+                return;
+            }
+            $resp = $this->smtpCmd($socket, "RCPT TO:<{$recipientEmail}>");
+            if (strpos($resp, '250') !== 0 && strpos($resp, '251') !== 0) {
+                fclose($socket);
+                $this->json(['success' => false, 'error' => 'RCPT TO rejected: ' . trim($resp)]);
+                return;
+            }
+            $resp = $this->smtpCmd($socket, "DATA");
+            if (strpos($resp, '354') !== 0) {
+                fclose($socket);
+                $this->json(['success' => false, 'error' => 'DATA rejected: ' . trim($resp)]);
+                return;
+            }
+            $messageId = bin2hex(random_bytes(8)) . '@' . (gethostname() ?: 'bbs');
+            $dateHeader = date('r');
+            $body = "From: Borg Backup Server <{$fromAddress}>\r\n"
+                  . "To: <{$recipientEmail}>\r\n"
+                  . "Subject: [BBS] SMTP Test\r\n"
+                  . "Date: {$dateHeader}\r\n"
+                  . "Message-ID: <{$messageId}>\r\n"
+                  . "MIME-Version: 1.0\r\n"
+                  . "Content-Type: text/plain; charset=UTF-8\r\n"
+                  . "\r\n"
+                  . "This is a test message from your Borg Backup Server.\r\n\r\n"
+                  . "If you're seeing this in your inbox, SMTP delivery is working end-to-end:\r\n"
+                  . "  - Connection authenticated\r\n"
+                  . "  - DNS routing succeeded\r\n"
+                  . "  - Spam filter accepted the message\r\n\r\n"
+                  . "-- Borg Backup Server\r\n";
+            $resp = $this->smtpCmd($socket, $body . ".");
+            if (strpos($resp, '250') !== 0) {
+                fclose($socket);
+                $this->json(['success' => false, 'error' => 'Server rejected message: ' . trim($resp)]);
+                return;
+            }
+
             $this->smtpCmd($socket, "QUIT");
             fclose($socket);
 
-            $this->json(['success' => true]);
+            $this->json(['success' => true, 'message' => "Test email sent to {$recipientEmail}"]);
         } catch (\Exception $e) {
             $this->json(['success' => false, 'error' => $e->getMessage()]);
         }
