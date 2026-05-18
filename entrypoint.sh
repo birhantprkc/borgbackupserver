@@ -384,10 +384,13 @@ if command -v clickhouse-server &>/dev/null; then
     if [ -f "/var/www/bbs/config/clickhouse-server-override.xml" ]; then
         cp /var/www/bbs/config/clickhouse-server-override.xml /etc/clickhouse-server/config.d/bbs-override.xml
     fi
-    # Self-heal: if a previous run left stderr.log/stdout.log oversized
-    # (clickhouse-server writes its own stderr there in --daemon mode and
-    # certain Poco logger states cause runaway growth — see #79, #252),
-    # truncate them on startup so we never inherit a near-full volume.
+    # Self-heal carried over from #252: containers that previously ran
+    # clickhouse-server in --daemon mode left a /var/log/clickhouse-server/
+    # stderr.log file behind, sometimes multi-GB after Poco logger
+    # rotation got stuck. Newer launches (see below) don't create that
+    # file at all — Docker captures stdout/stderr directly. This truncate
+    # cleans up any leftover from a prior image so a freshly-upgraded
+    # container doesn't carry decades of accumulated noise on the volume.
     for f in /var/log/clickhouse-server/stderr.log /var/log/clickhouse-server/stdout.log; do
         if [ -f "$f" ] && [ "$(stat -c%s "$f" 2>/dev/null || echo 0)" -gt 104857600 ]; then
             echo "  Truncating oversized $(basename "$f") ($(du -h "$f" | cut -f1))"
@@ -401,11 +404,22 @@ if command -v clickhouse-server &>/dev/null; then
     <tmp_path>/var/bbs/clickhouse/tmp/</tmp_path>
 </clickhouse>
 CHXML
-    # Don't swallow stderr — MISMATCHING_USERS_FOR_PROCESS_AND_DATA and
-    # other fatal startup errors go to stderr of the parent process, not
-    # the daemon's log file. Hiding them made #158 invisible to users.
-    TMPDIR=/var/bbs/tmp sudo -u clickhouse clickhouse-server --daemon --config-file=/etc/clickhouse-server/config.xml || \
-        echo "!! ClickHouse failed to start — check stderr above and /var/log/clickhouse-server/*.log"
+    # Launch in the foreground and background it from the entrypoint shell
+    # so stdout/stderr are inherited by Docker's log stream instead of
+    # being redirected by ClickHouse itself into /var/log/clickhouse-server/
+    # stderr.log. The --daemon flag used to redirect its own stderr to a
+    # file, which would grow unbounded when Poco's RotateBySizeStrategy
+    # got into a bad state (#252, #266) — multi-GB stderr.log files were
+    # routine on long-running containers. Bare-metal installs (systemd)
+    # never hit this because they run clickhouse-server in the foreground
+    # under journald; matching that pattern here gives Docker users the
+    # same well-behaved log routing.
+    #
+    # MISMATCHING_USERS_FOR_PROCESS_AND_DATA and other fatal startup
+    # errors still surface — they're now in `docker logs` directly instead
+    # of buried in stderr.log (which was the original concern in #158).
+    TMPDIR=/var/bbs/tmp sudo -u clickhouse clickhouse-server --config-file=/etc/clickhouse-server/config.xml &
+    CH_PID=$!
     for i in {1..30}; do
         curl -sf http://localhost:8123/ping >/dev/null 2>&1 && break
         sleep 1
