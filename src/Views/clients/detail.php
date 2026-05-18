@@ -1468,7 +1468,12 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                         <div class="col-md-6">
                             <textarea class="form-control edit-excludes" name="excludes" rows="3"><?= htmlspecialchars($plan['excludes'] ?? '') ?></textarea>
                         </div>
-                        <div class="col-md-3 form-text pt-2">One pattern per line</div>
+                        <div class="col-md-3 form-text pt-2">
+                            One pattern per line.<br>
+                            <a href="https://borgbackup.readthedocs.io/en/stable/usage/help.html#borg-patterns" target="_blank" rel="noopener" class="text-decoration-none">
+                                <i class="bi bi-box-arrow-up-right me-1"></i>Borg pattern syntax
+                            </a>
+                        </div>
                     </div>
 
                     <div class="row mb-3">
@@ -1793,7 +1798,12 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                     <div class="col-md-6">
                         <textarea class="form-control" name="excludes" id="excludesInput" rows="3" placeholder="*.tmp&#10;*.log&#10;*.cache&#10;/home/*/tmp"></textarea>
                     </div>
-                    <div class="col-md-3 form-text pt-2">One pattern per line. Borg glob patterns.</div>
+                    <div class="col-md-3 form-text pt-2">
+                        One pattern per line.<br>
+                        <a href="https://borgbackup.readthedocs.io/en/stable/usage/help.html#borg-patterns" target="_blank" rel="noopener" class="text-decoration-none">
+                            <i class="bi bi-box-arrow-up-right me-1"></i>Borg pattern syntax
+                        </a>
+                    </div>
                 </div>
 
                 <div class="row mb-3">
