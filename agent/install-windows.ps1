@@ -27,6 +27,47 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# -----------------------------------------------------------------------------
+# OS version gate (#274)
+# -----------------------------------------------------------------------------
+# The agent requires Windows 10 1607 / Server 2016 (build 14393) or newer.
+# Older versions ship with PowerShell defaults, TLS stacks, and Python 3
+# runtime support that this installer and the agent itself do not target.
+# Common failures on older OS versions: TLS handshake errors against the
+# BBS server, missing .NET classes for service installation, Python 3
+# refusing to install or run. Bail out with a clear message rather than
+# letting the user discover incompatibility halfway through a partial
+# install. Affected versions that hit this check: Server 2012 / 2012 R2,
+# Windows 8 / 8.1, Windows 7, Server 2008 R2 — all are out of mainstream
+# Microsoft support and should be upgraded before running the agent.
+$osVersion = [Environment]::OSVersion.Version
+$osBuild   = $osVersion.Build
+$osMajor   = $osVersion.Major
+if ($osMajor -lt 10 -or $osBuild -lt 14393) {
+    $productName = "Unknown Windows version"
+    try {
+        $productName = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -ErrorAction SilentlyContinue).ProductName
+    } catch { }
+
+    Write-Host ""
+    Write-Host "===========================================================================" -ForegroundColor Red
+    Write-Host "  Unsupported Windows version" -ForegroundColor Red
+    Write-Host "===========================================================================" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "  Detected:  $productName (build $osBuild)" -ForegroundColor Yellow
+    Write-Host "  Required:  Windows 10 1607+, Windows 11, Windows Server 2016+, or newer" -ForegroundColor Yellow
+    Write-Host "             (NT kernel 10.0, build 14393 or higher)"
+    Write-Host ""
+    Write-Host "  The BBS agent depends on TLS 1.2 defaults, modern PowerShell"
+    Write-Host "  behaviour, and a Python 3 runtime that older Windows builds do not"
+    Write-Host "  support. Older Server editions (2012, 2012 R2) and client editions"
+    Write-Host "  (7, 8, 8.1) are also out of mainstream Microsoft support."
+    Write-Host ""
+    Write-Host "  Please upgrade the operating system before installing the agent."
+    Write-Host ""
+    exit 1
+}
+
 # Force TLS 1.2+ (PowerShell 5.1 defaults to TLS 1.0 which most servers reject)
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
 
