@@ -3123,7 +3123,14 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
         <div class="tab-pane fade" id="install-windows" role="tabpanel">
             <div class="card border-0 shadow-sm">
                 <div class="card-body">
-                    <?php $winCmd = "powershell -ExecutionPolicy Bypass -Command \"& {iwr -UseBasicParsing '{$appUrl}/api/agent/download?file=install-windows.ps1' -OutFile \$env:TEMP\\bbs-install.ps1; & \$env:TEMP\\bbs-install.ps1 -Server '{$appUrl}' -Key '{$agent['api_key']}'}\""; ?>
+                    <?php
+                    // PowerShell on pre-2016 Windows defaults to TLS 1.0/1.1 — modern BBS
+                    // servers reject those, so `iwr` would fail before our script's OS gate
+                    // even runs. Forcing TLS 1.2 here lets the user reach the friendly
+                    // "unsupported OS" message inside the script (#274) rather than seeing
+                    // an opaque SSL/TLS handshake error from PowerShell.
+                    $winCmd = "powershell -ExecutionPolicy Bypass -Command \"& {[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; iwr -UseBasicParsing '{$appUrl}/api/agent/download?file=install-windows.ps1' -OutFile \$env:TEMP\\bbs-install.ps1; & \$env:TEMP\\bbs-install.ps1 -Server '{$appUrl}' -Key '{$agent['api_key']}'}\"";
+                    ?>
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <p class="mb-0">Run this command in an <strong>Administrator</strong> Command Prompt or PowerShell:</p>
                         <button class="btn btn-sm btn-outline-secondary" type="button"
