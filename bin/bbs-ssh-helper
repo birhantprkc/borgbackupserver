@@ -1401,7 +1401,7 @@ SSHEOF
         # stale as subcommands were added, which made "unknown action" errors
         # (usually an outdated installed helper, #342) very confusing.
         echo "Error: unknown action '${ACTION}'"
-        echo "If the app just called this, the installed helper at /usr/local/bin may be older than the app code — reinstall it from bin/bbs-ssh-helper."
+        echo "This usually means BBS components are out of sync — update to the latest release (Settings -> Update, or restart the Docker container) to bring everything current."
         echo "Available actions:"
         grep -oE '^    [a-z][a-z0-9-]*\)' "$0" | tr -d ' )' | sort | sed 's/^/  /'
         exit 1
