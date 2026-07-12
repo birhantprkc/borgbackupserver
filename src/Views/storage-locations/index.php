@@ -176,6 +176,35 @@ function escapeHtml(value) {
     </div>
 </form>
 
+<!-- Restore from S3 Backup (#342) — recover a server from the daily
+     server backups synced to S3, e.g. onto a fresh install after the
+     original server died. -->
+<div class="card border-0 shadow-sm mt-4">
+    <div class="card-header fw-semibold">
+        <i class="bi bi-cloud-download me-1"></i> Restore from S3 Backup
+    </div>
+    <div class="card-body">
+        <p class="text-muted small mb-3">
+            Recover this server from a server backup stored in S3 — for example onto a fresh install
+            after the original server was lost. Save the same S3 credentials the previous server used
+            (above), then list the available backups. Restoring replaces this server's
+            <strong>database, configuration, and SSH keys</strong>; repository data is not included and
+            is recovered separately (repos restore from S3 per repository, or can be imported from disk).
+        </p>
+        <button type="button" class="btn btn-sm btn-outline-primary" id="btnListS3Backups">
+            <i class="bi bi-search me-1"></i> List Available Backups
+        </button>
+        <div id="s3BackupListError" class="alert alert-danger d-none mt-3"></div>
+        <div id="s3BackupList" class="mt-3" style="display:none;"></div>
+        <div id="s3RestoreProgress" class="alert alert-warning mt-3" style="display:none;">
+            <span class="spinner-border spinner-border-sm me-2"></span>
+            <strong>Restoring…</strong> Downloading the backup and restoring the database. This can take
+            several minutes — do not close this page.
+        </div>
+        <div id="s3RestoreResult" class="mt-3" style="display:none;"></div>
+    </div>
+</div>
+
 <script>
 // KMS key field visibility
 document.getElementById('s3SseMode')?.addEventListener('change', function() {
@@ -210,6 +239,159 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
         result.className = 'd-flex align-items-center ms-2 small text-danger fw-semibold';
     });
 });
+
+// --- Restore from S3 Backup (#342) -----------------------------------
+(function () {
+    var listBtn = document.getElementById('btnListS3Backups');
+    if (!listBtn) return;
+    var listDiv = document.getElementById('s3BackupList');
+    var errDiv = document.getElementById('s3BackupListError');
+    var progress = document.getElementById('s3RestoreProgress');
+    var resultDiv = document.getElementById('s3RestoreResult');
+    var csrf = function () { return document.querySelector('input[name=csrf_token]').value; };
+
+    function fmtBytes(b) {
+        var units = ['B', 'KB', 'MB', 'GB'];
+        var i = 0; b = Number(b) || 0;
+        while (b >= 1024 && i < units.length - 1) { b /= 1024; i++; }
+        return (Math.round(b * 10) / 10) + ' ' + units[i];
+    }
+
+    listBtn.addEventListener('click', function () {
+        errDiv.classList.add('d-none');
+        listBtn.disabled = true;
+        listBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Listing...';
+        fetch('/storage-locations/s3/list-backups', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'csrf_token=' + encodeURIComponent(csrf()),
+            credentials: 'same-origin'
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            listBtn.disabled = false;
+            listBtn.innerHTML = '<i class="bi bi-search me-1"></i> List Available Backups';
+            if (!data.success) {
+                errDiv.textContent = data.error || 'Failed to list backups.';
+                errDiv.classList.remove('d-none');
+                return;
+            }
+            renderList(data.backups || []);
+        })
+        .catch(function () {
+            listBtn.disabled = false;
+            listBtn.innerHTML = '<i class="bi bi-search me-1"></i> List Available Backups';
+            errDiv.textContent = 'Request failed.';
+            errDiv.classList.remove('d-none');
+        });
+    });
+
+    function renderList(backups) {
+        listDiv.innerHTML = '';
+        listDiv.style.display = '';
+        if (!backups.length) {
+            var p = document.createElement('div');
+            p.className = 'alert alert-secondary small mb-0';
+            p.textContent = 'No server backups found in the _server-backups folder of this bucket.';
+            listDiv.appendChild(p);
+            return;
+        }
+        var wrap = document.createElement('div');
+        wrap.className = 'table-responsive';
+        var table = document.createElement('table');
+        table.className = 'table table-sm table-hover align-middle mb-0';
+        table.innerHTML = '<thead><tr><th>Backup</th><th>Size</th><th>Date</th><th></th></tr></thead>';
+        var tbody = document.createElement('tbody');
+        backups.forEach(function (b) {
+            var tr = document.createElement('tr');
+            var tdName = document.createElement('td');
+            tdName.className = 'font-monospace small';
+            tdName.textContent = b.filename;
+            tr.appendChild(tdName);
+            var tdSize = document.createElement('td');
+            tdSize.className = 'text-nowrap';
+            tdSize.textContent = fmtBytes(b.size);
+            tr.appendChild(tdSize);
+            var tdDate = document.createElement('td');
+            tdDate.className = 'text-nowrap small';
+            tdDate.textContent = (b.modified || '').replace('T', ' ').substring(0, 19);
+            tr.appendChild(tdDate);
+            var tdBtn = document.createElement('td');
+            tdBtn.className = 'text-end';
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn btn-sm btn-danger';
+            btn.innerHTML = '<i class="bi bi-cloud-download me-1"></i>Restore';
+            btn.addEventListener('click', function () { startRestore(b.filename); });
+            tdBtn.appendChild(btn);
+            tr.appendChild(tdBtn);
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        wrap.appendChild(table);
+        listDiv.appendChild(wrap);
+    }
+
+    function startRestore(filename) {
+        if (!confirm('Restore this server from "' + filename + '"?\n\n'
+            + 'This REPLACES the current database, configuration, and SSH keys with the backup\'s contents. '
+            + 'All current settings, clients, and users on THIS server are overwritten.\n\n'
+            + 'Your session will end and a NEW admin password will be generated and shown ONCE.')) {
+            return;
+        }
+        listDiv.style.display = 'none';
+        errDiv.classList.add('d-none');
+        resultDiv.style.display = 'none';
+        progress.style.display = '';
+        fetch('/storage-locations/s3/restore-backup', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'csrf_token=' + encodeURIComponent(csrf()) + '&filename=' + encodeURIComponent(filename),
+            credentials: 'same-origin'
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            progress.style.display = 'none';
+            resultDiv.style.display = '';
+            if (data.success) {
+                resultDiv.innerHTML = '';
+                var box = document.createElement('div');
+                box.className = 'alert alert-success mb-0';
+                box.innerHTML = '<h6 class="alert-heading"><i class="bi bi-check-circle me-1"></i>Restore complete</h6>'
+                    + '<p class="mb-2">The server was restored and is now in <strong>maintenance mode</strong>. '
+                    + 'A new admin password was generated — <strong>save it now, it is shown only once</strong>:</p>';
+                var creds = document.createElement('div');
+                creds.className = 'p-2 bg-body-secondary rounded font-monospace';
+                creds.textContent = 'Username: ' + (data.username || 'admin') + '   Password: ' + (data.password || '');
+                box.appendChild(creds);
+                var foot = document.createElement('p');
+                foot.className = 'mb-0 mt-2 small';
+                foot.textContent = 'Log in with these credentials, review Storage and Clients, restore repositories from S3 as needed, then turn off maintenance mode in Settings.';
+                box.appendChild(foot);
+                resultDiv.appendChild(box);
+            } else {
+                var err = document.createElement('div');
+                err.className = 'alert alert-danger mb-0';
+                err.textContent = 'Restore failed: ' + (data.error || 'unknown error');
+                if (data.output) {
+                    var pre = document.createElement('pre');
+                    pre.className = 'small mt-2 mb-0';
+                    pre.style.whiteSpace = 'pre-wrap';
+                    pre.textContent = data.output;
+                    err.appendChild(pre);
+                }
+                resultDiv.innerHTML = '';
+                resultDiv.appendChild(err);
+            }
+        })
+        .catch(function () {
+            progress.style.display = 'none';
+            resultDiv.style.display = '';
+            resultDiv.innerHTML = '<div class="alert alert-danger mb-0">Restore request failed — the connection may have dropped. '
+                + 'Check the server log; if the restore completed, the new admin password is in the restore output on the server.</div>';
+        });
+    }
+})();
 </script>
 
 <?php elseif ($section === 'wizard'): ?>
