@@ -392,6 +392,34 @@ def set_borg_source(source):
         logger.warning("Failed to save borg source: {}".format(e))
 
 
+def get_primary_mac():
+    """Best-effort MAC address of the primary network interface — the
+    server uses it to prefill the client's Wake-on-LAN MAC field.
+    Linux: interface of the default route. Elsewhere (and as fallback):
+    uuid.getnode(), skipped when it returns a random node rather than a
+    real hardware address (multicast bit set)."""
+    try:
+        if not IS_WINDOWS and platform.system().lower() == "linux":
+            with open("/proc/net/route") as f:
+                for line in f.readlines()[1:]:
+                    parts = line.split()
+                    if len(parts) > 1 and parts[1] == "00000000":  # default route
+                        with open("/sys/class/net/{}/address".format(parts[0])) as af:
+                            mac = af.read().strip().lower()
+                        if mac and mac != "00:00:00:00:00:00":
+                            return mac
+    except Exception:
+        pass
+    try:
+        import uuid
+        node = uuid.getnode()
+        if not (node >> 40) & 0x01:  # multicast bit set = randomly generated
+            return ":".join("{:02x}".format((node >> i) & 0xFF) for i in range(40, -8, -8))
+    except Exception:
+        pass
+    return None
+
+
 def get_system_info():
     """Gather system information for registration."""
     info = {
@@ -418,6 +446,7 @@ def get_system_info():
 
     # Platform and architecture info (for borg binary matching)
     info["platform"] = platform.system().lower()  # linux, darwin, freebsd, windows
+    info["mac_address"] = get_primary_mac()
     arch = platform.machine()
     if arch in ("aarch64", "arm64"):
         info["architecture"] = "arm64"

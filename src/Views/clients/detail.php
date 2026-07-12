@@ -200,6 +200,39 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                             <label class="form-label fw-semibold small">SSH Port Override</label>
                             <input type="number" class="form-control form-control-sm" name="ssh_port_override" value="<?= htmlspecialchars($agent['ssh_port_override'] ?? '') ?>" placeholder="e.g. 22222" min="1" max="65535">
                         </div>
+                        <hr class="my-3">
+                        <div class="form-check mb-2">
+                            <input type="hidden" name="wol_enabled" value="0">
+                            <input class="form-check-input" type="checkbox" name="wol_enabled" id="wolEnabled" value="1" <?= !empty($agent['wol_enabled']) ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-semibold small" for="wolEnabled">Wake-on-LAN</label>
+                            <div class="form-text">Wake this client with a magic packet when a backup is due. Only works when the BBS server is on the same network as the client.</div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label fw-semibold small">MAC Address</label>
+                            <input type="text" class="form-control form-control-sm" name="wol_mac"
+                                   value="<?= htmlspecialchars($agent['wol_mac'] ?: ($agent['mac_address'] ?? '')) ?>"
+                                   placeholder="aa:bb:cc:dd:ee:ff" pattern="[0-9a-fA-F:.\-]{12,17}">
+                            <?php if (empty($agent['wol_mac']) && !empty($agent['mac_address'])): ?>
+                            <div class="form-text">Detected from the agent.</div>
+                            <?php elseif (empty($agent['wol_mac']) && empty($agent['mac_address'])): ?>
+                            <div class="form-text">Auto-fills once the agent checks in while awake, or enter it manually.</div>
+                            <?php endif; ?>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-7">
+                                <label class="form-label fw-semibold small">Broadcast Address</label>
+                                <input type="text" class="form-control form-control-sm" name="wol_broadcast"
+                                       value="<?= htmlspecialchars($agent['wol_broadcast'] ?? '') ?>"
+                                       placeholder="<?= htmlspecialchars(\BBS\Services\WakeOnLanService::defaultBroadcast($agent['ip_address'] ?? null) ?? 'e.g. 192.168.1.255') ?>">
+                            </div>
+                            <div class="col-5">
+                                <label class="form-label fw-semibold small">Wake Timeout</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" class="form-control" name="wol_timeout_minutes" value="<?= (int) ($agent['wol_timeout_minutes'] ?? 5) ?>" min="1" max="60">
+                                    <span class="input-group-text">min</span>
+                                </div>
+                            </div>
+                        </div>
                         <?php endif; ?>
                     </div>
                     <div class="modal-footer">

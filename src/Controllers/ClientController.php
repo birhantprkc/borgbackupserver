@@ -1682,6 +1682,23 @@ class ClientController extends Controller
             $port = trim($_POST['ssh_port_override']);
             $data['ssh_port_override'] = ($port !== '' && (int) $port > 0 && (int) $port <= 65535) ? (int) $port : null;
         }
+        if ($this->isAdmin() && array_key_exists('wol_enabled', $_POST)) {
+            $data['wol_enabled'] = !empty($_POST['wol_enabled']) ? 1 : 0;
+
+            $mac = \BBS\Services\WakeOnLanService::normalizeMac(trim($_POST['wol_mac'] ?? ''));
+            $data['wol_mac'] = $mac;
+            if ($data['wol_enabled'] && $mac === null && trim($_POST['wol_mac'] ?? '') !== '') {
+                $this->flash('danger', 'Invalid MAC address — use the form aa:bb:cc:dd:ee:ff.');
+                $this->redirect("/clients/{$id}");
+                return;
+            }
+
+            $broadcast = trim($_POST['wol_broadcast'] ?? '');
+            $data['wol_broadcast'] = ($broadcast !== '' && filter_var($broadcast, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) ? $broadcast : null;
+
+            $timeout = (int) ($_POST['wol_timeout_minutes'] ?? 5);
+            $data['wol_timeout_minutes'] = min(60, max(1, $timeout));
+        }
 
         if (!empty($data)) {
             $this->db->update('agents', $data, 'id = ?', [$id]);

@@ -230,6 +230,83 @@ foreach ($zombieJobs as $zj) {
     echo date('Y-m-d H:i:s') . " Auto-failed: job #{$zj['id']} ({$zj['task_type']}) — running >24h on online agent \"{$zj['agent_name']}\"\n";
 }
 
+// Step 2b-wol: Wake-on-LAN — queued backup work for sleeping clients (#326).
+// SchedulerService queues due backups for offline agents when WoL is enabled
+// (instead of marking the schedule missed). This step sends a magic packet
+// burst every minute until the agent's heartbeat brings it online (the job
+// then dispatches normally) or the per-client timeout expires, at which
+// point the job fails with a clear error. Only works when the BBS server
+// is on the same network as the client.
+$wolJobs = $db->fetchAll("
+    SELECT bj.id, bj.queued_at, bj.status_message, bj.backup_plan_id,
+           a.id AS agent_id, a.name AS agent_name, a.ip_address,
+           a.wol_mac, a.mac_address, a.wol_broadcast, a.wol_timeout_minutes
+    FROM backup_jobs bj
+    JOIN agents a ON a.id = bj.agent_id
+    WHERE bj.status = 'queued' AND bj.task_type = 'backup'
+      AND a.wol_enabled = 1 AND a.status = 'offline'
+");
+foreach ($wolJobs as $wj) {
+    $wolFail = function (string $error) use ($db, $wj, &$notificationService) {
+        $db->update('backup_jobs', [
+            'status' => 'failed',
+            'completed_at' => date('Y-m-d H:i:s'),
+            'error_log' => $error,
+        ], 'id = ?', [$wj['id']]);
+        $db->insert('server_log', [
+            'agent_id' => $wj['agent_id'],
+            'backup_job_id' => $wj['id'],
+            'level' => 'error',
+            'message' => "Job #{$wj['id']} failed — {$error} (client \"{$wj['agent_name']}\")",
+        ]);
+        $notificationService = $notificationService ?? new NotificationService();
+        $notificationService->notify(
+            'backup_failed',
+            $wj['agent_id'],
+            $wj['backup_plan_id'] ? (int) $wj['backup_plan_id'] : null,
+            "Backup failed on client \"{$wj['agent_name']}\" — {$error}",
+            'critical'
+        );
+        echo date('Y-m-d H:i:s') . " Failed: job #{$wj['id']} — {$error}\n";
+    };
+
+    $mac = $wj['wol_mac'] ?: $wj['mac_address'];
+    if (empty($mac)) {
+        $wolFail('Wake-on-LAN is enabled but no MAC address is configured for this client');
+        continue;
+    }
+
+    $timeoutSecs = max(1, (int) $wj['wol_timeout_minutes']) * 60;
+    $elapsed = time() - strtotime($wj['queued_at']);
+    if ($elapsed > $timeoutSecs) {
+        $wolFail("Client did not wake within {$wj['wol_timeout_minutes']} minute(s) after Wake-on-LAN");
+        continue;
+    }
+
+    $broadcast = $wj['wol_broadcast']
+        ?: \BBS\Services\WakeOnLanService::defaultBroadcast($wj['ip_address'])
+        ?: '255.255.255.255';
+    $sent = \BBS\Services\WakeOnLanService::send($mac, $broadcast);
+
+    $remaining = (int) ceil(($timeoutSecs - $elapsed) / 60);
+    $db->update('backup_jobs', [
+        'status_message' => $sent
+            ? "Wake-on-LAN sent — waiting for client to wake ({$remaining}m left)"
+            : "Wake-on-LAN send failed — retrying ({$remaining}m left)",
+    ], 'id = ?', [$wj['id']]);
+
+    if (empty($wj['status_message'])) {
+        // First attempt for this job — log once, not every minute
+        $db->insert('server_log', [
+            'agent_id' => $wj['agent_id'],
+            'backup_job_id' => $wj['id'],
+            'level' => 'info',
+            'message' => "Wake-on-LAN magic packet sent to {$mac} via {$broadcast} for client \"{$wj['agent_name']}\"",
+        ]);
+    }
+    echo date('Y-m-d H:i:s') . " WoL: magic packet " . ($sent ? 'sent' : 'send FAILED') . " to {$mac} via {$broadcast} (job #{$wj['id']}, {$remaining}m left)\n";
+}
+
 // Step 2c: Fail stale management tasks (update_borg, update_agent) after 7 days
 // unpicked. These are excluded from Step 2 so they don't fail the moment the
 // client's laptop goes to sleep, but we still need a safety valve — if an agent

@@ -40,7 +40,8 @@ class SchedulerService
               AND s.next_run IS NOT NULL
               AND s.next_run <= ?
               AND bp.enabled = 1
-              AND a.status IN ('online', 'setup')
+              AND (a.status IN ('online', 'setup')
+                   OR (a.status = 'offline' AND a.wol_enabled = 1))
         ", [$now]);
 
         $created = [];
@@ -111,6 +112,7 @@ class SchedulerService
               AND s.next_run <= ?
               AND bp.enabled = 1
               AND a.status = 'offline'
+              AND a.wol_enabled = 0
         ", [$now]);
 
         foreach ($overdueSchedules as $sched) {
