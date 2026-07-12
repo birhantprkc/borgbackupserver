@@ -269,10 +269,23 @@
                         <td class="text-nowrap"><?= jobTypeIcon($job['task_type']) ?><?= htmlspecialchars(ucfirst(str_replace('_', ' ', $job['task_type']))) ?></td>
                         <td class="d-none d-md-table-cell"><?= number_format($job['files_total'] ?? 0) ?></td>
                         <td>
+                            <?php
+                            // Percent from file counts when the total is known
+                            // (backups pre-count; restores get it from the
+                            // catalog at queue time), else from byte totals
+                            // (borg extract reports byte offsets). Clamped —
+                            // extract's item counter includes directories, so
+                            // it can slightly overshoot a file-only total.
+                            $pct = null;
+                            if (($job['files_total'] ?? 0) > 0) {
+                                $pct = min(100, round(($job['files_processed'] / $job['files_total']) * 100));
+                            } elseif (($job['bytes_total'] ?? 0) > 0 && ($job['bytes_processed'] ?? 0) > 0) {
+                                $pct = min(100, round(($job['bytes_processed'] / $job['bytes_total']) * 100));
+                            }
+                            ?>
                             <?php if ($job['status'] === 'queued'): ?>
                                 <span class="text-muted">Waiting</span>
-                            <?php elseif (($job['files_total'] ?? 0) > 0): ?>
-                                <?php $pct = round(($job['files_processed'] / $job['files_total']) * 100); ?>
+                            <?php elseif ($pct !== null): ?>
                                 <div class="progress queue-progress" style="height: 18px; min-width: 80px;">
                                     <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width: <?= $pct ?>%">
                                         <?= $pct ?>%
@@ -455,10 +468,17 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootst
 
     function buildInProgressRow(job) {
         let progress;
+        // Same fallback chain as the PHP render: file counts, then byte
+        // totals (restores without a catalog count), clamped at 100.
+        let pct = null;
+        if ((job.files_total || 0) > 0) {
+            pct = Math.min(100, Math.round((job.files_processed / job.files_total) * 100));
+        } else if ((job.bytes_total || 0) > 0 && (job.bytes_processed || 0) > 0) {
+            pct = Math.min(100, Math.round((job.bytes_processed / job.bytes_total) * 100));
+        }
         if (job.status === 'queued') {
             progress = '<span class="text-muted">Waiting</span>';
-        } else if ((job.files_total || 0) > 0) {
-            const pct = Math.round((job.files_processed / job.files_total) * 100);
+        } else if (pct !== null) {
             progress = '<div class="progress queue-progress" style="height:18px;min-width:80px;">' +
                 '<div class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width:' + pct + '%">' + pct + '%</div></div>';
         } else if (job.status_message) {

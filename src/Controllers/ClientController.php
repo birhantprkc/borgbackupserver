@@ -901,6 +901,56 @@ class ClientController extends Controller
         }
 
 
+        // Resolve the expected file count up front so the queue's existing
+        // files-based progress bar works for restores — the agent counts
+        // each extracted file from `borg extract --list` but can't know the
+        // total itself. Full archive: the stored count. Selected paths:
+        // count matching catalog rows. Left NULL when the catalog can't
+        // answer (progress falls back to byte totals).
+        $filesTotal = null;
+        if (empty($selectedFiles)) {
+            $filesTotal = (int) ($archive['file_count'] ?? 0) ?: null;
+        } else {
+            try {
+                $ch = \BBS\Core\ClickHouse::getInstance();
+                if ($ch->isAvailable()) {
+                    // Catalog paths always carry a leading slash (the indexer
+                    // prepends one); selections from the UI may or may not —
+                    // normalize so the prefix match works either way. Then
+                    // drop selections nested inside another selection so
+                    // overlapping prefixes aren't counted twice.
+                    $paths = array_values(array_filter(array_map(
+                        fn($p) => '/' . trim((string) $p, '/'),
+                        $selectedFiles
+                    ), fn($p) => $p !== '/'));
+                    $roots = array_filter($paths, function ($p) use ($paths) {
+                        foreach ($paths as $other) {
+                            if ($other !== $p && str_starts_with($p, $other . '/')) return false;
+                        }
+                        return true;
+                    });
+
+                    $conds = [];
+                    $params = [$id, $archive_id];
+                    foreach ($roots as $p) {
+                        $conds[] = '(path = ? OR startsWith(path, ?))';
+                        $params[] = $p;
+                        $params[] = $p . '/';
+                    }
+                    if ($conds) {
+                        $row = $ch->fetchOne(
+                            "SELECT count() AS cnt FROM file_catalog
+                             WHERE agent_id = ? AND archive_id = ? AND (" . implode(' OR ', $conds) . ")",
+                            $params
+                        );
+                        $filesTotal = (int) ($row['cnt'] ?? 0) ?: null;
+                    }
+                }
+            } catch (\Exception $e) {
+                // Catalog unavailable — byte-based progress still applies
+            }
+        }
+
         // Create restore job
         $jobId = $this->db->insert('backup_jobs', [
             'agent_id' => $id,
@@ -912,6 +962,7 @@ class ClientController extends Controller
             'restore_archive_id' => $archive_id,
             'restore_paths' => json_encode($selectedFiles),
             'restore_destination' => $destination ?: null,
+            'files_total' => $filesTotal,
         ]);
 
         $this->db->insert('server_log', [

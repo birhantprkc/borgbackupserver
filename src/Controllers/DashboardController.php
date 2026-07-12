@@ -320,6 +320,7 @@ class DashboardController extends Controller
 
         $activeJobs = $this->db->fetchAll("
             SELECT bj.id, bj.task_type, bj.status, bj.files_total, bj.files_processed,
+                   bj.bytes_total, bj.bytes_processed,
                    a.name as agent_name, r.name as repo_name
             FROM backup_jobs bj
             JOIN agents a ON a.id = bj.agent_id
@@ -350,9 +351,15 @@ class DashboardController extends Controller
             'queuedJobs'  => $queuedJobs,
             'errorCount'  => $errorCount,
             'activeJobs'  => array_map(static function ($j) {
-                $pct = ((int) ($j['files_total'] ?? 0)) > 0
-                    ? (int) round(((int) $j['files_processed'] / (int) $j['files_total']) * 100)
-                    : null;
+                // File counts when the total is known (backups pre-count;
+                // restores get it from the catalog at queue time), else byte
+                // totals from borg extract's progress stream. Clamped at 100.
+                $pct = null;
+                if (((int) ($j['files_total'] ?? 0)) > 0) {
+                    $pct = min(100, (int) round(((int) $j['files_processed'] / (int) $j['files_total']) * 100));
+                } elseif (((int) ($j['bytes_total'] ?? 0)) > 0 && ((int) ($j['bytes_processed'] ?? 0)) > 0) {
+                    $pct = min(100, (int) round(((int) $j['bytes_processed'] / (int) $j['bytes_total']) * 100));
+                }
                 return [
                     'id'          => (int) $j['id'],
                     'agent_name'  => $j['agent_name'],
