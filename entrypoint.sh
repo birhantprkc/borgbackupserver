@@ -651,6 +651,22 @@ if [ "$BORG_COUNT" -eq 0 ]; then
     " 2>/dev/null || echo "Warning: Could not sync borg versions"
 fi
 
+# --- Keep the installed SSH helper in sync with the app code ---
+# The image installs /usr/local/bin/bbs-ssh-helper at build time, but when
+# the code in /var/www/bbs advances past the image (dev sync, mounted code),
+# new PHP ends up calling helper subcommands the installed copy doesn't
+# have ("Usage: bbs-ssh-helper {...}" errors, #342). Refresh on every start.
+if ! cmp -s /var/www/bbs/bin/bbs-ssh-helper /usr/local/bin/bbs-ssh-helper; then
+    echo "Updating bbs-ssh-helper from app code..."
+    cp /var/www/bbs/bin/bbs-ssh-helper /usr/local/bin/bbs-ssh-helper
+    chmod 755 /usr/local/bin/bbs-ssh-helper
+fi
+if ! cmp -s /var/www/bbs/bin/bbs-ssh-gate /usr/local/bin/bbs-ssh-gate; then
+    echo "Updating bbs-ssh-gate from app code..."
+    cp /var/www/bbs/bin/bbs-ssh-gate /usr/local/bin/bbs-ssh-gate
+    chmod 755 /usr/local/bin/bbs-ssh-gate
+fi
+
 # --- Regenerate allowed-storage-paths from database ---
 # This file lives in the container filesystem and is lost on recreation.
 # bbs-ssh-helper uses it to validate repo paths outside /var/bbs/.

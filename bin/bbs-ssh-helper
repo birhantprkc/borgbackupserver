@@ -1397,7 +1397,13 @@ SSHEOF
         ;;
 
     *)
-        echo "Usage: bbs-ssh-helper {create-user|create-repo-dir|borg-init|verify-repo|borg-extract|fix-repo-perms|fix-download-perms|delete-user|install-gate|update-all-keys|rclone-sync|rclone-restore|get-size|delete-storage|clear-borg-cache|update-storage-paths|update-allowed-paths} [args...]"
+        # Self-maintaining action list — the old hardcoded usage string went
+        # stale as subcommands were added, which made "unknown action" errors
+        # (usually an outdated installed helper, #342) very confusing.
+        echo "Error: unknown action '${ACTION}'"
+        echo "If the app just called this, the installed helper at /usr/local/bin may be older than the app code — reinstall it from bin/bbs-ssh-helper."
+        echo "Available actions:"
+        grep -oE '^    [a-z][a-z0-9-]*\)' "$0" | tr -d ' )' | sort | sed 's/^/  /'
         exit 1
         ;;
 esac
