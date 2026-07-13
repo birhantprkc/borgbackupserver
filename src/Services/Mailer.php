@@ -168,6 +168,7 @@ class Mailer
             'catalog_rebuild'      => 'Catalog Rebuild',
             'catalog_rebuild_full' => 'Catalog Rebuild',
             'archive_delete'       => 'Archive Delete',
+            'archive_lock'         => 'Archive Lock',
         ];
         return $labels[$taskType] ?? ucfirst(str_replace('_', ' ', $taskType));
     }

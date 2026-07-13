@@ -105,7 +105,7 @@ $staleJobs = $db->fetchAll("
     JOIN agents a ON a.id = bj.agent_id
     WHERE bj.status IN ('sent', 'running')
       AND a.status = 'offline'
-      AND bj.task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full', 'archive_delete', 'update_borg', 'update_agent')
+      AND bj.task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full', 'archive_delete', 'archive_lock', 'update_borg', 'update_agent')
 ");
 
 // Auto-retry settings (#249). Only kicks in for offline-induced backup
@@ -195,7 +195,7 @@ $zombieJobs = $db->fetchAll("
     JOIN agents a ON a.id = bj.agent_id
     WHERE bj.status IN ('running', 'sent')
       AND a.status = 'online'
-      AND bj.task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full', 'archive_delete')
+      AND bj.task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full', 'archive_delete', 'archive_lock')
       AND bj.queued_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)
       AND (bj.last_progress_at IS NULL OR bj.last_progress_at < DATE_SUB(NOW(), INTERVAL 60 MINUTE))
 ");
@@ -1685,6 +1685,27 @@ foreach ($serverJobs as $sj) {
             continue;
         }
         $borgArgs = ['delete', $repoPath . '::' . $archiveName];
+    } elseif ($sj['task_type'] === 'archive_lock') {
+        // Lock/unlock rename queued because the repo was busy when the user
+        // clicked (#314). Direction derives from the current flag: this job
+        // type only ever toggles, and duplicates are prevented at queue time.
+        $lockArchive = $db->fetchOne(
+            "SELECT * FROM archives WHERE id = ? AND repository_id = ?",
+            [$sj['restore_archive_id'], $sj['repository_id']]
+        );
+        if (!$lockArchive) {
+            $db->update('backup_jobs', [
+                'status' => 'failed',
+                'completed_at' => date('Y-m-d H:i:s'),
+                'error_log' => 'Archive no longer exists',
+            ], 'id = ?', [$sj['id']]);
+            continue;
+        }
+        $lockToLocked = empty($lockArchive['locked']);
+        $lockNewName = $lockToLocked
+            ? 'locked.' . $lockArchive['archive_name']
+            : preg_replace('/^locked\./', '', $lockArchive['archive_name']);
+        $borgArgs = ['rename', $repoPath . '::' . $lockArchive['archive_name'], $lockNewName];
     } else {
         // Unknown task type
         $db->update('backup_jobs', [
@@ -1958,6 +1979,23 @@ foreach ($serverJobs as $sj) {
     // After successful compact, repo shrank — refresh size.
     if ($result === 'completed' && $sj['task_type'] === 'compact') {
         \BBS\Services\RepositorySizeService::refresh((int) $sj['repository_id']);
+    }
+
+    // After successful archive_lock rename, flip the flag and stored name
+    if ($result === 'completed' && $sj['task_type'] === 'archive_lock' && !empty($lockArchive)) {
+        $db->update('archives', [
+            'archive_name' => $lockNewName,
+            'locked' => $lockToLocked ? 1 : 0,
+        ], 'id = ?', [$lockArchive['id']]);
+        $db->insert('server_log', [
+            'agent_id' => $sj['agent_id'],
+            'backup_job_id' => $sj['id'],
+            'level' => 'info',
+            'message' => $lockToLocked
+                ? "Archive \"{$lockArchive['archive_name']}\" locked (renamed to \"{$lockNewName}\") — excluded from pruning"
+                : "Archive \"{$lockArchive['archive_name']}\" unlocked (renamed to \"{$lockNewName}\") — normal retention applies",
+        ]);
+        $lockArchive = null;
     }
 
     // After successful archive_delete, remove the archive from the database

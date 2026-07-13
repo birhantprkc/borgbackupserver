@@ -945,13 +945,51 @@ class RepositoryController extends Controller
             return;
         }
 
+        // When the repo is busy (backup, prune, …) don't make the user wait or
+        // retry: queue the rename as a server-side job — the scheduler applies
+        // it as soon as the current job finishes (jobs on a repo serialize).
+        $queueLock = function () use ($agentId, $id, $archiveId, $archive, $locking) {
+            $existing = $this->db->fetchOne(
+                "SELECT id FROM backup_jobs
+                 WHERE repository_id = ? AND task_type = 'archive_lock'
+                   AND restore_archive_id = ? AND status IN ('queued', 'sent', 'running')
+                 LIMIT 1",
+                [$id, $archiveId]
+            );
+            if ($existing) {
+                $this->flash('info', 'A lock/unlock task for this archive is already queued.');
+                return;
+            }
+            $this->db->insert('backup_jobs', [
+                'agent_id' => $agentId,
+                'repository_id' => $id,
+                'task_type' => 'archive_lock',
+                'status' => 'queued',
+                'restore_archive_id' => $archiveId,
+                'status_message' => $archive['archive_name'],
+            ]);
+            $this->flash('success', ($locking ? 'Lock' : 'Unlock')
+                . ' queued — the repository is busy right now, so it will apply automatically as soon as the current job finishes.');
+        };
+
+        $activeJob = $this->db->fetchOne(
+            "SELECT id FROM backup_jobs WHERE repository_id = ? AND status IN ('queued', 'sent', 'running') LIMIT 1",
+            [$id]
+        );
+        if ($activeJob) {
+            $queueLock();
+            $this->redirect("/clients/{$agentId}/repo/{$id}");
+            return;
+        }
+
         $passphrase = '';
         if (!empty($repo['passphrase_encrypted'])) {
             $passphrase = Encryption::decrypt($repo['passphrase_encrypted']);
         }
 
-        // Rename inside borg. Fast metadata operation, but it takes the repo
-        // lock — a short lock-wait fails cleanly when a backup is running.
+        // Repo looks idle — rename immediately for instant feedback. It's a
+        // fast metadata operation, but it takes the repo lock; a short
+        // lock-wait catches the race where a job started since the check.
         if (($repo['storage_type'] ?? 'local') === 'remote_ssh') {
             $remoteSshService = new RemoteSshService();
             $config = $remoteSshService->getDecrypted((int) $repo['remote_ssh_config_id']);
@@ -1000,10 +1038,13 @@ class RepositoryController extends Controller
         }
 
         if (!$ok) {
-            $busy = stripos($errOut, 'lock') !== false;
-            $this->flash('danger', $busy
-                ? 'Repository is busy (a job is running) — try again in a moment.'
-                : 'Failed to ' . ($locking ? 'lock' : 'unlock') . ' archive: ' . substr($errOut, 0, 300));
+            if (stripos($errOut, 'lock') !== false) {
+                // A job grabbed the repo between our check and the rename —
+                // fall back to queueing so the user still doesn't have to wait
+                $queueLock();
+            } else {
+                $this->flash('danger', 'Failed to ' . ($locking ? 'lock' : 'unlock') . ' archive: ' . substr($errOut, 0, 300));
+            }
             $this->redirect("/clients/{$agentId}/repo/{$id}");
             return;
         }

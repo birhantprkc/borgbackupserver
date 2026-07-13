@@ -195,7 +195,7 @@ class AgentApiController extends Controller
             SELECT bj.id FROM backup_jobs bj
             WHERE bj.agent_id = ?
               AND bj.status IN ('running', 'sent')
-              AND bj.task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full', 'archive_delete')
+              AND bj.task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full', 'archive_delete', 'archive_lock')
               {$excludeClause}
               AND (
                   (bj.last_progress_at IS NOT NULL AND bj.last_progress_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE))
@@ -1001,7 +1001,7 @@ class AgentApiController extends Controller
             SELECT bj.id FROM backup_jobs bj
             WHERE bj.agent_id = ?
               AND bj.status = 'running'
-              AND bj.task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full', 'archive_delete')
+              AND bj.task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full', 'archive_delete', 'archive_lock')
               AND (
                   (bj.last_progress_at IS NOT NULL AND bj.last_progress_at < DATE_SUB(NOW(), INTERVAL {$stallMinutes} MINUTE))
                   OR
@@ -1017,7 +1017,7 @@ class AgentApiController extends Controller
         $cancelledJob = $this->db->fetchOne("
             SELECT id FROM backup_jobs
             WHERE agent_id = ? AND status = 'cancelled'
-              AND task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full', 'archive_delete')
+              AND task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full', 'archive_delete', 'archive_lock')
               AND completed_at IS NULL
             LIMIT 1
         ", [$agent['id']]);
