@@ -301,6 +301,15 @@ class RepositoryController extends Controller
 
         $agentId = $repo['agent_id'];
 
+        // Block if any archive in the repo is locked (legal hold, #314)
+        $lockedCount = $this->db->fetchOne(
+            "SELECT COUNT(*) as cnt FROM archives WHERE repository_id = ? AND locked = 1", [$id]
+        );
+        if ((int) ($lockedCount['cnt'] ?? 0) > 0) {
+            $this->flash('danger', 'Cannot delete repository — it contains locked archives. Unlock them first.');
+            $this->redirect("/clients/{$agentId}/repo/{$id}");
+        }
+
         // Block if backup plans reference this repo
         $planCount = $this->db->fetchOne(
             "SELECT COUNT(*) as cnt FROM backup_plans WHERE repository_id = ?", [$id]
@@ -897,6 +906,127 @@ class RepositoryController extends Controller
         }
     }
 
+    /**
+     * Lock or unlock an archive (legal hold, #314). Locking renames the
+     * archive with the "locked." prefix so borg prune's glob filter can
+     * never select it; the archives.locked flag drives the UI and the
+     * BBS-side delete guards. Unlocking renames it back.
+     */
+    public function toggleArchiveLock(int $agentId, int $id, int $archiveId): void
+    {
+        $this->requireAuth();
+        $this->verifyCsrf();
+
+        $repo = $this->db->fetchOne("
+            SELECT r.*, a.ssh_unix_user
+            FROM repositories r JOIN agents a ON a.id = r.agent_id
+            WHERE r.id = ? AND r.agent_id = ?", [$id, $agentId]);
+        if (!$repo || !$this->canAccessAgent($agentId)) {
+            $this->flash('danger', 'Repository not found.');
+            $this->redirect('/clients');
+        }
+        $this->requirePermission(PermissionService::MANAGE_REPOS, $agentId);
+
+        $archive = $this->db->fetchOne("SELECT * FROM archives WHERE id = ? AND repository_id = ?", [$archiveId, $id]);
+        if (!$archive) {
+            $this->flash('danger', 'Archive not found.');
+            $this->redirect("/clients/{$agentId}/repo/{$id}");
+        }
+
+        $locking = !((int) $archive['locked']);
+        $oldName = $archive['archive_name'];
+        $newName = $locking
+            ? 'locked.' . $oldName
+            : preg_replace('/^locked\./', '', $oldName);
+        if ($newName === $oldName) {
+            // Flag and name disagree (shouldn't happen) — repair the flag only
+            $this->db->update('archives', ['locked' => $locking ? 1 : 0], 'id = ?', [$archiveId]);
+            $this->redirect("/clients/{$agentId}/repo/{$id}");
+            return;
+        }
+
+        $passphrase = '';
+        if (!empty($repo['passphrase_encrypted'])) {
+            $passphrase = Encryption::decrypt($repo['passphrase_encrypted']);
+        }
+
+        // Rename inside borg. Fast metadata operation, but it takes the repo
+        // lock — a short lock-wait fails cleanly when a backup is running.
+        if (($repo['storage_type'] ?? 'local') === 'remote_ssh') {
+            $remoteSshService = new RemoteSshService();
+            $config = $remoteSshService->getDecrypted((int) $repo['remote_ssh_config_id']);
+            if (!$config) {
+                $this->flash('danger', 'Remote SSH host not found.');
+                $this->redirect("/clients/{$agentId}/repo/{$id}");
+                return;
+            }
+            $result = $remoteSshService->runBorgCommand(
+                $config,
+                $repo['path'],
+                ['rename', '--lock-wait=10', "{$repo['path']}::{$oldName}", $newName],
+                $passphrase
+            );
+            $ok = $result['success'];
+            $errOut = trim($result['stderr'] ?? $result['output'] ?? '');
+        } else {
+            $localPath = BorgCommandBuilder::getLocalRepoPath($repo);
+            $borgArgs = ['rename', '--lock-wait=10', "{$localPath}::{$oldName}", $newName];
+            if (!empty($repo['ssh_unix_user'])) {
+                $cmd = array_merge(['sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-cmd', $repo['ssh_unix_user'], '-'], $borgArgs);
+            } else {
+                $cmd = array_merge(['borg'], $borgArgs);
+            }
+            $proc = proc_open($cmd, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null,
+                empty($repo['ssh_unix_user'])
+                    ? array_filter($_SERVER, 'is_string') + [
+                        'BORG_PASSPHRASE' => $passphrase,
+                        'BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK' => 'yes',
+                        'BORG_RELOCATED_REPO_ACCESS_IS_OK' => 'yes',
+                        'BORG_BASE_DIR' => '/tmp/bbs-borg-www-data',
+                        'HOME' => '/tmp/bbs-borg-www-data',
+                    ]
+                    : null);
+            $ok = false;
+            $errOut = '';
+            if (is_resource($proc)) {
+                fwrite($pipes[0], $passphrase . "\n");
+                fclose($pipes[0]);
+                $stdout = stream_get_contents($pipes[1]);
+                $errOut = trim(stream_get_contents($pipes[2]) ?: $stdout);
+                fclose($pipes[1]);
+                fclose($pipes[2]);
+                $ok = proc_close($proc) === 0;
+            }
+        }
+
+        if (!$ok) {
+            $busy = stripos($errOut, 'lock') !== false;
+            $this->flash('danger', $busy
+                ? 'Repository is busy (a job is running) — try again in a moment.'
+                : 'Failed to ' . ($locking ? 'lock' : 'unlock') . ' archive: ' . substr($errOut, 0, 300));
+            $this->redirect("/clients/{$agentId}/repo/{$id}");
+            return;
+        }
+
+        $this->db->update('archives', [
+            'archive_name' => $newName,
+            'locked' => $locking ? 1 : 0,
+        ], 'id = ?', [$archiveId]);
+
+        $this->db->insert('server_log', [
+            'agent_id' => $agentId,
+            'level' => 'info',
+            'message' => ($locking
+                ? "Archive \"{$oldName}\" locked (renamed to \"{$newName}\") — excluded from pruning"
+                : "Archive \"{$oldName}\" unlocked (renamed to \"{$newName}\") — normal retention applies"),
+        ]);
+
+        $this->flash('success', $locking
+            ? 'Archive locked — it will never be pruned or deleted until unlocked.'
+            : 'Archive unlocked — normal retention rules apply again.');
+        $this->redirect("/clients/{$agentId}/repo/{$id}");
+    }
+
     public function deleteArchive(int $agentId, int $id, int $archiveId): void
     {
         $this->requireAuth();
@@ -913,6 +1043,11 @@ class RepositoryController extends Controller
         $archive = $this->db->fetchOne("SELECT * FROM archives WHERE id = ? AND repository_id = ?", [$archiveId, $id]);
         if (!$archive) {
             $this->flash('danger', 'Archive not found.');
+            $this->redirect("/clients/{$agentId}/repo/{$id}");
+        }
+
+        if (!empty($archive['locked'])) {
+            $this->flash('danger', 'This archive is locked — unlock it first if you really want to delete it.');
             $this->redirect("/clients/{$agentId}/repo/{$id}");
         }
 

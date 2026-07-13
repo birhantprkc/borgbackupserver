@@ -1639,12 +1639,20 @@ foreach ($serverJobs as $sj) {
     $repoPath = $isRemoteSsh ? $repo['path'] : $localPath;
     if ($sj['task_type'] === 'prune') {
         // Only scope prune to this plan's archives if the repo has multiple plans.
-        // Single-plan repos prune everything (including imported/orphaned archives).
+        // Single-plan repos prune everything (including imported/orphaned archives)
+        // — EXCEPT when the repo contains locked archives (#314): those are renamed
+        // with the "locked." prefix, which an unglobbed prune would still consider,
+        // so any lock forces the plan-prefix glob. Trade-off: repos holding locks
+        // no longer auto-prune orphaned/imported archives.
         $planCount = (int) ($db->fetchOne(
             "SELECT COUNT(*) as cnt FROM backup_plans WHERE repository_id = ? AND enabled = 1",
             [$sj['repository_id']]
         )['cnt'] ?? 0);
-        $archivePrefix = ($planCount > 1 && $sj['backup_plan_id']) ? 'plan' . $sj['backup_plan_id'] : null;
+        $lockedCount = (int) ($db->fetchOne(
+            "SELECT COUNT(*) as cnt FROM archives WHERE repository_id = ? AND locked = 1",
+            [$sj['repository_id']]
+        )['cnt'] ?? 0);
+        $archivePrefix = (($planCount > 1 || $lockedCount > 0) && $sj['backup_plan_id']) ? 'plan' . $sj['backup_plan_id'] : null;
         $borgArgs = \BBS\Services\BorgCommandBuilder::buildPruneCommand($plan, $localRepo, $archivePrefix);
         // Remove 'borg' from the front since we'll add it back
         if ($borgArgs[0] === 'borg') {

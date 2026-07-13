@@ -536,7 +536,7 @@ case "$ACTION" in
         # wrappers), create, mount, serve, export-tar, config — is rejected.
         BORG_SUBCMD="$1"
         case "$BORG_SUBCMD" in
-            prune|compact|check|break-lock|delete|info) ;;
+            prune|compact|check|break-lock|delete|info|rename) ;;
             *)
                 echo "Error: borg subcommand '$BORG_SUBCMD' is not permitted via borg-cmd"
                 exit 1

@@ -262,6 +262,7 @@ CREATE TABLE archives (
     file_count INT NOT NULL DEFAULT 0,
     original_size BIGINT NOT NULL DEFAULT 0,
     deduplicated_size BIGINT NOT NULL DEFAULT 0,
+    locked TINYINT(1) NOT NULL DEFAULT 0,
     databases_backed_up JSON DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (repository_id) REFERENCES repositories(id) ON DELETE CASCADE,

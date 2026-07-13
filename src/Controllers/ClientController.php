@@ -1733,6 +1733,17 @@ class ClientController extends Controller
             $this->redirect("/clients/{$id}");
         }
 
+        // Deleting a client cascades its repositories — locked archives
+        // (legal hold, #314) must not be removable that way either
+        $lockedCount = $this->db->fetchOne("
+            SELECT COUNT(*) as cnt FROM archives ar
+            JOIN repositories r ON r.id = ar.repository_id
+            WHERE r.agent_id = ? AND ar.locked = 1", [$id]);
+        if ((int) ($lockedCount['cnt'] ?? 0) > 0) {
+            $this->flash('danger', 'Cannot delete this client — it has locked archives. Unlock them first.');
+            $this->redirect("/clients/{$id}?tab=repos");
+        }
+
         // Deprovision SSH user
         if (!empty($agent['ssh_unix_user'])) {
             SshKeyManager::deprovisionClient($agent['ssh_unix_user']);

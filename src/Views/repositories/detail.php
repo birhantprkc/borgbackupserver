@@ -528,16 +528,39 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
                             <?php if (!empty($ar['databases_backed_up'])): ?>
                             <i class="bi bi-database text-info ms-1" title="Contains database backup"></i>
                             <?php endif; ?>
+                            <?php if (!empty($ar['locked'])): ?>
+                            <span class="badge text-bg-warning ms-1" title="Locked — excluded from pruning and deletion"><i class="bi bi-lock-fill"></i> Locked</span>
+                            <?php endif; ?>
                         </td>
                         <td class="text-nowrap"><?= \BBS\Core\TimeHelper::format($ar['created_at'], 'M j, Y g:i A') ?></td>
                         <td><?= number_format($ar['file_count']) ?></td>
                         <td><?= $origLabel ?></td>
                         <td><?= $dedupLabel ?></td>
-                        <td class="text-end" onclick="event.stopPropagation()">
+                        <td class="text-end text-nowrap" onclick="event.stopPropagation()">
+                            <?php if (!empty($ar['locked'])): ?>
+                            <form method="POST" action="/clients/<?= $agentId ?>/repo/<?= $repo['id'] ?>/archive/<?= $ar['id'] ?>/lock" class="d-inline"
+                                  data-confirm="Unlock this archive?&#10;&#10;Normal retention rules will apply again — it can be pruned on the next cycle.">
+                                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                <button type="submit" class="btn btn-sm btn-warning" title="Unlock — allow pruning again">
+                                    <i class="bi bi-unlock"></i>
+                                </button>
+                            </form>
+                            <button type="button" class="btn btn-sm btn-outline-danger" disabled title="Locked — unlock first to delete">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                            <?php else: ?>
+                            <form method="POST" action="/clients/<?= $agentId ?>/repo/<?= $repo['id'] ?>/archive/<?= $ar['id'] ?>/lock" class="d-inline"
+                                  data-confirm="Lock this archive?&#10;&#10;It will be excluded from pruning and cannot be deleted until unlocked (e.g. for a legal hold).">
+                                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                <button type="submit" class="btn btn-sm btn-outline-secondary" title="Lock — never prune or delete">
+                                    <i class="bi bi-lock"></i>
+                                </button>
+                            </form>
                             <button type="button" class="btn btn-sm btn-outline-danger"
                                     data-bs-toggle="modal" data-bs-target="#deleteArchiveModal<?= $ar['id'] ?>">
                                 <i class="bi bi-trash"></i>
                             </button>
+                            <?php endif; ?>
                         </td>
                     </tr>
                     <?php endforeach; ?>
@@ -592,10 +615,13 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
                 <p class="text-muted small mb-0">Permanently delete this repository and all its data. This cannot be undone.</p>
             </div>
             <?php
-            $deleteBlocked = count($plans) > 0 || $activeJob;
-            $blockReason = count($plans) > 0
-                ? "Delete the " . count($plans) . " backup plan(s) using this repo first"
-                : "Wait for active jobs to finish first";
+            $hasLockedArchives = !empty(array_filter($archives, fn($a) => !empty($a['locked'])));
+            $deleteBlocked = count($plans) > 0 || $activeJob || $hasLockedArchives;
+            $blockReason = $hasLockedArchives
+                ? 'Repository contains locked archives — unlock them first'
+                : (count($plans) > 0
+                    ? "Delete the " . count($plans) . " backup plan(s) using this repo first"
+                    : "Wait for active jobs to finish first");
             ?>
             <?php if ($deleteBlocked): ?>
             <button class="btn btn-outline-danger" disabled title="<?= htmlspecialchars($blockReason) ?>">
