@@ -3885,7 +3885,7 @@ const csrfToken = '<?= $this->csrfToken() ?>';
 
 <!-- ─── Live Filesystem Browser modal ─────────────────────────────── -->
 <div class="modal fade" id="dirBrowseModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable modal-fullscreen-md-down">
         <div class="modal-content">
             <div class="modal-header">
                 <h6 class="modal-title"><i class="bi bi-folder2-open me-1"></i>Browse Filesystem — <span id="dirBrowseAgentName"></span></h6>
@@ -3906,22 +3906,26 @@ const csrfToken = '<?= $this->csrfToken() ?>';
                         <i class="bi bi-arrow-clockwise me-1"></i>Refresh
                     </button>
                 </div>
-                <div class="row g-2">
+                <div class="row g-2 dirbrowse-panes">
                     <div class="col-md-7">
-                        <div class="border rounded p-2" style="height: 460px; overflow: auto; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.85rem;" id="dirBrowseTree">
+                        <div class="border rounded p-2 dirbrowse-tree-box" id="dirBrowseTree">
                             <div class="text-muted py-3 text-center"><span class="spinner-border spinner-border-sm me-2"></span>Loading…</div>
                         </div>
                     </div>
-                    <div class="col-md-1 d-flex flex-column align-items-center justify-content-center gap-2">
-                        <button type="button" class="btn btn-sm btn-primary w-100" id="dirBrowseAdd" title="Add selected directories">»</button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary w-100" id="dirBrowseRemove" title="Remove from selected">«</button>
+                    <div class="col-md-1 d-flex flex-row flex-md-column align-items-center justify-content-center gap-2 dirbrowse-transfer">
+                        <button type="button" class="btn btn-sm btn-primary flex-fill w-md-100" id="dirBrowseAdd" title="Add selected directories">
+                            <span class="dirbrowse-arrow-add">»</span>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary flex-fill w-md-100" id="dirBrowseRemove" title="Remove from selected">
+                            <span class="dirbrowse-arrow-remove">«</span>
+                        </button>
                     </div>
                     <div class="col-md-4">
                         <div class="d-flex justify-content-between align-items-center mb-1">
                             <span class="small fw-semibold">Selected</span>
                             <span class="small text-muted" id="dirBrowseSelectedCount">0</span>
                         </div>
-                        <div class="border rounded p-2 small" style="height: 460px; overflow: auto;" id="dirBrowseSelected"></div>
+                        <div class="border rounded p-2 small dirbrowse-selected-box" id="dirBrowseSelected"></div>
                     </div>
                 </div>
                 <div class="alert alert-warning small mt-3 mb-0 d-none" id="dirBrowseTruncated">
@@ -3935,6 +3939,48 @@ const csrfToken = '<?= $this->csrfToken() ?>';
         </div>
     </div>
 </div>
+
+<style>
+/* File picker (#296). Desktop: side-by-side tree | transfer | selected,
+   fixed-height panes. Below md the modal is a fullscreen sheet and the
+   panes stack with viewport-relative heights, so the phone isn't stuck
+   scrolling two 460px boxes inside a scrolling modal. */
+.dirbrowse-tree-box {
+    height: 460px;
+    overflow: auto;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 0.85rem;
+}
+.dirbrowse-selected-box { height: 460px; overflow: auto; }
+.w-md-100 { width: auto; }
+
+@media (min-width: 768px) {
+    .w-md-100 { width: 100%; }
+}
+
+@media (max-width: 767.98px) {
+    /* Tree gets most of the sheet; selected list is a compact strip below. */
+    .dirbrowse-tree-box {
+        height: calc(100dvh - 340px);
+        min-height: 200px;
+        font-size: 0.95rem;
+    }
+    .dirbrowse-selected-box { height: 150px; }
+
+    /* Roomier tap targets for folder rows (selection is by row tap). */
+    .dirbrowse-tree-box .dirbrowse-row { padding: 7px 4px !important; }
+
+    /* Transfer buttons sit horizontally between the stacked panes, so the
+       glyphs point down (add → selected) and up (remove ← tree) instead of
+       the desktop left/right. */
+    .dirbrowse-transfer { padding: 4px 0; }
+    .dirbrowse-transfer .btn { padding: 8px 0; font-size: 1.1rem; }
+    .dirbrowse-arrow-add::before { content: "\25BC"; }   /* ▼ */
+    .dirbrowse-arrow-remove::before { content: "\25B2"; } /* ▲ */
+    .dirbrowse-arrow-add, .dirbrowse-arrow-remove { font-size: 0; }
+    .dirbrowse-arrow-add::before, .dirbrowse-arrow-remove::before { font-size: 1rem; }
+}
+</style>
 
 <script>
 (function () {
