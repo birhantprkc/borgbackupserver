@@ -598,7 +598,7 @@ def download_ssh_key(config):
     try:
         key_dir = os.path.dirname(SSH_KEY_PATH)
         os.makedirs(key_dir, exist_ok=True)
-        with open(SSH_KEY_PATH, "w") as f:
+        with open(SSH_KEY_PATH, "w", newline="\n") as f:  # LF endings — CRLF keys are rejected by ssh (#347)
             f.write(private_key)
         if IS_WINDOWS:
             _lockdown_key_windows(SSH_KEY_PATH)
@@ -2573,7 +2573,7 @@ def execute_restore_pg(config, task):
             normalized_key = remote_ssh_key.replace("\r\n", "\n").replace("\r", "\n").rstrip() + "\n"
             if IS_WINDOWS:
                 _clear_stale_key_windows(remote_key_path)
-            with open(remote_key_path, "w") as kf:
+            with open(remote_key_path, "w", newline="\n") as kf:  # LF endings — CRLF keys are rejected by ssh (#347)
                 kf.write(normalized_key)
             if IS_WINDOWS:
                 _lockdown_key_windows(remote_key_path)
@@ -2790,7 +2790,7 @@ def execute_restore_mysql(config, task):
             normalized_key = remote_ssh_key.replace("\r\n", "\n").replace("\r", "\n").rstrip() + "\n"
             if IS_WINDOWS:
                 _clear_stale_key_windows(remote_key_path)
-            with open(remote_key_path, "w") as kf:
+            with open(remote_key_path, "w", newline="\n") as kf:  # LF endings — CRLF keys are rejected by ssh (#347)
                 kf.write(normalized_key)
             if IS_WINDOWS:
                 _lockdown_key_windows(remote_key_path)
@@ -3020,7 +3020,7 @@ def execute_restore_mongo(config, task):
             normalized_key = remote_ssh_key.replace("\r\n", "\n").replace("\r", "\n").rstrip() + "\n"
             if IS_WINDOWS:
                 _clear_stale_key_windows(remote_key_path)
-            with open(remote_key_path, "w") as kf:
+            with open(remote_key_path, "w", newline="\n") as kf:  # LF endings — CRLF keys are rejected by ssh (#347)
                 kf.write(normalized_key)
             if IS_WINDOWS:
                 _lockdown_key_windows(remote_key_path)
@@ -3593,7 +3593,7 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
             normalized_key = remote_ssh_key.replace("\r\n", "\n").replace("\r", "\n").rstrip() + "\n"
             if IS_WINDOWS:
                 _clear_stale_key_windows(remote_key_path)
-            with open(remote_key_path, "w") as kf:
+            with open(remote_key_path, "w", newline="\n") as kf:  # LF endings — CRLF keys are rejected by ssh (#347)
                 kf.write(normalized_key)
             if IS_WINDOWS:
                 _lockdown_key_windows(remote_key_path)
