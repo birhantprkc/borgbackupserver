@@ -1731,7 +1731,11 @@ def execute_plugin_pg_dump(config):
         # List databases via a catalog query. Parsing `psql -l` is unsafe: DBs with
         # GRANTed privileges have a multi-line "Access privileges" column whose
         # continuation lines (e.g. "<grantee>=<privs>/<grantor>") get mis-parsed as names.
-        list_cmd = ["psql", "-h", host, "-p", port, "-U", user, "-tAc",
+        # -d postgres: without an explicit database, psql defaults the dbname
+        # to the USERNAME — fatal for dedicated backup users with no
+        # same-named database (#345). The old `psql -l` connected to the
+        # postgres maintenance db implicitly; do the same explicitly.
+        list_cmd = ["psql", "-h", host, "-p", port, "-U", user, "-d", "postgres", "-tAc",
                     "SELECT datname FROM pg_database WHERE datallowconn AND NOT datistemplate"]
         result = subprocess.run(list_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=pg_env)
         if result.returncode != 0:
@@ -1829,7 +1833,9 @@ def test_plugin_pg_dump(config):
         raise Exception("Connection failed: {}".format(result.stderr.decode('utf-8', errors='replace').strip()))
 
     # List databases
-    cmd2 = ["psql", "-h", host, "-p", port, "-U", user, "-tAc",
+    # -d postgres — see execute_plugin_pg_dump: psql defaults dbname to the
+    # username otherwise, which fails for dedicated backup users (#345)
+    cmd2 = ["psql", "-h", host, "-p", port, "-U", user, "-d", "postgres", "-tAc",
             "SELECT datname FROM pg_database WHERE datallowconn AND NOT datistemplate"]
     result2 = subprocess.run(cmd2, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=pg_env, timeout=15)
     dbs = []
