@@ -2075,6 +2075,16 @@ foreach ($serverJobs as $sj) {
     }
 }
 
+// Step 4c: Sweep stale download/restore staging directories (hourly).
+// Normally cleaned by the request that created them, but a PHP crash or
+// container restart mid-download can strand multi-GB extractions (#344).
+if ((int) date('i') === 0) {
+    foreach (['/var/bbs/tmp', '/tmp'] as $stagingBase) {
+        if (!is_dir($stagingBase)) continue;
+        exec('find ' . escapeshellarg($stagingBase) . ' -maxdepth 1 \\( -name "bbs-download-*" -o -name "bbs-restore-*" \\) -mmin +1440 -exec rm -rf {} + 2>/dev/null');
+    }
+}
+
 // Step 5: Bootstrap size for any local repo whose size_bytes is still 0
 // (fresh install, newly added repo, or legacy migration). Runs every minute
 // but only touches disks once per repo, since the UPDATE makes size_bytes > 0.

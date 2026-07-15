@@ -351,8 +351,12 @@ class StorageLocationController extends Controller
             return;
         }
 
-        // Create temp directory
-        $tmpDir = '/tmp/bbs-restore-' . bin2hex(random_bytes(8));
+        // Stage under the data volume, not the OS disk (#344)
+        $stagingBase = '/var/bbs/tmp';
+        if (!is_dir($stagingBase) && !@mkdir($stagingBase, 0770, true)) {
+            $stagingBase = '/tmp';
+        }
+        $tmpDir = $stagingBase . '/bbs-restore-' . bin2hex(random_bytes(8));
         mkdir($tmpDir, 0700, true);
 
         $helper = '/usr/local/bin/bbs-ssh-helper';

@@ -191,9 +191,10 @@ case "$ACTION" in
             exit 1
         fi
 
-        # Safety: tmpdir must be under /tmp
-        if [[ ! "$TMPDIR" =~ ^/tmp/ ]]; then
-            echo "Error: tmpdir must be under /tmp/"
+        # Safety: staging must be under the data volume's tmp (preferred —
+        # sized for backup data, #344) or legacy /tmp
+        if [[ ! "$TMPDIR" =~ ^(/var/bbs/tmp|/tmp)/ ]]; then
+            echo "Error: tmpdir must be under /var/bbs/tmp/ or /tmp/"
             exit 1
         fi
 
@@ -1163,8 +1164,8 @@ case "$ACTION" in
             echo "Error: filename must match bbs-backup-*.tar.gz"
             exit 1
         fi
-        if [[ ! "$DEST_DIR" =~ ^/tmp/bbs-restore-[0-9a-f]+$ ]]; then
-            echo "Error: dest_dir must be a /tmp/bbs-restore-* staging directory"
+        if [[ ! "$DEST_DIR" =~ ^(/var/bbs/tmp|/tmp)/bbs-restore-[0-9a-f]+$ ]]; then
+            echo "Error: dest_dir must be a bbs-restore-* staging directory under /var/bbs/tmp or /tmp"
             exit 1
         fi
 
@@ -1205,8 +1206,8 @@ case "$ACTION" in
             echo "Usage: bbs-ssh-helper server-restore <backup_file>"
             exit 1
         fi
-        if [[ ! "$BACKUP_FILE" =~ ^/tmp/bbs-restore-[0-9a-f]+/bbs-backup-[A-Za-z0-9._-]+\.tar\.gz$ ]]; then
-            echo "Error: backup file must be inside a /tmp/bbs-restore-* staging directory"
+        if [[ ! "$BACKUP_FILE" =~ ^(/var/bbs/tmp|/tmp)/bbs-restore-[0-9a-f]+/bbs-backup-[A-Za-z0-9._-]+\.tar\.gz$ ]]; then
+            echo "Error: backup file must be inside a bbs-restore-* staging directory under /var/bbs/tmp or /tmp"
             exit 1
         fi
         if [ ! -f "$BACKUP_FILE" ]; then
@@ -1382,9 +1383,9 @@ SSHEOF
             exit 1
         fi
 
-        # Safety: tmpdir must be under /tmp
-        if [[ ! "$TMPDIR" =~ ^/tmp/bbs-download- ]]; then
-            echo "Error: tmpdir must be under /tmp/bbs-download-*"
+        # Safety: must be a download staging dir on the data volume (or legacy /tmp)
+        if [[ ! "$TMPDIR" =~ ^(/var/bbs/tmp|/tmp)/bbs-download- ]]; then
+            echo "Error: tmpdir must be under /var/bbs/tmp/bbs-download-* or /tmp/bbs-download-*"
             exit 1
         fi
 

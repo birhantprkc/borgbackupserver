@@ -1374,6 +1374,56 @@ class ClientController extends Controller
      * POST /clients/{id}/download
      * Extracts selected paths from a borg archive on the server and streams as tar.gz.
      */
+    /**
+     * Estimate the uncompressed size of a download selection so the space
+     * pre-flight can refuse before extraction (#344). Full archive: the
+     * stored original_size. Selection: catalog sum over the selected path
+     * prefixes (normalized to the catalog's leading-slash form, nested
+     * selections deduped). Returns null when no estimate is possible.
+     */
+    private function estimateDownloadBytes(int $agentId, int $archiveId, array $selectedFiles, int $archiveOriginalSize): ?int
+    {
+        if (empty($selectedFiles)) {
+            return $archiveOriginalSize > 0 ? $archiveOriginalSize : null;
+        }
+        try {
+            $ch = \BBS\Core\ClickHouse::getInstance();
+            if (!$ch->isAvailable()) {
+                return null;
+            }
+            $paths = array_values(array_filter(array_map(
+                fn($p) => '/' . trim((string) $p, '/'),
+                $selectedFiles
+            ), fn($p) => $p !== '/'));
+            $roots = array_filter($paths, function ($p) use ($paths) {
+                foreach ($paths as $other) {
+                    if ($other !== $p && str_starts_with($p, $other . '/')) return false;
+                }
+                return true;
+            });
+
+            $conds = [];
+            $params = [$agentId, $archiveId];
+            foreach ($roots as $p) {
+                $conds[] = '(path = ? OR startsWith(path, ?))';
+                $params[] = $p;
+                $params[] = $p . '/';
+            }
+            if (!$conds) {
+                return null;
+            }
+            $row = $ch->fetchOne(
+                "SELECT sum(file_size) AS bytes FROM file_catalog
+                 WHERE agent_id = ? AND archive_id = ? AND (" . implode(' OR ', $conds) . ")",
+                $params
+            );
+            $bytes = (int) ($row['bytes'] ?? 0);
+            return $bytes > 0 ? $bytes : null;
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
     public function download(int $id): void
     {
         $this->requireAuth();
@@ -1428,11 +1478,52 @@ class ClientController extends Controller
         $localPath = $isRemoteSsh ? $archive['repo_path'] : \BBS\Services\BorgCommandBuilder::getLocalRepoPath($repo);
         $env = \BBS\Services\BorgCommandBuilder::buildEnv($repo, false);
 
-        // Create temp directory for extraction
-        $tmpDir = '/tmp/bbs-download-' . bin2hex(random_bytes(8));
+        // Stage the extraction under the data volume, NOT the OS disk (#344):
+        // /tmp lives on the (often small) root filesystem — a large download
+        // filled it and starved borg-serve of temp space, crashing every
+        // running backup. /var/bbs is the volume actually sized for backups.
+        $stagingBase = '/var/bbs/tmp';
+        if (!is_dir($stagingBase) && !@mkdir($stagingBase, 0770, true)) {
+            $stagingBase = sys_get_temp_dir(); // fall back to /tmp if the volume is unwritable
+        }
+
+        // Pre-flight: refuse up front when the staging disk can't hold the
+        // selection, instead of dying mid-extract with a full disk.
+        $neededBytes = $this->estimateDownloadBytes($id, $archive_id, $selectedFiles, (int) $archive['original_size']);
+        $freeBytes = (float) @disk_free_space($stagingBase);
+        if ($neededBytes !== null && $freeBytes > 0 && $neededBytes * 1.05 > $freeBytes) {
+            $this->flash('danger', sprintf(
+                'Not enough space to prepare this download: it needs about %s, but only %s is free on the server (%s). Download a smaller selection or free up space.',
+                \BBS\Services\ServerStats::formatBytes((int) $neededBytes),
+                \BBS\Services\ServerStats::formatBytes((int) $freeBytes),
+                $stagingBase
+            ));
+            $this->redirect("/clients/{$id}?tab=restore");
+            return;
+        }
+
+        $tmpDir = $stagingBase . '/bbs-download-' . bin2hex(random_bytes(8));
         mkdir($tmpDir, 0700, true);
 
         $remoteSshKeyFile = null; // Track temp SSH key for cleanup
+
+        // The user closing the browser mid-download kills this request after
+        // the extract has already landed on disk — make sure the staging dir
+        // is removed no matter how the request ends.
+        ignore_user_abort(true);
+        register_shutdown_function(function () use ($tmpDir, &$remoteSshKeyFile) {
+            if ($remoteSshKeyFile && file_exists($remoteSshKeyFile)) {
+                @unlink($remoteSshKeyFile);
+            }
+            if (is_dir($tmpDir)) {
+                exec('rm -rf ' . escapeshellarg($tmpDir) . ' 2>/dev/null');
+                if (is_dir($tmpDir)) {
+                    // Files may be owned by the repo's bbs-* user — remove via helper perms fix + retry
+                    exec('sudo /usr/local/bin/bbs-ssh-helper fix-download-perms ' . escapeshellarg($tmpDir) . ' 2>/dev/null');
+                    exec('rm -rf ' . escapeshellarg($tmpDir) . ' 2>/dev/null');
+                }
+            }
+        });
 
         try {
             // Build borg extract args: repo::archive + selected paths
