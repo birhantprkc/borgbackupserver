@@ -3959,21 +3959,62 @@ const csrfToken = '<?= $this->csrfToken() ?>';
 }
 
 @media (max-width: 767.98px) {
-    /* Tree gets most of the sheet; selected list is a compact strip below. */
-    .dirbrowse-tree-box {
-        height: calc(100dvh - 340px);
-        min-height: 200px;
-        font-size: 0.95rem;
+    /* Fullscreen sheet as a single flex column: tree ~60% on top, selected
+       ~40% below, each with its own scroll. The modal body must not scroll
+       (nested touch-scroll areas fight and the tree can't be scrolled or
+       tapped to expand), and the panes container must be flex-wrap:nowrap —
+       Bootstrap's .row is flex-wrap:wrap, and in a column a tall tree makes
+       the following panes wrap into a second column off to the right (#296). */
+    #dirBrowseModal .modal-body {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        min-height: 0;
     }
-    .dirbrowse-selected-box { height: 150px; }
+    #dirBrowseModal .dirbrowse-panes {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        flex-wrap: nowrap;
+    }
+    /* Tree column — 60% of the space, its box scrolls */
+    #dirBrowseModal .dirbrowse-panes > .col-md-7 {
+        flex: 6 1 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+    .dirbrowse-tree-box {
+        flex: 1 1 auto;
+        height: auto;
+        min-height: 0;
+        font-size: 0.95rem;
+        -webkit-overflow-scrolling: touch;
+    }
+    /* Selected column — 40%, its box scrolls, sits below the tree */
+    #dirBrowseModal .dirbrowse-panes > .col-md-4 {
+        flex: 4 1 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+    .dirbrowse-selected-box {
+        flex: 1 1 auto;
+        height: auto;
+        min-height: 0;
+        -webkit-overflow-scrolling: touch;
+    }
 
-    /* Roomier tap targets for folder rows (selection is by row tap). */
-    .dirbrowse-tree-box .dirbrowse-row { padding: 7px 4px !important; }
+    /* Roomier tap targets for folder rows, and a bigger hit area on the
+       expand chevron so folders open on a normal tap. */
+    .dirbrowse-tree-box .dirbrowse-row { padding: 9px 4px !important; }
+    .dirbrowse-tree-box .dirbrowse-expand { min-width: 26px; }
 
-    /* Transfer buttons sit horizontally between the stacked panes, so the
+    /* Transfer buttons form a horizontal bar between the stacked panes, so the
        glyphs point down (add → selected) and up (remove ← tree) instead of
        the desktop left/right. */
-    .dirbrowse-transfer { padding: 4px 0; }
+    .dirbrowse-transfer { flex: 0 0 auto; padding: 4px 0; }
     .dirbrowse-transfer .btn { padding: 8px 0; font-size: 1.1rem; }
     .dirbrowse-arrow-add::before { content: "\25BC"; }   /* ▼ */
     .dirbrowse-arrow-remove::before { content: "\25B2"; } /* ▲ */
