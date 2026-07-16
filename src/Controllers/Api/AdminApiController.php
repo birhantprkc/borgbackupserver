@@ -993,6 +993,74 @@ class AdminApiController extends Controller
         $this->json(['status' => 'ok', 'message' => "Repository \"{$repo['name']}\" deleted"]);
     }
 
+    // ── Archives (recovery points) ───────────────────────
+
+    /**
+     * GET /api/v1/clients/{id}/repositories/{repoId}/archives
+     * List a repository's recovery points, including each one's lock state
+     * (#314). Use this to find the archive id to lock.
+     */
+    public function listArchives(int $id, int $repoId): void
+    {
+        $this->requireApiToken();
+
+        $repo = $this->db->fetchOne(
+            "SELECT r.id FROM repositories r WHERE r.id = ? AND r.agent_id = ?",
+            [$repoId, $id]
+        );
+        if (!$repo) {
+            $this->json(['error' => 'Repository not found'], 404);
+        }
+
+        $rows = $this->db->fetchAll(
+            "SELECT id, archive_name, file_count, original_size, deduplicated_size, locked, created_at
+             FROM archives WHERE repository_id = ? ORDER BY created_at DESC",
+            [$repoId]
+        );
+        $archives = array_map(static function ($a) {
+            return [
+                'id'                => (int) $a['id'],
+                'name'              => $a['archive_name'],
+                'file_count'        => (int) $a['file_count'],
+                'original_size'     => (int) $a['original_size'],
+                'deduplicated_size' => (int) $a['deduplicated_size'],
+                'locked'            => (bool) ((int) $a['locked']),
+                'created_at'        => $a['created_at'],
+            ];
+        }, $rows);
+
+        $this->json(['archives' => $archives]);
+    }
+
+    /**
+     * POST /api/v1/clients/{id}/repositories/{repoId}/archives/{archiveId}/lock
+     * Lock or unlock a recovery point (#314). Body: {"locked": true|false}.
+     * A locked archive is never pruned and cannot be deleted. If the repo is
+     * busy the change is queued and applies when the running job finishes
+     * (response 202). Idempotent — locking an already-locked archive is a
+     * no-op 200.
+     */
+    public function setArchiveLock(int $id, int $repoId, int $archiveId): void
+    {
+        $this->requireApiToken();
+        $input = $this->getJsonInput();
+
+        if (!array_key_exists('locked', $input)) {
+            $this->json(['error' => 'locked is required (boolean)'], 400);
+        }
+        $desired = (bool) $input['locked'];
+
+        $result = (new \BBS\Services\ArchiveLockService())->setLock($id, $repoId, $archiveId, $desired);
+
+        $this->json([
+            'status'  => $result['ok'] ? 'ok' : 'error',
+            'result'  => $result['result'],
+            'message' => $result['message'],
+            'name'    => $result['archive_name'] ?? null,
+            'locked'  => $result['locked'] ?? ($result['result'] === 'queued' ? $desired : null),
+        ], $result['code']);
+    }
+
     // ── Plan Edit/Delete/Trigger ─────────────────────────
 
     public function updatePlan(int $id, int $planId): void

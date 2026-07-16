@@ -917,154 +917,20 @@ class RepositoryController extends Controller
         $this->requireAuth();
         $this->verifyCsrf();
 
-        $repo = $this->db->fetchOne("
-            SELECT r.*, a.ssh_unix_user
-            FROM repositories r JOIN agents a ON a.id = r.agent_id
-            WHERE r.id = ? AND r.agent_id = ?", [$id, $agentId]);
-        if (!$repo || !$this->canAccessAgent($agentId)) {
+        if (!$this->canAccessAgent($agentId)) {
             $this->flash('danger', 'Repository not found.');
             $this->redirect('/clients');
         }
         $this->requirePermission(PermissionService::MANAGE_REPOS, $agentId);
 
-        $archive = $this->db->fetchOne("SELECT * FROM archives WHERE id = ? AND repository_id = ?", [$archiveId, $id]);
-        if (!$archive) {
-            $this->flash('danger', 'Archive not found.');
+        // Shared with the admin API (#314). Web toggles the current state.
+        $result = (new \BBS\Services\ArchiveLockService())->setLock($agentId, $id, $archiveId, null);
+
+        if (!$result['ok'] && $result['result'] === 'not_found') {
+            $this->flash('danger', $result['message'] . '.');
             $this->redirect("/clients/{$agentId}/repo/{$id}");
         }
-
-        $locking = !((int) $archive['locked']);
-        $oldName = $archive['archive_name'];
-        $newName = $locking
-            ? 'locked.' . $oldName
-            : preg_replace('/^locked\./', '', $oldName);
-        if ($newName === $oldName) {
-            // Flag and name disagree (shouldn't happen) — repair the flag only
-            $this->db->update('archives', ['locked' => $locking ? 1 : 0], 'id = ?', [$archiveId]);
-            $this->redirect("/clients/{$agentId}/repo/{$id}");
-            return;
-        }
-
-        // When the repo is busy (backup, prune, …) don't make the user wait or
-        // retry: queue the rename as a server-side job — the scheduler applies
-        // it as soon as the current job finishes (jobs on a repo serialize).
-        $queueLock = function () use ($agentId, $id, $archiveId, $archive, $locking) {
-            $existing = $this->db->fetchOne(
-                "SELECT id FROM backup_jobs
-                 WHERE repository_id = ? AND task_type = 'archive_lock'
-                   AND restore_archive_id = ? AND status IN ('queued', 'sent', 'running')
-                 LIMIT 1",
-                [$id, $archiveId]
-            );
-            if ($existing) {
-                $this->flash('info', 'A lock/unlock task for this archive is already queued.');
-                return;
-            }
-            $this->db->insert('backup_jobs', [
-                'agent_id' => $agentId,
-                'repository_id' => $id,
-                'task_type' => 'archive_lock',
-                'status' => 'queued',
-                'restore_archive_id' => $archiveId,
-                'status_message' => $archive['archive_name'],
-            ]);
-            $this->flash('success', ($locking ? 'Lock' : 'Unlock')
-                . ' queued — the repository is busy right now, so it will apply automatically as soon as the current job finishes.');
-        };
-
-        $activeJob = $this->db->fetchOne(
-            "SELECT id FROM backup_jobs WHERE repository_id = ? AND status IN ('queued', 'sent', 'running') LIMIT 1",
-            [$id]
-        );
-        if ($activeJob) {
-            $queueLock();
-            $this->redirect("/clients/{$agentId}/repo/{$id}");
-            return;
-        }
-
-        $passphrase = '';
-        if (!empty($repo['passphrase_encrypted'])) {
-            $passphrase = Encryption::decrypt($repo['passphrase_encrypted']);
-        }
-
-        // Repo looks idle — rename immediately for instant feedback. It's a
-        // fast metadata operation, but it takes the repo lock; a short
-        // lock-wait catches the race where a job started since the check.
-        if (($repo['storage_type'] ?? 'local') === 'remote_ssh') {
-            $remoteSshService = new RemoteSshService();
-            $config = $remoteSshService->getDecrypted((int) $repo['remote_ssh_config_id']);
-            if (!$config) {
-                $this->flash('danger', 'Remote SSH host not found.');
-                $this->redirect("/clients/{$agentId}/repo/{$id}");
-                return;
-            }
-            $result = $remoteSshService->runBorgCommand(
-                $config,
-                $repo['path'],
-                ['rename', '--lock-wait=10', "{$repo['path']}::{$oldName}", $newName],
-                $passphrase
-            );
-            $ok = $result['success'];
-            $errOut = trim($result['stderr'] ?? $result['output'] ?? '');
-        } else {
-            $localPath = BorgCommandBuilder::getLocalRepoPath($repo);
-            $borgArgs = ['rename', '--lock-wait=10', "{$localPath}::{$oldName}", $newName];
-            if (!empty($repo['ssh_unix_user'])) {
-                $cmd = array_merge(['sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-cmd', $repo['ssh_unix_user'], '-'], $borgArgs);
-            } else {
-                $cmd = array_merge(['borg'], $borgArgs);
-            }
-            $proc = proc_open($cmd, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null,
-                empty($repo['ssh_unix_user'])
-                    ? array_filter($_SERVER, 'is_string') + [
-                        'BORG_PASSPHRASE' => $passphrase,
-                        'BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK' => 'yes',
-                        'BORG_RELOCATED_REPO_ACCESS_IS_OK' => 'yes',
-                        'BORG_BASE_DIR' => '/tmp/bbs-borg-www-data',
-                        'HOME' => '/tmp/bbs-borg-www-data',
-                    ]
-                    : null);
-            $ok = false;
-            $errOut = '';
-            if (is_resource($proc)) {
-                fwrite($pipes[0], $passphrase . "\n");
-                fclose($pipes[0]);
-                $stdout = stream_get_contents($pipes[1]);
-                $errOut = trim(stream_get_contents($pipes[2]) ?: $stdout);
-                fclose($pipes[1]);
-                fclose($pipes[2]);
-                $ok = proc_close($proc) === 0;
-            }
-        }
-
-        if (!$ok) {
-            if (stripos($errOut, 'lock') !== false) {
-                // A job grabbed the repo between our check and the rename —
-                // fall back to queueing so the user still doesn't have to wait
-                $queueLock();
-            } else {
-                $this->flash('danger', 'Failed to ' . ($locking ? 'lock' : 'unlock') . ' archive: ' . substr($errOut, 0, 300));
-            }
-            $this->redirect("/clients/{$agentId}/repo/{$id}");
-            return;
-        }
-
-        $this->db->update('archives', [
-            'archive_name' => $newName,
-            'locked' => $locking ? 1 : 0,
-        ], 'id = ?', [$archiveId]);
-
-        $this->db->insert('server_log', [
-            'agent_id' => $agentId,
-            'level' => 'info',
-            'message' => ($locking
-                ? "Archive \"{$oldName}\" locked (renamed to \"{$newName}\") — excluded from pruning"
-                : "Archive \"{$oldName}\" unlocked (renamed to \"{$newName}\") — normal retention applies"),
-        ]);
-
-        $this->flash('success', $locking
-            ? 'Archive locked — it will never be pruned or deleted until unlocked.'
-            : 'Archive unlocked — normal retention rules apply again.');
+        $this->flash($result['ok'] ? 'success' : 'danger', $result['message']);
         $this->redirect("/clients/{$agentId}/repo/{$id}");
     }
 
