@@ -4346,8 +4346,10 @@ const csrfToken = '<?= $this->csrfToken() ?>';
         const active = document.querySelector('.dirbrowse-row.active');
         if (!active) return;
         const li = active.parentElement;
-        if (li.dataset.type !== 'directory') return; // only directories
+        // Directories or individual files — borg create accepts either as a
+        // backup path (#296). Only skip nodes with no real path.
         const path = li.dataset.path;
+        if (!path) return;
         selectedPaths.add(path);
         renderSelected();
     });
