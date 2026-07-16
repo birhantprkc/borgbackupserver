@@ -1,6 +1,7 @@
 # Borg Backup Server
 
-<img width="100%" alt="Borg Backup Server Dashboard" src="https://github.com/user-attachments/assets/6e3cee15-6a2d-428b-be25-d150a38c787a" />
+<img width="100%" alt="borg backup server gui" src="https://github.com/user-attachments/assets/c623708f-65b6-4f88-a786-a570c51d60a4" />
+
 
 
 A self-hosted web application for centrally managing [BorgBackup](https://borgbackup.readthedocs.io/) across multiple endpoints (Linux, Mac and Windows). A lightweight agent polls the server for tasks over HTTPS, backs up over SSH to the server, and reports progress back. No inbound connections to endpoints from the server — this works behind firewalls and NAT from where the server is providing easy provisioning. Includes a setup wizard for simple installation or a Docker image to start up in 30 seconds.
