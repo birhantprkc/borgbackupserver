@@ -236,6 +236,16 @@ class AdminApiController extends Controller
             $this->json(['error' => 'Client not found'], 404);
         }
 
+        // Deleting a client cascades its repositories — locked archives
+        // (legal hold, #314) must not be removable that way.
+        $lockedCount = $this->db->fetchOne(
+            "SELECT COUNT(*) as cnt FROM archives ar
+             JOIN repositories r ON r.id = ar.repository_id
+             WHERE r.agent_id = ? AND ar.locked = 1", [$id]);
+        if ((int) ($lockedCount['cnt'] ?? 0) > 0) {
+            $this->json(['error' => 'Cannot delete — client has locked archives. Unlock them first.'], 409);
+        }
+
         // Deprovision SSH user
         if (!empty($agent['ssh_unix_user'])) {
             SshKeyManager::deprovisionClient($agent['ssh_unix_user']);
@@ -948,6 +958,12 @@ class AdminApiController extends Controller
         $repo = $this->db->fetchOne("SELECT r.*, a.id as agent_id FROM repositories r JOIN agents a ON a.id = r.agent_id WHERE r.id = ? AND r.agent_id = ?", [$repoId, $id]);
         if (!$repo) {
             $this->json(['error' => 'Repository not found'], 404);
+        }
+
+        // Locked archives (legal hold, #314) block deletion — matches the web UI.
+        $lockedCount = $this->db->fetchOne("SELECT COUNT(*) as cnt FROM archives WHERE repository_id = ? AND locked = 1", [$repoId]);
+        if ((int) ($lockedCount['cnt'] ?? 0) > 0) {
+            $this->json(['error' => 'Cannot delete — repository contains locked archives. Unlock them first.'], 409);
         }
 
         $planCount = $this->db->fetchOne("SELECT COUNT(*) as cnt FROM backup_plans WHERE repository_id = ?", [$repoId]);
