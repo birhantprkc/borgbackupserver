@@ -357,7 +357,21 @@ fi
 
 cd "$BBS_DIR"
 info "Installing Composer dependencies..."
-composer install --no-dev --optimize-autoloader --quiet 2>/dev/null
+# --no-interaction is critical: without it Composer prompts on stdin (e.g.
+# "enter a GitHub token" when GitHub API rate-limits a dist download on a
+# shared cloud IP) and, because the old command hid output with 2>/dev/null,
+# the installer just hung silently at this step (#351). Run it visibly, log
+# to a file, and fail loudly with the log on any error instead of hanging.
+export COMPOSER_ALLOW_SUPERUSER=1 COMPOSER_NO_INTERACTION=1
+COMPOSER_LOG="/tmp/bbs-composer-install.log"
+if ! composer install --no-dev --optimize-autoloader --no-interaction --no-progress 2>&1 | tee "$COMPOSER_LOG"; then
+    fail "Composer failed to install PHP dependencies. Full output above and in $COMPOSER_LOG"
+    echo "  Common causes: no outbound HTTPS to packagist.org/GitHub, or GitHub API rate-limiting."
+    echo "  If rate-limited, create a token at https://github.com/settings/tokens and run:"
+    echo "    composer config --global github-oauth.github.com <TOKEN>"
+    echo "  then re-run this installer."
+    exit 1
+fi
 ok "Composer dependencies installed"
 
 chown -R www-data:www-data "$BBS_DIR"
