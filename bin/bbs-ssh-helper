@@ -1242,24 +1242,31 @@ case "$ACTION" in
         chown root:root "$GATE_DST"
         echo "Installed bbs-ssh-gate to $GATE_DST"
 
-        # Ensure sshd accepts legacy ssh-rsa host key algorithm for older clients
-        # (CentOS 6 with OpenSSH 5.3 cannot negotiate modern algorithms)
+        # Ensure sshd accepts legacy algorithms for older clients. OpenSSH 10
+        # (Debian 13) dropped both ssh-rsa (SHA-1) host keys and the SHA-1
+        # Diffie-Hellman kex algorithms, so old clients — Windows Server 2016,
+        # Dropbear NAS boxes, CentOS 6/7 — are closed at key exchange (#352).
+        # Rewritten whenever the desired content changes so existing installs
+        # pick up new entries (not just when the file is missing).
         SSHD_LEGACY="/etc/ssh/sshd_config.d/bbs-legacy-compat.conf"
         SSHD_CONF_DIR="/etc/ssh/sshd_config.d"
-        if [ -d "$SSHD_CONF_DIR" ] && [ ! -f "$SSHD_LEGACY" ]; then
-            cat > "$SSHD_LEGACY" <<'SSHEOF'
+        read -r -d '' SSHD_LEGACY_CONTENT <<'SSHEOF' || true
 # Added by BBS to support agents on older OS with legacy SSH clients
 HostKeyAlgorithms +ssh-rsa
 PubkeyAcceptedAlgorithms +ssh-rsa
+KexAlgorithms +diffie-hellman-group14-sha1,diffie-hellman-group-exchange-sha1,diffie-hellman-group1-sha1
 SSHEOF
+        if [ -d "$SSHD_CONF_DIR" ] && { [ ! -f "$SSHD_LEGACY" ] || [ "$(cat "$SSHD_LEGACY" 2>/dev/null)" != "$SSHD_LEGACY_CONTENT" ]; }; then
+            OLD_LEGACY="$(cat "$SSHD_LEGACY" 2>/dev/null || true)"
+            printf '%s\n' "$SSHD_LEGACY_CONTENT" > "$SSHD_LEGACY"
             chmod 644 "$SSHD_LEGACY"
-            # Validate config before restarting
+            # Validate config before restarting; restore prior content on error
             if sshd -t 2>/dev/null; then
                 systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null || true
                 echo "Enabled legacy SSH compatibility"
             else
-                rm -f "$SSHD_LEGACY"
-                echo "Warning: sshd config invalid, removed legacy compat"
+                if [ -n "$OLD_LEGACY" ]; then printf '%s\n' "$OLD_LEGACY" > "$SSHD_LEGACY"; else rm -f "$SSHD_LEGACY"; fi
+                echo "Warning: sshd config invalid, reverted legacy compat"
             fi
         fi
         echo "OK"

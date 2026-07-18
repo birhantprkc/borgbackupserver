@@ -764,18 +764,25 @@ mysql -u bbs -p"$DB_PASS" bbs -N -e "SELECT ssh_unix_user, id, IFNULL(ssh_home_d
 done
 
 # --- Legacy SSH compatibility ---
-# OpenSSH 10+ dropped ssh-rsa (SHA-1) from default accepted algorithms.
-# Re-enable it so agents on older OS (CentOS 6/7, Ubuntu 14/16) can connect.
-# This config lives inside the container filesystem and is lost on recreation,
-# so we must re-create it every startup (not just during bbs-update).
+# The base image now ships OpenSSH 10 (Debian 13), which dropped not just
+# ssh-rsa (SHA-1) host keys but also the SHA-1 Diffie-Hellman key-exchange
+# algorithms. Old clients — Windows Server 2016, NAS boxes running Dropbear,
+# CentOS 6/7 — negotiate diffie-hellman-group14-sha1 and were closed at KEX
+# time after the server updated ("connection closed by remote host", #352).
+# Re-enable the legacy host-key AND kex algorithms. Rewritten whenever the
+# desired content changes so existing installs pick up new entries; the file
+# lives in the container FS and is lost on recreation, so re-create it every
+# startup.
 SSHD_LEGACY="/etc/ssh/sshd_config.d/bbs-legacy-compat.conf"
 SSHD_CONF_DIR="/etc/ssh/sshd_config.d"
-if [ -d "$SSHD_CONF_DIR" ] && [ ! -f "$SSHD_LEGACY" ]; then
-    cat > "$SSHD_LEGACY" <<'SSHEOF'
+read -r -d '' SSHD_LEGACY_CONTENT <<'SSHEOF' || true
 # Added by BBS to support agents on older OS with legacy SSH clients
 HostKeyAlgorithms +ssh-rsa
 PubkeyAcceptedAlgorithms +ssh-rsa
+KexAlgorithms +diffie-hellman-group14-sha1,diffie-hellman-group-exchange-sha1,diffie-hellman-group1-sha1
 SSHEOF
+if [ -d "$SSHD_CONF_DIR" ] && { [ ! -f "$SSHD_LEGACY" ] || [ "$(cat "$SSHD_LEGACY" 2>/dev/null)" != "$SSHD_LEGACY_CONTENT" ]; }; then
+    printf '%s\n' "$SSHD_LEGACY_CONTENT" > "$SSHD_LEGACY"
     chmod 644 "$SSHD_LEGACY"
     echo "  Enabled legacy SSH compatibility"
 fi
