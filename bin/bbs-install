@@ -504,8 +504,15 @@ step "10/11" "Setup cron"
 
 touch /var/log/bbs-scheduler.log
 chown www-data:www-data /var/log/bbs-scheduler.log
-CRON_LINE="* * * * * /usr/bin/php $BBS_DIR/scheduler.php >> /var/log/bbs-scheduler.log 2>&1"
-( crontab -u www-data -l 2>/dev/null || true; echo "$CRON_LINE" ) | sort -u | crontab -u www-data -
+# flock -n: only one scheduler runs at a time. Without it, a run that hangs
+# (e.g. blocked on an unresponsive NFS storage mount) doesn't stop cron from
+# launching another every minute — they pile up, each holding a MySQL
+# connection, until the connection pool is exhausted and the whole web UI
+# 500s (falcon outage, 2026-07-21). If a run is still going, the next tick
+# skips instead of stacking.
+CRON_LINE="* * * * * /usr/bin/flock -n /var/lock/bbs-scheduler.lock /usr/bin/php $BBS_DIR/scheduler.php >> /var/log/bbs-scheduler.log 2>&1"
+# Drop any previous unguarded scheduler line so we don't end up with both.
+( crontab -u www-data -l 2>/dev/null | grep -v 'scheduler.php' || true; echo "$CRON_LINE" ) | sort -u | crontab -u www-data -
 ok "Scheduler cron installed"
 
 # ─── Step 10: Set timezone ──────────────────────────────────────────────────

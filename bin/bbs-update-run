@@ -183,6 +183,19 @@ else
     echo "  Warning: .env not found, skipping"
 fi
 
+# Ensure the scheduler cron has the flock overlap guard. Older installs
+# scheduled it unguarded, so a run hung on dead storage could pile up and
+# exhaust MySQL connections (falcon outage, 2026-07-21). Rewrite the www-data
+# scheduler line to the flock form if it isn't already.
+if command -v crontab &>/dev/null && command -v flock &>/dev/null; then
+    if crontab -u www-data -l 2>/dev/null | grep -q 'scheduler.php' \
+       && ! crontab -u www-data -l 2>/dev/null | grep -q 'flock.*scheduler.php'; then
+        GUARDED="* * * * * /usr/bin/flock -n /var/lock/bbs-scheduler.lock /usr/bin/php $BBS_DIR/scheduler.php >> /var/log/bbs-scheduler.log 2>&1"
+        ( crontab -u www-data -l 2>/dev/null | grep -v 'scheduler.php'; echo "$GUARDED" ) | crontab -u www-data -
+        echo "  Added flock overlap guard to scheduler cron"
+    fi
+fi
+
 # Restart PHP to clear OPcache (non-fatal — update is already complete at this point)
 PHP_FPM=$(systemctl list-units --type=service --no-legend 2>/dev/null | grep -oP 'php[0-9.]+-fpm\.service' | head -1 || true)
 if [ -n "$PHP_FPM" ]; then

@@ -806,7 +806,11 @@ TMPDIR=/var/bbs/tmp
 # backups kept working via the poll endpoint (#307). Running as root and
 # dropping to www-data via su sidesteps the PAM-session issue and keeps file
 # ownership correct.
-* * * * * root su -s /bin/sh www-data -c 'cd /var/www/bbs && TMPDIR=/var/bbs/tmp /usr/local/bin/php scheduler.php' >> /var/log/bbs-scheduler.log 2>&1
+# flock -n: never run two schedulers at once. A run that hangs (e.g. blocked
+# on an unresponsive NFS storage mount) must not let cron stack another every
+# minute — they pile up holding MySQL connections until the pool is exhausted
+# and the web UI 500s. If a run is still going, the next tick skips.
+* * * * * root flock -n /var/lock/bbs-scheduler.lock su -s /bin/sh www-data -c 'cd /var/www/bbs && TMPDIR=/var/bbs/tmp /usr/local/bin/php scheduler.php' >> /var/log/bbs-scheduler.log 2>&1
 # Save UIDs for any user home dirs that have .ssh/ but no .uid file yet
 */5 * * * * root for d in /var/bbs/home/*/; do [ -d "$d/.ssh" ] && [ ! -f "$d/.uid" ] && stat -c \%u "$d" > "$d/.uid" 2>/dev/null; done
 # Cap ClickHouse stderr/stdout at ~50MB. ClickHouse runs as --daemon and
