@@ -430,24 +430,56 @@ class AdminApiController extends Controller
             }
         }
 
-        $initCmd = BorgCommandBuilder::buildInitCommand($repo);
-        $env = BorgCommandBuilder::buildEnv($repo);
+        // Update .storage-paths BEFORE borg init so SSH access works even if init fails
+        if (!empty($agent['ssh_unix_user'])) {
+            SshKeyManager::updateAgentStoragePaths($this->db, $id, $agent);
+        }
+
+        // Run borg init via bbs-ssh-helper against the local path — same flow as the
+        // web UI. Never init over the repo's ssh:// path: the server has neither the
+        // agent's SSH identity nor a guaranteed loopback on the configured port (#356).
+        $initCmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'borg-init', $repoLocalPath, $encryption];
+        $passphraseToPipe = '';
+        if ($encryption !== 'none' && !empty($passphrase)) {
+            $initCmd[] = '-';
+            $passphraseToPipe = $passphrase;
+        }
+        $exitCode = 1;
+        $stdout = '';
+        $stderr = '';
         $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
-        $proc = proc_open($initCmd, $descriptors, $pipes, null, $env);
-        $stdout = stream_get_contents($pipes[1]);
-        $stderr = stream_get_contents($pipes[2]);
-        fclose($pipes[0]);
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-        $exitCode = proc_close($proc);
+        $proc = proc_open($initCmd, $descriptors, $pipes);
+        if (is_resource($proc)) {
+            if ($passphraseToPipe !== '') {
+                fwrite($pipes[0], $passphraseToPipe . "\n");
+            }
+            fclose($pipes[0]);
+            $stdout = stream_get_contents($pipes[1]);
+            $stderr = stream_get_contents($pipes[2]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            $exitCode = proc_close($proc);
+        }
 
         if ($exitCode !== 0) {
-            $errorMsg = trim($stderr ?: $stdout);
+            $errorMsg = trim($stdout . "\n" . $stderr);
             $this->db->insert('server_log', [
                 'agent_id' => $id,
                 'level' => 'error',
                 'message' => "borg init failed for repo \"{$safeName}\" via API: {$errorMsg}",
             ]);
+        } elseif (!empty($agent['ssh_unix_user'])) {
+            // Fix ownership: borg init runs as root, but the agent's unix user
+            // must own the repo for SSH access
+            $fixCmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'fix-repo-perms', $repoLocalPath, $agent['ssh_unix_user']];
+            exec(implode(' ', array_map('escapeshellarg', $fixCmd)) . ' 2>&1', $fixOutput, $fixRet);
+            if ($fixRet !== 0) {
+                $this->db->insert('server_log', [
+                    'agent_id' => $id,
+                    'level' => 'warning',
+                    'message' => "fix-repo-perms failed via API: " . implode(' ', $fixOutput),
+                ]);
+            }
         }
 
         $this->db->insert('server_log', [

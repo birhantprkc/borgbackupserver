@@ -94,15 +94,6 @@ class BorgCommandBuilder
     }
 
     /**
-     * Build the borg init command for a new repository.
-     */
-    public static function buildInitCommand(array $repo): array
-    {
-        $cmd = ['borg', 'init', '--encryption=' . $repo['encryption'], $repo['path']];
-        return $cmd;
-    }
-
-    /**
      * Build the borg list command.
      */
     public static function buildListCommand(array $repo, ?string $archiveName = null): array
