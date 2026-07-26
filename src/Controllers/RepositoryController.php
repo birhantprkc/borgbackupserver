@@ -30,6 +30,19 @@ class RepositoryController extends Controller
         return $slug ?: 'repo';
     }
 
+    /**
+     * Sanitize a repo name that refers to an EXISTING directory (import).
+     * Same character rules as sanitizePathName() but case-preserving — the
+     * name must match the on-disk / remote directory exactly (#360).
+     * Returns '' if nothing usable remains so callers can reject the input.
+     */
+    private function sanitizeImportName(string $name): string
+    {
+        $slug = preg_replace('/[^A-Za-z0-9_-]+/', '-', $name);
+        $slug = preg_replace('/-{2,}/', '-', $slug);
+        return trim($slug, '-');
+    }
+
     public function store(): void
     {
         $this->requireAuth();
@@ -1565,7 +1578,7 @@ class RepositoryController extends Controller
 
         $agentId = (int) ($_POST['agent_id'] ?? 0);
         $storageType = $_POST['storage_type'] ?? 'local';
-        $name = $this->sanitizePathName(trim($_POST['name'] ?? ''));
+        $name = $this->sanitizeImportName(trim($_POST['name'] ?? ''));
         $passphrase = $_POST['passphrase'] ?? '';
         $storageLocationId = !empty($_POST['storage_location_id']) ? (int) $_POST['storage_location_id'] : null;
         $remoteSshConfigId = !empty($_POST['remote_ssh_config_id']) ? (int) $_POST['remote_ssh_config_id'] : null;
@@ -1731,9 +1744,9 @@ class RepositoryController extends Controller
         }
 
         // Sanitize the name — import uses this for both the directory lookup
-        // and the DB record. Leading slashes, special characters, etc. get
-        // stripped to match how new repos are created.
-        $name = $this->sanitizePathName($name);
+        // and the DB record. Special characters get stripped, but case is
+        // preserved: the name must match the existing directory (#360).
+        $name = $this->sanitizeImportName($name);
         if (empty($name)) {
             $this->flash('danger', 'Repository name must contain at least one alphanumeric character.');
             $this->redirect("/clients/{$agentId}?tab=repos");
