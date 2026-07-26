@@ -270,6 +270,7 @@ class App
 
         // Admin API (token-authenticated)
         $this->router->map('GET', '/api/v1/summary', 'Api\\AdminApiController@summary');
+        $this->router->map('GET', '/api/v1/metrics', 'Api\\AdminApiController@metrics');
         $this->router->map('GET', '/api/v1/clients', 'Api\\AdminApiController@listClients');
         $this->router->map('POST', '/api/v1/clients', 'Api\\AdminApiController@createClient');
         $this->router->map('GET', '/api/v1/clients/[i:id]', 'Api\\AdminApiController@getClient');

@@ -36,6 +36,104 @@ class AdminApiController extends Controller
         $this->json(['clients' => $agents]);
     }
 
+    /**
+     * GET /api/v1/metrics — monitoring snapshot for external systems
+     * (health checks, dashboards, Prometheus via a JSON adapter). Timestamps
+     * are returned both as datetime strings and unix epochs so time-series
+     * tools can consume them directly.
+     */
+    public function metrics(): void
+    {
+        $this->requireApiToken();
+
+        $clients = ['total' => 0, 'online' => 0, 'offline' => 0, 'error' => 0, 'setup' => 0];
+        foreach ($this->db->fetchAll("SELECT status, COUNT(*) AS c FROM agents GROUP BY status") as $row) {
+            $clients[$row['status']] = (int) $row['c'];
+            $clients['total'] += (int) $row['c'];
+        }
+
+        $queue = ['queued' => 0, 'sent' => 0, 'running' => 0];
+        foreach ($this->db->fetchAll("SELECT status, COUNT(*) AS c FROM backup_jobs WHERE status IN ('queued','sent','running') GROUP BY status") as $row) {
+            $queue[$row['status']] = (int) $row['c'];
+        }
+
+        // All-time backup job outcomes per client
+        $jobTotals = [];
+        $jobRows = $this->db->fetchAll("
+            SELECT bj.agent_id, a.name AS client_name, bj.status, COUNT(*) AS c
+            FROM backup_jobs bj
+            JOIN agents a ON a.id = bj.agent_id
+            WHERE bj.task_type = 'backup' AND bj.status IN ('completed','failed','cancelled')
+            GROUP BY bj.agent_id, a.name, bj.status
+        ");
+        foreach ($jobRows as $row) {
+            $cid = (int) $row['agent_id'];
+            if (!isset($jobTotals[$cid])) {
+                $jobTotals[$cid] = ['client_id' => $cid, 'client' => $row['client_name'], 'completed' => 0, 'failed' => 0, 'cancelled' => 0];
+            }
+            $jobTotals[$cid][$row['status']] = (int) $row['c'];
+        }
+
+        // Per-plan last run (any terminal status) and last success
+        $planRows = $this->db->fetchAll("
+            SELECT bp.id AS plan_id, bp.name AS plan_name, bp.enabled,
+                   a.id AS client_id, a.name AS client_name,
+                   lastj.status AS last_status,
+                   lastj.completed_at AS last_run_at,
+                   lastj.duration_seconds AS last_run_duration_seconds,
+                   lasts.completed_at AS last_success_at,
+                   lasts.duration_seconds AS last_success_duration_seconds,
+                   lasts.bytes_processed AS last_success_bytes
+            FROM backup_plans bp
+            JOIN agents a ON a.id = bp.agent_id
+            LEFT JOIN (
+                SELECT backup_plan_id, status, completed_at, duration_seconds,
+                       ROW_NUMBER() OVER (PARTITION BY backup_plan_id ORDER BY completed_at DESC, id DESC) AS rn
+                FROM backup_jobs
+                WHERE task_type = 'backup' AND status IN ('completed', 'failed')
+            ) lastj ON lastj.backup_plan_id = bp.id AND lastj.rn = 1
+            LEFT JOIN (
+                SELECT backup_plan_id, completed_at, duration_seconds, bytes_processed,
+                       ROW_NUMBER() OVER (PARTITION BY backup_plan_id ORDER BY completed_at DESC, id DESC) AS rn
+                FROM backup_jobs
+                WHERE task_type = 'backup' AND status = 'completed'
+            ) lasts ON lasts.backup_plan_id = bp.id AND lasts.rn = 1
+            ORDER BY a.name, bp.name
+        ");
+        $plans = array_map(fn($r) => [
+            'plan_id' => (int) $r['plan_id'],
+            'plan' => $r['plan_name'],
+            'enabled' => (bool) $r['enabled'],
+            'client_id' => (int) $r['client_id'],
+            'client' => $r['client_name'],
+            'last_status' => $r['last_status'],
+            'last_run_at' => $r['last_run_at'],
+            'last_run_ts' => $r['last_run_at'] ? strtotime($r['last_run_at']) : null,
+            'last_run_duration_seconds' => $r['last_run_duration_seconds'] !== null ? (int) $r['last_run_duration_seconds'] : null,
+            'last_success_at' => $r['last_success_at'],
+            'last_success_ts' => $r['last_success_at'] ? strtotime($r['last_success_at']) : null,
+            'last_success_duration_seconds' => $r['last_success_duration_seconds'] !== null ? (int) $r['last_success_duration_seconds'] : null,
+            'last_success_bytes' => $r['last_success_bytes'] !== null ? (int) $r['last_success_bytes'] : null,
+        ], $planRows);
+
+        $repos = array_map(fn($r) => [
+            'id' => (int) $r['id'],
+            'client_id' => (int) $r['agent_id'],
+            'name' => $r['name'],
+            'storage_type' => $r['storage_type'],
+            'size_bytes' => (int) $r['size_bytes'],
+        ], $this->db->fetchAll("SELECT id, agent_id, name, storage_type, size_bytes FROM repositories"));
+
+        $this->json([
+            'generated_at' => date('c'),
+            'clients' => $clients,
+            'queue' => $queue,
+            'backup_jobs_total' => array_values($jobTotals),
+            'plans' => $plans,
+            'repositories' => $repos,
+        ]);
+    }
+
     public function summary(): void
     {
         $this->requireApiToken();

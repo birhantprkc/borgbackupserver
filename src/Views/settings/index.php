@@ -1908,6 +1908,7 @@ document.getElementById('appIconFileInput').addEventListener('change', function(
             </thead>
             <tbody>
                 <tr><td><span class="badge bg-success">GET</span></td><td><code>/api/v1/summary</code></td><td>Summary of each client's backup plans and latest backup result</td></tr>
+                <tr><td><span class="badge bg-success">GET</span></td><td><code>/api/v1/metrics</code></td><td>Monitoring snapshot: client/queue counts, per-plan last run &amp; last success, job totals, repo sizes</td></tr>
                 <tr><td><span class="badge bg-success">GET</span></td><td><code>/api/v1/clients</code></td><td>List all clients</td></tr>
                 <tr><td><span class="badge bg-primary">POST</span></td><td><code>/api/v1/clients</code></td><td>Create a client (returns api_key for agent install)</td></tr>
                 <tr><td><span class="badge bg-success">GET</span></td><td><code>/api/v1/clients/{id}</code></td><td>Get client details with repos &amp; plans</td></tr>
