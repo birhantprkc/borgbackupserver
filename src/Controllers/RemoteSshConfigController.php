@@ -174,6 +174,26 @@ class RemoteSshConfigController extends Controller
             (new RemoteSshService())->refreshBorgBaseDiskUsage(array_merge($existing, $data, ['id' => $id]));
         }
 
+        // Repo paths embed this config's host/port/user/base path at creation
+        // time. Rebuild them so existing repos follow the change instead of
+        // still pointing at the old host (#358).
+        $repos = $this->db->fetchAll(
+            "SELECT id, name FROM repositories WHERE remote_ssh_config_id = ? AND storage_type = 'remote_ssh'",
+            [$id]
+        );
+        if ($repos) {
+            $newConfig = array_merge($existing, $data, ['id' => $id]);
+            $remoteSshService = new RemoteSshService();
+            foreach ($repos as $repo) {
+                $this->db->update(
+                    'repositories',
+                    ['path' => $remoteSshService->buildRepoPath($newConfig, $repo['name'])],
+                    'id = ?',
+                    [$repo['id']]
+                );
+            }
+        }
+
         $this->db->insert('server_log', [
             'level' => 'info',
             'message' => "Remote SSH config \"{$name}\" updated",
