@@ -122,6 +122,12 @@ class SettingsController extends Controller
 
         $allowed = ['max_queue', 'server_host', 'ssh_port', 'agent_poll_interval', 'stall_timeout_minutes', 'session_timeout_hours', 'default_theme', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_secure', 'smtp_from', 'notification_retention_days', 'storage_alert_threshold', 'apprise_urls', 'self_backup_retention', 'auto_retry_max_attempts', 'agent_offline_notify_minutes', 'auto_compact_day', 'auto_compact_hour'];
 
+        $oldServerHost = null;
+        if (isset($_POST['server_host'])) {
+            $row = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
+            $oldServerHost = $row['value'] ?? null;
+        }
+
         foreach ($allowed as $key) {
             if (isset($_POST[$key])) {
                 $existing = $this->db->fetchOne("SELECT `key` FROM settings WHERE `key` = ?", [$key]);
@@ -148,6 +154,25 @@ class SettingsController extends Controller
                 $this->db->update('settings', ['value' => $value], "`key` = ?", [$key]);
             } else {
                 $this->db->insert('settings', ['key' => $key, 'value' => $value]);
+            }
+        }
+
+        // Repo paths bake the server host in at creation time — when the
+        // global host changes, rewrite the local repo paths of every client
+        // that doesn't have a per-client override (#367)
+        if (isset($_POST['server_host']) && trim($_POST['server_host']) !== ($oldServerHost ?? '')) {
+            $agents = $this->db->fetchAll(
+                "SELECT id FROM agents WHERE server_host_override IS NULL OR server_host_override = ''"
+            );
+            $updated = 0;
+            foreach ($agents as $a) {
+                $updated += \BBS\Services\SshKeyManager::rewriteAgentRepoHosts($this->db, (int) $a['id'], trim($_POST['server_host']));
+            }
+            if ($updated > 0) {
+                $this->db->insert('server_log', [
+                    'level' => 'info',
+                    'message' => "Server host changed — updated {$updated} repository path(s)",
+                ]);
             }
         }
 

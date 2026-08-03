@@ -170,6 +170,40 @@ class SshKeyManager
     }
 
     /**
+     * Rewrite the host in an agent's local ssh:// repo paths. Local repo paths
+     * bake the server host in at creation time, so a later change to the
+     * per-client override or the global server_host setting must update the
+     * stored paths too (#367). Returns the number of repos updated.
+     */
+    public static function rewriteAgentRepoHosts(\BBS\Core\Database $db, int $agentId, string $newHost): int
+    {
+        $host = self::stripHostPort(trim($newHost));
+        if ($host === '') {
+            return 0;
+        }
+
+        $repos = $db->fetchAll(
+            "SELECT id, path FROM repositories
+             WHERE agent_id = ? AND storage_type = 'local' AND path LIKE 'ssh://%'",
+            [$agentId]
+        );
+
+        $updated = 0;
+        foreach ($repos as $repo) {
+            $newPath = preg_replace_callback(
+                '/^(ssh:\/\/[^@\/]+@)[^\/]+/',
+                fn($m) => $m[1] . $host,
+                $repo['path']
+            );
+            if ($newPath !== null && $newPath !== $repo['path']) {
+                $db->update('repositories', ['path' => $newPath], 'id = ?', [$repo['id']]);
+                $updated++;
+            }
+        }
+        return $updated;
+    }
+
+    /**
      * Update the .storage-paths file for an agent (used by bbs-ssh-gate to allow
      * borg access to storage locations outside the agent's SSH home directory).
      * Gathers all unique storage location agent directories and writes them via

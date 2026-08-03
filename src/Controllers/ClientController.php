@@ -1794,6 +1794,26 @@ class ClientController extends Controller
         if (!empty($data)) {
             $this->db->update('agents', $data, 'id = ?', [$id]);
 
+            // Repo paths bake the server host in at creation time — when the
+            // override changes (set, changed, or cleared), rewrite this
+            // client's local repo paths to the new effective host (#367)
+            if (array_key_exists('server_host_override', $data)
+                && $data['server_host_override'] !== ($agent['server_host_override'] ?? null)) {
+                $effectiveHost = $data['server_host_override'];
+                if ($effectiveHost === null) {
+                    $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
+                    $effectiveHost = $serverHost['value'] ?? '';
+                }
+                $updated = SshKeyManager::rewriteAgentRepoHosts($this->db, $id, $effectiveHost);
+                if ($updated > 0) {
+                    $this->db->insert('server_log', [
+                        'agent_id' => $id,
+                        'level' => 'info',
+                        'message' => "Server host override changed — updated {$updated} repository path(s)",
+                    ]);
+                }
+            }
+
             // A newly assigned owner gets access and all permissions by
             // default, revocable in the user's profile (#337)
             if (!empty($data['user_id']) && $data['user_id'] !== (int) ($agent['user_id'] ?? 0)) {
