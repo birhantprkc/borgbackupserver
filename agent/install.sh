@@ -172,6 +172,19 @@ except:
     fi
 
     print_success "Detected: ${BOLD}$os_pretty${NC}"
+
+    # Refuse to install inside a container without an init system: the service
+    # can't be kept running there, so the agent registers once and then drops
+    # offline permanently (#370). `command -v systemctl` is not enough — the
+    # binary can exist in containers where systemd isn't PID 1.
+    if [ ! -d /run/systemd/system ] && { [ -f /.dockerenv ] || grep -qE 'docker|containerd|kubepods|lxc' /proc/1/cgroup 2>/dev/null; }; then
+        print_error "This looks like a container without an init system (no systemd)."
+        print_error "The agent needs a service manager to keep running — installing here"
+        print_error "would register the client once and then leave it permanently offline."
+        print_error "Install the agent on the host that owns the data, or run it as its own"
+        print_error "container: https://github.com/marcpope/borgbackupserver/wiki/Docker-Agent-Setup"
+        exit 1
+    fi
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
