@@ -39,7 +39,7 @@ The developer has made a system for provisioning Demos at no cost here: [Borg Ba
 
 ## Quick Start
 
-Start with a fresh **Ubuntu 22.04+** server, then run:
+Start with a fresh **Ubuntu server** (22.04, 24.04, and 26.04 LTS are supported), then run:
 
 ```bash
 curl -sO https://raw.githubusercontent.com/marcpope/borgbackupserver/main/bin/bbs-install

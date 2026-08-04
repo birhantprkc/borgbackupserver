@@ -269,7 +269,7 @@ class ClientController extends Controller
             $detail = SshKeyManager::getLastHelperError();
             $this->flash('danger', 'Cannot create client — SSH provisioning failed'
                 . ($detail ? ': ' . htmlspecialchars($detail) : '')
-                . '. Ensure bbs-ssh-helper is installed at /usr/local/bin/bbs-ssh-helper with sudo access. See the Installation Guide: https://github.com/marcpope/borgbackupserver/blob/main/docs/INSTALL.md');
+                . '. Ensure bbs-ssh-helper is installed at /usr/local/bin/bbs-ssh-helper with sudo access. See the Installation Guide: https://github.com/marcpope/borgbackupserver/wiki/Installation');
             $this->redirect('/clients/add');
         }
 
