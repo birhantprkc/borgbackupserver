@@ -173,6 +173,20 @@ except:
 
     print_success "Detected: ${BOLD}$os_pretty${NC}"
 
+    # Refuse to install on the BBS server itself — backups always run through
+    # an agent on the machine that owns the data; the server is never its own
+    # client (#370). Checked before the generic container guard so someone
+    # inside the BBS Docker container gets this more specific message.
+    if [ -f /var/www/bbs/config/.env ] || [ -d /var/www/bbs/src ]; then
+        print_error "This machine is running the BBS server itself — the agent can't be"
+        print_error "installed here. Agents run on the machines being backed up; the BBS"
+        print_error "server only coordinates. If the data you want to back up is on this"
+        print_error "host (or mounted into the BBS container), install the agent on the"
+        print_error "machine that owns the data, or run the agent as its own container:"
+        print_error "https://github.com/marcpope/borgbackupserver/wiki/Docker-Agent-Setup"
+        exit 1
+    fi
+
     # Refuse to install inside a container without an init system: the service
     # can't be kept running there, so the agent registers once and then drops
     # offline permanently (#370). `command -v systemctl` is not enough — the
