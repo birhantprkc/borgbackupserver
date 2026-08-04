@@ -8,6 +8,19 @@ class SshKeyManager
 {
     private const SSH_HELPER = '/usr/local/bin/bbs-ssh-helper';
 
+    /** Last stderr/exit info from a failed runHelper() call, for error surfacing */
+    private static ?string $lastHelperError = null;
+
+    /**
+     * The error output of the most recent failed helper invocation (or null).
+     * Lets callers show the real cause (e.g. a sudoers problem) instead of a
+     * generic "provisioning failed" message (#368).
+     */
+    public static function getLastHelperError(): ?string
+    {
+        return self::$lastHelperError;
+    }
+
     /**
      * Generate an SSH RSA key pair (RSA-4096 for maximum client compatibility).
      * Returns ['private_key' => string, 'public_key' => string].
@@ -93,11 +106,13 @@ class SshKeyManager
         $output = self::runHelper('create-user', $unixUser, $homeDir, $keys['public_key']);
         if ($output === null || !str_contains($output, 'OK')) {
             // Log the actual error for debugging
+            $detail = $output ?: (self::$lastHelperError ?? 'bbs-ssh-helper returned no output');
+            self::$lastHelperError = $detail;
             $db = Database::getInstance();
             $db->insert('server_log', [
                 'agent_id' => $agentId,
                 'level' => 'error',
-                'message' => "SSH provisioning failed: " . ($output ?: 'bbs-ssh-helper returned no output'),
+                'message' => "SSH provisioning failed: {$detail}",
             ]);
             return null;
         }
@@ -268,6 +283,7 @@ class SshKeyManager
         ], $pipes);
 
         if (!is_resource($proc)) {
+            self::$lastHelperError = 'failed to start bbs-ssh-helper';
             return null;
         }
 
@@ -279,10 +295,12 @@ class SshKeyManager
         $exitCode = proc_close($proc);
 
         if ($exitCode !== 0) {
+            self::$lastHelperError = trim($stderr ?: $stdout) ?: "exit code {$exitCode} with no output";
             error_log("bbs-ssh-helper failed (exit $exitCode): $stderr");
             return null;
         }
 
+        self::$lastHelperError = null;
         return trim($stdout);
     }
 }

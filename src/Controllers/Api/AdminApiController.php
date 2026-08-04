@@ -303,7 +303,8 @@ class AdminApiController extends Controller
         if (!$sshResult) {
             @rmdir($clientDir);
             $this->db->delete('agents', 'id = ?', [$id]);
-            $this->json(['error' => 'SSH provisioning failed. Ensure bbs-ssh-helper is installed.'], 500);
+            $detail = SshKeyManager::getLastHelperError();
+            $this->json(['error' => 'SSH provisioning failed' . ($detail ? ': ' . $detail : '') . '. Ensure bbs-ssh-helper is installed.'], 500);
         }
 
         $this->db->insert('server_log', [

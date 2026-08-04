@@ -268,6 +268,9 @@ info "[6/7] Restoring system config..."
 if [ -d "$TMPDIR/sudoers" ]; then
     for sf in "$TMPDIR/sudoers"/*; do
         [ -f "$sf" ] || continue
+        # Never restore the legacy bbs-borg rule — its (bbs-*) RunAs wildcard
+        # is invalid on newer sudo and disables all www-data sudo (#368)
+        [ "$(basename "$sf")" = "bbs-borg" ] && continue
         cp "$sf" "/etc/sudoers.d/$(basename "$sf")"
         chmod 440 "/etc/sudoers.d/$(basename "$sf")"
     done
@@ -275,10 +278,10 @@ if [ -d "$TMPDIR/sudoers" ]; then
 else
     # Ensure defaults exist even without backup copy
     echo "www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper, $BBS_DIR/bin/bbs-update" > /etc/sudoers.d/bbs-ssh-helper
-    echo "www-data ALL=(bbs-*) NOPASSWD: /usr/bin/borg, /usr/local/bin/borg, /usr/bin/rclone, /usr/bin/env" > /etc/sudoers.d/bbs-borg
-    chmod 440 /etc/sudoers.d/bbs-ssh-helper /etc/sudoers.d/bbs-borg
+    chmod 440 /etc/sudoers.d/bbs-ssh-helper
     ok "Sudoers created (defaults)"
 fi
+rm -f /etc/sudoers.d/bbs-borg
 
 if [ -f "$TMPDIR/cron" ]; then
     cp "$TMPDIR/cron" /etc/cron.d/bbs-scheduler

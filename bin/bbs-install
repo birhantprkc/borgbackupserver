@@ -20,7 +20,10 @@ LOG_FILE="/var/log/bbs-install.log"
 exec > >(stdbuf -oL tee -a "$LOG_FILE") 2>&1
 
 # Ensure interactive prompts work even when piped (curl | sudo bash)
-if [[ ! -t 0 ]] && [[ -e /dev/tty ]]; then
+# Use /dev/tty for prompts when stdin is piped — but only if it's actually
+# openable ([[ -e /dev/tty ]] is true even with no controlling terminal,
+# e.g. ssh without -t, where opening it fails and killed the script)
+if [[ ! -t 0 ]] && (exec 3</dev/tty) 2>/dev/null; then
     exec 3</dev/tty
 else
     exec 3<&0
@@ -289,7 +292,18 @@ else
     apt-get update -qq 2>/dev/null
 
     info "Installing ClickHouse server and client..."
-    DEBIAN_FRONTEND=noninteractive apt-get install -y clickhouse-server clickhouse-client > /dev/null 2>&1
+    # Pinned to the same version as the Docker image (see Dockerfile
+    # CLICKHOUSE_VERSION). Unpinned "stable" drifts to builds that raise the
+    # CPU-instruction baseline and crash with "Illegal instruction" on older
+    # CPUs (#327) — and a failed install here silently aborts the installer.
+    CLICKHOUSE_VERSION="26.5.2.39"
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        clickhouse-common-static="$CLICKHOUSE_VERSION" \
+        clickhouse-server="$CLICKHOUSE_VERSION" \
+        clickhouse-client="$CLICKHOUSE_VERSION" > /dev/null 2>&1; then
+        die "ClickHouse ${CLICKHOUSE_VERSION} install failed — run 'apt-get install clickhouse-server=${CLICKHOUSE_VERSION}' manually to see why"
+    fi
+    apt-mark hold clickhouse-common-static clickhouse-server clickhouse-client >/dev/null 2>&1 || true
 
     # Config override will be installed by bbs-update after BBS code is downloaded
     mkdir -p /etc/clickhouse-server/config.d
@@ -414,10 +428,42 @@ echo "www-data ALL=(root) NOPASSWD: /usr/local/bin/bbs-ssh-helper, $BBS_DIR/bin/
 chmod 440 /etc/sudoers.d/bbs-ssh-helper
 ok "SSH helper sudoers configured"
 
-echo "www-data ALL=(bbs-*) NOPASSWD: /usr/bin/borg, /usr/local/bin/borg, /usr/bin/rclone, /usr/bin/env" \
-    > /etc/sudoers.d/bbs-borg
-chmod 440 /etc/sudoers.d/bbs-borg
-ok "Borg sudoers configured"
+# Note: no /etc/sudoers.d/bbs-borg — all borg/rclone commands run through
+# bbs-ssh-helper. The old "www-data ALL=(bbs-*)" rule is invalid syntax on
+# newer sudo (breaks every www-data sudo call, #368) and unnecessary.
+
+# Ubuntu 26.04+ ships a hardened apache2.service that hides /etc/sudoers
+# from the service (InaccessiblePaths) and mounts /etc read-only
+# (ProtectSystem=full). Both break the sudo → bbs-ssh-helper provisioning
+# flow (#368). Install a drop-in that keeps the hardening but restores the
+# minimum BBS needs: sudoers visibility, writable /etc (useradd), writable
+# /usr/local/bin (borg updates). /usr and /boot stay read-only.
+if systemctl show apache2 -p InaccessiblePaths 2>/dev/null | grep -q sudoers || \
+   systemctl show apache2 -p ProtectSystem 2>/dev/null | grep -qE '=(full|strict)$'; then
+    mkdir -p /etc/systemd/system/apache2.service.d
+    cat > /etc/systemd/system/apache2.service.d/bbs.conf <<'APACHE_EOF'
+[Service]
+# BBS override for the hardened apache2 unit (Ubuntu 26.04+). The stock
+# sandbox hides /etc/sudoers and mounts /etc read-only, which blocks the
+# sudo -> bbs-ssh-helper provisioning flow (#368). This keeps ProtectSystem
+# (/usr and /boot read-only) and every other hardening directive; it only
+# restores sudoers visibility, /etc writes, and /usr/local/bin writes.
+ProtectSystem=true
+# The helper chmods setgid dirs (catalog logs); RestrictSUIDSGID=yes blocks
+# creating sgid files entirely
+RestrictSUIDSGID=no
+InaccessiblePaths=
+InaccessiblePaths=/boot
+InaccessiblePaths=/root
+InaccessiblePaths=-/etc/apt
+InaccessiblePaths=-/etc/.git
+InaccessiblePaths=-/etc/.svn
+ReadWritePaths=-/usr/local/bin
+APACHE_EOF
+    systemctl daemon-reload
+    systemctl restart apache2
+    ok "Apache systemd override installed (hardened unit detected)"
+fi
 
 # Install the latest server-hosted borg binary (if available) to replace the apt version
 BORG_PUBLIC="$BBS_DIR/public/borg"

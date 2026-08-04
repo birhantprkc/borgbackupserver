@@ -141,11 +141,13 @@ else
     echo "  OK"
 fi
 
-BORG_SUDOERS="/etc/sudoers.d/bbs-borg"
-BORG_EXPECTED="www-data ALL=(bbs-*) NOPASSWD: /usr/bin/borg, /usr/local/bin/borg, /usr/bin/rclone, /usr/bin/env"
-if [ ! -f "$BORG_SUDOERS" ] || ! grep -q "/usr/bin/rclone" "$BORG_SUDOERS"; then
-    echo "$BORG_EXPECTED" > "$BORG_SUDOERS"
-    chmod 440 "$BORG_SUDOERS"
+# Remove the legacy bbs-borg sudoers file: nothing uses it since all borg/
+# rclone commands moved into bbs-ssh-helper, and its "ALL=(bbs-*)" RunAs
+# wildcard is invalid syntax on newer sudo — the parse error disables ALL
+# sudo for www-data, breaking client provisioning entirely (#368).
+if [ -f /etc/sudoers.d/bbs-borg ]; then
+    rm -f /etc/sudoers.d/bbs-borg
+    echo "  Removed legacy /etc/sudoers.d/bbs-borg"
 fi
 
 # 8. Run database migrations
@@ -193,6 +195,53 @@ if command -v crontab &>/dev/null && command -v flock &>/dev/null; then
         GUARDED="* * * * * /usr/bin/flock -n /var/lock/bbs-scheduler.lock /usr/bin/php $BBS_DIR/scheduler.php >> /var/log/bbs-scheduler.log 2>&1"
         ( crontab -u www-data -l 2>/dev/null | grep -v 'scheduler.php'; echo "$GUARDED" ) | crontab -u www-data -
         echo "  Added flock overlap guard to scheduler cron"
+    fi
+fi
+
+# Apache systemd override for hardened units (Ubuntu 26.04+): the stock
+# apache2.service hides /etc/sudoers and mounts /etc read-only, breaking the
+# sudo -> bbs-ssh-helper provisioning flow (#368). Same drop-in bbs-install
+# ships; installed here too so release-upgraded systems get it.
+APACHE_DROPIN="/etc/systemd/system/apache2.service.d/bbs.conf"
+if systemctl show apache2 -p InaccessiblePaths 2>/dev/null | grep -q sudoers || \
+   systemctl show apache2 -p ProtectSystem 2>/dev/null | grep -qE '=(full|strict)$'; then
+    mkdir -p /etc/systemd/system/apache2.service.d
+    cat > "$APACHE_DROPIN.new" <<'APACHE_EOF'
+[Service]
+# BBS override for the hardened apache2 unit (Ubuntu 26.04+). The stock
+# sandbox hides /etc/sudoers and mounts /etc read-only, which blocks the
+# sudo -> bbs-ssh-helper provisioning flow (#368). This keeps ProtectSystem
+# (/usr and /boot read-only) and every other hardening directive; it only
+# restores sudoers visibility, /etc writes, and /usr/local/bin writes.
+ProtectSystem=true
+# The helper chmods setgid dirs (catalog logs); RestrictSUIDSGID=yes blocks
+# creating sgid files entirely
+RestrictSUIDSGID=no
+InaccessiblePaths=
+InaccessiblePaths=/boot
+InaccessiblePaths=/root
+InaccessiblePaths=-/etc/apt
+InaccessiblePaths=-/etc/.git
+InaccessiblePaths=-/etc/.svn
+ReadWritePaths=-/usr/local/bin
+APACHE_EOF
+    if ! cmp -s "$APACHE_DROPIN.new" "$APACHE_DROPIN" 2>/dev/null; then
+        mv "$APACHE_DROPIN.new" "$APACHE_DROPIN"
+        systemctl daemon-reload
+        if grep -q apache2.service /proc/self/cgroup 2>/dev/null; then
+            # We're running inside Apache's cgroup (web-triggered update):
+            # restarting Apache now would kill this update mid-run. Schedule
+            # a detached restart from PID 1 instead.
+            systemd-run --on-active=30 --unit=bbs-apache-override-restart \
+                systemctl restart apache2 >/dev/null 2>&1 || \
+                echo "  Apache override installed — restart apache2 to activate it"
+            echo "  Apache override installed (restart scheduled)"
+        else
+            systemctl restart apache2
+            echo "  Apache override installed and Apache restarted"
+        fi
+    else
+        rm -f "$APACHE_DROPIN.new"
     fi
 fi
 

@@ -134,7 +134,6 @@ fi
 echo "[5/5] Backing up system config..."
 mkdir -p "$TMPDIR/sudoers"
 [ -f /etc/sudoers.d/bbs-ssh-helper ] && cp /etc/sudoers.d/bbs-ssh-helper "$TMPDIR/sudoers/" 2>/dev/null || true
-[ -f /etc/sudoers.d/bbs-borg ] && cp /etc/sudoers.d/bbs-borg "$TMPDIR/sudoers/" 2>/dev/null || true
 [ -f /etc/cron.d/bbs-scheduler ] && cp /etc/cron.d/bbs-scheduler "$TMPDIR/cron" 2>/dev/null || true
 echo "  OK"
 

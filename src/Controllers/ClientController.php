@@ -266,7 +266,10 @@ class ClientController extends Controller
             // Clean up: remove storage dir and agent record
             @rmdir($clientDir);
             $this->db->delete('agents', 'id = ?', [$id]);
-            $this->flash('danger', 'Cannot create client — SSH provisioning failed. Ensure bbs-ssh-helper is installed at /usr/local/bin/bbs-ssh-helper with sudo access. See the Installation Guide: https://github.com/marcpope/borgbackupserver/blob/main/docs/INSTALL.md');
+            $detail = SshKeyManager::getLastHelperError();
+            $this->flash('danger', 'Cannot create client — SSH provisioning failed'
+                . ($detail ? ': ' . htmlspecialchars($detail) : '')
+                . '. Ensure bbs-ssh-helper is installed at /usr/local/bin/bbs-ssh-helper with sudo access. See the Installation Guide: https://github.com/marcpope/borgbackupserver/blob/main/docs/INSTALL.md');
             $this->redirect('/clients/add');
         }
 
