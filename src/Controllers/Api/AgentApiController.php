@@ -145,7 +145,7 @@ class AgentApiController extends Controller
         $sshPort = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'ssh_port'");
 
         // Per-agent overrides take precedence over global settings
-        $host = !empty($agent['server_host_override']) ? $agent['server_host_override'] : SshKeyManager::stripHostPort($serverHost['value'] ?? '');
+        $host = SshKeyManager::stripHostPort(!empty($agent['server_host_override']) ? $agent['server_host_override'] : ($serverHost['value'] ?? ''));
         $port = !empty($agent['ssh_port_override']) ? (int) $agent['ssh_port_override'] : (int) ($sshPort['value'] ?? 22);
 
         $this->json([
@@ -1083,7 +1083,7 @@ class AgentApiController extends Controller
         $serverHost = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
         $sshPort = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'ssh_port'");
 
-        $host = !empty($agent['server_host_override']) ? $agent['server_host_override'] : SshKeyManager::stripHostPort($serverHost['value'] ?? '');
+        $host = SshKeyManager::stripHostPort(!empty($agent['server_host_override']) ? $agent['server_host_override'] : ($serverHost['value'] ?? ''));
         $port = !empty($agent['ssh_port_override']) ? (int) $agent['ssh_port_override'] : (int) ($sshPort['value'] ?? 22);
 
         $this->json([

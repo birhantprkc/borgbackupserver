@@ -3597,7 +3597,20 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
 <?php elseif ($tab === 'install' && $isOwnerOrAdmin): ?>
     <h5 class="mb-3">Install Agent</h5>
 
-    <?php $appUrl = rtrim(\BBS\Core\Config::get('APP_URL', 'https://' . $serverHost), '/'); ?>
+    <?php
+    $appUrl = rtrim(\BBS\Core\Config::get('APP_URL', 'https://' . $serverHost), '/');
+    // Per-client server host override: an agent that reaches the server at a
+    // different address (e.g. an internal Docker hostname) must download the
+    // installer and poll the API via that address too (#367). Keep APP_URL's
+    // scheme; the override may carry its own port, otherwise reuse APP_URL's.
+    if (!empty($agent['server_host_override'])) {
+        $parts = parse_url($appUrl);
+        $override = $agent['server_host_override'];
+        $hasPort = (bool) preg_match('/^([^:\[\]]+|\[[0-9a-fA-F:]+\]):\d+$/', $override);
+        $port = (!$hasPort && !empty($parts['port'])) ? ':' . $parts['port'] : '';
+        $appUrl = ($parts['scheme'] ?? 'https') . '://' . $override . $port;
+    }
+    ?>
 
     <ul class="nav nav-tabs mb-3" role="tablist">
         <li class="nav-item" role="presentation">
