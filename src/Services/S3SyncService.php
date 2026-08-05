@@ -508,7 +508,13 @@ class S3SyncService
      */
     public function generateManifestFile(array $repo, array $agent, string $passphrase): array
     {
+        // tempnam() returns false when the temp dir is unusable — e.g. TMPDIR
+        // pointing at a directory that doesn't exist (#371). Fail cleanly
+        // instead of fataling on fopen('').
         $tempFile = tempnam(sys_get_temp_dir(), 'bbs-manifest-');
+        if ($tempFile === false) {
+            return ['success' => false, 'error' => 'Cannot create temp file in ' . sys_get_temp_dir() . ' — check that the directory exists and is writable (TMPDIR)'];
+        }
         $fp = fopen($tempFile, 'w');
 
         // Write opening brace and header fields
@@ -705,6 +711,9 @@ class S3SyncService
 
         // Download to temp file
         $tempFile = tempnam(sys_get_temp_dir(), 'bbs-manifest-');
+        if ($tempFile === false) {
+            return ['success' => false, 'file' => null, 'error' => 'Cannot create temp file in ' . sys_get_temp_dir() . ' — check that the directory exists and is writable (TMPDIR)'];
+        }
 
         $cmd = ['rclone', 'copyto', $remote, $tempFile];
         $env = $this->buildRcloneEnv($creds);

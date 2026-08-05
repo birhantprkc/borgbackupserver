@@ -185,18 +185,34 @@ else
     echo "  Warning: .env not found, skipping"
 fi
 
-# Ensure the scheduler cron has the flock overlap guard. Older installs
-# scheduled it unguarded, so a run hung on dead storage could pile up and
-# exhaust MySQL connections (falcon outage, 2026-07-21). Rewrite the www-data
-# scheduler line to the flock form if it isn't already.
-if command -v crontab &>/dev/null && command -v flock &>/dev/null; then
-    if crontab -u www-data -l 2>/dev/null | grep -q 'scheduler.php' \
-       && ! crontab -u www-data -l 2>/dev/null | grep -q 'flock.*scheduler.php'; then
-        GUARDED="* * * * * /usr/bin/flock -n /var/lock/bbs-scheduler.lock /usr/bin/php $BBS_DIR/scheduler.php >> /var/log/bbs-scheduler.log 2>&1"
-        ( crontab -u www-data -l 2>/dev/null | grep -v 'scheduler.php'; echo "$GUARDED" ) | crontab -u www-data -
-        echo "  Added flock overlap guard to scheduler cron"
+# Ensure the scheduler cron EXISTS and has the flock overlap guard. The old
+# check only upgraded an existing www-data crontab line — an install whose
+# scheduler cron lived elsewhere (or went missing) was left with no scheduler
+# at all (#371). Docker is excluded: there entrypoint.sh owns the cron via
+# /etc/cron.d with the container's php path.
+if [ ! -f /.dockerenv ] && command -v crontab &>/dev/null && command -v flock &>/dev/null; then
+    # Consolidate: bare-metal installs schedule via www-data's crontab. A
+    # stray /etc/cron.d/bbs-scheduler (old restore, or the Docker block
+    # copied by hand) double-schedules and often carries container-only
+    # paths (/usr/local/bin/php, TMPDIR=/var/bbs/tmp) that break on bare
+    # metal (#371).
+    if [ -f /etc/cron.d/bbs-scheduler ]; then
+        rm -f /etc/cron.d/bbs-scheduler
+        echo "  Removed /etc/cron.d/bbs-scheduler (scheduler runs from www-data's crontab)"
     fi
+    if ! crontab -u www-data -l 2>/dev/null | grep -q 'flock.*scheduler.php'; then
+        GUARDED="* * * * * /usr/bin/flock -n /var/lock/bbs-scheduler.lock /usr/bin/php $BBS_DIR/scheduler.php >> /var/log/bbs-scheduler.log 2>&1"
+        ( crontab -u www-data -l 2>/dev/null | grep -v 'scheduler.php' || true; echo "$GUARDED" ) | crontab -u www-data -
+        echo "  Scheduler cron installed/updated (flock-guarded)"
+    fi
+    touch /var/log/bbs-scheduler.log
+    chown www-data:www-data /var/log/bbs-scheduler.log 2>/dev/null || true
 fi
+
+# Scratch space matching the Docker layout — harmless if unused, and keeps
+# any TMPDIR=/var/bbs/tmp configuration working on bare metal (#371)
+mkdir -p /var/bbs/tmp
+chmod 1777 /var/bbs/tmp 2>/dev/null || true
 
 # Apache systemd override for hardened units (Ubuntu 26.04+): the stock
 # apache2.service hides /etc/sudoers and mounts /etc read-only, breaking the
