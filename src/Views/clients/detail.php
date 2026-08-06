@@ -1051,13 +1051,8 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                         <li>
                             <?php if ($deleteBlocked): ?>
                                 <span class="dropdown-item disabled text-muted" data-bs-toggle="tooltip" title="<?= htmlspecialchars($blockReason) ?>"><i class="bi bi-trash me-2"></i>Delete</span>
-                            <?php elseif (isset($s3SyncByRepo[$repo['id']])): ?>
-                                <button type="button" class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#deleteRepoModal<?= $repo['id'] ?>"><i class="bi bi-trash me-2"></i>Delete</button>
                             <?php else: ?>
-                                <form method="POST" action="/repositories/<?= $repo['id'] ?>/delete" data-confirm="PERMANENTLY delete repository &quot;<?= htmlspecialchars($repo['name']) ?>&quot;, all its archives, and the data on disk?&#10;&#10;This action is NOT reversible." data-confirm-danger>
-                                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                                    <button type="submit" class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Delete</button>
-                                </form>
+                                <button type="button" class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#deleteRepoModal<?= $repo['id'] ?>"><i class="bi bi-trash me-2"></i>Delete</button>
                             <?php endif; ?>
                         </li>
                     </ul>
@@ -1106,7 +1101,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
 
     <!-- Delete Repo Modals (for repos with S3 sync) -->
     <?php foreach ($repositories as $repo): ?>
-    <?php if (isset($s3SyncByRepo[$repo['id']])): ?>
+    <?php $isRemoteRepo = ($repo['storage_type'] ?? 'local') === 'remote_ssh'; ?>
     <div class="modal fade" id="deleteRepoModal<?= $repo['id'] ?>" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -1117,8 +1112,24 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                 <form method="POST" action="/repositories/<?= $repo['id'] ?>/delete">
                     <div class="modal-body">
                         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                        <p>PERMANENTLY delete repository <strong>"<?= htmlspecialchars($repo['name']) ?>"</strong>, all its archives, and the data on disk?</p>
-                        <p class="text-danger fw-bold">This action is NOT reversible.</p>
+                        <?php if ($isRemoteRepo): ?>
+                            <p>Remove repository <strong>"<?= htmlspecialchars($repo['name']) ?>"</strong> and its archive catalog from BBS?</p>
+                            <div class="alert alert-info d-flex align-items-start mb-0">
+                                <i class="bi bi-info-circle-fill me-2 mt-1"></i>
+                                <div>The borg data on the remote host is <strong>not</strong> deleted — only the registration in BBS is removed. You can re-attach it later (on any client) via <em>Import existing</em>.</div>
+                            </div>
+                        <?php else: ?>
+                            <p>PERMANENTLY delete repository <strong>"<?= htmlspecialchars($repo['name']) ?>"</strong>, all its archives, and the data on disk?</p>
+                            <p class="text-danger fw-bold">This action is NOT reversible.</p>
+                            <div class="form-check mt-3 p-3 bg-body-secondary rounded">
+                                <input class="form-check-input" type="checkbox" name="keep_data" id="keepData_<?= $repo['id'] ?>" value="1">
+                                <label class="form-check-label" for="keepData_<?= $repo['id'] ?>">
+                                    <i class="bi bi-hdd text-warning me-1"></i>Keep repository data on disk (unlink only)
+                                </label>
+                                <div class="form-text">The borg repository stays in storage and can be re-attached to any client later via Repositories &rarr; Scan &amp; Adopt.</div>
+                            </div>
+                        <?php endif; ?>
+                        <?php if (isset($s3SyncByRepo[$repo['id']])): ?>
                         <div class="form-check mt-3 p-3 bg-body-secondary rounded">
                             <input class="form-check-input" type="checkbox" name="delete_from_s3" id="deleteFromS3_<?= $repo['id'] ?>" value="1">
                             <label class="form-check-label" for="deleteFromS3_<?= $repo['id'] ?>">
@@ -1126,16 +1137,16 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                             </label>
                             <div class="form-text">If unchecked, the S3 copy will remain and can be restored later.</div>
                         </div>
+                        <?php endif; ?>
                     </div>
                     <div class="modal-footer border-0">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>Delete Repository</button>
+                        <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i><?= $isRemoteRepo ? 'Remove Repository' : 'Delete Repository' ?></button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
-    <?php endif; ?>
     <?php endforeach; ?>
 
     <?php endif; ?>

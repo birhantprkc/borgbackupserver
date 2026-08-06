@@ -341,10 +341,14 @@ class RepositoryController extends Controller
             $this->redirect("/clients/{$agentId}?tab=repos");
         }
 
+        // Unlink-only: keep the borg data on disk so the repo can be
+        // re-attached later (to any client) via scan/adopt (#369)
+        $keepData = !empty($_POST['keep_data']);
+
         // Delete borg repository from disk
         $localPath = BorgCommandBuilder::getLocalRepoPath($repo);
         $diskDeleted = false;
-        if (!empty($localPath) && is_dir($localPath)) {
+        if (!$keepData && !empty($localPath) && is_dir($localPath)) {
             // Safety: only delete paths within a known storage location
             $allowedPaths = array_column(
                 $this->db->fetchAll("SELECT path FROM storage_locations"),
@@ -433,8 +437,10 @@ class RepositoryController extends Controller
             $this->updateAgentStoragePaths($agentId, $agent);
         }
 
-        $msg = "Repository \"{$repo['name']}\" deleted.";
-        if ($diskDeleted) {
+        $msg = "Repository \"{$repo['name']}\" " . ($keepData ? 'unlinked' : 'deleted') . ".";
+        if ($keepData && !empty($localPath)) {
+            $msg .= " Data kept at {$localPath} — re-attach it anytime via Scan & Adopt.";
+        } elseif ($diskDeleted) {
             $msg .= " Data removed from disk.";
         } elseif (!empty($localPath) && is_dir($localPath)) {
             $msg .= " Warning: disk data at {$localPath} could not be removed — clean up manually.";
@@ -450,7 +456,7 @@ class RepositoryController extends Controller
         $this->db->insert('server_log', [
             'agent_id' => $agentId,
             'level' => 'info',
-            'message' => "Repository \"{$repo['name']}\" deleted" . ($diskDeleted ? " (disk data removed)" : "") . ($s3Deleted ? " (S3 data removed)" : ""),
+            'message' => "Repository \"{$repo['name']}\" " . ($keepData ? "unlinked (data kept on disk)" : "deleted") . ($diskDeleted ? " (disk data removed)" : "") . ($s3Deleted ? " (S3 data removed)" : ""),
         ]);
 
         $this->flash('success', $msg);

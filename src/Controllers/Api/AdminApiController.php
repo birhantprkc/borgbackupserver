@@ -1107,9 +1107,14 @@ class AdminApiController extends Controller
             $this->json(['error' => 'Cannot delete — repository has active jobs'], 409);
         }
 
+        // ?keep_data=1 (or JSON body {"keep_data": true}): unlink only — keep
+        // the borg data on disk for later re-attachment via scan/adopt (#369)
+        $input = $this->getJsonInput();
+        $keepData = !empty($_GET['keep_data']) || !empty($input['keep_data']);
+
         // Delete from disk
         $localPath = BorgCommandBuilder::getLocalRepoPath($repo);
-        if (!empty($localPath) && is_dir($localPath)) {
+        if (!$keepData && !empty($localPath) && is_dir($localPath)) {
             exec('sudo /usr/local/bin/bbs-ssh-helper delete-storage ' . escapeshellarg($localPath) . ' 2>&1', $output, $retval);
         }
 
@@ -1134,10 +1139,10 @@ class AdminApiController extends Controller
         $this->db->insert('server_log', [
             'agent_id' => $id,
             'level' => 'info',
-            'message' => "Repository \"{$repo['name']}\" deleted via API",
+            'message' => "Repository \"{$repo['name']}\" " . ($keepData ? 'unlinked (data kept on disk)' : 'deleted') . " via API",
         ]);
 
-        $this->json(['status' => 'ok', 'message' => "Repository \"{$repo['name']}\" deleted"]);
+        $this->json(['status' => 'ok', 'message' => "Repository \"{$repo['name']}\" " . ($keepData ? 'unlinked — data kept on disk' : 'deleted')]);
     }
 
     // ── Archives (recovery points) ───────────────────────
