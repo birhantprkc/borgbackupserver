@@ -5,7 +5,7 @@ set -eu
 : "${BBS_SERVER:?BBS_SERVER env var is required (e.g. https://backups.example.com)}"
 : "${BBS_API_KEY:?BBS_API_KEY env var is required}"
 
-mkdir -p /etc/bbs-agent
+mkdir -p /etc/bbs-agent "${BORG_BASE_DIR:-/etc/bbs-agent/borg}"
 
 {
     printf '[server]\n'

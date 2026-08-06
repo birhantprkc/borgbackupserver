@@ -31,9 +31,14 @@ RUN arch=$(dpkg --print-architecture) && \
     rm -rf /var/lib/apt/lists/* /tmp/mdbtools.deb
 
 # Force UTF-8 so the agent's ASCII-locale re-exec branch stays dormant.
+# BORG_BASE_DIR keeps borg's cache, config, and security dir under the
+# persisted /etc/bbs-agent volume — without it they live in /root and are
+# lost on container recreate, forcing borg to re-chunk every file on the
+# next backup (#373).
 ENV LC_ALL=C.UTF-8 \
     LANG=C.UTF-8 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    BORG_BASE_DIR=/etc/bbs-agent/borg
 
 RUN mkdir -p /opt/bbs-agent /etc/bbs-agent
 COPY agent/bbs-agent.py /opt/bbs-agent/bbs-agent.py
