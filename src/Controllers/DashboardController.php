@@ -338,7 +338,7 @@ class DashboardController extends Controller
 
         // Tile links to /log?level=error&hours=24, so count only what that
         // page renders. See getDashboardData() for the rationale (#235).
-        $errorCountQuery = "SELECT COUNT(*) as cnt FROM server_log sl LEFT JOIN agents a ON a.id = sl.agent_id WHERE sl.level = 'error' AND sl.created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)";
+        $errorCountQuery = "SELECT COUNT(*) as cnt FROM server_log sl LEFT JOIN agents a ON a.id = sl.agent_id WHERE sl.level = 'error' AND sl.resolved_at IS NULL AND sl.created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)";
         if ($agentWhere !== '1=1') {
             $errorCountQuery .= " AND ({$agentWhere} OR sl.agent_id IS NULL)";
         }
@@ -400,7 +400,7 @@ class DashboardController extends Controller
             SELECT sl.message, a.name as agent_name
             FROM server_log sl
             LEFT JOIN agents a ON a.id = sl.agent_id
-            WHERE sl.level = 'error' AND sl.created_at > ?
+            WHERE sl.level = 'error' AND sl.resolved_at IS NULL AND sl.created_at > ?
         ";
         $errParams = [$since];
         if ($agentWhere !== '1=1') {
@@ -476,7 +476,7 @@ class DashboardController extends Controller
         // endpoint and the scheduler's stale/zombie sweepers, so they're
         // captured here without a separate count. Operational alerts
         // (agent_offline, missed_schedule) live in /notifications.
-        $errorCountQuery = "SELECT COUNT(*) as cnt FROM server_log sl LEFT JOIN agents a ON a.id = sl.agent_id WHERE sl.level = 'error' AND sl.created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)";
+        $errorCountQuery = "SELECT COUNT(*) as cnt FROM server_log sl LEFT JOIN agents a ON a.id = sl.agent_id WHERE sl.level = 'error' AND sl.resolved_at IS NULL AND sl.created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)";
         if ($agentWhere !== '1=1') {
             $errorCountQuery .= " AND ({$agentWhere} OR sl.agent_id IS NULL)";
         }
@@ -562,7 +562,7 @@ class DashboardController extends Controller
         $logErrorsChartQuery = "SELECT DATE_FORMAT(sl.created_at, '%Y-%m-%d %H:00') as hour, COUNT(*) as count
                                   FROM server_log sl
                                   LEFT JOIN agents a ON a.id = sl.agent_id
-                                 WHERE sl.level = 'error'
+                                 WHERE sl.level = 'error' AND sl.resolved_at IS NULL
                                    AND sl.created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)";
         if ($agentWhere !== '1=1') {
             $logErrorsChartQuery .= " AND ({$agentWhere} OR sl.agent_id IS NULL)";

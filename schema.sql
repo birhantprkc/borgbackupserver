@@ -285,9 +285,12 @@ CREATE TABLE server_log (
     backup_job_id INT DEFAULT NULL,
     level ENUM('info', 'warning', 'error') NOT NULL DEFAULT 'info',
     message TEXT NOT NULL,
+    resolved_at DATETIME DEFAULT NULL,
+    resolved_by INT DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE SET NULL,
     FOREIGN KEY (backup_job_id) REFERENCES backup_jobs(id) ON DELETE SET NULL,
+    FOREIGN KEY (resolved_by) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_level (level),
     INDEX idx_created (created_at)
 );

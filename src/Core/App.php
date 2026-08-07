@@ -168,6 +168,8 @@ class App
 
         // Log
         $this->router->map('GET', '/log', 'LogController@index');
+        $this->router->map('POST', '/log/[i:id]/resolve', 'LogController@resolve');
+        $this->router->map('POST', '/log/resolve-all', 'LogController@resolveAll');
 
         // Settings
         $this->router->map('GET', '/settings', 'SettingsController@index');

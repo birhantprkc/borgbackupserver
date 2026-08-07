@@ -13,6 +13,18 @@
         <a href="/log?level=info<?= $clientParam ?>" class="btn btn-sm <?= $currentLevel === 'info' ? 'btn-info' : 'btn-outline-secondary' ?>">Info</a>
         <a href="/log?level=warning<?= $clientParam ?>" class="btn btn-sm <?= $currentLevel === 'warning' ? 'btn-warning' : 'btn-outline-secondary' ?>">Warning</a>
         <a href="/log?level=error<?= $clientParam ?>" class="btn btn-sm <?= $currentLevel === 'error' ? 'btn-danger' : 'btn-outline-secondary' ?>">Error</a>
+        <?php $qsBase = '/log?' . http_build_query(array_filter(['level' => $currentLevel, 'client' => $currentClient ?: null, 'hours' => $currentHours ?: null])); ?>
+        <a href="<?= $qsBase . ($showResolved ? '' : (str_contains($qsBase, '=') ? '&' : '') . 'resolved=1') ?>"
+           class="btn btn-sm <?= $showResolved ? 'btn-secondary' : 'btn-outline-secondary' ?>" title="Include errors already marked resolved">
+            <i class="bi bi-check2-circle"></i> <?= $showResolved ? 'Hide' : 'Show' ?> Resolved
+        </a>
+        <?php if ($this->isAdmin()): ?>
+        <form method="POST" action="/log/resolve-all" class="d-inline" data-confirm="Mark ALL current errors as resolved? They will disappear from the dashboard and the default log view.">
+            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+            <input type="hidden" name="return" value="<?= htmlspecialchars($_SERVER['REQUEST_URI'] ?? '/log') ?>">
+            <button type="submit" class="btn btn-sm btn-outline-success"><i class="bi bi-check2-all"></i> Resolve All Errors</button>
+        </form>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -31,6 +43,7 @@
                         <th style="white-space: nowrap;">Client</th>
                         <th>Level</th>
                         <th>Message</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -61,7 +74,28 @@
                             ?>
                             <span class="badge text-bg-<?= $lc ?>"><?= $log['level'] ?></span>
                         </td>
-                        <td><?= htmlspecialchars($log['message']) ?></td>
+                        <td>
+                            <?= htmlspecialchars($log['message']) ?>
+                            <?php if (!empty($log['resolved_at'])): ?>
+                                <span class="badge text-bg-success ms-1" title="Resolved <?= \BBS\Core\TimeHelper::format($log['resolved_at'], 'M j, g:i A') ?><?= !empty($log['resolved_by_name']) ? ' by ' . htmlspecialchars($log['resolved_by_name']) : '' ?>">
+                                    <i class="bi bi-check2"></i> resolved
+                                </span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="text-end" style="white-space: nowrap;" onclick="event.stopPropagation()">
+                            <?php if ($log['level'] === 'error' && $this->isAdmin()): ?>
+                            <form method="POST" action="/log/<?= $log['id'] ?>/resolve" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                <input type="hidden" name="return" value="<?= htmlspecialchars($_SERVER['REQUEST_URI'] ?? '/log') ?>">
+                                <?php if (!empty($log['resolved_at'])): ?>
+                                    <input type="hidden" name="unresolve" value="1">
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary py-0" title="Mark as unresolved">Unresolve</button>
+                                <?php else: ?>
+                                    <button type="submit" class="btn btn-sm btn-outline-success py-0" title="Mark as resolved — hides it from the dashboard and default log view">Resolve</button>
+                                <?php endif; ?>
+                            </form>
+                            <?php endif; ?>
+                        </td>
                     </tr>
                     <?php endforeach; ?>
                 </tbody>

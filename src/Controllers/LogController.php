@@ -42,6 +42,13 @@ class LogController extends Controller
             $params[] = $hours;
         }
 
+        // Resolved errors are hidden by default so multiple admins don't
+        // re-triage the same handled error (#365); ?resolved=1 shows them
+        $showResolved = !empty($_GET['resolved']);
+        if (!$showResolved) {
+            $where .= ' AND sl.resolved_at IS NULL';
+        }
+
         // Get agents list for the client filter dropdown
         [$agentListWhere, $agentListParams] = $this->getAgentWhereClause('a');
         $agents = $this->db->fetchAll("
@@ -59,9 +66,10 @@ class LogController extends Controller
         $pages = max(1, (int) ceil($total / $perPage));
 
         $logs = $this->db->fetchAll("
-            SELECT sl.*, a.name as agent_name
+            SELECT sl.*, a.name as agent_name, u.username as resolved_by_name
             FROM server_log sl
             LEFT JOIN agents a ON a.id = sl.agent_id
+            LEFT JOIN users u ON u.id = sl.resolved_by
             WHERE {$where}
             ORDER BY sl.created_at DESC
             LIMIT {$perPage} OFFSET {$offset}
@@ -77,6 +85,59 @@ class LogController extends Controller
             'page' => $page,
             'pages' => $pages,
             'total' => $total,
+            'showResolved' => $showResolved,
         ]);
+    }
+
+    /**
+     * Mark an error entry as resolved (or unresolved) so it drops off the
+     * dashboard and default log view (#365). Admin only — resolution is a
+     * global state shared by every admin doing backup checks.
+     */
+    public function resolve(int $id): void
+    {
+        $this->requireAdmin();
+        $this->verifyCsrf();
+
+        $entry = $this->db->fetchOne("SELECT id, level, resolved_at FROM server_log WHERE id = ?", [$id]);
+        if (!$entry || $entry['level'] !== 'error') {
+            $this->flash('danger', 'Log entry not found (only errors can be resolved).');
+            $this->redirect('/log');
+        }
+
+        if (!empty($_POST['unresolve'])) {
+            $this->db->update('server_log', ['resolved_at' => null, 'resolved_by' => null], 'id = ?', [$id]);
+            $this->flash('success', 'Error marked as unresolved.');
+        } else {
+            $this->db->update('server_log', [
+                'resolved_at' => date('Y-m-d H:i:s'),
+                'resolved_by' => $_SESSION['user_id'] ?? null,
+            ], 'id = ?', [$id]);
+            $this->flash('success', 'Error marked as resolved.');
+        }
+        $this->redirect($this->safeReturnPath());
+    }
+
+    /**
+     * Resolve every currently-unresolved error in one click.
+     */
+    public function resolveAll(): void
+    {
+        $this->requireAdmin();
+        $this->verifyCsrf();
+
+        $this->db->query(
+            "UPDATE server_log SET resolved_at = NOW(), resolved_by = ? WHERE level = 'error' AND resolved_at IS NULL",
+            [$_SESSION['user_id'] ?? null]
+        );
+        $this->flash('success', 'All errors marked as resolved.');
+        $this->redirect($this->safeReturnPath());
+    }
+
+    /** Only same-site paths — a POSTed return URL must not become an open redirect. */
+    private function safeReturnPath(): string
+    {
+        $r = $_POST['return'] ?? '';
+        return (is_string($r) && str_starts_with($r, '/') && !str_starts_with($r, '//')) ? $r : '/log';
     }
 }
