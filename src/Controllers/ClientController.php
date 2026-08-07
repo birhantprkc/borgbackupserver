@@ -415,6 +415,32 @@ class ClientController extends Controller
         $allPlugins = $pluginManager->getAllPlugins();
         $pluginConfigs = $pluginManager->getPluginConfigs($id);
 
+        // Per-plan plugin slugs for the Status tab schedule summary: plugins
+        // attached to the plan AND enabled for the agent, plus an S3 marker
+        // for plans whose repository has offsite sync enabled.
+        $planPlugins = [];
+        foreach ($this->db->fetchAll(
+            "SELECT bpp.backup_plan_id AS pid, pl.slug
+             FROM backup_plan_plugins bpp
+             JOIN plugins pl ON pl.id = bpp.plugin_id
+             JOIN backup_plans bp ON bp.id = bpp.backup_plan_id
+             JOIN agent_plugins ap ON ap.plugin_id = pl.id AND ap.agent_id = bp.agent_id AND ap.enabled = 1
+             WHERE bp.agent_id = ? AND bpp.enabled = 1", [$id]
+        ) as $r) {
+            $planPlugins[(int) $r['pid']][] = $r['slug'];
+        }
+        foreach ($this->db->fetchAll(
+            "SELECT DISTINCT bp.id AS pid
+             FROM backup_plans bp
+             JOIN repository_s3_configs rsc ON rsc.repository_id = bp.repository_id AND rsc.enabled = 1
+             WHERE bp.agent_id = ?", [$id]
+        ) as $r) {
+            $planPlugins[(int) $r['pid']][] = 's3_sync';
+        }
+        foreach ($planPlugins as $pid => $slugs) {
+            $planPlugins[$pid] = array_values(array_unique($slugs));
+        }
+
         // Check if global S3 settings have a bucket configured
         $globalS3Bucket = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 's3_bucket'");
         $globalS3Configured = !empty($globalS3Bucket['value']);
@@ -499,6 +525,7 @@ class ClientController extends Controller
             'allPlugins' => $allPlugins,
             'pluginManager' => $pluginManager,
             'pluginConfigs' => $pluginConfigs,
+            'planPlugins' => $planPlugins,
             's3SyncByRepo' => $s3SyncByRepo,
             's3Orphans' => $s3Orphans,
             'globalS3Configured' => $globalS3Configured,

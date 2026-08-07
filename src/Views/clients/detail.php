@@ -471,8 +471,83 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
         </div>
     </div>
 
-    <!-- Row 3: Recent Activity (table) -->
-    <div class="card border-0 shadow-sm">
+    <!-- Row 3: Schedules summary (left) + Recent Activity (right) -->
+    <?php
+    // Compact plugin-icon renderer for the schedule summary
+    $pluginIconHtml = function (string $slug): string {
+        $logos = [
+            'mysql_dump' => ['/images/mysql.png', 'MySQL'],
+            'pg_dump'    => ['/images/postgresql.svg', 'PostgreSQL'],
+            'mongo_dump' => ['/images/mongodb.svg', 'MongoDB'],
+            'interworx'  => ['/images/interworx-icon.png', 'InterWorx'],
+        ];
+        if (isset($logos[$slug])) {
+            [$src, $name] = $logos[$slug];
+            return '<img src="' . $src . '" alt="' . $name . '" title="' . $name . '" style="width:22px;height:22px;object-fit:contain;">';
+        }
+        if ($slug === 'shell_hook') {
+            return '<span title="Script Hook" class="d-inline-flex align-items-center justify-content-center rounded" style="width:22px;height:22px;background:rgba(13,110,253,0.12);"><i class="bi bi-code-slash text-primary" style="font-size:0.8rem;"></i></span>';
+        }
+        if ($slug === 's3_sync') {
+            return '<span title="S3 Offsite Sync" class="d-inline-flex align-items-center justify-content-center rounded" style="width:22px;height:22px;background:#ff6b6b;"><i class="bi bi-cloud-arrow-up text-white" style="font-size:0.75rem;"></i></span>';
+        }
+        return '<i class="bi bi-puzzle text-secondary" title="' . htmlspecialchars($slug) . '"></i>';
+    };
+    ?>
+    <div class="row g-4">
+    <!-- Left: Schedules summary -->
+    <div class="col-lg-6">
+    <div class="card border-0 shadow-sm h-100">
+        <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-calendar-week me-1"></i> Schedules</span>
+            <a href="?tab=schedules" class="small text-decoration-none">Manage &rarr;</a>
+        </div>
+        <div class="card-body p-0">
+            <?php if (empty($plans)): ?>
+            <div class="p-4 text-muted text-center">No backup plans yet. <a href="?tab=schedules">Add one &rarr;</a></div>
+            <?php else: ?>
+            <div class="list-group list-group-flush">
+                <?php foreach ($plans as $plan):
+                    $freq = $plan['frequency'] ?? 'manual';
+                    $isActive = $plan['schedule_enabled'] ?? false;
+                    $isManual = $freq === 'manual' || empty($plan['schedule_id']);
+                    $sched = ucfirst(str_replace(['10min','15min','30min'], ['Every 10 min','Every 15 min','Every 30 min'], $freq));
+                    if (!empty($plan['times']) && in_array($freq, ['daily','weekly','monthly'])) $sched .= ' @ ' . htmlspecialchars($plan['times']);
+                    if ($freq === 'weekly' && isset($plan['day_of_week'])) { $dn = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; $sched = ($dn[$plan['day_of_week']] ?? '') . 's @ ' . htmlspecialchars($plan['times'] ?? '00:00'); }
+                    if ($freq === 'monthly' && isset($plan['day_of_month'])) { $dom = $plan['day_of_month']; $sched = 'Monthly on ' . ($dom === 'last' ? 'last day' : $dom) . ' @ ' . htmlspecialchars($plan['times'] ?? '00:00'); }
+                    if ($isManual) $sched = 'Manual (no schedule)';
+                    $isRemote = ($plan['repo_storage_type'] ?? 'local') === 'remote_ssh';
+                    $slugs = $planPlugins[(int) $plan['id']] ?? [];
+                    $statusColor = $isActive ? 'success' : ($isManual ? 'secondary' : 'warning');
+                ?>
+                <div class="list-group-item py-3" style="cursor:pointer;" onclick="window.location='?tab=schedules'">
+                    <div class="d-flex align-items-start justify-content-between gap-2">
+                        <div style="min-width:0;">
+                            <div class="fw-semibold text-truncate">
+                                <i class="bi bi-circle-fill text-<?= $statusColor ?> me-1" style="font-size:0.5rem;vertical-align:middle;" title="<?= $isActive ? 'Active' : ($isManual ? 'Manual' : 'Paused') ?>"></i>
+                                <?= htmlspecialchars($plan['name']) ?>
+                            </div>
+                            <div class="small text-muted text-truncate mt-1">
+                                <i class="bi bi-hdd-stack me-1"></i><?= htmlspecialchars($plan['repo_name'] ?? '&mdash;') ?><?php if ($isRemote): ?> <span class="badge bg-secondary-subtle text-secondary-emphasis" style="font-size:0.6rem;">Remote</span><?php endif; ?>
+                            </div>
+                            <div class="small text-muted mt-1"><i class="bi bi-clock me-1"></i><?= $sched ?></div>
+                        </div>
+                        <?php if (!empty($slugs)): ?>
+                        <div class="d-flex align-items-center gap-1 flex-shrink-0" style="flex-wrap:wrap;justify-content:flex-end;max-width:110px;">
+                            <?php foreach ($slugs as $slug) echo $pluginIconHtml($slug); ?>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+        </div>
+    </div>
+    </div>
+    <!-- Right: Recent Activity -->
+    <div class="col-lg-6">
+    <div class="card border-0 shadow-sm h-100">
         <div class="card-header fw-semibold">
             <i class="bi bi-clock-history me-1"></i> Recent Activity
         </div>
@@ -492,7 +567,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                         </tr>
                     </thead>
                     <tbody>
-                    <?php foreach (array_slice($recentJobs, 0, 20) as $job):
+                    <?php foreach (array_slice($recentJobs, 0, 12) as $job):
                         $jIcon = match($job['status']) {
                             'completed' => 'check-circle-fill text-success',
                             'failed' => 'x-circle-fill text-danger',
@@ -525,6 +600,8 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
             <?php endif; ?>
         </div>
     </div>
+    </div><!-- /col Recent Activity -->
+    </div><!-- /row Schedules + Recent Activity -->
 
     <?php if (!empty($durationChart)): ?>
     <script src="/assets/chartjs/chart.umd.min.js"></script>
