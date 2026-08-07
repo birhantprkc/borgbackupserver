@@ -94,6 +94,17 @@ class BorgCommandBuilder
     }
 
     /**
+     * Turn a borg create command into a dry run: walks sources and applies
+     * excludes but writes nothing to the repository (#257).
+     */
+    public static function makeDryRun(array $cmd): array
+    {
+        // Insert after ['borg', 'create', ...]
+        array_splice($cmd, 2, 0, ['--dry-run']);
+        return $cmd;
+    }
+
+    /**
      * Build the borg list command.
      */
     public static function buildListCommand(array $repo, ?string $archiveName = null): array

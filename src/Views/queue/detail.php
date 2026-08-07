@@ -486,6 +486,43 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
 </div>
 
 <!-- Error Log (if failed) -->
+<?php
+// Dry run results (#257): summary + capped sample lists from task_result
+$dryRunResult = null;
+if ($job['task_type'] === 'backup_dry_run' && !empty($job['task_result'])) {
+    $decoded = json_decode($job['task_result'], true);
+    if (is_array($decoded) && !empty($decoded['dry_run'])) $dryRunResult = $decoded;
+}
+?>
+<?php if ($dryRunResult !== null): ?>
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header card-head-gradient fw-semibold">
+        <i class="bi bi-eyeglasses me-1"></i> Dry Run Results
+    </div>
+    <div class="card-body">
+        <p class="mb-2">
+            <span class="badge text-bg-success me-1"><?= number_format($dryRunResult['would_backup'] ?? 0) ?></span> items would be backed up,
+            <span class="badge text-bg-secondary me-1"><?= number_format($dryRunResult['excluded'] ?? 0) ?></span> excluded by patterns.
+            Nothing was written to the repository.
+        </p>
+        <?php foreach ([['excluded_sample', 'Excluded items', 'excluded'], ['included_sample', 'Items that would be backed up', 'would_backup']] as [$key, $label, $totalKey]): ?>
+            <?php $sample = $dryRunResult[$key] ?? []; $totalCount = (int) ($dryRunResult[$totalKey] ?? 0); ?>
+            <?php if (!empty($sample)): ?>
+            <div class="mb-2">
+                <a class="text-decoration-none small" data-bs-toggle="collapse" href="#dryrun-<?= $key ?>">
+                    <i class="bi bi-chevron-expand"></i> <?= $label ?>
+                    (<?= count($sample) < $totalCount ? 'first ' . count($sample) . ' of ' . number_format($totalCount) : count($sample) ?>)
+                </a>
+                <div class="collapse" id="dryrun-<?= $key ?>">
+                    <pre class="small bg-body-secondary rounded p-2 mt-1 mb-0" style="max-height: 300px; overflow-y: auto; white-space: pre-wrap; word-break: break-all;"><?= htmlspecialchars(implode("\n", $sample)) ?></pre>
+                </div>
+            </div>
+            <?php endif; ?>
+        <?php endforeach; ?>
+    </div>
+</div>
+<?php endif; ?>
+
 <?php if ($job['status'] === 'failed' && $job['error_log']): ?>
 <div id="error-section" class="card border-0 shadow-sm mb-4 border-danger">
     <div class="card-header card-head-gradient fw-semibold text-danger">

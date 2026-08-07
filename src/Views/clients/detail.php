@@ -1660,6 +1660,12 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                                     <button type="submit" class="dropdown-item"><i class="bi bi-play-fill text-success me-2"></i>Run Now</button>
                                 </form>
                             </li>
+                            <li>
+                                <form method="POST" action="/plans/<?= $plan['id'] ?>/dry-run">
+                                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                    <button type="submit" class="dropdown-item" title="Test what would be backed up — applies all exclude patterns, writes nothing to the repository"><i class="bi bi-eyeglasses text-info me-2"></i>Dry Run</button>
+                                </form>
+                            </li>
                             <?php if ($plan['schedule_id']): ?>
                             <li>
                                 <form method="POST" action="/schedules/<?= $plan['schedule_id'] ?>/toggle">

@@ -145,6 +145,7 @@ class App
         $this->router->map('POST', '/plans/[i:id]/edit', 'BackupPlanController@update');
         $this->router->map('POST', '/plans/[i:id]/delete', 'BackupPlanController@delete');
         $this->router->map('POST', '/plans/[i:id]/trigger', 'BackupPlanController@trigger');
+        $this->router->map('POST', '/plans/[i:id]/dry-run', 'BackupPlanController@dryRun');
         $this->router->map('POST', '/plans/[i:id]/duplicate', 'BackupPlanController@duplicate');
 
         // Schedules

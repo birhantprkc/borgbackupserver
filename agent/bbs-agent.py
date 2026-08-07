@@ -46,7 +46,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.66.5"
+AGENT_VERSION = "2.70.0"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -3558,6 +3558,13 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
     catalog_ssh = None  # SSH subprocess for streaming catalog to server
     catalog_pipe_failed = False
 
+    # Dry-run tallies (#257): counts + capped path samples returned as the
+    # job's task_result so the UI can show what would be backed up
+    dry_included = 0
+    dry_excluded = 0
+    dry_included_sample = []
+    dry_excluded_sample = []
+
     if task_type == "backup":
         ssh_info = load_ssh_info()
         if ssh_info and ssh_info.get("ssh_unix_user") and ssh_info.get("server_host"):
@@ -3706,6 +3713,31 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
                             })
                             last_progress_time = now
 
+                elif msg_type in ("file_status", "file_item") and task_type == "backup_dry_run":
+                    # Tally what borg WOULD do: 'x' = excluded by a pattern,
+                    # 'd' = directory (not counted), anything else = a file
+                    # that would be backed up (#257)
+                    dr_status = (entry.get("status") or "-")[0].lower()
+                    dr_path = entry.get("path", "")
+                    if dr_status == "x":
+                        dry_excluded += 1
+                        if len(dry_excluded_sample) < 200:
+                            dry_excluded_sample.append(dr_path)
+                    elif dr_status != "d":
+                        dry_included += 1
+                        if len(dry_included_sample) < 200:
+                            dry_included_sample.append(dr_path)
+                    files_processed = dry_included + dry_excluded
+                    now = time.time()
+                    if now - last_progress_time >= 5:
+                        api_request(config, "/api/agent/progress", method="POST", data={
+                            "job_id": job_id,
+                            "files_processed": files_processed,
+                            "status_message": "Dry run: scanned {:,} files ({:,} excluded)...".format(
+                                dry_included + dry_excluded, dry_excluded),
+                        })
+                        last_progress_time = now
+
                 elif msg_type in ("file_status", "file_item") and task_type == "backup" and catalog_ssh:
                     # Excluded ('x') and unreadable ('e') items are not in the
                     # archive — skip them before doing any work. borg emits one
@@ -3844,7 +3876,12 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
                 logger.error("Job #{} failed: nothing extracted".format(job_id))
             else:
                 result = "completed"
-                if task_type == "backup":
+                if task_type == "backup_dry_run":
+                    logger.info(
+                        "Job #{} dry run completed: {} items would be backed up, {} excluded".format(
+                            job_id, dry_included, dry_excluded)
+                    )
+                elif task_type == "backup":
                     logger.info(
                         "Job #{} completed: {} files, "
                         "{} bytes original, {} bytes dedup".format(job_id, files_processed, original_size, deduplicated_size)
@@ -3863,7 +3900,7 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
             # silently skipped, #203). For restore (and any other op)
             # exit 1 means at least one file failed to extract — fail
             # the job outright.
-            if task_type == "backup":
+            if task_type in ("backup", "backup_dry_run"):
                 result = "completed"
                 # Routine borg/SSH warnings that fire on every backup of
                 # an active system aren't actionable and shouldn't trip
@@ -4016,6 +4053,15 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
             "bytes_total": bytes_total if bytes_total else bytes_processed,
             "bytes_processed": bytes_processed,
         }
+
+    if task_type == "backup_dry_run":
+        status_data["task_result"] = json.dumps({
+            "dry_run": True,
+            "would_backup": dry_included,
+            "excluded": dry_excluded,
+            "included_sample": dry_included_sample,
+            "excluded_sample": dry_excluded_sample,
+        })
 
     if archive_name:
         status_data["archive_name"] = archive_name

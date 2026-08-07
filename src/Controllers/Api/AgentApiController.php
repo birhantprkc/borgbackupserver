@@ -414,6 +414,12 @@ class AgentApiController extends Controller
         if (!empty($input['error_log']))      $data['error_log'] = $input['error_log'];
         if (!empty($input['had_warnings']))   $data['had_warnings'] = 1;
 
+        // Dry runs return their would-backup/excluded summary as task_result
+        // JSON for the job detail page (#257)
+        if ($job['task_type'] === 'backup_dry_run' && !empty($input['task_result'])) {
+            $data['task_result'] = substr((string) $input['task_result'], 0, 262144);
+        }
+
         $this->db->update('backup_jobs', $data, 'id = ?', [$jobId]);
 
         $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));

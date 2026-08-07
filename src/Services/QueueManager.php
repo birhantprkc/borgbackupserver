@@ -113,7 +113,7 @@ class QueueManager
         // tasks (prune/compact/catalog/etc.) run by the scheduler itself —
         // they don't care about the agent's connection state.
         $agentBoundTypes = [
-            'backup', 'restore', 'restore_mysql', 'restore_pg', 'restore_mongo',
+            'backup', 'backup_dry_run', 'restore', 'restore_mysql', 'restore_pg', 'restore_mongo',
             'update_borg', 'update_agent', 'plugin_test', 'list_dir',
         ];
 
@@ -206,23 +206,31 @@ class QueueManager
 
             $taskPayload = null;
 
-            if ($job['task_type'] === 'backup') {
+            if ($job['task_type'] === 'backup' || $job['task_type'] === 'backup_dry_run') {
+                $isDryRun = $job['task_type'] === 'backup_dry_run';
                 $prefix = $job['backup_plan_id'] ? 'plan' . $job['backup_plan_id'] : ($job['repo_name'] ?? 'backup');
-                $archiveName = BorgCommandBuilder::generateArchiveName($prefix);
+                $archiveName = BorgCommandBuilder::generateArchiveName($isDryRun ? 'dry-run' : $prefix);
 
-                // Build plugin payload and auto-include plugin directories (e.g. mysql dump_dir)
-                $pluginManager = new PluginManager();
-                $plugins = $pluginManager->buildPluginPayload($job['backup_plan_id'], $job['agent_id']);
-                foreach ($plugins as $p) {
-                    if (!empty($p['config']['dump_dir'])) {
-                        $dumpDir = rtrim($p['config']['dump_dir'], '/');
-                        if (strpos($plan['directories'], $dumpDir) === false) {
-                            $plan['directories'] .= "\n" . $dumpDir;
+                // Build plugin payload and auto-include plugin directories (e.g. mysql dump_dir).
+                // Dry runs never execute plugins — no database dumps, no hooks (#257).
+                $plugins = [];
+                if (!$isDryRun) {
+                    $pluginManager = new PluginManager();
+                    $plugins = $pluginManager->buildPluginPayload($job['backup_plan_id'], $job['agent_id']);
+                    foreach ($plugins as $p) {
+                        if (!empty($p['config']['dump_dir'])) {
+                            $dumpDir = rtrim($p['config']['dump_dir'], '/');
+                            if (strpos($plan['directories'], $dumpDir) === false) {
+                                $plan['directories'] .= "\n" . $dumpDir;
+                            }
                         }
                     }
                 }
 
                 $cmd = BorgCommandBuilder::buildCreateCommand($plan, $repo, $archiveName);
+                if ($isDryRun) {
+                    $cmd = BorgCommandBuilder::makeDryRun($cmd);
+                }
 
                 // For remote SSH repos, add --remote-path and include SSH key in payload
                 $remoteSshConfig = null;
@@ -261,7 +269,7 @@ class QueueManager
                     }
                 }
 
-                $taskPayload = BorgCommandBuilder::toTaskPayload('backup', $cmd, $env, $extra);
+                $taskPayload = BorgCommandBuilder::toTaskPayload($isDryRun ? 'backup_dry_run' : 'backup', $cmd, $env, $extra);
 
                 // Log the borg command being sent to the agent
                 $cmdStr = implode(' ', array_map('escapeshellarg', $cmd));
@@ -408,23 +416,31 @@ class QueueManager
                 'prune_years' => $job['prune_years'] ?? 0,
             ];
 
-            if ($job['task_type'] === 'backup') {
+            if ($job['task_type'] === 'backup' || $job['task_type'] === 'backup_dry_run') {
+                $isDryRun = $job['task_type'] === 'backup_dry_run';
                 $prefix = $job['backup_plan_id'] ? 'plan' . $job['backup_plan_id'] : ($job['repo_name'] ?? 'backup');
-                $archiveName = BorgCommandBuilder::generateArchiveName($prefix);
+                $archiveName = BorgCommandBuilder::generateArchiveName($isDryRun ? 'dry-run' : $prefix);
 
-                // Build plugin payload and auto-include plugin directories (e.g. mysql dump_dir)
-                $pluginManager = new PluginManager();
-                $plugins = $pluginManager->buildPluginPayload($job['backup_plan_id'], $job['agent_id']);
-                foreach ($plugins as $p) {
-                    if (!empty($p['config']['dump_dir'])) {
-                        $dumpDir = rtrim($p['config']['dump_dir'], '/');
-                        if (strpos($plan['directories'], $dumpDir) === false) {
-                            $plan['directories'] .= "\n" . $dumpDir;
+                // Build plugin payload and auto-include plugin directories (e.g. mysql dump_dir).
+                // Dry runs never execute plugins — no database dumps, no hooks (#257).
+                $plugins = [];
+                if (!$isDryRun) {
+                    $pluginManager = new PluginManager();
+                    $plugins = $pluginManager->buildPluginPayload($job['backup_plan_id'], $job['agent_id']);
+                    foreach ($plugins as $p) {
+                        if (!empty($p['config']['dump_dir'])) {
+                            $dumpDir = rtrim($p['config']['dump_dir'], '/');
+                            if (strpos($plan['directories'], $dumpDir) === false) {
+                                $plan['directories'] .= "\n" . $dumpDir;
+                            }
                         }
                     }
                 }
 
                 $cmd = BorgCommandBuilder::buildCreateCommand($plan, $repo, $archiveName);
+                if ($isDryRun) {
+                    $cmd = BorgCommandBuilder::makeDryRun($cmd);
+                }
 
                 // For remote SSH repos, add --remote-path and include SSH key
                 $remoteSshConfig = null;
@@ -459,7 +475,7 @@ class QueueManager
                         $extra['remote_ssh_key'] = $job['remote_ssh_key_encrypted'];
                     }
                 }
-                $tasks[] = BorgCommandBuilder::toTaskPayload('backup', $cmd, $env, $extra);
+                $tasks[] = BorgCommandBuilder::toTaskPayload($isDryRun ? 'backup_dry_run' : 'backup', $cmd, $env, $extra);
             } elseif ($job['task_type'] === 'restore') {
                 $payload = $this->buildRestorePayload($job);
                 if ($payload) {

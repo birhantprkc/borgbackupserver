@@ -211,6 +211,52 @@ class BackupPlanController extends Controller
         $this->redirect("/queue/{$jobId}");
     }
 
+    /**
+     * Queue a dry run (#257): the plan's exact borg command with --dry-run,
+     * so exclude patterns can be tested without writing anything to the repo.
+     */
+    public function dryRun(int $id): void
+    {
+        $this->requireAuth();
+        $this->verifyCsrf();
+
+        $plan = $this->getPlan($id);
+        if (!$plan) {
+            $this->flash('danger', 'Backup plan not found.');
+            $this->redirect('/clients');
+        }
+
+        $this->requirePermission(PermissionService::TRIGGER_BACKUP, $plan['agent_id']);
+
+        $planBusy = $this->db->fetchOne("
+            SELECT id FROM backup_jobs
+            WHERE backup_plan_id = ?
+              AND status IN ('queued', 'sent', 'running')
+        ", [$id]);
+        if ($planBusy) {
+            $this->flash('warning', 'This plan already has a job queued or running.');
+            $this->redirect("/clients/{$plan['agent_id']}?tab=backups");
+            return;
+        }
+
+        $jobId = $this->db->insert('backup_jobs', [
+            'backup_plan_id' => $id,
+            'agent_id' => $plan['agent_id'],
+            'repository_id' => $plan['repository_id'],
+            'task_type' => 'backup_dry_run',
+            'status' => 'queued',
+        ]);
+
+        $this->db->insert('server_log', [
+            'agent_id' => $plan['agent_id'],
+            'backup_job_id' => $jobId,
+            'level' => 'info',
+            'message' => "Dry run queued for plan \"{$plan['name']}\" (job #{$jobId})",
+        ]);
+
+        $this->redirect("/queue/{$jobId}");
+    }
+
     public function duplicate(int $id): void
     {
         $this->requireAuth();
