@@ -82,7 +82,12 @@ class BackupPlanController extends Controller
         ]);
 
         // Save plugin configurations
-        $this->savePluginConfigs($planId);
+        $pluginErr = $this->savePluginConfigs($planId, $agentId);
+        if ($pluginErr) {
+            $this->flash('warning', "Backup plan \"{$name}\" created, but plugins were not saved: {$pluginErr}");
+            $this->redirect("/clients/{$agentId}?tab=schedules");
+            return;
+        }
 
         $this->flash('success', "Backup plan \"{$name}\" created with schedule.");
         $this->redirect("/clients/{$agentId}?tab=schedules");
@@ -139,7 +144,12 @@ class BackupPlanController extends Controller
         }
 
         // Update plugin configurations
-        $this->savePluginConfigs($id);
+        $pluginErr = $this->savePluginConfigs($id, (int) $plan['agent_id']);
+        if ($pluginErr) {
+            $this->flash('warning', "Plan saved, but plugins were not updated: {$pluginErr}");
+            $this->redirect("/clients/{$plan['agent_id']}?tab=schedules");
+            return;
+        }
 
         $this->flash('success', 'Backup plan updated.');
         $this->redirect("/clients/{$plan['agent_id']}?tab=schedules");
@@ -333,25 +343,65 @@ class BackupPlanController extends Controller
         return $plan;
     }
 
-    private function savePluginConfigs(int $planId): void
+    /**
+     * Persist the plugin configs checked for a plan. Accepts a flat list of
+     * plugin_config ids (plan_plugin_configs[]) so a plan can run several
+     * configs, including two of the same engine. Falls back to the legacy
+     * plugin_config[plugin_id]=config_id map for older form posts.
+     * Returns an error string if the selection is invalid, else null.
+     */
+    private function savePluginConfigs(int $planId, int $agentId): ?string
     {
-        $pluginConfigs = $_POST['plugin_config'] ?? [];
+        $configIds = [];
+        if (isset($_POST['plan_plugin_configs']) && is_array($_POST['plan_plugin_configs'])) {
+            $configIds = array_map('intval', $_POST['plan_plugin_configs']);
+        } elseif (isset($_POST['plugin_config']) && is_array($_POST['plugin_config'])) {
+            foreach ($_POST['plugin_config'] as $cid) {
+                if (!empty($cid)) $configIds[] = (int) $cid;
+            }
+        }
+        $configIds = array_values(array_unique(array_filter($configIds)));
 
-        // Clear existing
+        // Resolve each config (must belong to this agent). Collect dump dirs
+        // for database engines to reject two configs that would clobber each
+        // other's dumps in the same directory.
+        $rows = [];
+        $dumpDirs = [];
+        foreach ($configIds as $cid) {
+            $pc = $this->db->fetchOne(
+                "SELECT pc.id, pc.plugin_id, pc.name, pc.config, p.slug
+                 FROM plugin_configs pc JOIN plugins p ON p.id = pc.plugin_id
+                 WHERE pc.id = ? AND pc.agent_id = ?",
+                [$cid, $agentId]
+            );
+            if (!$pc) continue;
+            if (in_array($pc['slug'], ['mysql_dump', 'pg_dump', 'mongo_dump'], true)) {
+                $cfg = json_decode($pc['config'], true) ?: [];
+                $dir = rtrim($cfg['dump_dir'] ?? '', '/');
+                if ($dir !== '') {
+                    if (isset($dumpDirs[$dir])) {
+                        return "Plugin configs \"{$dumpDirs[$dir]}\" and \"{$pc['name']}\" both dump to {$dir}. "
+                             . "Give each database config its own dump directory so they don't overwrite each other.";
+                    }
+                    $dumpDirs[$dir] = $pc['name'];
+                }
+            }
+            $rows[] = $pc;
+        }
+
         $this->db->query("DELETE FROM backup_plan_plugins WHERE backup_plan_id = ?", [$planId]);
-
         $order = 0;
-        foreach ($pluginConfigs as $pluginId => $configId) {
-            if (empty($configId)) continue;
+        foreach ($rows as $pc) {
             $this->db->insert('backup_plan_plugins', [
                 'backup_plan_id' => $planId,
-                'plugin_id' => (int) $pluginId,
-                'plugin_config_id' => (int) $configId,
+                'plugin_id' => (int) $pc['plugin_id'],
+                'plugin_config_id' => (int) $pc['id'],
                 'config' => '{}',
                 'execution_order' => $order++,
                 'enabled' => 1,
             ]);
         }
+        return null;
     }
 
     private function calculateNextRun(string $frequency, string $times, ?int $dayOfWeek, ?int $dayOfMonth): ?string

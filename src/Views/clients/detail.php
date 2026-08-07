@@ -1668,6 +1668,50 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
     </div>
     <?php
     $enabledPluginsList = array_filter($agentPlugins, fn($p) => !empty($p['agent_enabled']));
+
+    // Plugin configs selectable per plan: named configs of enabled, non-S3
+    // plugins (S3 offsite sync is repo-level, not per-plan).
+    $enabledPluginIds = array_map(fn($p) => $p['id'], $enabledPluginsList);
+    $planPluginConfigCards = array_values(array_filter(
+        $pluginConfigs,
+        fn($c) => in_array($c['plugin_id'], $enabledPluginIds) && ($c['slug'] ?? '') !== 's3_sync'
+    ));
+
+    // Render the horizontal list of plugin-config cards with a checkbox each.
+    // $checkedIds = config ids currently attached to the plan.
+    $renderPluginCards = function (array $checkedIds) use ($planPluginConfigCards) {
+        $typeLabels = [
+            'mysql_dump' => 'MySQL', 'pg_dump' => 'PostgreSQL', 'mongo_dump' => 'MongoDB',
+            'interworx' => 'InterWorx', 'shell_hook' => 'Script',
+        ];
+        $logos = [
+            'mysql_dump' => '/images/mysql.png', 'pg_dump' => '/images/postgresql.svg',
+            'mongo_dump' => '/images/mongodb.svg', 'interworx' => '/images/interworx-icon.png',
+        ];
+        echo '<div class="d-flex flex-wrap gap-2">';
+        foreach ($planPluginConfigCards as $c) {
+            $slug = $c['slug'] ?? '';
+            $checked = in_array((int) $c['id'], array_map('intval', $checkedIds), true);
+            $cid = 'ppc_' . $c['id'] . '_' . mt_rand(1000, 9999);
+            $iconHtml = isset($logos[$slug])
+                ? '<img src="' . $logos[$slug] . '" alt="" style="width:24px;height:24px;object-fit:contain;">'
+                : ($slug === 'shell_hook'
+                    ? '<span class="d-inline-flex align-items-center justify-content-center rounded" style="width:24px;height:24px;background:rgba(13,110,253,0.12);"><i class="bi bi-code-slash text-primary"></i></span>'
+                    : '<i class="bi bi-puzzle text-secondary" style="font-size:1.3rem;"></i>');
+            $type = $typeLabels[$slug] ?? ucfirst(str_replace('_', ' ', $slug));
+            ?>
+            <label class="border rounded p-2 position-relative d-flex align-items-center gap-2 <?= $checked ? 'border-primary bg-primary-subtle' : '' ?>" style="width:190px;cursor:pointer;" for="<?= $cid ?>">
+                <input class="form-check-input position-absolute" type="checkbox" name="plan_plugin_configs[]" value="<?= (int) $c['id'] ?>" id="<?= $cid ?>" <?= $checked ? 'checked' : '' ?> style="top:6px;right:6px;margin:0;" onchange="this.closest('label').classList.toggle('border-primary', this.checked); this.closest('label').classList.toggle('bg-primary-subtle', this.checked);">
+                <?= $iconHtml ?>
+                <span class="min-width-0" style="min-width:0;">
+                    <span class="d-block fw-semibold text-truncate small" style="max-width:120px;"><?= htmlspecialchars($c['name']) ?></span>
+                    <span class="d-block text-muted" style="font-size:0.7rem;"><?= htmlspecialchars($type) ?></span>
+                </span>
+            </label>
+            <?php
+        }
+        echo '</div>';
+    };
     ?>
 
     <script>
@@ -2113,33 +2157,15 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                     </div>
 
                     <!-- Plugins (edit) -->
-                    <?php
-                    if (!empty($enabledPluginsList) && !empty($pluginConfigs)):
-                        $existingPlanPlugins = $pluginManager->getPlanPlugins($plan['id']);
+                    <?php if (!empty($planPluginConfigCards)):
+                        $checkedIds = array_map(fn($epp) => (int) $epp['plugin_config_id'], $pluginManager->getPlanPlugins($plan['id']));
                     ?>
                     <div class="row mb-3">
                         <label class="col-md-3 col-form-label fw-semibold">Plugins</label>
                         <div class="col-md-9">
-                            <?php foreach ($enabledPluginsList as $plugin):
-                                if (($plugin['slug'] ?? '') === 's3_sync') continue;
-                                $configs = array_filter($pluginConfigs, fn($c) => $c['plugin_id'] == $plugin['id']);
-                                if (empty($configs)) continue;
-                                $currentConfigId = null;
-                                foreach ($existingPlanPlugins as $epp) {
-                                    if ($epp['plugin_id'] == $plugin['id']) $currentConfigId = $epp['plugin_config_id'] ?? null;
-                                }
-                            ?>
-                            <div class="mb-2">
-                                <label class="form-label small fw-semibold"><?= htmlspecialchars($plugin['name']) ?></label>
-                                <select name="plugin_config[<?= $plugin['id'] ?>]" class="form-select form-select-sm">
-                                    <option value="">-- None --</option>
-                                    <?php foreach ($configs as $pcfg): ?>
-                                    <option value="<?= $pcfg['id'] ?>" <?= $pcfg['id'] == $currentConfigId ? 'selected' : '' ?>><?= htmlspecialchars($pcfg['name']) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <?php endforeach; ?>
-                            <small class="text-muted"><a href="?tab=plugins">Manage plugin configurations</a></small>
+                            <div class="form-text mb-2">Run these before each backup &mdash; check any number, including two of the same engine.</div>
+                            <?php $renderPluginCards($checkedIds); ?>
+                            <small class="text-muted d-block mt-2"><a href="?tab=plugins">Manage plugin configurations</a></small>
                         </div>
                     </div>
                     <?php endif; ?>
@@ -2478,26 +2504,13 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                 </div>
 
                 <!-- Plugins -->
-                <?php if (!empty($enabledPluginsList) && !empty($pluginConfigs)): ?>
+                <?php if (!empty($planPluginConfigCards)): ?>
                 <div class="row mb-3">
                     <label class="col-md-3 col-form-label fw-semibold">Plugins</label>
                     <div class="col-md-9">
-                        <?php foreach ($enabledPluginsList as $plugin):
-                            if (($plugin['slug'] ?? '') === 's3_sync') continue;
-                            $configs = array_filter($pluginConfigs, fn($c) => $c['plugin_id'] == $plugin['id']);
-                            if (empty($configs)) continue;
-                        ?>
-                        <div class="mb-2">
-                            <label class="form-label small fw-semibold"><?= htmlspecialchars($plugin['name']) ?></label>
-                            <select name="plugin_config[<?= $plugin['id'] ?>]" class="form-select form-select-sm">
-                                <option value="">-- None --</option>
-                                <?php foreach ($configs as $pcfg): ?>
-                                <option value="<?= $pcfg['id'] ?>"><?= htmlspecialchars($pcfg['name']) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <?php endforeach; ?>
-                        <small class="text-muted"><a href="?tab=plugins">Manage plugin configurations</a></small>
+                        <div class="form-text mb-2">Run these before each backup &mdash; check any number, including two of the same engine.</div>
+                        <?php $renderPluginCards([]); ?>
+                        <small class="text-muted d-block mt-2"><a href="?tab=plugins">Manage plugin configurations</a></small>
                     </div>
                 </div>
                 <?php endif; ?>
@@ -3443,13 +3456,18 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
                     foreach ($archives as $ar):
                         if (empty($ar['databases_backed_up'])) continue;
                         $dbMeta = json_decode($ar['databases_backed_up'], true);
-                        if (empty($dbMeta['databases'])) continue;
+                        // Count databases across grouped (v2) or flat (legacy) formats
+                        if (!empty($dbMeta['groups'])) {
+                            $n = array_sum(array_map(fn($g) => count($g['databases'] ?? []), $dbMeta['groups']));
+                        } else {
+                            $n = count($dbMeta['databases'] ?? []);
+                        }
+                        if ($n === 0) continue;
                         if ($ar['repo_name'] !== $currentRepo):
                             if ($currentRepo !== null) echo '</optgroup>';
                             $currentRepo = $ar['repo_name'];
                             echo '<optgroup label="' . htmlspecialchars($currentRepo) . '">';
                         endif;
-                        $n = count($dbMeta['databases']);
                         $dbLabel = " ({$n} " . ($n === 1 ? 'database' : 'databases') . ')';
                     ?>
                         <option value="<?= $ar['id'] ?>">

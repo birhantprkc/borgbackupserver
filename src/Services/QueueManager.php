@@ -691,6 +691,11 @@ class QueueManager
 
         if (!$mysqlConfig) return null;
 
+        // Trust the selected config for how its dump was written — a v2 archive
+        // (multiple DB configs) has no single top-level compress/per_database (#382).
+        if (isset($mysqlConfig['compress']))     $compress = (bool) $mysqlConfig['compress'];
+        if (isset($mysqlConfig['per_database'])) $perDatabase = (bool) $mysqlConfig['per_database'];
+
         $dumpDir = $mysqlConfig['dump_dir'] ?? '/home/bbs/mysql';
 
         // Build borg extract command: extract only the specific dump file(s) needed
@@ -806,13 +811,15 @@ class QueueManager
 
         if (!$pgConfig) return null;
 
+        if (isset($pgConfig['compress'])) $compress = (bool) $pgConfig['compress'];
+
         $dumpDir = $pgConfig['dump_dir'] ?? '/home/bbs/pgdump';
 
         // Build borg extract command targeting only the specific dump file(s) needed
         $repo = ['path' => $archive['repo_path'], 'passphrase_encrypted' => $archive['passphrase_encrypted']];
         $extractPaths = [];
         $basePath = ltrim($dumpDir, '/');
-        $perDatabase = $dbInfo['per_database'] ?? true;
+        $perDatabase = $pgConfig['per_database'] ?? ($dbInfo['per_database'] ?? true);
         if ($perDatabase && !empty($databases)) {
             foreach ($databases as $db) {
                 $dbName = $db['database'] ?? '';
@@ -919,6 +926,8 @@ class QueueManager
         }
 
         if (!$mongoConfig) return null;
+
+        if (isset($mongoConfig['compress'])) $compress = (bool) $mongoConfig['compress'];
 
         $dumpDir = $mongoConfig['dump_dir'] ?? '/home/bbs/mongodump';
 

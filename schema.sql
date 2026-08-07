@@ -442,7 +442,7 @@ CREATE TABLE backup_plan_plugins (
     FOREIGN KEY (backup_plan_id) REFERENCES backup_plans(id) ON DELETE CASCADE,
     FOREIGN KEY (plugin_id) REFERENCES plugins(id) ON DELETE CASCADE,
     FOREIGN KEY (plugin_config_id) REFERENCES plugin_configs(id) ON DELETE SET NULL,
-    UNIQUE KEY unique_plan_plugin (backup_plan_id, plugin_id)
+    UNIQUE KEY unique_plan_config (backup_plan_id, plugin_config_id)
 ) ENGINE=InnoDB;
 
 -- Repository-level S3 sync configuration (decoupled from backup plans)

@@ -649,6 +649,64 @@
 
         let dbRestoreMode = 'files';
         let dbPerDatabase = true;
+        let dbGroups = [];      // per-config database groups from the listing (#382)
+        let dbBackedUpAt = '';
+
+        // Render one row per database into the table body.
+        function renderDbRows(databases, mtimes, perDatabase) {
+            dbTableBody.innerHTML = '';
+            (databases || []).forEach(function(dbName) {
+                const tr = document.createElement('tr');
+                const escapedName = esc(dbName);
+                tr.innerHTML =
+                    '<td>' +
+                        '<select class="form-select form-select-sm db-mode-select" name="dbmode_' + escapedName + '" data-db="' + escapedName + '">' +
+                            '<option value="none">None</option>' +
+                            '<option value="replace">Replace</option>' +
+                            (perDatabase ? '<option value="rename">Copy</option>' : '') +
+                        '</select>' +
+                    '</td>' +
+                    '<td>' +
+                        '<span class="font-monospace">' + escapedName + '</span>' +
+                        '<div class="db-copy-input mt-1" style="display:none;">' +
+                            '<div class="input-group input-group-sm">' +
+                                '<span class="input-group-text"><i class="bi bi-arrow-right"></i></span>' +
+                                '<input type="text" class="form-control form-control-sm font-monospace" data-rename-for="' + escapedName + '" value="' + escapedName + '_copy" placeholder="New database name">' +
+                            '</div>' +
+                        '</div>' +
+                    '</td>' +
+                    '<td class="text-end text-muted small">' + esc((mtimes && mtimes[dbName]) || dbBackedUpAt) + '</td>';
+                dbTableBody.appendChild(tr);
+            });
+        }
+
+        // Show the databases belonging to the currently-selected connection's
+        // group. Two configs of the same engine each restore independently.
+        function refreshDbTableForConnection() {
+            if (!dbGroups.length) { dbTable.style.display = 'none'; return; }
+            var sel = parseConfigValue();
+            var group = null;
+            if (dbGroups.length === 1 && (dbGroups[0].config_id === null || dbGroups[0].config_id === undefined)) {
+                group = dbGroups[0]; // legacy single flat group
+            } else if (sel.id) {
+                group = dbGroups.find(function(g) { return String(g.config_id) === String(sel.id); });
+            }
+            if (!group) {
+                dbTable.style.display = 'none';
+                dbAllDbNote.style.display = 'none';
+                dbNoData.style.display = '';
+                var names = dbGroups.map(function(g) { return g.config_name || ('config ' + g.config_id); }).join(', ');
+                dbNoData.innerHTML = '<i class="bi bi-database d-block mb-2" style="font-size:2rem;opacity:0.3;"></i>This archive backed up databases from: ' + esc(names) + '.<br>Pick the matching connection above to restore its databases.';
+                updateDbSelection();
+                return;
+            }
+            dbNoData.style.display = 'none';
+            dbPerDatabase = group.per_database !== false;
+            dbAllDbNote.style.display = dbPerDatabase ? 'none' : '';
+            renderDbRows(group.databases || [], group.mtimes || {}, dbPerDatabase);
+            dbTable.style.display = (group.databases && group.databases.length) ? '' : 'none';
+            updateDbSelection();
+        }
 
         // Parse connection picker value: "mysql:123" or "pg:456"
         function parseConfigValue() {
@@ -692,11 +750,25 @@
                     form.action = form.dataset.mysqlAction || form.action;
                 }
             }
+            // Re-show the databases for the newly-selected connection (#382)
+            if (dbArchiveSelect && dbArchiveSelect.value && dbGroups.length) {
+                refreshDbTableForConnection();
+            }
         }
         if (dbConfigId) {
             dbConfigId.addEventListener('change', updateConnectionInfo);
             updateConnectionInfo();
         }
+        // Toggle the copy-name input and refresh counts when a mode changes.
+        // Attached once (delegation) so re-rendering rows keeps working.
+        dbTableBody.addEventListener('change', function(e) {
+            if (e.target.classList.contains('db-mode-select')) {
+                const row = e.target.closest('tr');
+                const copyDiv = row.querySelector('.db-copy-input');
+                if (copyDiv) copyDiv.style.display = e.target.value === 'rename' ? '' : 'none';
+                updateDbSelection();
+            }
+        });
 
         // Mode toggle
         if (modeToggle) {
@@ -749,56 +821,19 @@
                     .then(r => r.json())
                     .then(data => {
                         dbLoading.style.display = 'none';
+                        dbGroups = data.groups || [];
+                        dbBackedUpAt = data.backed_up_at || '';
 
-                        if (!data.databases || data.databases.length === 0) {
+                        if (!dbGroups.length && (!data.databases || data.databases.length === 0)) {
                             dbNoData.style.display = '';
                             dbNoData.innerHTML = '<i class="bi bi-database d-block mb-2" style="font-size:2rem;opacity:0.3;"></i>No database backup info for this archive';
                             return;
                         }
-
-                        dbPerDatabase = data.per_database !== false;
-                        if (!dbPerDatabase) {
-                            dbAllDbNote.style.display = '';
+                        // Older server without grouped output: wrap the flat list.
+                        if (!dbGroups.length) {
+                            dbGroups = [{ config_id: null, databases: data.databases, per_database: data.per_database, compress: data.compress, mtimes: data.mtimes || {} }];
                         }
-
-                        dbTable.style.display = '';
-                        var mtimes = data.mtimes || {};
-                        var fallbackDate = data.backed_up_at || '';
-                        data.databases.forEach(function(dbName) {
-                            const tr = document.createElement('tr');
-                            const escapedName = esc(dbName);
-                            tr.innerHTML =
-                                '<td>' +
-                                    '<select class="form-select form-select-sm db-mode-select" name="dbmode_' + escapedName + '" data-db="' + escapedName + '">' +
-                                        '<option value="none">None</option>' +
-                                        '<option value="replace">Replace</option>' +
-                                        (dbPerDatabase ? '<option value="rename">Copy</option>' : '') +
-                                    '</select>' +
-                                '</td>' +
-                                '<td>' +
-                                    '<span class="font-monospace">' + escapedName + '</span>' +
-                                    '<div class="db-copy-input mt-1" style="display:none;">' +
-                                        '<div class="input-group input-group-sm">' +
-                                            '<span class="input-group-text"><i class="bi bi-arrow-right"></i></span>' +
-                                            '<input type="text" class="form-control form-control-sm font-monospace" data-rename-for="' + escapedName + '" value="' + escapedName + '_copy" placeholder="New database name">' +
-                                        '</div>' +
-                                    '</div>' +
-                                '</td>' +
-                                '<td class="text-end text-muted small">' + esc(mtimes[dbName] || fallbackDate) + '</td>';
-                            dbTableBody.appendChild(tr);
-                        });
-
-                        // Show/hide copy name input and update selection when mode changes
-                        dbTableBody.addEventListener('change', function(e) {
-                            if (e.target.classList.contains('db-mode-select')) {
-                                const row = e.target.closest('tr');
-                                const copyDiv = row.querySelector('.db-copy-input');
-                                if (copyDiv) {
-                                    copyDiv.style.display = e.target.value === 'rename' ? '' : 'none';
-                                }
-                                updateDbSelection();
-                            }
-                        });
+                        refreshDbTableForConnection();
                     })
                     .catch(function() {
                         dbLoading.style.display = 'none';

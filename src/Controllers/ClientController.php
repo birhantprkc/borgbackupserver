@@ -1037,33 +1037,48 @@ class ClientController extends Controller
         }
 
         $data = $archive['databases_backed_up'] ? json_decode($archive['databases_backed_up'], true) : null;
-        $databases = $data['databases'] ?? [];
-        $compress = $data['compress'] ?? true;
 
-        // Look up dump file mtimes from the file catalog
-        $mtimes = [];
-        if (!empty($databases)) {
+        // Normalize into groups so multiple database configs — including two of
+        // the same engine — each restore independently (#382). New format is
+        // {"version":2,"groups":[...]}; older archives store a single flat
+        // object, which we wrap as one group.
+        $groups = [];
+        if (is_array($data) && !empty($data['groups'])) {
+            $groups = $data['groups'];
+        } elseif (is_array($data) && !empty($data['databases'])) {
             $dumpDir = $data['dump_dir'] ?? null;
             if (!$dumpDir) {
-                // Try to find dump_dir from plugin configs for this agent
                 $pluginManager = new \BBS\Services\PluginManager();
-                $configs = $pluginManager->getPluginConfigs($id);
-                foreach ($configs as $c) {
+                foreach ($pluginManager->getPluginConfigs($id) as $c) {
                     if (in_array($c['slug'], ['mysql_dump', 'pg_dump'])) {
-                        $cfgData = json_decode($c['config_data'] ?? '{}', true);
-                        if (!empty($cfgData['dump_dir'])) {
-                            $dumpDir = rtrim($cfgData['dump_dir'], '/');
-                            break;
-                        }
+                        $cfgData = json_decode($c['config'] ?? '{}', true);
+                        if (!empty($cfgData['dump_dir'])) { $dumpDir = rtrim($cfgData['dump_dir'], '/'); break; }
                     }
                 }
             }
-            if ($dumpDir) {
-                $patterns = [];
-                foreach ($databases as $db) {
-                    $ext = $compress ? '.sql.gz' : '.sql';
-                    $patterns[] = $dumpDir . '/' . $db . $ext;
-                }
+            $groups = [[
+                'config_id' => null,
+                'config_name' => null,
+                'engine' => null,
+                'dump_dir' => $dumpDir,
+                'databases' => $data['databases'],
+                'per_database' => $data['per_database'] ?? true,
+                'compress' => $data['compress'] ?? true,
+            ]];
+        }
+
+        // Resolve dump-file mtimes from the file catalog, per group's dump dir.
+        foreach ($groups as &$g) {
+            $g['mtimes'] = [];
+            $dumpDir = rtrim($g['dump_dir'] ?? '', '/');
+            $dbs = $g['databases'] ?? [];
+            if ($dumpDir === '' || empty($dbs)) continue;
+            $compress = $g['compress'] ?? true;
+            $patterns = [];
+            foreach ($dbs as $db) {
+                $patterns[] = $dumpDir . '/' . $db . ($compress ? '.sql.gz' : '.sql');
+            }
+            try {
                 $ch = \BBS\Core\ClickHouse::getInstance();
                 $pathList = implode(', ', array_map(fn($p) => "'" . str_replace(["\\", "'"], ["\\\\", "\\'"], $p) . "'", $patterns));
                 $rows = $ch->fetchAll("
@@ -1072,19 +1087,28 @@ class ClientController extends Controller
                     WHERE agent_id = {$id} AND archive_id = {$archive_id} AND path IN ({$pathList})
                 ");
                 foreach ($rows as $row) {
-                    $basename = basename($row['path']);
-                    $dbName = preg_replace('/\\.sql(\\.gz)?$/', '', $basename);
-                    $mtimes[$dbName] = $row['mtime'] ? \BBS\Core\TimeHelper::format($row['mtime'], 'M j, Y g:i A') : null;
+                    $dbName = preg_replace('/\\.sql(\\.gz)?$/', '', basename($row['path']));
+                    $g['mtimes'][$dbName] = $row['mtime'] ? \BBS\Core\TimeHelper::format($row['mtime'], 'M j, Y g:i A') : null;
                 }
-            }
+            } catch (\Exception $e) { /* catalog unavailable — mtimes optional */ }
+        }
+        unset($g);
+
+        // Flat union for backward compatibility with older restore.js.
+        $allDb = [];
+        $unionMtimes = [];
+        foreach ($groups as $g) {
+            foreach (($g['databases'] ?? []) as $db) $allDb[$db] = true;
+            $unionMtimes += $g['mtimes'];
         }
 
         $this->json([
-            'databases' => $databases,
-            'per_database' => $data['per_database'] ?? true,
-            'compress' => $compress,
+            'groups' => $groups,
+            'databases' => array_keys($allDb),
+            'per_database' => $groups[0]['per_database'] ?? true,
+            'compress' => $groups[0]['compress'] ?? true,
             'backed_up_at' => $archive['created_at'] ? \BBS\Core\TimeHelper::format($archive['created_at'], 'M j, Y g:i A') : null,
-            'mtimes' => $mtimes,
+            'mtimes' => $unionMtimes,
         ]);
     }
 

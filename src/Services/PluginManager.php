@@ -175,6 +175,11 @@ class PluginManager
             if (!empty($pp['plugin_config_id'])) {
                 $resolved = $this->buildTestPayload($pp['plugin_config_id']);
                 if (!empty($resolved)) {
+                    // Tag with config identity so the agent can keep results
+                    // per config (a plan may run two configs of one engine, #382)
+                    $resolved['config_id'] = (int) $pp['plugin_config_id'];
+                    $namedCfg = $this->getPluginConfig((int) $pp['plugin_config_id']);
+                    $resolved['config_name'] = $namedCfg['name'] ?? null;
                     $payload[] = $resolved;
                     continue;
                 }

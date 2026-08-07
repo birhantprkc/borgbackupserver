@@ -46,7 +46,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.70.0"
+AGENT_VERSION = "2.71.0"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -1390,13 +1390,16 @@ PLUGIN_DISPLAY_NAMES = {
 
 
 def execute_plugins(plugins, config=None, job_id=None, task=None):
-    """Execute pre-backup plugins. Returns dict of results keyed by slug.
+    """Execute pre-backup plugins. Returns a LIST of per-config run records
+    (dicts: slug, config_id, config_name, config, result). A plan can attach
+    several configs — including two of the same engine — so results must be
+    kept per config, not collapsed by slug (#382).
 
     `task` is the full task dict from the server; passed through to plugins
     that consume backup-context env vars (currently shell_hook only — see
     #250). Other plugins ignore it.
     """
-    results = {}
+    runs = []
     for plugin in plugins:
         slug = plugin.get("slug", "")
         cfg = plugin.get("config", {})
@@ -1419,7 +1422,13 @@ def execute_plugins(plugins, config=None, job_id=None, task=None):
             result = func(cfg, task)
         else:
             result = func(cfg)
-        results[slug] = result
+        runs.append({
+            "slug": slug,
+            "config_id": plugin.get("config_id"),
+            "config_name": plugin.get("config_name"),
+            "config": cfg,
+            "result": result if isinstance(result, dict) else {},
+        })
         logger.info("Plugin {} completed".format(slug))
 
         # Send plugin summary to server log
@@ -1427,7 +1436,7 @@ def execute_plugins(plugins, config=None, job_id=None, task=None):
             summary = _plugin_summary(slug, cfg, result)
             if summary:
                 log_to_server(config, job_id, summary)
-    return results
+    return runs
 
 
 def _plugin_summary(slug, config, result):
@@ -1500,21 +1509,22 @@ def _format_size(bytes_val):
     return "{:.1f} PB".format(bytes_val)
 
 
-def cleanup_plugins(plugins, plugin_results, config=None, job_id=None, backup_result="completed", task=None):
-    """Run post-backup cleanup for plugins.
+def cleanup_plugins(plugin_runs, config=None, job_id=None, backup_result="completed", task=None):
+    """Run post-backup cleanup for each plugin config that ran (#382).
     Shell hook post-scripts always run (to restart services stopped by pre-scripts).
     File cleanup (dump deletion) only runs on successful backups.
     """
-    for plugin in plugins:
-        slug = plugin.get("slug", "")
-        cfg = plugin.get("config", {})
+    for run in plugin_runs:
+        slug = run.get("slug", "")
+        cfg = run.get("config", {})
+        res = run.get("result", {}) or {}
 
         # Shell hook post-scripts ALWAYS run regardless of backup result
         if slug == "shell_hook":
             func = globals().get("cleanup_plugin_shell_hook")
             if func:
                 try:
-                    cleanup_result = func(cfg, plugin_results.get(slug, {}), task=task, backup_result=backup_result)
+                    cleanup_result = func(cfg, res, task=task, backup_result=backup_result)
                     if config and job_id and cleanup_result:
                         log_to_server(config, job_id, "Shell hook post-script: {}".format(cleanup_result))
                 except Exception as e:
@@ -1530,10 +1540,10 @@ def cleanup_plugins(plugins, plugin_results, config=None, job_id=None, backup_re
         func = globals().get("cleanup_plugin_{}".format(slug))
         if func:
             try:
-                func(cfg, plugin_results.get(slug, {}))
+                func(cfg, res)
                 if config and job_id:
                     if cfg.get("cleanup_after", True):
-                        dump_dir = plugin_results.get(slug, {}).get("dump_dir", "")
+                        dump_dir = res.get("dump_dir", "")
                         if dump_dir:
                             log_to_server(config, job_id, "Plugin cleanup: removed dump files from {}".format(dump_dir))
             except Exception as e:
@@ -3466,11 +3476,11 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
     })
 
     # Execute pre-backup plugins
-    plugin_results = {}
+    plugin_runs = []
     if task_type == "backup" and plugins:
         try:
             logger.info("Running {} pre-backup plugin(s)".format(len(plugins)))
-            plugin_results = execute_plugins(plugins, config, job_id, task=task)
+            plugin_runs = execute_plugins(plugins, config, job_id, task=task)
         except Exception as e:
             logger.error("Pre-backup plugin failed: {}".format(e))
             report_status(config, {
@@ -4070,32 +4080,26 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
     if had_warnings:
         status_data["had_warnings"] = True
 
-    # Report backed-up databases from mysql_dump plugin
-    if result == "completed" and task_type == "backup" and plugin_results.get("mysql_dump"):
-        mysql_result = plugin_results["mysql_dump"]
-        status_data["databases_backed_up"] = {
-            "databases": mysql_result.get("databases", []),
-            "per_database": mysql_result.get("per_database", True),
-            "compress": mysql_result.get("compress", True),
-        }
-
-    # Report backed-up databases from pg_dump plugin
-    if result == "completed" and task_type == "backup" and plugin_results.get("pg_dump"):
-        pg_result = plugin_results["pg_dump"]
-        status_data["databases_backed_up"] = {
-            "databases": pg_result.get("databases", []),
-            "per_database": True,
-            "compress": pg_result.get("compress", True),
-        }
-
-    # Report backed-up databases from mongo_dump plugin
-    if result == "completed" and task_type == "backup" and plugin_results.get("mongo_dump"):
-        mongo_result = plugin_results["mongo_dump"]
-        status_data["databases_backed_up"] = {
-            "databases": mongo_result.get("databases", []),
-            "per_database": mongo_result.get("per_database", True),
-            "compress": mongo_result.get("compress", True),
-        }
+    # Report backed-up databases as one group per database-engine config that
+    # ran, so two servers (even with same-named databases) can be restored
+    # independently (#382). Format v2: {"version":2, "groups":[...]}.
+    if result == "completed" and task_type == "backup":
+        db_groups = []
+        for run in plugin_runs:
+            if run.get("slug") not in ("mysql_dump", "pg_dump", "mongo_dump"):
+                continue
+            r = run.get("result", {}) or {}
+            db_groups.append({
+                "config_id": run.get("config_id"),
+                "config_name": run.get("config_name"),
+                "engine": run.get("slug"),
+                "dump_dir": r.get("dump_dir", ""),
+                "databases": r.get("databases", []),
+                "per_database": r.get("per_database", True),
+                "compress": r.get("compress", True),
+            })
+        if db_groups:
+            status_data["databases_backed_up"] = {"version": 2, "groups": db_groups}
 
     # Report final status to server. For completed backups with catalog,
     # the server will detect and import the catalog file from disk.
@@ -4105,7 +4109,7 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
     # Run post-backup plugin cleanup (always run shell_hook post-scripts to
     # restart services even if backup failed; other cleanup only on success)
     if task_type == "backup" and plugins:
-        cleanup_plugins(plugins, plugin_results, config, job_id, backup_result=result, task=task)
+        cleanup_plugins(plugin_runs, config, job_id, backup_result=result, task=task)
 
     # Clean up temporary SSH key for remote repos
     if remote_ssh_key and os.path.exists(remote_key_path):
