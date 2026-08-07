@@ -2383,7 +2383,16 @@ if (!empty($subscribers)) {
                 continue;
             }
             try {
-                $reportService->emailReport((int) $todayReport['id'], (int) $sub['id']);
+                if ($frequency === 'weekly') {
+                    // Weekly subscribers get a 7-day window, not the stored
+                    // daily report (#285). Built once per run, transient —
+                    // never overwrites the daily report row.
+                    $weeklyReportData = $weeklyReportData
+                        ?? $reportService->generate($todayDate, false, date('Y-m-d H:i:s', strtotime('-7 days')), 'weekly', false)['data'];
+                    $reportService->emailReportData($weeklyReportData, $todayDate, (int) $sub['id']);
+                } else {
+                    $reportService->emailReport((int) $todayReport['id'], (int) $sub['id']);
+                }
                 $freqLabel = $frequency === 'weekly' ? 'weekly' : 'daily';
                 echo date('Y-m-d H:i:s') . " Emailed {$freqLabel} report to {$sub['email']}\n";
                 $db->query(

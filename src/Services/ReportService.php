@@ -22,7 +22,7 @@ class ReportService
      * automatic minute-by-minute regeneration passes false so it doesn't
      * look like the user just clicked the button (#176).
      */
-    public function generate(?string $date = null, bool $bumpTimestamp = false): array
+    public function generate(?string $date = null, bool $bumpTimestamp = false, ?string $sinceTime = null, string $period = 'daily', bool $persist = true): array
     {
         if ($date) {
             $reportDate = $date;
@@ -30,12 +30,14 @@ class ReportService
             $tz = $_SESSION['timezone'] ?? 'UTC';
             $reportDate = (new \DateTime('now', new \DateTimeZone($tz)))->format('Y-m-d');
         }
-        // Count backups since the last report (not just "today" which is timezone-dependent)
-        $lastReport = $this->db->fetchOne(
-            "SELECT created_at FROM daily_reports WHERE report_date < ? ORDER BY report_date DESC LIMIT 1",
-            [$reportDate]
-        );
-        $sinceTime = $lastReport['created_at'] ?? date('Y-m-d H:i:s', strtotime('-24 hours'));
+        if ($sinceTime === null) {
+            // Count backups since the last report (not just "today" which is timezone-dependent)
+            $lastReport = $this->db->fetchOne(
+                "SELECT created_at FROM daily_reports WHERE report_date < ? ORDER BY report_date DESC LIMIT 1",
+                [$reportDate]
+            );
+            $sinceTime = $lastReport['created_at'] ?? date('Y-m-d H:i:s', strtotime('-24 hours'));
+        }
 
         // All agents
         $agents = $this->db->fetchAll("SELECT id, name, hostname, status, last_heartbeat FROM agents ORDER BY name");
@@ -303,6 +305,16 @@ class ReportService
             $data['remote_storage'] = $remoteStorageData;
         }
 
+        $data['period'] = $period;
+        $data['period_start'] = $sinceTime;
+
+        // Weekly (or other non-daily) datasets are transient: they're built
+        // per-send with a wider window and must not overwrite the stored
+        // daily report row (#285)
+        if (!$persist) {
+            return ['id' => 0, 'data' => $data];
+        }
+
         // Upsert: update existing report for this date or create new one.
         // Bump created_at only when the caller asked (manual regenerate) — the
         // scheduler refreshes numbers every minute and bumping the timestamp
@@ -390,10 +402,12 @@ class ReportService
         $serverHost = htmlspecialchars($data['server_host'] ?? 'BBS');
         $generatedAt = !empty($data['generated_at']) ? $fmtTime($data['generated_at'], 'Y-m-d g:i A T') : '';
 
+        $periodLabel = ($data['period'] ?? 'daily') === 'weekly' ? 'Weekly' : 'Daily';
+
         $html = <<<HTML
         <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:700px;margin:0 auto;color:#333;background:#fff;border-radius:8px;">
             <div style="background:#1a1a2e;color:#fff;padding:20px 24px;border-radius:8px 8px 0 0;">
-                <h2 style="margin:0 0 4px 0;font-size:20px;">Daily Backup Report</h2>
+                <h2 style="margin:0 0 4px 0;font-size:20px;">{$periodLabel} Backup Report</h2>
                 <div style="opacity:0.8;font-size:14px;">{$dateFormatted} &mdash; {$serverHost}</div>
             </div>
         HTML;
@@ -601,12 +615,28 @@ class ReportService
 
         if (empty($toEmail)) return false;
 
+        return $this->emailReportData($report['data'], $report['report_date'], $userId, $toEmail);
+    }
+
+    /**
+     * Email a report from an in-memory dataset (used for transient weekly
+     * reports that aren't stored in daily_reports, #285).
+     */
+    public function emailReportData(array $data, string $reportDate, int $userId, ?string $toEmail = null): bool
+    {
+        if (!$toEmail) {
+            $user = $this->db->fetchOne("SELECT email FROM users WHERE id = ?", [$userId]);
+            $toEmail = $user['email'] ?? '';
+        }
+        if (empty($toEmail)) return false;
+
         $mailer = new Mailer();
         if (!$mailer->isEnabled()) return false;
 
-        $html = $this->renderHtml($report['data'], $userId);
-        $dateFormatted = date('M j, Y', strtotime($report['report_date']));
-        $subject = "[BBS] Daily Report — {$dateFormatted}";
+        $html = $this->renderHtml($data, $userId);
+        $dateFormatted = date('M j, Y', strtotime($reportDate));
+        $periodLabel = ($data['period'] ?? 'daily') === 'weekly' ? 'Weekly' : 'Daily';
+        $subject = "[BBS] {$periodLabel} Report — {$dateFormatted}";
 
         return $mailer->send($toEmail, $subject, $html);
     }
