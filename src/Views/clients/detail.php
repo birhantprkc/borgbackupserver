@@ -531,6 +531,9 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                                 <i class="bi bi-hdd-stack me-1"></i><?= htmlspecialchars($plan['repo_name'] ?? '&mdash;') ?><?php if ($isRemote): ?> <span class="badge bg-secondary-subtle text-secondary-emphasis" style="font-size:0.6rem;">Remote</span><?php endif; ?>
                             </div>
                             <div class="small text-muted mt-1"><i class="bi bi-clock me-1"></i><?= $sched ?></div>
+                            <?php if ($isActive && !empty($plan['next_run'])): ?>
+                            <div class="small text-info mt-1"><i class="bi bi-arrow-right-circle me-1"></i>Next: <?= \BBS\Core\TimeHelper::format($plan['next_run'], 'M j, g:ia') ?></div>
+                            <?php endif; ?>
                         </div>
                         <?php if (!empty($slugs)): ?>
                         <div class="d-flex align-items-center gap-1 flex-shrink-0" style="flex-wrap:wrap;justify-content:flex-end;max-width:110px;">
@@ -548,8 +551,9 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
     <!-- Right: Recent Activity -->
     <div class="col-lg-6">
     <div class="card border-0 shadow-sm h-100">
-        <div class="card-header fw-semibold">
-            <i class="bi bi-clock-history me-1"></i> Recent Activity
+        <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-clock-history me-1"></i> Recent Activity</span>
+            <a href="/log?client=<?= (int) $agent['id'] ?>" class="small text-decoration-none">More Activity &rarr;</a>
         </div>
         <div class="card-body p-0">
             <?php if (empty($recentJobs)): ?>
@@ -567,7 +571,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                         </tr>
                     </thead>
                     <tbody>
-                    <?php foreach (array_slice($recentJobs, 0, 12) as $job):
+                    <?php foreach (array_slice($recentJobs, 0, 10) as $job):
                         $jIcon = match($job['status']) {
                             'completed' => 'check-circle-fill text-success',
                             'failed' => 'x-circle-fill text-danger',
