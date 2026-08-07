@@ -41,6 +41,10 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                     <button class="btn btn-sm btn-outline-secondary border-0" data-bs-toggle="modal" data-bs-target="#editClientModal" title="Edit client">
                         <i class="bi bi-pencil"></i>
                     </button>
+                    <button class="btn btn-sm btn-outline-secondary border-0" onclick="openNotes('client', <?= $agent['id'] ?>, <?= htmlspecialchars(json_encode($agent['name'])) ?>, this)"
+                            data-notes="<?= htmlspecialchars($agent['notes'] ?? '') ?>" data-notes-meta="<?= !empty($agent['notes_updated_at']) ? htmlspecialchars(\BBS\Core\TimeHelper::format($agent['notes_updated_at'], 'M j, g:i A') . (!empty($usersById[$agent['notes_updated_by']] ?? null) ? ' by ' . $usersById[$agent['notes_updated_by']] : '')) : '' ?>" title="<?= !empty($agent['notes']) ? 'View notes' : 'Add a note' ?>">
+                        <i class="bi bi-journal-text<?= !empty($agent['notes']) ? ' text-warning' : '' ?>"></i>
+                    </button>
                 </div>
                 <div class="text-muted d-flex flex-wrap gap-3 align-items-center" style="font-size:.8rem;">
                     <?php if ($agent['hostname']): ?>
@@ -1020,6 +1024,9 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li>
+                            <button type="button" class="dropdown-item" onclick="openNotes('repo', <?= $repo['id'] ?>, <?= htmlspecialchars(json_encode($repo['name'])) ?>, this)" data-notes="<?= htmlspecialchars($repo['notes'] ?? '') ?>" data-notes-meta="<?= !empty($repo['notes_updated_at']) ? htmlspecialchars(\BBS\Core\TimeHelper::format($repo['notes_updated_at'], 'M j, g:i A') . (!empty($usersById[$repo['notes_updated_by']] ?? null) ? ' by ' . $usersById[$repo['notes_updated_by']] : '')) : '' ?>"><i class="bi bi-journal-text me-2"></i>Notes<?= !empty($repo['notes']) ? ' <i class="bi bi-circle-fill text-warning" style="font-size:.4rem;vertical-align:middle;"></i>' : '' ?></button>
+                        </li>
+                        <li>
                             <form method="POST" action="/repositories/<?= $repo['id'] ?>/maintenance">
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                 <input type="hidden" name="action" value="check">
@@ -1065,7 +1072,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                             <span class="schedule-id"><?= $isRemoteRepo ? 'Remote' : 'Local' ?></span>
                         </div>
                         <div class="flex-grow-1 min-width-0">
-                            <h6 class="mb-1 fw-bold"><?= htmlspecialchars($repo['name']) ?></h6>
+                            <h6 class="mb-1 fw-bold"><?= htmlspecialchars($repo['name']) ?><?php if (!empty($repo['notes'])): ?> <i class="bi bi-journal-text text-warning small" title="<?= htmlspecialchars(mb_substr($repo['notes'], 0, 200)) ?>"></i><?php endif; ?></h6>
                             <div class="small text-muted">
                                 <i class="bi bi-hdd me-1"></i><?= $sizeLabel ?>
                             </div>
@@ -1645,6 +1652,9 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end" style="z-index:2147483647;">
                             <li>
+                                <button type="button" class="dropdown-item" onclick="openNotes('plan', <?= $plan['id'] ?>, <?= htmlspecialchars(json_encode($plan['name'])) ?>, this)" data-notes="<?= htmlspecialchars($plan['notes'] ?? '') ?>" data-notes-meta="<?= !empty($plan['notes_updated_at']) ? htmlspecialchars(\BBS\Core\TimeHelper::format($plan['notes_updated_at'], 'M j, g:i A') . (!empty($usersById[$plan['notes_updated_by']] ?? null) ? ' by ' . $usersById[$plan['notes_updated_by']] : '')) : '' ?>"><i class="bi bi-journal-text me-2"></i>Notes<?= !empty($plan['notes']) ? ' <i class="bi bi-circle-fill text-warning" style="font-size:.4rem;vertical-align:middle;"></i>' : '' ?></button>
+                            </li>
+                            <li>
                                 <form method="POST" action="/plans/<?= $plan['id'] ?>/trigger">
                                     <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                     <button type="submit" class="dropdown-item"><i class="bi bi-play-fill text-success me-2"></i>Run Now</button>
@@ -1684,7 +1694,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                             <span class="schedule-id">#<?= $plan['id'] ?></span>
                         </div>
                         <div class="flex-grow-1 min-width-0">
-                            <h6 class="mb-1 fw-bold"><?= htmlspecialchars($plan['name']) ?></h6>
+                            <h6 class="mb-1 fw-bold"><?= htmlspecialchars($plan['name']) ?><?php if (!empty($plan['notes'])): ?> <i class="bi bi-journal-text text-warning small" title="<?= htmlspecialchars(mb_substr($plan['notes'], 0, 200)) ?>"></i><?php endif; ?></h6>
                             <div class="small text-muted">
                                 <i class="bi bi-clock me-1"></i><?= $schedSummary ?>
                             </div>
@@ -2846,6 +2856,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                         <?php endif; ?>
                     </div>
                     <div class="d-flex align-items-center gap-1" onclick="event.stopPropagation();">
+                        <button type="button" class="btn btn-sm btn-outline-secondary border-0" onclick="openNotes('plugin', <?= $cfg['id'] ?>, <?= htmlspecialchars(json_encode($cfg['name'])) ?>, this)" data-notes="<?= htmlspecialchars($cfg['notes'] ?? '') ?>" data-notes-meta="<?= !empty($cfg['notes_updated_at']) ? htmlspecialchars(\BBS\Core\TimeHelper::format($cfg['notes_updated_at'], 'M j, g:i A') . (!empty($usersById[$cfg['notes_updated_by']] ?? null) ? ' by ' . $usersById[$cfg['notes_updated_by']] : '')) : '' ?>" title="<?= !empty($cfg['notes']) ? 'View notes' : 'Add a note' ?>"><i class="bi bi-journal-text<?= !empty($cfg['notes']) ? ' text-warning' : '' ?>"></i></button>
                         <button type="button" class="btn btn-sm btn-outline-primary border-0" onclick="testPluginConfig(<?= $agent['id'] ?>, <?= $cfg['id'] ?>)" title="Test"><i class="bi bi-lightning"></i></button>
                         <button type="button" class="btn btn-sm btn-outline-secondary border-0" onclick="new bootstrap.Collapse(document.getElementById('editConfig<?= $cfg['id'] ?>')).toggle();" title="Edit"><i class="bi bi-pencil"></i></button>
                         <form method="POST" action="/clients/<?= $agent['id'] ?>/plugin-configs/<?= $cfg['id'] ?>/delete" class="d-inline" data-confirm="Delete this configuration?" data-confirm-danger>
@@ -4446,3 +4457,62 @@ const csrfToken = '<?= $this->csrfToken() ?>';
 .dirbrowse-row.active { background: var(--bs-primary-bg-subtle, rgba(13,110,253,0.15)); }
 .dirbrowse-selected-row.active { background: var(--bs-primary-bg-subtle, rgba(13,110,253,0.15)); }
 </style>
+
+<!-- Shared notes modal (#334): one modal serves clients, repos, plans, plugin configs -->
+<div class="modal fade" id="notesModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title"><i class="bi bi-journal-text me-2"></i>Notes — <span id="notesModalLabel"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <textarea class="form-control" id="notesModalText" rows="6" maxlength="5000"
+                          placeholder="What is this for? Anything your team should know."></textarea>
+                <div class="form-text" id="notesModalMeta"></div>
+                <div class="text-danger small mt-1 d-none" id="notesModalError"></div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="notesModalSave"><i class="bi bi-check2 me-1"></i>Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+(function() {
+    let notesCtx = null;
+    window.openNotes = function(entity, id, label, el) {
+        notesCtx = { entity, id };
+        document.getElementById('notesModalLabel').textContent = label;
+        document.getElementById('notesModalText').value = el.dataset.notes || '';
+        const meta = el.dataset.notesMeta || '';
+        document.getElementById('notesModalMeta').textContent = meta ? 'Last updated ' + meta : '';
+        document.getElementById('notesModalError').classList.add('d-none');
+        new bootstrap.Modal(document.getElementById('notesModal')).show();
+    };
+    document.getElementById('notesModalSave').addEventListener('click', function() {
+        if (!notesCtx) return;
+        const btn = this;
+        btn.disabled = true;
+        const body = new URLSearchParams({
+            csrf_token: <?= json_encode($this->csrfToken()) ?>,
+            entity: notesCtx.entity,
+            id: notesCtx.id,
+            notes: document.getElementById('notesModalText').value,
+        });
+        fetch('/notes/save', { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body })
+            .then(r => r.json())
+            .then(d => {
+                if (d.status === 'ok') { window.location.reload(); return; }
+                throw new Error(d.error || 'Save failed');
+            })
+            .catch(e => {
+                btn.disabled = false;
+                const err = document.getElementById('notesModalError');
+                err.textContent = e.message;
+                err.classList.remove('d-none');
+            });
+    });
+})();
+</script>

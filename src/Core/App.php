@@ -167,6 +167,7 @@ class App
         $this->router->map('POST', '/notifications/read-all', 'NotificationController@markAllRead');
 
         // Log
+        $this->router->map('POST', '/notes/save', 'NotesController@save');
         $this->router->map('GET', '/log', 'LogController@index');
         $this->router->map('POST', '/log/[i:id]/resolve', 'LogController@resolve');
         $this->router->map('POST', '/log/resolve-all', 'LogController@resolveAll');

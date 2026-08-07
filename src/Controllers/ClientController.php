@@ -371,6 +371,9 @@ class ClientController extends Controller
         // Users list for owner assignment
         $users = $this->isAdmin() ? $this->db->fetchAll("SELECT id, username FROM users ORDER BY username") : [];
 
+        // id → username map for notes attribution ("last updated by …", #334)
+        $usersById = array_column($this->db->fetchAll("SELECT id, username FROM users"), 'username', 'id');
+
         // Status tab data
         $nextBackup = $this->db->fetchOne("
             SELECT s.next_run, bp.name as plan_name, bp.id as plan_id, s.id as schedule_id
@@ -481,6 +484,7 @@ class ClientController extends Controller
             'totalArchives' => $totalArchives,
             'lastJob' => $lastJob,
             'users' => $users,
+            'usersById' => $usersById,
             'repositories' => $repositories,
             'plans' => $plans,
             'recentJobs' => $recentJobs,
