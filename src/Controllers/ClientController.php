@@ -1876,6 +1876,21 @@ class ClientController extends Controller
             $ch->exec("ALTER TABLE catalog_dirs DROP PARTITION " . (int) $id);
         } catch (\Exception $e) { /* ignore */ }
 
+        // Clear S3 sync links first: repository_s3_configs RESTRICTs
+        // plugin_config deletion, and the agent cascade reaches
+        // plugin_configs before the repository cascade clears these rows,
+        // so deleting the agent directly 500s with an FK violation (#378)
+        $this->db->query(
+            "DELETE rsc FROM repository_s3_configs rsc
+             JOIN repositories r ON r.id = rsc.repository_id
+             WHERE r.agent_id = ?", [$id]
+        );
+        $this->db->query(
+            "DELETE rsc FROM repository_s3_configs rsc
+             JOIN plugin_configs pc ON pc.id = rsc.plugin_config_id
+             WHERE pc.agent_id = ?", [$id]
+        );
+
         $this->db->delete('agents', 'id = ?', [$id]);
         $this->flash('success', "Client \"{$agent['name']}\" deleted.");
         $this->redirect('/clients');
