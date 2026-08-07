@@ -46,7 +46,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.64.0"
+AGENT_VERSION = "2.66.5"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -3707,6 +3707,16 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
                             last_progress_time = now
 
                 elif msg_type in ("file_status", "file_item") and task_type == "backup" and catalog_ssh:
+                    # Excluded ('x') and unreadable ('e') items are not in the
+                    # archive — skip them before doing any work. borg emits one
+                    # file_status event per EXCLUDED file too, so broad exclude
+                    # patterns (**\Cache etc.) produce millions of events; the
+                    # per-event stat + SSH write + flush below froze Windows
+                    # backups for hours and could deadlock the whole pipeline
+                    # when the catalog pipe backed up (#380).
+                    fstatus = (entry.get("status") or "U")[0].upper()
+                    if fstatus in ("X", "E"):
+                        continue
                     # Stream file entry to server via SSH pipe
                     fpath = entry.get("path", "")
                     fsize = 0
@@ -3724,7 +3734,7 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
                             pass
                     line = json.dumps({
                         "path": fpath,
-                        "status": entry.get("status", "U")[0].upper(),
+                        "status": fstatus,
                         "size": fsize,
                         "mtime": fmtime,
                     }) + "\n"
