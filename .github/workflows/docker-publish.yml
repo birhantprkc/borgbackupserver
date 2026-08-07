@@ -3,6 +3,12 @@ name: Build and Push Docker Image
 on:
   release:
     types: [published]
+  # Manual recovery when GitHub drops the release event (v2.66.3 never
+  # built — the event was lost during an Actions disruption). Dispatch on
+  # the tag ref: gh workflow run docker-publish.yml --ref vX.Y.Z
+  # Note: manual dispatch always tags :latest, so only use it for stable
+  # release tags, not prereleases.
+  workflow_dispatch:
 
 env:
   REGISTRY: docker.io
