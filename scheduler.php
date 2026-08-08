@@ -1795,10 +1795,43 @@ foreach ($serverJobs as $sj) {
                 fwrite($pipes[0], $passphrase . "\n");
             }
             fclose($pipes[0]);
-            $stdout = stream_get_contents($pipes[1]);
-            $stderr = stream_get_contents($pipes[2]);
-            fclose($pipes[1]);
-            fclose($pipes[2]);
+            // Drain stdout and stderr concurrently via stream_select. Reading
+            // them serially (stdout to EOF, then stderr) deadlocks when borg
+            // fills the 64 KB stderr pipe buffer before finishing — e.g.
+            // `prune --list --log-json` emits one ~290-byte "Keeping archive"
+            // line per kept archive on stderr, so rules keeping ~225+ archives
+            // stalled indefinitely (#384).
+            stream_set_blocking($pipes[1], false);
+            stream_set_blocking($pipes[2], false);
+            $stderr = '';
+            $open = [1 => $pipes[1], 2 => $pipes[2]];
+            while ($open) {
+                $read = array_values($open);
+                $write = null;
+                $except = null;
+                if (stream_select($read, $write, $except, 5) === false) {
+                    break;
+                }
+                foreach ($open as $i => $pipe) {
+                    $chunk = fread($pipe, 65536);
+                    if ($chunk !== false && $chunk !== '') {
+                        if ($i === 1) {
+                            $stdout .= $chunk;
+                        } else {
+                            $stderr .= $chunk;
+                        }
+                    }
+                    if (feof($pipe)) {
+                        fclose($pipe);
+                        unset($open[$i]);
+                    }
+                }
+            }
+            // If stream_select errored out, close whatever is left so
+            // proc_close can't block on open pipes.
+            foreach ($open as $pipe) {
+                fclose($pipe);
+            }
             $exitCode = proc_close($proc);
 
             if ($exitCode <= 1) {
