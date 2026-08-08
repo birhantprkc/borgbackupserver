@@ -131,6 +131,29 @@ def _detect_dropbear():
 IS_DROPBEAR = _detect_dropbear()
 
 
+def _detect_nixos():
+    """Detect NixOS. Packages there are managed declaratively through Nix:
+    foreign glibc binaries can't execute (no FHS ELF interpreter at
+    /lib/ld-linux-*), there is no imperative package manager the agent can
+    drive, and pip is unavailable — so borg self-update must be skipped
+    (#359). /etc/NIXOS is the canonical marker; os-release is the backup."""
+    if IS_WINDOWS:
+        return False
+    if os.path.exists("/etc/NIXOS"):
+        return True
+    try:
+        with open("/etc/os-release") as f:
+            for line in f:
+                if line.strip() in ("ID=nixos", 'ID="nixos"'):
+                    return True
+    except (FileNotFoundError, OSError):
+        pass
+    return False
+
+
+IS_NIXOS = _detect_nixos()
+
+
 def _ssh_common_opts(connect_timeout=None):
     """Argv fragment for non-interactive ssh: skip hostkey check, run in
     batch mode, optionally cap connect time. Dropbear has none of the
@@ -804,6 +827,19 @@ def execute_update_borg(config, task):
             "job_id": job_id,
             "result": "completed",
             "output_log": "Skipped - no compatible binary available for this platform",
+        })
+        return
+
+    # NixOS: borg is managed declaratively via nixpkgs — every install
+    # method the agent has (foreign binary, package manager, pip) is a
+    # guaranteed failure there. Report a clear skip instead (#359).
+    if IS_NIXOS:
+        logger.info("Skipping borg update - borg is managed by Nix on NixOS")
+        report_status(config, {
+            "job_id": job_id,
+            "result": "completed",
+            "output_log": "Skipped - borg on NixOS is managed through nixpkgs. "
+                          "Update it via your Nix configuration (e.g. nixos-rebuild switch --upgrade).",
         })
         return
 

@@ -836,6 +836,13 @@ class SettingsController extends Controller
                 continue;
             }
 
+            // NixOS agents manage borg through nixpkgs — the agent skips
+            // update jobs, so queueing one is pure noise (#359)
+            if (stripos($agent['os_info'] ?? '', 'nixos') !== false) {
+                $skipped++;
+                continue;
+            }
+
             // In server mode, skip incompatible agents
             if ($mode === 'server') {
                 $version = $service->getServerVersion();

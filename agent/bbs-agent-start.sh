@@ -1,6 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # bbs-agent-start.sh — Pre-start wrapper for the BBS agent.
+# (env-based shebang: NixOS has no /bin/bash — only /bin/sh and /usr/bin/env.)
 #
 # This script runs BEFORE the agent Python script and provides a recovery
 # path if the .py file is broken (e.g. SyntaxError from a bad update).

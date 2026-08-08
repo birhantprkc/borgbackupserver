@@ -333,6 +333,24 @@ install_borg() {
                 "$brew_bin" install borgbackup python3 >/dev/null 2>&1 || true
             fi
             ;;
+        nixos)
+            # NixOS: packages are normally declared in configuration.nix
+            # (environment.systemPackages = [ pkgs.borgbackup pkgs.python3 ])
+            # but an imperative nix-env install keeps the one-line installer
+            # working. Channel attr is `nixos.` on NixOS, `nixpkgs.` on
+            # plain Nix — try both. Profile bins are added to PATH so the
+            # resolve step below finds what just landed.
+            nix-env -iA nixos.borgbackup nixos.python3 >/dev/null 2>&1 || \
+                nix-env -iA nixpkgs.borgbackup nixpkgs.python3 >/dev/null 2>&1 || true
+            export PATH="$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:/run/current-system/sw/bin:$PATH"
+            if ! command -v borg >/dev/null 2>&1; then
+                stop_spinner
+                print_error "Could not install borg via nix-env. Add borgbackup and python3 to"
+                print_error "your NixOS configuration, then re-run this installer:"
+                print_error "  environment.systemPackages = [ pkgs.borgbackup pkgs.python3 ];"
+                exit 1
+            fi
+            ;;
         *)
             stop_spinner
             print_error "Unsupported OS '$OS'. Install borg and python3 manually, then re-run."
@@ -381,6 +399,12 @@ check_python3() {
             /usr/local/bin/python3.9
             /usr/bin/python3
         )
+        # Whatever python3 is in PATH goes last — catches NixOS (no FHS
+        # paths at all, everything under /nix/store) and other non-standard
+        # prefixes the fixed list above can't know about (#359).
+        local path_python
+        path_python=$(command -v python3 2>/dev/null || true)
+        [ -n "$path_python" ] && candidates+=("$path_python")
         for p in "${candidates[@]}"; do
             if [ -x "$p" ]; then
                 local ver
@@ -718,6 +742,13 @@ RCEOF
     elif [ -d /run/systemd/system ] || command -v systemctl &>/dev/null; then
         start_spinner "Configuring systemd service..."
 
+        # Resolve bash at install time — NixOS has no /bin/bash (only
+        # /bin/sh and /usr/bin/env exist there), so a hardcoded ExecStart
+        # path would fail on start (#359).
+        local bash_bin
+        bash_bin=$(command -v bash 2>/dev/null || echo /bin/bash)
+
+        mkdir -p /etc/systemd/system
         cat > /etc/systemd/system/bbs-agent.service <<EOF
 [Unit]
 Description=Borg Backup Server Agent
@@ -728,7 +759,7 @@ Wants=network-online.target
 Type=simple
 User=root
 Environment=LC_ALL=C.UTF-8 LANG=C.UTF-8 BBS_AGENT_DIR=$INSTALL_DIR BBS_PYTHON=$PYTHON3
-ExecStart=/bin/bash $INSTALL_DIR/bbs-agent-start.sh
+ExecStart=$bash_bin $INSTALL_DIR/bbs-agent-start.sh
 Restart=always
 RestartSec=10
 StandardOutput=journal

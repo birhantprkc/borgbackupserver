@@ -1199,6 +1199,15 @@ class AgentApiController extends Controller
             return;
         }
 
+        // NixOS manages borg declaratively through nixpkgs — the agent can't
+        // install a foreign binary (no FHS ELF interpreter), has no package
+        // manager to drive, and pip is unavailable. The agent reports such
+        // jobs as skipped without changing borg_version, so queueing here
+        // would loop daily forever (#359).
+        if (stripos($agent['os_info'] ?? '', 'nixos') !== false) {
+            return;
+        }
+
         // Don't queue if there's already a pending/running borg update,
         // or if one failed in the last 24 hours (avoid retry loops on persistent failures like full disk)
         $existing = $this->db->fetchOne(
