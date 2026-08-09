@@ -2453,4 +2453,412 @@ class AdminApiController extends Controller
 
         $this->json(['schedules' => $rows]);
     }
+
+    // ── Notifications (#bbsapp) ─────────────────────────────────────
+
+    /**
+     * GET /api/v1/notifications?limit=N&offset=N
+     * Same visibility rules as the web bell: global notifications, the
+     * caller's own, and agent-scoped ones for agents they can access.
+     */
+    public function listNotifications(): void
+    {
+        $ctx = $this->requireApiAuth();
+        $limit = isset($_GET['limit']) ? max(1, min(200, (int) $_GET['limit'])) : 50;
+        $offset = isset($_GET['offset']) ? max(0, (int) $_GET['offset']) : 0;
+
+        $service = new \BBS\Services\NotificationService();
+        $rows = $service->getAll($limit, $offset, (int) $ctx['id']);
+        foreach ($rows as &$n) {
+            $n['id'] = (int) $n['id'];
+            $n['agent_id'] = $n['agent_id'] !== null ? (int) $n['agent_id'] : null;
+            $n['occurrence_count'] = (int) $n['occurrence_count'];
+            $n['read'] = $n['read_at'] !== null;
+            $n['resolved'] = $n['resolved_at'] !== null;
+        }
+        unset($n);
+
+        $this->json([
+            'notifications' => $rows,
+            'unread' => $service->unreadCount((int) $ctx['id']),
+            'limit' => $limit,
+            'offset' => $offset,
+        ]);
+    }
+
+    /** POST /api/v1/notifications/{id}/read */
+    public function markNotificationRead(int $id): void
+    {
+        $ctx = $this->requireApiAuth();
+        $service = new \BBS\Services\NotificationService();
+        $service->markRead($id, (int) $ctx['id']);
+        $this->json(['status' => 'ok', 'unread' => $service->unreadCount((int) $ctx['id'])]);
+    }
+
+    /** POST /api/v1/notifications/read-all */
+    public function markAllNotificationsRead(): void
+    {
+        $ctx = $this->requireApiAuth();
+        $service = new \BBS\Services\NotificationService();
+        $service->markAllRead((int) $ctx['id']);
+        $this->json(['status' => 'ok', 'unread' => 0]);
+    }
+
+    // ── Jobs by id / queue actions (#bbsapp) ────────────────────────
+
+    /**
+     * GET /api/v1/jobs/{id} — job detail + live progress without needing
+     * the client id first (the mobile queue list links straight here).
+     */
+    public function getJobById(int $jobId): void
+    {
+        $ctx = $this->requireApiAuth();
+
+        $job = $this->db->fetchOne("
+            SELECT bj.*, a.name AS client_name, a.id AS client_id,
+                   bp.name AS plan_name, r.name AS repository_name
+            FROM backup_jobs bj
+            JOIN agents a ON a.id = bj.agent_id
+            LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
+            LEFT JOIN repositories r ON r.id = bj.repository_id
+            WHERE bj.id = ?
+        ", [$jobId]);
+
+        if (!$job || !$this->apiCanAccessAgent($ctx, (int) $job['agent_id'])) {
+            $this->json(['error' => 'Job not found'], 404);
+        }
+
+        $this->json($job);
+    }
+
+    /**
+     * POST /api/v1/queue/{id}/cancel — mirrors the web queue's cancel,
+     * including the automatic break-lock cleanup job.
+     */
+    public function cancelQueueJob(int $id): void
+    {
+        $ctx = $this->requireApiAuth();
+
+        $job = $this->db->fetchOne("SELECT * FROM backup_jobs WHERE id = ?", [$id]);
+        if (!$job || !$this->apiCanAccessAgent($ctx, (int) $job['agent_id'])) {
+            $this->json(['error' => 'Job not found'], 404);
+        }
+        if (!in_array($job['status'], ['queued', 'sent', 'running'])) {
+            $this->json(['error' => 'Job cannot be cancelled (status: ' . $job['status'] . ')'], 409);
+        }
+        if (!$this->apiHasPermission($ctx, \BBS\Services\PermissionService::TRIGGER_BACKUP, (int) $job['agent_id'])) {
+            $this->json(['error' => 'You do not have permission to cancel jobs on this client'], 403);
+        }
+
+        $this->db->update('backup_jobs', [
+            'status' => 'cancelled',
+            'error_log' => 'Cancelled by user',
+            'completed_at' => date('Y-m-d H:i:s'),
+        ], 'id = ?', [$id]);
+
+        $this->db->insert('server_log', [
+            'agent_id' => $job['agent_id'],
+            'backup_job_id' => $id,
+            'level' => 'warning',
+            'message' => "Job #{$id} cancelled by user (API)",
+        ]);
+
+        // Auto-queue a break-lock to clean up any stale borg lock
+        if ($job['repository_id'] && in_array($job['task_type'], ['backup', 'restore', 'restore_mysql', 'restore_pg', 'restore_mongo'])) {
+            $this->db->insert('backup_jobs', [
+                'agent_id' => $job['agent_id'],
+                'repository_id' => $job['repository_id'],
+                'task_type' => 'break_lock',
+                'status' => 'queued',
+            ]);
+        }
+
+        $this->json(['status' => 'ok', 'message' => "Job #{$id} cancelled"]);
+    }
+
+    /**
+     * POST /api/v1/queue/{id}/retry — requeue a failed job.
+     */
+    public function retryQueueJob(int $id): void
+    {
+        $ctx = $this->requireApiAuth();
+
+        $job = $this->db->fetchOne("SELECT * FROM backup_jobs WHERE id = ?", [$id]);
+        if (!$job || !$this->apiCanAccessAgent($ctx, (int) $job['agent_id'])) {
+            $this->json(['error' => 'Job not found'], 404);
+        }
+        if ($job['status'] !== 'failed') {
+            $this->json(['error' => 'Only failed jobs can be retried'], 409);
+        }
+        if (!$this->apiHasPermission($ctx, \BBS\Services\PermissionService::TRIGGER_BACKUP, (int) $job['agent_id'])) {
+            $this->json(['error' => 'You do not have permission to retry jobs on this client'], 403);
+        }
+
+        $newJobId = $this->db->insert('backup_jobs', [
+            'agent_id' => $job['agent_id'],
+            'backup_plan_id' => $job['backup_plan_id'],
+            'repository_id' => $job['repository_id'],
+            'task_type' => $job['task_type'],
+            'status' => 'queued',
+            'queued_at' => date('Y-m-d H:i:s'),
+            'restore_archive_id' => $job['restore_archive_id'],
+            'restore_paths' => $job['restore_paths'],
+            'restore_destination' => $job['restore_destination'],
+            'restore_databases' => $job['restore_databases'],
+        ]);
+
+        $this->db->insert('server_log', [
+            'agent_id' => $job['agent_id'],
+            'backup_job_id' => $newJobId,
+            'level' => 'info',
+            'message' => "Job #{$newJobId} queued (retry of #{$id}, API)",
+        ]);
+
+        $this->json(['status' => 'ok', 'job_id' => (int) $newJobId, 'message' => "Job #{$id} retried as #{$newJobId}"]);
+    }
+
+    // ── Catalog browse + restore (#bbsapp) ──────────────────────────
+
+    /**
+     * GET /api/v1/clients/{id}/repositories/{repoId}/archives/{archiveId}/files
+     * Paginated catalog browse. Query: path (default /), limit (default 200,
+     * max 1000), cursor (opaque, from the previous page). Directories are
+     * returned on the first page only; files paginate via keyset cursor —
+     * archives hold millions of rows, so no OFFSET scans.
+     */
+    public function listArchiveFiles(int $id, int $repoId, int $archiveId): void
+    {
+        $ctx = $this->requireApiAuth();
+        if (!$this->apiCanAccessAgent($ctx, $id)) {
+            $this->json(['error' => 'Client not found'], 404);
+        }
+
+        $archive = $this->db->fetchOne("
+            SELECT ar.id FROM archives ar
+            JOIN repositories r ON r.id = ar.repository_id
+            WHERE ar.id = ? AND ar.repository_id = ? AND r.agent_id = ?
+        ", [$archiveId, $repoId, $id]);
+        if (!$archive) {
+            $this->json(['error' => 'Archive not found'], 404);
+        }
+
+        $ch = \BBS\Core\ClickHouse::getInstance();
+        if (!$ch->isAvailable()) {
+            $this->json(['error' => 'File catalog is unavailable on this server'], 503);
+        }
+
+        $prefix = $_GET['path'] ?? '/';
+        if ($prefix !== '/' && !str_ends_with($prefix, '/')) {
+            $prefix .= '/';
+        }
+        $parentDir = $prefix === '/' ? '/' : rtrim($prefix, '/');
+        $limit = isset($_GET['limit']) ? max(1, min(1000, (int) $_GET['limit'])) : 200;
+        $cursor = $_GET['cursor'] ?? '';
+        $afterName = '';
+        if ($cursor !== '') {
+            $decoded = base64_decode($cursor, true);
+            if ($decoded === false) {
+                $this->json(['error' => 'Invalid cursor'], 400);
+            }
+            $afterName = $decoded;
+        }
+
+        // Directories only on the first page — they're bounded per level.
+        $directories = [];
+        if ($afterName === '') {
+            $dirs = $ch->fetchAll("
+                SELECT name, dir_path, file_count, total_size
+                FROM catalog_dirs
+                WHERE agent_id = ? AND archive_id = ? AND parent_dir = ?
+                ORDER BY name
+            ", [$id, $archiveId, $parentDir]);
+            foreach ($dirs as $d) {
+                $directories[] = [
+                    'name' => $d['name'],
+                    'path' => $d['dir_path'] . '/',
+                    'file_count' => (int) $d['file_count'],
+                    'total_size' => (int) $d['total_size'],
+                ];
+            }
+        }
+
+        // Keyset pagination on file_name (part of the table's ORDER BY key).
+        // Fetch limit+1 to know whether another page exists.
+        $fetch = $limit + 1;
+        $files = $ch->fetchAll("
+            SELECT path AS file_path, file_name, file_size, status,
+                   formatDateTime(mtime, '%Y-%m-%d %H:%i:%S') AS mtime
+            FROM file_catalog
+            WHERE agent_id = ? AND archive_id = ? AND parent_dir = ? AND status != 'D'
+              AND file_name > ?
+            ORDER BY file_name
+            LIMIT {$fetch}
+        ", [$id, $archiveId, $parentDir, $afterName]);
+
+        $nextCursor = null;
+        if (count($files) > $limit) {
+            $files = array_slice($files, 0, $limit);
+            $nextCursor = base64_encode(end($files)['file_name']);
+        }
+        foreach ($files as &$f) {
+            $f['file_size'] = (int) $f['file_size'];
+        }
+        unset($f);
+
+        $this->json([
+            'path' => $prefix,
+            'dirs' => $directories,
+            'files' => $files,
+            'next_cursor' => $nextCursor,
+        ]);
+    }
+
+    /**
+     * POST /api/v1/clients/{id}/restore
+     * Body: {"archive_id": N, "paths": ["/etc", ...], "destination": "/tmp/x"}.
+     * Empty paths = full archive. Mirrors the web restore flow including the
+     * up-front files_total resolution for progress bars.
+     */
+    public function restoreFiles(int $id): void
+    {
+        $ctx = $this->requireApiAuth();
+        if (!$this->apiCanAccessAgent($ctx, $id)) {
+            $this->json(['error' => 'Client not found'], 404);
+        }
+        if (!$this->apiHasPermission($ctx, \BBS\Services\PermissionService::RESTORE, $id)) {
+            $this->json(['error' => 'You do not have permission to restore on this client'], 403);
+        }
+
+        $input = $this->getJsonInput();
+        $archiveId = (int) ($input['archive_id'] ?? 0);
+        $selectedFiles = is_array($input['paths'] ?? null) ? $input['paths'] : [];
+        $destination = trim($input['destination'] ?? '');
+
+        if (!$archiveId) {
+            $this->json(['error' => 'archive_id is required'], 400);
+        }
+
+        $archive = $this->db->fetchOne("
+            SELECT ar.*, r.path AS repo_path
+            FROM archives ar
+            JOIN repositories r ON r.id = ar.repository_id
+            WHERE ar.id = ? AND r.agent_id = ?
+        ", [$archiveId, $id]);
+        if (!$archive) {
+            $this->json(['error' => 'Archive not found'], 404);
+        }
+
+        // Resolve expected file count for the queue's progress bar (same
+        // logic as the web restore — see ClientController::restoreSubmit).
+        $filesTotal = null;
+        if (empty($selectedFiles)) {
+            $filesTotal = (int) ($archive['file_count'] ?? 0) ?: null;
+        } else {
+            try {
+                $ch = \BBS\Core\ClickHouse::getInstance();
+                if ($ch->isAvailable()) {
+                    $paths = array_values(array_filter(array_map(
+                        fn($p) => '/' . trim((string) $p, '/'),
+                        $selectedFiles
+                    ), fn($p) => $p !== '/'));
+                    $roots = array_filter($paths, function ($p) use ($paths) {
+                        foreach ($paths as $other) {
+                            if ($other !== $p && str_starts_with($p, $other . '/')) return false;
+                        }
+                        return true;
+                    });
+
+                    $conds = [];
+                    $params = [$id, $archiveId];
+                    foreach ($roots as $p) {
+                        $conds[] = '(path = ? OR startsWith(path, ?))';
+                        $params[] = $p;
+                        $params[] = $p . '/';
+                    }
+                    if ($conds) {
+                        $row = $ch->fetchOne(
+                            "SELECT count() AS cnt FROM file_catalog
+                             WHERE agent_id = ? AND archive_id = ? AND (" . implode(' OR ', $conds) . ")",
+                            $params
+                        );
+                        $filesTotal = (int) ($row['cnt'] ?? 0) ?: null;
+                    }
+                }
+            } catch (\Exception $e) {
+                // Catalog unavailable — byte-based progress still applies
+            }
+        }
+
+        $jobId = $this->db->insert('backup_jobs', [
+            'agent_id' => $id,
+            'backup_plan_id' => null,
+            'repository_id' => $archive['repository_id'],
+            'task_type' => 'restore',
+            'status' => 'queued',
+            'queued_at' => date('Y-m-d H:i:s'),
+            'restore_archive_id' => $archiveId,
+            'restore_paths' => json_encode($selectedFiles),
+            'restore_destination' => $destination ?: null,
+            'files_total' => $filesTotal,
+        ]);
+
+        $this->db->insert('server_log', [
+            'agent_id' => $id,
+            'backup_job_id' => $jobId,
+            'level' => 'info',
+            'message' => empty($selectedFiles)
+                ? "Restore queued via API: full archive {$archive['archive_name']}"
+                : "Restore queued via API: " . count($selectedFiles) . " paths from archive {$archive['archive_name']}",
+        ]);
+
+        $this->json(['status' => 'ok', 'job_id' => (int) $jobId]);
+    }
+
+    // ── Push registration (#bbsapp) ─────────────────────────────────
+
+    /**
+     * POST /api/v1/push/register — {device_id, apns_token, platform}.
+     * Upserts per (user, device); re-registration refreshes the token.
+     */
+    public function registerPush(): void
+    {
+        $ctx = $this->requireApiAuth();
+        $input = $this->getJsonInput();
+
+        $deviceId = substr(trim($input['device_id'] ?? ''), 0, 64);
+        $apnsToken = substr(trim($input['apns_token'] ?? ''), 0, 255);
+        $platform = substr(trim($input['platform'] ?? 'ios'), 0, 16);
+
+        if ($deviceId === '' || $apnsToken === '') {
+            $this->json(['error' => 'device_id and apns_token are required'], 400);
+        }
+
+        $this->db->query(
+            "INSERT INTO push_tokens (user_id, device_id, apns_token, platform)
+             VALUES (?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE apns_token = VALUES(apns_token), platform = VALUES(platform)",
+            [(int) $ctx['id'], $deviceId, $apnsToken, $platform]
+        );
+
+        $this->json(['status' => 'ok']);
+    }
+
+    /**
+     * DELETE /api/v1/push/register — body or query device_id. Called on
+     * logout so a signed-out phone stops receiving pushes.
+     */
+    public function unregisterPush(): void
+    {
+        $ctx = $this->requireApiAuth();
+        $input = $this->getJsonInput();
+        $deviceId = substr(trim($input['device_id'] ?? ($_GET['device_id'] ?? '')), 0, 64);
+
+        if ($deviceId === '') {
+            $this->json(['error' => 'device_id is required'], 400);
+        }
+
+        $this->db->delete('push_tokens', 'user_id = ? AND device_id = ?', [(int) $ctx['id'], $deviceId]);
+        http_response_code(204);
+        exit;
+    }
 }

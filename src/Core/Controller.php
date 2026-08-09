@@ -229,6 +229,19 @@ class Controller
     }
 
     /**
+     * Per-agent action permission check for token-authenticated endpoints
+     * (trigger_backup, restore, ...). Admins bypass, matching the web UI.
+     */
+    protected function apiHasPermission(array $ctx, string $permission, int $agentId): bool
+    {
+        if (($ctx['role'] ?? '') === 'admin') {
+            return true;
+        }
+        $permService = new \BBS\Services\PermissionService();
+        return $permService->hasPermission((int) $ctx['id'], $permission, $agentId);
+    }
+
+    /**
      * True if this token may return secret material in API responses.
      * Platform tokens (hosted-managed master key) always qualify;
      * regular user tokens need the `can_read_secrets` flag set explicitly

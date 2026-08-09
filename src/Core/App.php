@@ -285,6 +285,16 @@ class App
         $this->router->map('GET', '/api/v1/auth/sessions', 'Api\\MobileAuthController@sessions');
         $this->router->map('DELETE', '/api/v1/auth/sessions/[i:id]', 'Api\\MobileAuthController@deleteSession');
         $this->router->map('GET', '/api/v1/dashboard', 'Api\\AdminApiController@dashboard');
+        $this->router->map('GET', '/api/v1/notifications', 'Api\\AdminApiController@listNotifications');
+        $this->router->map('POST', '/api/v1/notifications/[i:id]/read', 'Api\\AdminApiController@markNotificationRead');
+        $this->router->map('POST', '/api/v1/notifications/read-all', 'Api\\AdminApiController@markAllNotificationsRead');
+        $this->router->map('GET', '/api/v1/jobs/[i:jobId]', 'Api\\AdminApiController@getJobById');
+        $this->router->map('POST', '/api/v1/queue/[i:id]/cancel', 'Api\\AdminApiController@cancelQueueJob');
+        $this->router->map('POST', '/api/v1/queue/[i:id]/retry', 'Api\\AdminApiController@retryQueueJob');
+        $this->router->map('GET', '/api/v1/clients/[i:id]/repositories/[i:repoId]/archives/[i:archiveId]/files', 'Api\\AdminApiController@listArchiveFiles');
+        $this->router->map('POST', '/api/v1/clients/[i:id]/restore', 'Api\\AdminApiController@restoreFiles');
+        $this->router->map('POST', '/api/v1/push/register', 'Api\\AdminApiController@registerPush');
+        $this->router->map('DELETE', '/api/v1/push/register', 'Api\\AdminApiController@unregisterPush');
 
         // Admin API (token-authenticated)
         $this->router->map('GET', '/api/v1/summary', 'Api\\AdminApiController@summary');
