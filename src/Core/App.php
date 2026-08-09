@@ -342,6 +342,7 @@ class App
         $this->router->map('DELETE', '/api/v1/users/[i:id]', 'Api\\AdminApiController@deleteUser');
         $this->router->map('GET', '/api/v1/log', 'Api\\AdminApiController@listLog');
         $this->router->map('GET', '/api/v1/schedules', 'Api\\AdminApiController@listSchedules');
+        $this->router->map('GET', '/api/v1/schedules/day', 'Api\\AdminApiController@schedulesDay');
 
         // Catalog & Restore (client-facing)
         $this->router->map('GET', '/clients/[i:id]/catalog/[i:archive_id]', 'ClientController@catalog');

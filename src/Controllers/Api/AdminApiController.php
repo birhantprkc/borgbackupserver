@@ -2521,6 +2521,365 @@ class AdminApiController extends Controller
         $this->json(['schedules' => $rows]);
     }
 
+    /**
+     * GET /api/v1/schedules/day?date=YYYY-MM-DD&client_id=N
+     *
+     * The mobile Schedules screen: one day of concrete occurrences for the
+     * whole server — what already ran and what is still coming — plus the
+     * Mon–Sun day-picker counts for the surrounding week.
+     *
+     * This is ScheduleController::week() cut to a single day and returned as
+     * JSON. The caller does no timezone arithmetic: minute_of_day, time_label
+     * and now_minute are all pre-resolved into the caller's timezone, because
+     * the app's runtime ships a trimmed Intl with no usable TimeZone support.
+     */
+    public function schedulesDay(): void
+    {
+        $ctx = $this->requireApiAuth();
+
+        // The caller's display preferences drive every pre-formatted field.
+        // $ctx carries no session, so read them off the user row.
+        $prefs = $this->db->fetchOne(
+            "SELECT timezone, time_format FROM users WHERE id = ?",
+            [(int) $ctx['id']]
+        ) ?: [];
+        $tzName = $prefs['timezone'] ?: 'America/New_York';
+        try {
+            $viewerTz = new \DateTimeZone($tzName);
+        } catch (\Exception $e) {
+            $tzName = 'UTC';
+            $viewerTz = new \DateTimeZone('UTC');
+        }
+        $timeFormat = ($prefs['time_format'] ?? '12h') === '24h' ? '24h' : '12h';
+        $is24h = $timeFormat === '24h';
+        $utc = new \DateTimeZone('UTC');
+
+        $today = (new \DateTime('now', $viewerTz))->format('Y-m-d');
+        $date = isset($_GET['date']) ? trim((string) $_GET['date']) : '';
+        if ($date === '') {
+            $date = $today;
+        }
+        $parsed = \DateTime::createFromFormat('!Y-m-d', $date, $viewerTz);
+        if (!$parsed || $parsed->format('Y-m-d') !== $date) {
+            $this->json(['error' => 'date must be a valid YYYY-MM-DD value'], 400);
+        }
+
+        $clientId = isset($_GET['client_id']) && $_GET['client_id'] !== ''
+            ? (int) $_GET['client_id'] : null;
+
+        // Monday–Sunday week containing $date, in the caller's timezone.
+        $weekStart = (clone $parsed)->modify('monday this week');
+        $weekDates = [];
+        for ($i = 0; $i < 7; $i++) {
+            $weekDates[] = (clone $weekStart)->modify("+{$i} days")->format('Y-m-d');
+        }
+
+        [$agentWhere, $agentParams] = $this->apiAgentWhereClause($ctx, 'a');
+
+        $schedules = $this->db->fetchAll("
+            SELECT s.id, s.backup_plan_id, s.frequency, s.times, s.day_of_week,
+                   s.day_of_month, s.timezone,
+                   bp.name AS plan_name, bp.repository_id,
+                   r.name AS repository_name,
+                   a.id AS agent_id, a.name AS agent_name
+            FROM schedules s
+            JOIN backup_plans bp ON bp.id = s.backup_plan_id
+            JOIN agents a ON a.id = bp.agent_id
+            LEFT JOIN repositories r ON r.id = bp.repository_id
+            WHERE s.enabled = 1 AND bp.enabled = 1 AND {$agentWhere}
+            ORDER BY a.name, bp.name
+        ", $agentParams);
+
+        // Median duration per plan from the last 10 successful backups, same
+        // bounded query the web week view uses.
+        $planIds = array_values(array_unique(array_map(
+            fn($s) => (int) $s['backup_plan_id'], $schedules
+        )));
+        $durations = [];
+        if (!empty($planIds)) {
+            $placeholders = implode(',', array_fill(0, count($planIds), '?'));
+            $rows = $this->db->fetchAll("
+                SELECT backup_plan_id, duration_seconds
+                FROM (
+                    SELECT backup_plan_id, duration_seconds,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY backup_plan_id
+                               ORDER BY completed_at DESC
+                           ) AS rn
+                    FROM backup_jobs
+                    WHERE backup_plan_id IN ({$placeholders})
+                      AND status = 'completed' AND task_type = 'backup'
+                      AND duration_seconds IS NOT NULL AND duration_seconds > 0
+                      AND completed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                ) ranked
+                WHERE rn <= 10
+            ", $planIds);
+            $byPlan = [];
+            foreach ($rows as $r) {
+                $byPlan[(int) $r['backup_plan_id']][] = (int) $r['duration_seconds'];
+            }
+            foreach ($byPlan as $pid => $ds) {
+                sort($ds);
+                $durations[$pid] = $ds[(int) (count($ds) / 2)];
+            }
+        }
+
+        // Expand every non-interval schedule into concrete occurrences.
+        // Occurrences are bucketed by their date in the CALLER's timezone, so
+        // a schedule running in another timezone lands on the day the user
+        // actually sees it — including when the conversion crosses midnight.
+        $intervalFreqs = ['10min', '15min', '30min', 'hourly'];
+        $byDate = array_fill_keys($weekDates, []);
+        $intervalSchedules = [];
+        $clients = [];
+
+        // Walk a day either side of the week so a timezone shift can pull an
+        // occurrence into the window from the adjacent day.
+        $scanStart = (clone $weekStart)->modify('-1 day');
+
+        foreach ($schedules as $s) {
+            $agentId = (int) $s['agent_id'];
+            $clients[$agentId] = $s['agent_name'];
+
+            if (in_array($s['frequency'], $intervalFreqs, true)) {
+                if ($clientId === null || $agentId === $clientId) {
+                    $intervalSchedules[] = [
+                        'plan_id' => (int) $s['backup_plan_id'],
+                        'plan_name' => $s['plan_name'],
+                        'client_id' => $agentId,
+                        'client_name' => $s['agent_name'],
+                        'frequency' => $s['frequency'],
+                    ];
+                }
+                continue;
+            }
+
+            $timeList = array_values(array_filter(array_map('trim', explode(',', $s['times'] ?? ''))));
+            if (empty($timeList)) {
+                continue;
+            }
+
+            try {
+                $schedTz = new \DateTimeZone($s['timezone'] ?: 'UTC');
+            } catch (\Exception $e) {
+                $schedTz = $utc;
+            }
+
+            $planId = (int) $s['backup_plan_id'];
+            $durSec = $durations[$planId] ?? 15 * 60;
+
+            for ($d = 0; $d < 9; $d++) {
+                $day = (clone $scanStart)->modify("+{$d} days");
+                // Frequency is evaluated against the schedule's own calendar day.
+                $dayInSchedTz = \DateTime::createFromFormat(
+                    '!Y-m-d', $day->format('Y-m-d'), $schedTz
+                );
+                if (!$dayInSchedTz || !$this->scheduleFiresOn($s, $dayInSchedTz)) {
+                    continue;
+                }
+
+                foreach ($timeList as $t) {
+                    $parts = explode(':', $t);
+                    $occ = (clone $dayInSchedTz)->setTime((int) ($parts[0] ?? 0), (int) ($parts[1] ?? 0));
+                    $local = (clone $occ)->setTimezone($viewerTz);
+                    $localDate = $local->format('Y-m-d');
+                    if (!isset($byDate[$localDate])) {
+                        continue;
+                    }
+
+                    $minuteOfDay = ((int) $local->format('G')) * 60 + (int) $local->format('i');
+                    $byDate[$localDate][] = [
+                        'key' => $planId . '@' . $localDate . 'T' . $local->format('H:i'),
+                        'plan_id' => $planId,
+                        'plan_name' => $s['plan_name'],
+                        'client_id' => $agentId,
+                        'client_name' => $s['agent_name'],
+                        'repository_name' => $s['repository_name'],
+                        'frequency' => $s['frequency'],
+                        'minute_of_day' => $minuteOfDay,
+                        'time_label' => $is24h ? $local->format('H:i') : $local->format('g:i A'),
+                        'scheduled_at' => (clone $occ)->setTimezone($utc)->format('Y-m-d H:i:s'),
+                        'estimated_duration_seconds' => (int) $durSec,
+                        'duration_estimated' => !isset($durations[$planId]),
+                        'state' => 'upcoming',
+                        'had_warnings' => 0,
+                        'job_id' => null,
+                        'started_at' => null,
+                        'completed_at' => null,
+                        'duration_seconds' => null,
+                    ];
+                }
+            }
+        }
+
+        // Day-picker chips count the whole week and are deliberately NOT
+        // narrowed by client_id — the chips must not move as the filter does.
+        $days = [];
+        foreach ($weekDates as $wd) {
+            $days[] = [
+                'date' => $wd,
+                'weekday' => \DateTime::createFromFormat('!Y-m-d', $wd, $viewerTz)->format('D'),
+                'count' => count($byDate[$wd]),
+                'is_today' => $wd === $today,
+            ];
+        }
+
+        $occurrences = $byDate[$date] ?? [];
+        if ($clientId !== null) {
+            $occurrences = array_values(array_filter(
+                $occurrences,
+                fn($o) => $o['client_id'] === $clientId
+            ));
+        }
+        usort($occurrences, fn($a, $b) => $a['minute_of_day'] <=> $b['minute_of_day']);
+
+        $occurrences = $this->attachJobsToOccurrences($occurrences, $date, $viewerTz);
+
+        $clientList = [];
+        foreach ($clients as $id => $name) {
+            $clientList[] = ['id' => $id, 'name' => $name];
+        }
+        usort($clientList, fn($a, $b) => strcasecmp($a['name'], $b['name']));
+
+        $isToday = $date === $today;
+        $nowLocal = new \DateTime('now', $viewerTz);
+
+        $this->json([
+            'date' => $date,
+            'timezone' => $tzName,
+            'time_format' => $timeFormat,
+            'is_today' => $isToday,
+            'now_minute' => $isToday
+                ? ((int) $nowLocal->format('G')) * 60 + (int) $nowLocal->format('i')
+                : null,
+            'days' => $days,
+            'clients' => $clientList,
+            'occurrences' => $occurrences,
+            'interval_schedules' => $intervalSchedules,
+        ]);
+    }
+
+    /**
+     * Does a daily/weekly/monthly schedule fire on this calendar day?
+     * $day is midnight of the candidate day in the schedule's own timezone.
+     */
+    private function scheduleFiresOn(array $schedule, \DateTime $day): bool
+    {
+        switch ($schedule['frequency']) {
+            case 'daily':
+                return true;
+            case 'weekly':
+                // Schema stores day_of_week as 0=Sunday, matching PHP's `w`.
+                return (int) ($schedule['day_of_week'] ?? 0) === (int) $day->format('w');
+            case 'monthly':
+                return (int) ($schedule['day_of_month'] ?? 0) === (int) $day->format('j');
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * Resolve each occurrence's state by matching it to a real backup job.
+     *
+     * Same "nearest block" idea the web week view uses: a job belongs to the
+     * occurrence of its plan whose scheduled time is closest to when the job
+     * was queued or started. Pairs are assigned closest-first so two runs of
+     * the same plan on one day can't both claim the same block.
+     */
+    private function attachJobsToOccurrences(array $occurrences, string $date, \DateTimeZone $viewerTz): array
+    {
+        if (empty($occurrences)) {
+            return $occurrences;
+        }
+
+        $planIds = array_values(array_unique(array_map(fn($o) => $o['plan_id'], $occurrences)));
+        $placeholders = implode(',', array_fill(0, count($planIds), '?'));
+
+        // The day in the caller's timezone, as the naive UTC bounds the
+        // backup_jobs timestamps are stored in.
+        $dayStart = \DateTime::createFromFormat('!Y-m-d', $date, $viewerTz);
+        $dayEnd = (clone $dayStart)->modify('+1 day');
+        $fromUtc = (clone $dayStart)->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+        $toUtc = (clone $dayEnd)->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+
+        $jobs = $this->db->fetchAll(
+            "SELECT id, backup_plan_id, status, had_warnings, queued_at, started_at,
+                    completed_at, duration_seconds
+             FROM backup_jobs
+             WHERE backup_plan_id IN ({$placeholders})
+               AND task_type = 'backup'
+               AND COALESCE(started_at, queued_at) >= ?
+               AND COALESCE(started_at, queued_at) < ?
+             ORDER BY id ASC",
+            array_merge($planIds, [$fromUtc, $toUtc])
+        );
+
+        if (empty($jobs)) {
+            return $this->markUnmatchedStates($occurrences);
+        }
+
+        // Score every plausible (occurrence, job) pair, then assign the
+        // closest pairs first so each side is used at most once.
+        $pairs = [];
+        foreach ($jobs as $ji => $job) {
+            $jobTs = strtotime($job['started_at'] ?: $job['queued_at'] ?: '') ?: 0;
+            foreach ($occurrences as $oi => $occ) {
+                if ($occ['plan_id'] !== (int) $job['backup_plan_id']) {
+                    continue;
+                }
+                $pairs[] = [
+                    'distance' => abs($jobTs - (strtotime($occ['scheduled_at'] . ' UTC') ?: 0)),
+                    'job' => $ji,
+                    'occ' => $oi,
+                ];
+            }
+        }
+        usort($pairs, fn($a, $b) => $a['distance'] <=> $b['distance']);
+
+        $usedJobs = [];
+        $usedOccs = [];
+        foreach ($pairs as $pair) {
+            if (isset($usedJobs[$pair['job']]) || isset($usedOccs[$pair['occ']])) {
+                continue;
+            }
+            $usedJobs[$pair['job']] = true;
+            $usedOccs[$pair['occ']] = true;
+
+            $job = $jobs[$pair['job']];
+            $status = $job['status'];
+            $occurrences[$pair['occ']] = array_merge($occurrences[$pair['occ']], [
+                // 'sent' is an in-flight queue state the app doesn't model.
+                'state' => $status === 'sent' ? 'queued' : $status,
+                'job_id' => (int) $job['id'],
+                'had_warnings' => (int) $job['had_warnings'],
+                'started_at' => $job['started_at'],
+                'completed_at' => $job['completed_at'],
+                'duration_seconds' => $job['duration_seconds'] !== null
+                    ? (int) $job['duration_seconds'] : null,
+            ]);
+        }
+
+        return $this->markUnmatchedStates($occurrences);
+    }
+
+    /**
+     * Occurrences with no job are either still to come or were never run.
+     */
+    private function markUnmatchedStates(array $occurrences): array
+    {
+        $now = time();
+        foreach ($occurrences as &$occ) {
+            if ($occ['job_id'] !== null) {
+                continue;
+            }
+            $scheduledTs = strtotime($occ['scheduled_at'] . ' UTC') ?: 0;
+            $occ['state'] = $scheduledTs > $now ? 'upcoming' : 'missed';
+        }
+        unset($occ);
+
+        return $occurrences;
+    }
+
     // ── Notifications (#bbsapp) ─────────────────────────────────────
 
     /**
