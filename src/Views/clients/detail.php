@@ -3050,10 +3050,13 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                                 if ($showWhen) {
                                     $swField = array_key_first($showWhen);
                                     $swValue = $showWhen[$swField];
-                                    $showWhenAttr = ' class="plugin-show-when" data-show-field="' . htmlspecialchars($swField) . '" data-show-value="' . htmlspecialchars($swValue) . '"';
+                                    // NOTE: must merge into the div's class attribute — a second
+                                    // class="" attribute is ignored by HTML parsers, which left
+                                    // these fields permanently visible in the edit form.
+                                    $showWhenAttr = ' data-show-field="' . htmlspecialchars($swField) . '" data-show-value="' . htmlspecialchars($swValue) . '"';
                                 }
                             ?>
-                            <div class="mb-2"<?= $showWhenAttr ?>>
+                            <div class="mb-2<?= $showWhen ? ' plugin-show-when' : '' ?>"<?= $showWhenAttr ?>>
                                 <?php if ($def['type'] === 'checkbox'): ?>
                                     <div class="form-check"><input class="form-check-input" type="checkbox" name="plugin_config[<?= $field ?>]" value="1" id="editCfg<?= $cfg['id'] ?>_<?= $field ?>" <?= $val ? 'checked' : '' ?>><label class="form-check-label small" for="editCfg<?= $cfg['id'] ?>_<?= $field ?>"><?= htmlspecialchars($def['label']) ?></label></div>
                                 <?php elseif ($def['type'] === 'select'): ?>
