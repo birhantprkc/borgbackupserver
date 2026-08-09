@@ -6,6 +6,21 @@ use BBS\Core\Database;
 
 class S3SyncService
 {
+    /**
+     * Maximum file_catalog rows to embed in a manifest.
+     *
+     * The manifest is generated inline by the once-a-minute scheduler tick and
+     * holds the scheduler's flock for the whole run, so an unbounded catalog
+     * export stalls every other queued job. It is also pointless past this
+     * size: importManifestFile() json_decode()s the whole document in memory,
+     * so a multi-GB manifest can never be read back.
+     *
+     * At roughly 200 bytes of JSON per row this keeps the catalog section near
+     * the ~50MB ceiling the importer can actually handle. Larger repositories
+     * write archives only and rebuild the catalog via catalog_sync on restore.
+     */
+    public const MANIFEST_MAX_CATALOG_ROWS = 250000;
+
     private Database $db;
 
     public function __construct()
@@ -561,11 +576,34 @@ class S3SyncService
         // Stream file catalog from ClickHouse in batches
         $ch = \BBS\Core\ClickHouse::getInstance();
         $agentId = (int) $agent['id'];
+
+        // Count first: repositories with tens of millions of catalog rows would
+        // otherwise block the scheduler for an hour writing a manifest no
+        // importer can read back. Skip the catalog and flag it instead.
+        $catalogRows = 0;
+        if (!empty($archiveNameById)) {
+            $idList = implode(',', array_map('intval', array_keys($archiveNameById)));
+            $countRow = $ch->fetchOne(
+                "SELECT count() AS c FROM file_catalog
+                 WHERE agent_id = {$agentId} AND archive_id IN ({$idList})"
+            );
+            $catalogRows = (int) ($countRow['c'] ?? 0);
+        }
+
+        $catalogSkipped = $catalogRows > self::MANIFEST_MAX_CATALOG_ROWS;
+        fwrite($fp, '  "file_catalog_skipped": ' . ($catalogSkipped ? 'true' : 'false') . ",\n");
+        fwrite($fp, '  "file_catalog_row_count": ' . $catalogRows . ",\n");
         fwrite($fp, '  "file_catalog": [' . "\n");
 
         $batchSize = 10000;
         $firstFile = true;
         $fileCount = 0;
+
+        // An oversized catalog writes an empty array — archives are still
+        // present, and restore falls back to catalog_sync to rebuild.
+        if ($catalogSkipped) {
+            $archiveNameById = [];
+        }
 
         // Keyset pagination: iterate one archive at a time, paging on path > last.
         // OFFSET-based pagination is O(N^2) in ClickHouse because every batch
@@ -615,6 +653,8 @@ class S3SyncService
             'file' => $tempFile,
             'archives' => $archiveCount,
             'files' => $fileCount,
+            'catalog_skipped' => $catalogSkipped,
+            'catalog_rows' => $catalogRows,
         ];
     }
 
@@ -894,6 +934,8 @@ class S3SyncService
             @unlink($tsvFile);
         }
 
+        $catalogSkipped = !empty($manifest['file_catalog_skipped']);
+
         // Update repository stats
         $this->db->update('repositories', [
             'archive_count' => $archiveCount,
@@ -904,6 +946,7 @@ class S3SyncService
             'success' => true,
             'archives' => $archiveCount,
             'files' => $fileCount,
+            'catalog_skipped' => $catalogSkipped,
             'error' => null,
         ];
     }

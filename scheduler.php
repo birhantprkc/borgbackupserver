@@ -576,13 +576,25 @@ foreach ($serverJobs as $sj) {
                 $manifestUploadResult = $s3Service->uploadManifestFile($manifestGenResult['file'], $s3Repo, $s3Agent, $creds);
 
                 if ($manifestUploadResult['success']) {
-                    echo date('Y-m-d H:i:s') . "   Manifest uploaded ({$manifestGenResult['archives']} archives, {$manifestGenResult['files']} files)\n";
-                    $db->insert('server_log', [
-                        'agent_id' => $sj['agent_id'],
-                        'backup_job_id' => $sj['id'],
-                        'level' => 'info',
-                        'message' => "Manifest uploaded: {$manifestGenResult['archives']} archives, {$manifestGenResult['files']} files cataloged",
-                    ]);
+                    if (!empty($manifestGenResult['catalog_skipped'])) {
+                        $rows = number_format((int) $manifestGenResult['catalog_rows']);
+                        $cap = number_format(\BBS\Services\S3SyncService::MANIFEST_MAX_CATALOG_ROWS);
+                        echo date('Y-m-d H:i:s') . "   Manifest uploaded ({$manifestGenResult['archives']} archives, file catalog skipped: {$rows} rows exceeds {$cap})\n";
+                        $db->insert('server_log', [
+                            'agent_id' => $sj['agent_id'],
+                            'backup_job_id' => $sj['id'],
+                            'level' => 'info',
+                            'message' => "Manifest uploaded: {$manifestGenResult['archives']} archives. File catalog omitted ({$rows} rows exceeds the {$cap} manifest limit) — a restore from S3 will rebuild it via catalog sync.",
+                        ]);
+                    } else {
+                        echo date('Y-m-d H:i:s') . "   Manifest uploaded ({$manifestGenResult['archives']} archives, {$manifestGenResult['files']} files)\n";
+                        $db->insert('server_log', [
+                            'agent_id' => $sj['agent_id'],
+                            'backup_job_id' => $sj['id'],
+                            'level' => 'info',
+                            'message' => "Manifest uploaded: {$manifestGenResult['archives']} archives, {$manifestGenResult['files']} files cataloged",
+                        ]);
+                    }
                 } else {
                     echo date('Y-m-d H:i:s') . "   Warning: manifest upload failed: {$manifestUploadResult['output']}\n";
                     $db->insert('server_log', [
@@ -690,6 +702,23 @@ foreach ($serverJobs as $sj) {
                         'level' => 'info',
                         'message' => "Catalog imported from manifest: {$importResult['archives']} archives, {$importResult['files']} files",
                     ]);
+
+                    // Manifest carried archives only (catalog too large to embed) —
+                    // rebuild the file catalog the slow way so restore browsing works.
+                    if (!empty($importResult['catalog_skipped'])) {
+                        echo date('Y-m-d H:i:s') . "   Manifest had no file catalog, queuing catalog_sync...\n";
+                        $db->insert('backup_jobs', [
+                            'agent_id' => $sj['agent_id'],
+                            'repository_id' => $sj['repository_id'],
+                            'task_type' => 'catalog_sync',
+                            'status' => 'queued',
+                        ]);
+                        $db->insert('server_log', [
+                            'agent_id' => $sj['agent_id'],
+                            'level' => 'info',
+                            'message' => 'Manifest contained no file catalog (too large to embed), catalog_sync queued to rebuild it',
+                        ]);
+                    }
                 } else {
                     // Manifest import failed, fall back to catalog_sync
                     echo date('Y-m-d H:i:s') . "   Manifest import failed: {$importResult['error']}, falling back to catalog_sync\n";
