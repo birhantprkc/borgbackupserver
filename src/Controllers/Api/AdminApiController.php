@@ -1563,7 +1563,74 @@ class AdminApiController extends Controller
             ORDER BY bj.queued_at ASC
         ", $agentParams);
 
-        $this->json(['queue' => $jobs, 'count' => count($jobs)]);
+        // Recent history (?recent=N, default 10, cap 50) — the finished
+        // jobs the web queue page shows below the in-flight section.
+        // Cross-client ordering has to happen in SQL; the per-client jobs
+        // endpoint can't answer this without a request per client.
+        $recentN = isset($_GET['recent']) ? max(1, min(50, (int) $_GET['recent'])) : 10;
+        $recent = $this->db->fetchAll("
+            SELECT bj.id, bj.task_type, bj.status, bj.status_message,
+                   bj.queued_at, bj.started_at, bj.completed_at,
+                   bj.duration_seconds, bj.had_warnings,
+                   a.name as client_name, a.id as client_id,
+                   bp.name as plan_name, r.name as repository_name
+            FROM backup_jobs bj
+            JOIN agents a ON a.id = bj.agent_id
+            LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
+            LEFT JOIN repositories r ON r.id = bj.repository_id
+            WHERE bj.status IN ('completed', 'failed') AND {$agentWhere}
+            ORDER BY bj.completed_at DESC
+            LIMIT {$recentN}
+        ", $agentParams);
+        foreach ($recent as &$r) {
+            $r['id'] = (int) $r['id'];
+            $r['client_id'] = (int) $r['client_id'];
+            $r['duration_seconds'] = $r['duration_seconds'] !== null ? (int) $r['duration_seconds'] : null;
+            $r['had_warnings'] = (int) $r['had_warnings'];
+        }
+        unset($r);
+
+        // Queue slots are server-wide capacity (global); stats are scoped
+        // to the caller's agents like everything else.
+        $activeCount = $this->db->count('backup_jobs', "status IN ('sent', 'running')");
+        $maxQueue = (int) ($this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'max_queue'")['value'] ?? 4);
+
+        $stats = ['queued' => 0, 'running' => 0, 'completed_24h' => 0, 'failed_24h' => 0, 'avg_seconds_24h' => 0];
+        foreach ($this->db->fetchAll("
+            SELECT bj.status, COUNT(*) AS c FROM backup_jobs bj
+            JOIN agents a ON a.id = bj.agent_id
+            WHERE bj.status IN ('queued', 'sent', 'running') AND {$agentWhere}
+            GROUP BY bj.status", $agentParams) as $row) {
+            if ($row['status'] === 'running') {
+                $stats['running'] += (int) $row['c'];
+            } else {
+                $stats['queued'] += (int) $row['c']; // queued + sent
+            }
+        }
+        foreach ($this->db->fetchAll("
+            SELECT bj.status, COUNT(*) AS c FROM backup_jobs bj
+            JOIN agents a ON a.id = bj.agent_id
+            WHERE bj.status IN ('completed', 'failed') AND bj.completed_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
+              AND {$agentWhere}
+            GROUP BY bj.status", $agentParams) as $row) {
+            $stats[$row['status'] . '_24h'] = (int) $row['c'];
+        }
+        $avg = $this->db->fetchOne("
+            SELECT ROUND(AVG(TIMESTAMPDIFF(SECOND, bj.started_at, bj.completed_at))) AS avg_sec
+            FROM backup_jobs bj
+            JOIN agents a ON a.id = bj.agent_id
+            WHERE bj.status = 'completed' AND bj.completed_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
+              AND bj.started_at IS NOT NULL AND {$agentWhere}
+        ", $agentParams);
+        $stats['avg_seconds_24h'] = (int) ($avg['avg_sec'] ?? 0);
+
+        $this->json([
+            'queue' => $jobs,
+            'count' => count($jobs),
+            'recent' => $recent,
+            'slots' => ['active' => $activeCount, 'max' => $maxQueue],
+            'stats' => $stats,
+        ]);
     }
 
     /**
@@ -2508,7 +2575,12 @@ class AdminApiController extends Controller
 
     /**
      * GET /api/v1/jobs/{id} — job detail + live progress without needing
-     * the client id first (the mobile queue list links straight here).
+     * the client id first (the queue list links straight here).
+     *
+     * The job row stays FLAT at the top level (the shape shipped in
+     * v2.73.0 — nesting it would be a breaking change); the detail extras
+     * ride as sibling keys: logs, queue {active,max,position},
+     * current_file, prune_stats. Mirrors QueueController::detailJson().
      */
     public function getJobById(int $jobId): void
     {
@@ -2516,6 +2588,7 @@ class AdminApiController extends Controller
 
         $job = $this->db->fetchOne("
             SELECT bj.*, a.name AS client_name, a.id AS client_id,
+                   a.status AS client_status, a.last_heartbeat AS client_last_heartbeat,
                    bp.name AS plan_name, r.name AS repository_name
             FROM backup_jobs bj
             JOIN agents a ON a.id = bj.agent_id
@@ -2528,7 +2601,59 @@ class AdminApiController extends Controller
             $this->json(['error' => 'Job not found'], 404);
         }
 
-        $this->json($job);
+        // Activity log for this job
+        $logs = $this->db->fetchAll("
+            SELECT id, level, message, created_at FROM server_log
+            WHERE backup_job_id = ?
+            ORDER BY created_at ASC, id ASC
+        ", [$jobId]);
+        foreach ($logs as &$l) {
+            $l['id'] = (int) $l['id'];
+        }
+        unset($l);
+
+        // Queue slots are a server-wide resource, so active/max are global;
+        // position is this job's place in the queued line.
+        $activeCount = $this->db->count('backup_jobs', "status IN ('sent', 'running')");
+        $maxQueue = (int) ($this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'max_queue'")['value'] ?? 4);
+        $queuePosition = null;
+        if ($job['status'] === 'queued') {
+            $pos = $this->db->fetchOne(
+                "SELECT COUNT(*) as cnt FROM backup_jobs WHERE status = 'queued' AND queued_at <= ?",
+                [$job['queued_at']]
+            );
+            $queuePosition = (int) $pos['cnt'];
+        }
+
+        // Current file for a running backup — tail of the agent's catalog log
+        $currentFile = null;
+        if ($job['status'] === 'running' && $job['task_type'] === 'backup') {
+            $jobAgent = $this->db->fetchOne("SELECT ssh_home_dir FROM agents WHERE id = ?", [$job['agent_id']]);
+            if ($jobAgent && !empty($jobAgent['ssh_home_dir'])) {
+                $catalogPath = $jobAgent['ssh_home_dir'] . '/.catalog-logs/catalog-' . $jobId . '.jsonl';
+                if (file_exists($catalogPath)) {
+                    $lastLine = trim(shell_exec('tail -n 1 ' . escapeshellarg($catalogPath)) ?? '');
+                    if ($lastLine) {
+                        $entry = json_decode($lastLine, true);
+                        if ($entry && !empty($entry['path'])) {
+                            $currentFile = rtrim($entry['path'], '/');
+                        }
+                    }
+                }
+            }
+        }
+
+        $pruneStats = null;
+        if ($job['task_type'] === 'prune') {
+            $pruneStats = \BBS\Controllers\QueueController::parsePruneStats($logs);
+        }
+
+        $this->json($job + [
+            'logs' => $logs,
+            'queue' => ['active' => $activeCount, 'max' => $maxQueue, 'position' => $queuePosition],
+            'current_file' => $currentFile,
+            'prune_stats' => $pruneStats,
+        ]);
     }
 
     /**

@@ -165,7 +165,7 @@ class QueueController extends Controller
         // For prune jobs, parse the log entries for keep rules and per-rule counts
         $pruneStats = null;
         if ($job['task_type'] === 'prune') {
-            $pruneStats = $this->parsePruneStats($logs);
+            $pruneStats = self::parsePruneStats($logs);
         }
 
         $this->view('queue/detail', [
@@ -250,8 +250,9 @@ class QueueController extends Controller
     /**
      * Parse prune-specific stats from server_log entries for a job.
      * Returns keep rules (from command), kept/deleted counts, and per-rule counts where available.
+     * Public static so the token API's job-detail endpoint can reuse it.
      */
-    private function parsePruneStats(array $logs): array
+    public static function parsePruneStats(array $logs): array
     {
         $stats = [
             'keep_rules' => [],       // ['hourly' => 6, 'daily' => 14, ...]
