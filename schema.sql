@@ -506,7 +506,7 @@ CREATE TABLE push_tokens (
 -- OIDC exchange code between the browser redirect and token exchange.
 CREATE TABLE auth_challenges (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    kind ENUM('2fa', 'oidc_exchange') NOT NULL,
+    kind ENUM('2fa', 'oidc_exchange', '2fa_setup') NOT NULL,
     challenge_hash CHAR(64) NOT NULL UNIQUE,
     user_id INT NOT NULL,
     payload TEXT DEFAULT NULL,

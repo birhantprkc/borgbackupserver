@@ -344,6 +344,22 @@ class App
         $this->router->map('GET', '/api/v1/schedules', 'Api\\AdminApiController@listSchedules');
         $this->router->map('GET', '/api/v1/schedules/day', 'Api\\AdminApiController@schedulesDay');
 
+        // My Profile (#bbsapp) — token-authenticated twins of ProfileController
+        $this->router->map('GET',   '/api/v1/profile', 'Api\\ProfileApiController@show');
+        $this->router->map('PATCH', '/api/v1/profile', 'Api\\ProfileApiController@update');
+        $this->router->map('GET',   '/api/v1/profile/timezones', 'Api\\ProfileApiController@timezones');
+        $this->router->map('POST',  '/api/v1/profile/password', 'Api\\ProfileApiController@changePassword');
+        $this->router->map('PUT',   '/api/v1/profile/storage-alerts', 'Api\\ProfileApiController@storageAlerts');
+        $this->router->map('POST',  '/api/v1/profile/2fa/setup', 'Api\\ProfileApiController@twoFactorSetup');
+        $this->router->map('POST',  '/api/v1/profile/2fa/enable', 'Api\\ProfileApiController@twoFactorEnable');
+        $this->router->map('POST',  '/api/v1/profile/2fa/disable', 'Api\\ProfileApiController@twoFactorDisable');
+        $this->router->map('POST',  '/api/v1/profile/2fa/recovery-codes', 'Api\\ProfileApiController@twoFactorRecoveryCodes');
+        $this->router->map('GET',   '/api/v1/profile/reports', 'Api\\ProfileApiController@reports');
+        $this->router->map('PUT',   '/api/v1/profile/reports/preferences', 'Api\\ProfileApiController@reportPreferences');
+        $this->router->map('GET',   '/api/v1/reports/[i:id]', 'Api\\ProfileApiController@getReport');
+        $this->router->map('POST',  '/api/v1/reports/generate', 'Api\\ProfileApiController@generateReport');
+        $this->router->map('POST',  '/api/v1/reports/[i:id]/email', 'Api\\ProfileApiController@emailReport');
+
         // Catalog & Restore (client-facing)
         $this->router->map('GET', '/clients/[i:id]/catalog/[i:archive_id]', 'ClientController@catalog');
         $this->router->map('GET', '/clients/[i:id]/catalog/[i:archive_id]/tree', 'ClientController@catalogTree');
