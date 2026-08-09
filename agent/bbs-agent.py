@@ -2111,14 +2111,21 @@ def execute_plugin_interworx(config):
     if r.returncode != 0:
         stderr = r.stderr.decode("utf-8", errors="replace").strip()
         stdout = r.stdout.decode("utf-8", errors="replace").strip()
-        # backup.pex logs progress as it goes and prints the actual error
-        # LAST — keep the tail of both streams, not the head, or the error
-        # message is exactly the part that gets truncated away (#19614).
+        # backup.pex logs verbose per-domain progress; when one sub-backup
+        # fails it logs the error mid-stream, keeps going, and exits
+        # non-zero at the end — so neither the head nor the tail alone is
+        # guaranteed to contain the failure (#19614). Pull out lines that
+        # look like errors from the FULL output, then append the tail for
+        # context.
+        combined = (stderr + "\n" + stdout).strip()
+        err_re = re.compile(r"error|fail|fatal|unable|cannot|can't|denied|no space|quota|timed? ?out|skip", re.IGNORECASE)
+        err_lines = [ln for ln in combined.splitlines() if ln.strip() and err_re.search(ln)]
         parts = []
-        if stderr:
-            parts.append("stderr: …" + stderr[-1500:] if len(stderr) > 1500 else "stderr: " + stderr)
-        if stdout:
-            parts.append("stdout: …" + stdout[-800:] if len(stdout) > 800 else "stdout: " + stdout)
+        if err_lines:
+            parts.append("error lines:\n" + "\n".join(err_lines[:30]))
+        tail_src = stderr or stdout
+        if tail_src:
+            parts.append("output tail:\n…" + tail_src[-1200:] if len(tail_src) > 1200 else "output tail:\n" + tail_src)
         detail = "\n".join(parts) or "(no output)"
         raise Exception("InterWorx backup failed (exit {}): {}".format(r.returncode, detail))
 
