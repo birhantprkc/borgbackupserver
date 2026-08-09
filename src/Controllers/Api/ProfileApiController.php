@@ -30,7 +30,7 @@ class ProfileApiController extends Controller
     /**
      * The caller's user row, or a 401 if the account vanished under the token.
      */
-    private function currentUser(array $ctx): array
+    private function apiUser(array $ctx): array
     {
         $user = $this->db->fetchOne("SELECT * FROM users WHERE id = ?", [(int) $ctx['id']]);
         if (!$user) {
@@ -100,7 +100,7 @@ class ProfileApiController extends Controller
     public function show(): void
     {
         $ctx = $this->requireApiAuth();
-        $user = $this->currentUser($ctx);
+        $user = $this->apiUser($ctx);
 
         $twoFactor = new TwoFactorService();
         $enabled = $twoFactor->isEnabled((int) $user['id']);
@@ -127,7 +127,7 @@ class ProfileApiController extends Controller
     public function update(): void
     {
         $ctx = $this->requireApiAuth();
-        $user = $this->currentUser($ctx);
+        $user = $this->apiUser($ctx);
         $input = $this->getJsonInput();
         $userId = (int) $user['id'];
 
@@ -210,7 +210,7 @@ class ProfileApiController extends Controller
             }
         }
 
-        $this->json(['user' => $this->userPayload($this->currentUser($ctx))]);
+        $this->json(['user' => $this->userPayload($this->apiUser($ctx))]);
     }
 
     /**
@@ -256,7 +256,7 @@ class ProfileApiController extends Controller
     public function changePassword(): void
     {
         $ctx = $this->requireApiAuth();
-        $user = $this->currentUser($ctx);
+        $user = $this->apiUser($ctx);
         $input = $this->getJsonInput();
 
         $this->verifyPassword($user, (string) ($input['current_password'] ?? ''));
@@ -294,7 +294,7 @@ class ProfileApiController extends Controller
     public function storageAlerts(): void
     {
         $ctx = $this->requireApiAuth();
-        $user = $this->currentUser($ctx);
+        $user = $this->apiUser($ctx);
         $input = $this->getJsonInput();
 
         $mode = (string) ($input['mode'] ?? '');
@@ -329,7 +329,7 @@ class ProfileApiController extends Controller
     public function twoFactorSetup(): void
     {
         $ctx = $this->requireApiAuth();
-        $user = $this->currentUser($ctx);
+        $user = $this->apiUser($ctx);
         $userId = (int) $user['id'];
 
         $twoFactor = new TwoFactorService();
@@ -371,7 +371,7 @@ class ProfileApiController extends Controller
     public function twoFactorEnable(): void
     {
         $ctx = $this->requireApiAuth();
-        $user = $this->currentUser($ctx);
+        $user = $this->apiUser($ctx);
         $userId = (int) $user['id'];
         $input = $this->getJsonInput();
 
@@ -421,7 +421,7 @@ class ProfileApiController extends Controller
     public function twoFactorDisable(): void
     {
         $ctx = $this->requireApiAuth();
-        $user = $this->currentUser($ctx);
+        $user = $this->apiUser($ctx);
         $input = $this->getJsonInput();
 
         $this->verifyPassword($user, (string) ($input['password'] ?? ''));
@@ -441,7 +441,7 @@ class ProfileApiController extends Controller
     public function twoFactorRecoveryCodes(): void
     {
         $ctx = $this->requireApiAuth();
-        $user = $this->currentUser($ctx);
+        $user = $this->apiUser($ctx);
         $input = $this->getJsonInput();
 
         $twoFactor = new TwoFactorService();
@@ -462,7 +462,7 @@ class ProfileApiController extends Controller
     public function reports(): void
     {
         $ctx = $this->requireApiAuth();
-        $user = $this->currentUser($ctx);
+        $user = $this->apiUser($ctx);
 
         $service = new ReportService();
         $rows = $service->getRecentReports();
@@ -484,7 +484,7 @@ class ProfileApiController extends Controller
     public function reportPreferences(): void
     {
         $ctx = $this->requireApiAuth();
-        $user = $this->currentUser($ctx);
+        $user = $this->apiUser($ctx);
         $input = $this->getJsonInput();
 
         $frequency = (string) ($input['frequency'] ?? $user['report_frequency']);
@@ -502,7 +502,7 @@ class ProfileApiController extends Controller
         ];
         $this->db->update('users', $prefs, 'id = ?', [(int) $user['id']]);
 
-        $this->json(['preferences' => $this->reportPreferencesPayload($this->currentUser($ctx))]);
+        $this->json(['preferences' => $this->reportPreferencesPayload($this->apiUser($ctx))]);
     }
 
     /**
