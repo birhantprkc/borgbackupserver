@@ -35,11 +35,14 @@ class SettingsController extends Controller
 
         // Exclude platform-kind tokens — those belong to the hosted platform,
         // not the customer, and must not appear on the user-facing list.
+        // Mobile tokens (phones signed in via the app) ARE shown so an admin
+        // can see and revoke devices from here.
         $apiTokens = $this->db->fetchAll("
-            SELECT t.id, t.name, t.created_at, t.last_used_at, t.can_read_secrets, u.username
+            SELECT t.id, t.name, t.kind, t.device_name, t.last_seen_ip,
+                   t.created_at, t.last_used_at, t.can_read_secrets, u.username
             FROM api_tokens t
             JOIN users u ON u.id = t.user_id
-            WHERE t.kind = 'user'
+            WHERE t.kind IN ('user', 'mobile')
             ORDER BY t.created_at
         ");
 

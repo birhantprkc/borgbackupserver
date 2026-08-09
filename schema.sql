@@ -477,8 +477,27 @@ CREATE TABLE api_tokens (
     can_read_secrets TINYINT(1) NOT NULL DEFAULT 0,
     token_hash VARCHAR(64) NOT NULL UNIQUE,
     user_id INT NOT NULL,
+    device_name VARCHAR(100) DEFAULT NULL,
+    device_id VARCHAR(64) DEFAULT NULL,
+    expires_at DATETIME DEFAULT NULL,
+    last_seen_ip VARCHAR(45) DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_used_at DATETIME DEFAULT NULL,
+    INDEX idx_kind_user (kind, user_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- Short-lived single-use secrets for stateless mobile auth flows:
+-- the 2FA challenge between password and TOTP verification, and the
+-- OIDC exchange code between the browser redirect and token exchange.
+CREATE TABLE auth_challenges (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    kind ENUM('2fa', 'oidc_exchange') NOT NULL,
+    challenge_hash CHAR(64) NOT NULL UNIQUE,
+    user_id INT NOT NULL,
+    payload TEXT DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 

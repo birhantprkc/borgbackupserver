@@ -126,6 +126,34 @@ class Controller
      */
     protected function requireApiToken(): array
     {
+        $ctx = $this->authenticateBearer();
+
+        if ($ctx['role'] !== 'admin') {
+            $this->json(['error' => 'API token must belong to an admin user'], 403);
+        }
+
+        return $ctx;
+    }
+
+    /**
+     * Authenticate a Bearer token without requiring the admin role.
+     * Used by mobile/session endpoints, which scope their own results
+     * through PermissionService instead (see apiAgentWhereClause /
+     * apiCanAccessAgent). Do NOT loosen requireApiToken() itself —
+     * existing automation depends on its admin gate.
+     */
+    protected function requireApiAuth(): array
+    {
+        return $this->authenticateBearer();
+    }
+
+    /**
+     * Shared Bearer-token authentication: hash lookup, rate limit,
+     * expiry check, last_used_at / last_seen_ip bump. Role enforcement
+     * is the caller's job.
+     */
+    private function authenticateBearer(): array
+    {
         $header = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
         $token = '';
         if (str_starts_with($header, 'Bearer ')) {
@@ -142,7 +170,7 @@ class Controller
 
         $hash = hash('sha256', $token);
         $apiToken = $this->db->fetchOne(
-            "SELECT t.*, u.role FROM api_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = ?",
+            "SELECT t.*, u.role, u.username, u.all_clients FROM api_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = ?",
             [$hash]
         );
 
@@ -150,21 +178,54 @@ class Controller
             $this->json(['error' => 'Invalid API token'], 401);
         }
 
-        if ($apiToken['role'] !== 'admin') {
-            $this->json(['error' => 'API token must belong to an admin user'], 403);
+        if (!empty($apiToken['expires_at']) && strtotime($apiToken['expires_at']) < time()) {
+            $this->json(['error' => 'API token has expired'], 401);
         }
 
         $this->resetRateLimit('admin_api');
 
-        $this->db->query("UPDATE api_tokens SET last_used_at = NOW() WHERE id = ?", [$apiToken['id']]);
+        $ip = $_SERVER['REMOTE_ADDR'] ?? null;
+        $this->db->query(
+            "UPDATE api_tokens SET last_used_at = NOW(), last_seen_ip = ? WHERE id = ?",
+            [$ip, $apiToken['id']]
+        );
 
         return [
             'id' => $apiToken['user_id'],
+            'username' => $apiToken['username'],
+            'role' => $apiToken['role'],
+            'all_clients' => !empty($apiToken['all_clients']),
             'token_id' => $apiToken['id'],
             'token_name' => $apiToken['name'],
             'token_kind' => $apiToken['kind'] ?? 'user',
             'can_read_secrets' => !empty($apiToken['can_read_secrets']),
         ];
+    }
+
+    /**
+     * Agent-visibility WHERE clause for token-authenticated endpoints,
+     * mirroring getAgentWhereClause() for the session-based web UI.
+     * Admins see everything; other users see their assigned agents.
+     */
+    protected function apiAgentWhereClause(array $ctx, string $agentAlias = 'a'): array
+    {
+        if (($ctx['role'] ?? '') === 'admin') {
+            return ['1=1', []];
+        }
+        $permService = new \BBS\Services\PermissionService();
+        return $permService->getAgentWhereClause((int) $ctx['id'], $agentAlias);
+    }
+
+    /**
+     * Per-agent access check for token-authenticated endpoints.
+     */
+    protected function apiCanAccessAgent(array $ctx, int $agentId): bool
+    {
+        if (($ctx['role'] ?? '') === 'admin') {
+            return true;
+        }
+        $permService = new \BBS\Services\PermissionService();
+        return $permService->canAccessAgent((int) $ctx['id'], $agentId);
     }
 
     /**
@@ -176,6 +237,11 @@ class Controller
      */
     protected function tokenCanReadSecrets(array $ctx): bool
     {
+        // Mobile tokens can NEVER read secrets, even for admin accounts —
+        // passphrases and S3 credentials must not reach a phone.
+        if (($ctx['token_kind'] ?? 'user') === 'mobile') {
+            return false;
+        }
         if (($ctx['token_kind'] ?? 'user') === 'platform') {
             return true;
         }

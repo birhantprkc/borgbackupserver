@@ -272,6 +272,20 @@ class App
         $this->router->map('GET', '/get-agent', 'Api\\AgentApiController@getAgent');
         $this->router->map('GET', '/get-agent-windows', 'Api\\AgentApiController@getAgentWindows');
 
+        // Mobile app auth + session API (#bbsapp). discover/login/2fa/oidc
+        // are unauthenticated by design (they ARE the login); the rest use
+        // requireApiAuth() (Bearer, no admin gate, PermissionService scoping).
+        $this->router->map('GET', '/api/v1/auth/discover', 'Api\\MobileAuthController@discover');
+        $this->router->map('POST', '/api/v1/auth/login', 'Api\\MobileAuthController@login');
+        $this->router->map('POST', '/api/v1/auth/2fa', 'Api\\MobileAuthController@twoFactor');
+        $this->router->map('GET', '/api/v1/auth/oidc/start', 'Api\\MobileAuthController@oidcStart');
+        $this->router->map('POST', '/api/v1/auth/oidc/exchange', 'Api\\MobileAuthController@oidcExchange');
+        $this->router->map('GET', '/api/v1/auth/me', 'Api\\MobileAuthController@me');
+        $this->router->map('POST', '/api/v1/auth/logout', 'Api\\MobileAuthController@logout');
+        $this->router->map('GET', '/api/v1/auth/sessions', 'Api\\MobileAuthController@sessions');
+        $this->router->map('DELETE', '/api/v1/auth/sessions/[i:id]', 'Api\\MobileAuthController@deleteSession');
+        $this->router->map('GET', '/api/v1/dashboard', 'Api\\AdminApiController@dashboard');
+
         // Admin API (token-authenticated)
         $this->router->map('GET', '/api/v1/summary', 'Api\\AdminApiController@summary');
         $this->router->map('GET', '/api/v1/metrics', 'Api\\AdminApiController@metrics');

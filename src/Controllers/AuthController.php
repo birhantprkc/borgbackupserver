@@ -36,6 +36,15 @@ class AuthController extends Controller
      */
     private function localLoginDisabled(?OidcService $oidc = null): bool
     {
+        return self::isLocalLoginDisabled($oidc);
+    }
+
+    /**
+     * Reusable (also from the mobile API): is password login disabled in
+     * favour of SSO-only sign-in?
+     */
+    public static function isLocalLoginDisabled(?OidcService $oidc = null): bool
+    {
         $oidc = $oidc ?? new OidcService();
         if (!$oidc->isEnabled()) {
             return false;
@@ -45,7 +54,7 @@ class AuthController extends Controller
             && in_array(strtolower((string) $env), ['1', 'true', 'yes', 'on'], true)) {
             return true;
         }
-        $row = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'disable_local_login'");
+        $row = \BBS\Core\Database::getInstance()->fetchOne("SELECT `value` FROM settings WHERE `key` = 'disable_local_login'");
         return ($row['value'] ?? '0') === '1';
     }
 
@@ -184,8 +193,24 @@ class AuthController extends Controller
             $redirectUri = "{$scheme}://{$host}/login/oidc/callback";
         }
 
+        // Mobile-app brokered SSO (#bbsapp): /api/v1/auth/oidc/start stashed
+        // device info in the session before redirecting to the IdP. The IdP
+        // returns to this same registered callback URL (so customers never
+        // touch their IdP config); when the marker is present we finish by
+        // handing the app a one-time exchange code instead of a web session.
+        $mobile = $_SESSION['mobile_oidc'] ?? null;
+        if ($mobile && (time() - ($mobile['started_at'] ?? 0)) > 600) {
+            unset($_SESSION['mobile_oidc']);
+            $mobile = null;
+        }
+
         try {
             $result = $oidcService->handleCallback($redirectUri);
+
+            if ($mobile) {
+                unset($_SESSION['mobile_oidc']);
+                $this->finishMobileOidc($mobile, $result); // never returns
+            }
 
             if ($result['status'] === 'pending') {
                 $this->flash('warning', $result['message']);
@@ -204,9 +229,54 @@ class AuthController extends Controller
                 $this->redirect('/login');
             }
         } catch (\Exception $e) {
+            if ($mobile) {
+                unset($_SESSION['mobile_oidc']);
+                header('Location: ' . $mobile['redirect'] . '?error=error&message=' . urlencode('SSO error: ' . $e->getMessage()));
+                exit;
+            }
             $this->flash('danger', 'SSO error: ' . $e->getMessage());
             $this->redirect('/login');
         }
+    }
+
+    /**
+     * Finish a mobile-brokered OIDC login: mint a one-time exchange code
+     * (60s TTL, single use) and bounce back into the app via its custom
+     * scheme. The app then swaps the code for a real bearer token over TLS
+     * at /api/v1/auth/oidc/exchange — the code is the only thing that
+     * transits the (non-private) URL-handler channel.
+     */
+    private function finishMobileOidc(array $mobile, array $result): void
+    {
+        $appRedirect = $mobile['redirect'];
+
+        if ($result['status'] === 'pending' || $result['status'] === 'denied') {
+            header('Location: ' . $appRedirect . '?error=' . urlencode($result['status'])
+                . '&message=' . urlencode($result['message'] ?? 'Account not approved.'));
+            exit;
+        }
+
+        if (empty($result['user'])) {
+            header('Location: ' . $appRedirect . '?error=error&message=' . urlencode('SSO login failed.'));
+            exit;
+        }
+
+        $code = bin2hex(random_bytes(32));
+        $this->db->insert('auth_challenges', [
+            'kind' => 'oidc_exchange',
+            'challenge_hash' => hash('sha256', $code),
+            'user_id' => $result['user']['id'],
+            'payload' => json_encode([
+                'state' => $mobile['state'] ?? '',
+                'device_id' => $mobile['device_id'] ?? '',
+                'device_name' => $mobile['device_name'] ?? '',
+            ]),
+            'expires_at' => date('Y-m-d H:i:s', time() + 60),
+        ]);
+
+        header('Location: ' . $appRedirect . '?code=' . urlencode($code)
+            . '&state=' . urlencode($mobile['state'] ?? ''));
+        exit;
     }
 
     public function twoFactorForm(): void

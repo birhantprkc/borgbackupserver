@@ -22,7 +22,9 @@ class AdminApiController extends Controller
 
     public function listClients(): void
     {
-        $this->requireApiToken();
+        // Mobile/non-admin tokens are allowed but see only their agents.
+        $ctx = $this->requireApiAuth();
+        [$agentWhere, $agentParams] = $this->apiAgentWhereClause($ctx, 'a');
 
         $agents = $this->db->fetchAll("
             SELECT a.id, a.name, a.hostname, a.ip_address, a.os_info,
@@ -30,8 +32,9 @@ class AdminApiController extends Controller
                    a.created_at, u.username as owner
             FROM agents a
             LEFT JOIN users u ON u.id = a.user_id
+            WHERE {$agentWhere}
             ORDER BY a.name
-        ");
+        ", $agentParams);
 
         $this->json(['clients' => $agents]);
     }
@@ -214,7 +217,10 @@ class AdminApiController extends Controller
 
     public function getClient(int $id): void
     {
-        $this->requireApiToken();
+        $ctx = $this->requireApiAuth();
+        if (!$this->apiCanAccessAgent($ctx, $id)) {
+            $this->json(['error' => 'Client not found'], 404);
+        }
 
         $agent = $this->db->fetchOne("
             SELECT a.id, a.name, a.hostname, a.ip_address, a.os_info,
@@ -229,13 +235,22 @@ class AdminApiController extends Controller
             $this->json(['error' => 'Client not found'], 404);
         }
 
-        // Decrypt stored token for API response (falls back to legacy plaintext).
-        if (empty($agent['api_key']) && !empty($agent['api_key_encrypted'])) {
-            try {
-                $agent['api_key'] = \BBS\Services\Encryption::decrypt($agent['api_key_encrypted']);
-            } catch (\Throwable $e) { /* leave blank */ }
+        // The agent api_key is its registration credential. Mobile tokens
+        // never receive it — the app has no use for it and it must not sit
+        // in a phone's response cache. Admin CLI tokens keep it (existing
+        // automation reads it).
+        if (($ctx['token_kind'] ?? 'user') === 'mobile' || ($ctx['role'] ?? '') !== 'admin') {
+            $agent['api_key'] = null;
+            unset($agent['api_key_encrypted']);
+        } else {
+            // Decrypt stored token for API response (falls back to legacy plaintext).
+            if (empty($agent['api_key']) && !empty($agent['api_key_encrypted'])) {
+                try {
+                    $agent['api_key'] = \BBS\Services\Encryption::decrypt($agent['api_key_encrypted']);
+                } catch (\Throwable $e) { /* leave blank */ }
+            }
+            unset($agent['api_key_encrypted']);
         }
-        unset($agent['api_key_encrypted']);
 
         // Include repos and plans
         $repos = $this->db->fetchAll(
@@ -387,7 +402,10 @@ class AdminApiController extends Controller
 
     public function listRepositories(int $id): void
     {
-        $this->requireApiToken();
+        $ctx = $this->requireApiAuth();
+        if (!$this->apiCanAccessAgent($ctx, $id)) {
+            $this->json(['error' => 'Client not found'], 404);
+        }
 
         $agent = $this->db->fetchOne("SELECT id FROM agents WHERE id = ?", [$id]);
         if (!$agent) {
@@ -625,7 +643,10 @@ class AdminApiController extends Controller
 
     public function listPlans(int $id): void
     {
-        $this->requireApiToken();
+        $ctx = $this->requireApiAuth();
+        if (!$this->apiCanAccessAgent($ctx, $id)) {
+            $this->json(['error' => 'Client not found'], 404);
+        }
 
         $agent = $this->db->fetchOne("SELECT id FROM agents WHERE id = ?", [$id]);
         if (!$agent) {
@@ -1169,7 +1190,10 @@ class AdminApiController extends Controller
      */
     public function listArchives(int $id, int $repoId): void
     {
-        $this->requireApiToken();
+        $ctx = $this->requireApiAuth();
+        if (!$this->apiCanAccessAgent($ctx, $id)) {
+            $this->json(['error' => 'Client not found'], 404);
+        }
 
         $repo = $this->db->fetchOne(
             "SELECT r.id FROM repositories r WHERE r.id = ? AND r.agent_id = ?",
@@ -1346,7 +1370,10 @@ class AdminApiController extends Controller
 
     public function pausePlan(int $id, int $planId): void
     {
-        $this->requireApiToken();
+        $ctx = $this->requireApiAuth();
+        if (!$this->apiCanAccessAgent($ctx, $id)) {
+            $this->json(['error' => 'Plan not found'], 404);
+        }
 
         $plan = $this->db->fetchOne("SELECT * FROM backup_plans WHERE id = ? AND agent_id = ?", [$planId, $id]);
         if (!$plan) {
@@ -1365,7 +1392,10 @@ class AdminApiController extends Controller
 
     public function resumePlan(int $id, int $planId): void
     {
-        $this->requireApiToken();
+        $ctx = $this->requireApiAuth();
+        if (!$this->apiCanAccessAgent($ctx, $id)) {
+            $this->json(['error' => 'Plan not found'], 404);
+        }
 
         $plan = $this->db->fetchOne("SELECT * FROM backup_plans WHERE id = ? AND agent_id = ?", [$planId, $id]);
         if (!$plan) {
@@ -1384,7 +1414,10 @@ class AdminApiController extends Controller
 
     public function triggerPlan(int $id, int $planId): void
     {
-        $this->requireApiToken();
+        $ctx = $this->requireApiAuth();
+        if (!$this->apiCanAccessAgent($ctx, $id)) {
+            $this->json(['error' => 'Plan not found'], 404);
+        }
 
         $plan = $this->db->fetchOne("SELECT * FROM backup_plans WHERE id = ? AND agent_id = ?", [$planId, $id]);
         if (!$plan) {
@@ -1444,7 +1477,10 @@ class AdminApiController extends Controller
 
     public function listJobs(int $id): void
     {
-        $this->requireApiToken();
+        $ctx = $this->requireApiAuth();
+        if (!$this->apiCanAccessAgent($ctx, $id)) {
+            $this->json(['error' => 'Client not found'], 404);
+        }
 
         $agent = $this->db->fetchOne("SELECT id FROM agents WHERE id = ?", [$id]);
         if (!$agent) {
@@ -1488,7 +1524,10 @@ class AdminApiController extends Controller
 
     public function getJob(int $id, int $jobId): void
     {
-        $this->requireApiToken();
+        $ctx = $this->requireApiAuth();
+        if (!$this->apiCanAccessAgent($ctx, $id)) {
+            $this->json(['error' => 'Job not found'], 404);
+        }
 
         $job = $this->db->fetchOne("
             SELECT bj.*, bp.name as plan_name, r.name as repository_name
@@ -1507,7 +1546,8 @@ class AdminApiController extends Controller
 
     public function getQueue(): void
     {
-        $this->requireApiToken();
+        $ctx = $this->requireApiAuth();
+        [$agentWhere, $agentParams] = $this->apiAgentWhereClause($ctx, 'a');
 
         $jobs = $this->db->fetchAll("
             SELECT bj.id, bj.task_type, bj.status, bj.status_message,
@@ -1519,11 +1559,107 @@ class AdminApiController extends Controller
             JOIN agents a ON a.id = bj.agent_id
             LEFT JOIN backup_plans bp ON bp.id = bj.backup_plan_id
             LEFT JOIN repositories r ON r.id = bj.repository_id
-            WHERE bj.status IN ('queued', 'sent', 'running')
+            WHERE bj.status IN ('queued', 'sent', 'running') AND {$agentWhere}
             ORDER BY bj.queued_at ASC
-        ");
+        ", $agentParams);
 
         $this->json(['queue' => $jobs, 'count' => count($jobs)]);
+    }
+
+    /**
+     * GET /api/v1/dashboard — one round trip for the mobile dashboard,
+     * scoped to the caller's agents (#bbsapp).
+     */
+    public function dashboard(): void
+    {
+        $ctx = $this->requireApiAuth();
+        [$agentWhere, $agentParams] = $this->apiAgentWhereClause($ctx, 'a');
+
+        $clients = ['total' => 0, 'online' => 0, 'offline' => 0, 'error' => 0, 'setup' => 0];
+        foreach ($this->db->fetchAll(
+            "SELECT a.status, COUNT(*) AS c FROM agents a WHERE {$agentWhere} GROUP BY a.status",
+            $agentParams
+        ) as $row) {
+            $clients[$row['status']] = (int) $row['c'];
+            $clients['total'] += (int) $row['c'];
+        }
+
+        $jobs = ['running' => 0, 'queued' => 0, 'failed_24h' => 0, 'completed_24h' => 0];
+        foreach ($this->db->fetchAll("
+            SELECT bj.status, COUNT(*) AS c FROM backup_jobs bj
+            JOIN agents a ON a.id = bj.agent_id
+            WHERE bj.status IN ('queued', 'sent', 'running') AND {$agentWhere}
+            GROUP BY bj.status", $agentParams) as $row) {
+            if ($row['status'] === 'queued') {
+                $jobs['queued'] += (int) $row['c'];
+            } else {
+                $jobs['running'] += (int) $row['c']; // running + sent
+            }
+        }
+        foreach ($this->db->fetchAll("
+            SELECT bj.status, COUNT(*) AS c FROM backup_jobs bj
+            JOIN agents a ON a.id = bj.agent_id
+            WHERE bj.status IN ('failed', 'completed') AND bj.completed_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
+              AND {$agentWhere}
+            GROUP BY bj.status", $agentParams) as $row) {
+            $jobs[$row['status'] . '_24h'] = (int) $row['c'];
+        }
+
+        $storage = ['used_bytes' => 0, 'total_bytes' => 0, 'locations' => 0];
+        $storage['locations'] = (int) ($this->db->fetchOne("SELECT COUNT(*) AS c FROM storage_locations")['c'] ?? 0);
+        $defaultLoc = $this->db->fetchOne("SELECT path FROM storage_locations WHERE is_default = 1");
+        if ($defaultLoc) {
+            $disk = \BBS\Services\ServerStats::getDiskUsage($defaultLoc['path']);
+            if ($disk) {
+                $storage['used_bytes'] = (int) $disk['used'];
+                $storage['total_bytes'] = (int) $disk['total'];
+            }
+        }
+
+        $active = $this->db->fetchAll("
+            SELECT bj.id, a.name AS client, a.id AS client_id, r.name AS repo,
+                   bj.task_type, bj.status,
+                   bj.bytes_processed, bj.bytes_total,
+                   bj.files_processed, bj.files_total, bj.started_at
+            FROM backup_jobs bj
+            JOIN agents a ON a.id = bj.agent_id
+            LEFT JOIN repositories r ON r.id = bj.repository_id
+            WHERE bj.status IN ('queued', 'sent', 'running') AND {$agentWhere}
+            ORDER BY bj.queued_at ASC
+        ", $agentParams);
+        foreach ($active as &$aj) {
+            foreach (['id', 'client_id', 'bytes_processed', 'bytes_total', 'files_processed', 'files_total'] as $k) {
+                $aj[$k] = (int) $aj[$k];
+            }
+        }
+        unset($aj);
+
+        // Unread notifications visible to this user: their own, plus
+        // unowned ones for agents in their scope (admins see everything).
+        if (($ctx['role'] ?? '') === 'admin') {
+            $unread = $this->db->fetchOne(
+                "SELECT COUNT(*) AS c FROM notifications WHERE read_at IS NULL AND resolved_at IS NULL"
+            );
+        } else {
+            $unread = $this->db->fetchOne("
+                SELECT COUNT(*) AS c FROM notifications n
+                LEFT JOIN agents a ON a.id = n.agent_id
+                WHERE n.read_at IS NULL AND n.resolved_at IS NULL
+                  AND (n.user_id = ? OR (n.user_id IS NULL AND n.agent_id IS NOT NULL AND {$agentWhere}))",
+                array_merge([(int) $ctx['id']], $agentParams));
+        }
+
+        $maint = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'maintenance_mode'");
+
+        $this->json([
+            'clients' => $clients,
+            'jobs' => $jobs,
+            'storage' => $storage,
+            'active' => $active,
+            'notifications_unread' => (int) ($unread['c'] ?? 0),
+            'maintenance_mode' => ($maint['value'] ?? '0') === '1',
+            'generated_at' => date('c'),
+        ]);
     }
 
     // ── Helpers ──────────────────────────────────────────
@@ -1670,7 +1806,9 @@ class AdminApiController extends Controller
      */
     public function getStorageCapacity(): void
     {
-        $this->requireApiToken();
+        // Aggregate disk numbers only — same data the dashboard storage
+        // widget shows every signed-in user, so no admin gate.
+        $this->requireApiAuth();
 
         $loc = $this->db->fetchOne("SELECT path FROM storage_locations WHERE is_default = 1");
         if (!$loc) {
@@ -2213,7 +2351,7 @@ class AdminApiController extends Controller
      */
     public function listLog(): void
     {
-        $this->requireApiToken();
+        $ctx = $this->requireApiAuth();
 
         $level   = $_GET['level'] ?? null;
         $agentId = isset($_GET['agent_id']) ? (int) $_GET['agent_id'] : null;
@@ -2223,6 +2361,13 @@ class AdminApiController extends Controller
 
         $where  = [];
         $params = [];
+        // Non-admin callers only see log entries for agents they can access
+        // (server-wide rows with no agent are admin-only).
+        if (($ctx['role'] ?? '') !== 'admin') {
+            [$agentWhere, $agentParams] = $this->apiAgentWhereClause($ctx, 'a');
+            $where[] = "(a.id IS NOT NULL AND {$agentWhere})";
+            $params = array_merge($params, $agentParams);
+        }
         if ($level !== null && in_array($level, ['info', 'warning', 'error'], true)) {
             $where[] = "l.level = ?";
             $params[] = $level;
@@ -2238,7 +2383,7 @@ class AdminApiController extends Controller
         $whereSql = !empty($where) ? ('WHERE ' . implode(' AND ', $where)) : '';
 
         $total = (int) ($this->db->fetchOne(
-            "SELECT COUNT(*) AS c FROM server_log l {$whereSql}",
+            "SELECT COUNT(*) AS c FROM server_log l LEFT JOIN agents a ON a.id = l.agent_id {$whereSql}",
             $params
         )['c'] ?? 0);
 
@@ -2270,7 +2415,8 @@ class AdminApiController extends Controller
      */
     public function listSchedules(): void
     {
-        $this->requireApiToken();
+        $ctx = $this->requireApiAuth();
+        [$agentWhere, $agentParams] = $this->apiAgentWhereClause($ctx, 'a');
 
         $rows = $this->db->fetchAll(
             "SELECT bp.id AS plan_id, bp.name AS plan_name, bp.enabled AS plan_enabled,
@@ -2289,7 +2435,9 @@ class AdminApiController extends Controller
              JOIN agents a ON a.id = bp.agent_id
              JOIN repositories r ON r.id = bp.repository_id
              LEFT JOIN schedules s ON s.backup_plan_id = bp.id
-             ORDER BY a.name, bp.name"
+             WHERE {$agentWhere}
+             ORDER BY a.name, bp.name",
+            $agentParams
         );
 
         foreach ($rows as &$r) {

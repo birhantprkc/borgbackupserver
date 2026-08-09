@@ -1851,7 +1851,12 @@ document.getElementById('appIconFileInput').addEventListener('change', function(
                     <?php foreach ($apiTokens as $token): ?>
                     <tr>
                         <td class="fw-semibold">
+                            <?php if (($token['kind'] ?? 'user') === 'mobile'): ?>
+                            <i class="bi bi-phone me-1 text-muted"></i><?= htmlspecialchars($token['device_name'] ?: $token['name']) ?>
+                            <span class="badge bg-info-subtle text-info-emphasis ms-2" title="Signed in from the mobile app<?= !empty($token['last_seen_ip']) ? ' — last seen from ' . htmlspecialchars($token['last_seen_ip']) : '' ?>">mobile</span>
+                            <?php else: ?>
                             <i class="bi bi-key me-1 text-muted"></i><?= htmlspecialchars($token['name']) ?>
+                            <?php endif; ?>
                             <?php if (!empty($token['can_read_secrets'])): ?>
                             <span class="badge bg-warning text-dark ms-2" title="This token can read repository passphrases and S3 credentials"><i class="bi bi-eye me-1"></i>secrets</span>
                             <?php endif; ?>
