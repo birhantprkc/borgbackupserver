@@ -46,7 +46,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.72.0"
+AGENT_VERSION = "2.74.0"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -2109,9 +2109,18 @@ def execute_plugin_interworx(config):
 
     r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=7200)
     if r.returncode != 0:
-        stderr = r.stderr.decode("utf-8", errors="replace")
-        stdout = r.stdout.decode("utf-8", errors="replace")
-        raise Exception("InterWorx backup failed (exit {}): {}".format(r.returncode, (stderr or stdout)[:2000]))
+        stderr = r.stderr.decode("utf-8", errors="replace").strip()
+        stdout = r.stdout.decode("utf-8", errors="replace").strip()
+        # backup.pex logs progress as it goes and prints the actual error
+        # LAST — keep the tail of both streams, not the head, or the error
+        # message is exactly the part that gets truncated away (#19614).
+        parts = []
+        if stderr:
+            parts.append("stderr: …" + stderr[-1500:] if len(stderr) > 1500 else "stderr: " + stderr)
+        if stdout:
+            parts.append("stdout: …" + stdout[-800:] if len(stdout) > 800 else "stdout: " + stdout)
+        detail = "\n".join(parts) or "(no output)"
+        raise Exception("InterWorx backup failed (exit {}): {}".format(r.returncode, detail))
 
     # Count backup files created
     backup_files = []
