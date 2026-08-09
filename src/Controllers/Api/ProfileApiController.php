@@ -5,7 +5,6 @@ namespace BBS\Controllers\Api;
 use BBS\Core\Controller;
 use BBS\Services\TwoFactorService;
 use BBS\Services\ReportService;
-use BBS\Services\SchedulerService;
 use BBS\Services\PermissionService;
 use BBS\Services\Mailer;
 use BBS\Services\Encryption;
@@ -16,7 +15,7 @@ use BBS\Services\Encryption;
  * ProfileController does all of this already, but as session-authenticated,
  * CSRF-guarded form posts that answer with a redirect and a flash message.
  * These are the same actions with JSON in and JSON out; the business logic
- * still lives in TwoFactorService / ReportService / SchedulerService.
+ * still lives in TwoFactorService / ReportService.
  */
 class ProfileApiController extends Controller
 {
@@ -166,9 +165,10 @@ class ProfileApiController extends Controller
             $updates['theme'] = $theme;
         }
 
-        // Timezone last: it is the only field with a side effect, so it runs
-        // once the cheap validations have already had their chance to 422.
-        $newTimezone = null;
+        // The profile timezone is a DISPLAY preference only. A schedule keeps
+        // its own declared timezone and its own next_run, so changing this
+        // never moves when a backup actually fires — it only changes the wall
+        // clock the app prints it against (see schedulesDay()).
         if (array_key_exists('timezone', $input)) {
             $tz = trim((string) $input['timezone']);
             if (!in_array($tz, timezone_identifiers_list(), true)) {
@@ -176,38 +176,11 @@ class ProfileApiController extends Controller
             }
             if ($tz !== $user['timezone']) {
                 $updates['timezone'] = $tz;
-                $newTimezone = $tz;
             }
         }
 
         if (!empty($updates)) {
             $this->db->update('users', $updates, 'id = ?', [$userId]);
-        }
-
-        // Keep the web's schedule-timezone propagation: schedules still on the
-        // user's OLD timezone follow them, so the phone and the web UI never
-        // disagree about when a backup fires. Only schedules matching the old
-        // value move, so a schedule deliberately set elsewhere is left alone.
-        if ($newTimezone !== null) {
-            $oldTimezone = $user['timezone'];
-            if (($user['role'] ?? '') === 'admin') {
-                $affected = $this->db->fetchAll(
-                    "SELECT s.id FROM schedules s WHERE s.timezone = ?",
-                    [$oldTimezone]
-                );
-            } else {
-                $affected = $this->db->fetchAll(
-                    "SELECT s.id FROM schedules s
-                     JOIN backup_plans bp ON bp.id = s.backup_plan_id
-                     JOIN user_agents ua ON ua.agent_id = bp.agent_id
-                     WHERE ua.user_id = ? AND s.timezone = ?",
-                    [$userId, $oldTimezone]
-                );
-            }
-            $ids = array_column($affected, 'id');
-            if (!empty($ids)) {
-                (new SchedulerService())->recalculateTimezone($ids, $newTimezone);
-            }
         }
 
         $this->json(['user' => $this->userPayload($this->apiUser($ctx))]);
