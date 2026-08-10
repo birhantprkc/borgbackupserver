@@ -616,7 +616,7 @@ class S3SyncService
                 $lastPathEsc = addslashes($lastPath);
                 $files = $ch->fetchAll(
                     "SELECT path, file_size,
-                            formatDateTime(mtime, '%Y-%m-%d %H:%i:%S') as mtime
+                            toString(mtime) as mtime
                      FROM file_catalog
                      WHERE agent_id = {$agentId}
                        AND archive_id = {$aid}

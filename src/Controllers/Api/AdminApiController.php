@@ -3185,7 +3185,7 @@ class AdminApiController extends Controller
         $fetch = $limit + 1;
         $files = $ch->fetchAll("
             SELECT path AS file_path, file_name, file_size, status,
-                   formatDateTime(mtime, '%Y-%m-%d %H:%i:%S') AS mtime
+                   toString(mtime) AS mtime
             FROM file_catalog
             WHERE agent_id = ? AND archive_id = ? AND parent_dir = ? AND status != 'D'
               AND file_name > ?

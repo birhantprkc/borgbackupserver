@@ -709,7 +709,7 @@ class ClientController extends Controller
         // fetchAllOrdered: dodge the CH 26.5 ORDER BY..LIMIT lazy-materialization bug (#301)
         $files = $ch->fetchAllOrdered(
             "SELECT path as file_path, file_name, file_size, status,
-                    formatDateTime(mtime, '%Y-%m-%d %H:%i:%S') as mtime
+                    toString(mtime) as mtime
              FROM file_catalog
              WHERE {$where}
              ORDER BY path
@@ -769,7 +769,7 @@ class ClientController extends Controller
         // Get files directly at this level (exact parent_dir match)
         $files = $ch->fetchAll("
             SELECT path as file_path, file_name, file_size, status,
-                   formatDateTime(mtime, '%Y-%m-%d %H:%i:%S') as mtime
+                   toString(mtime) as mtime
             FROM file_catalog
             WHERE agent_id = ? AND archive_id = ? AND parent_dir = ? AND status != 'D'
             ORDER BY file_name
@@ -837,7 +837,7 @@ class ClientController extends Controller
 
         $versions = $ch->fetchAll(
             "SELECT path, archive_id, file_size, status,
-                    formatDateTime(mtime, '%Y-%m-%d %H:%i:%S') as mtime
+                    toString(mtime) as mtime
              FROM file_catalog
              WHERE agent_id = {$id} AND path IN ({$pathList})
              ORDER BY path, archive_id DESC"
@@ -1082,7 +1082,7 @@ class ClientController extends Controller
                 $ch = \BBS\Core\ClickHouse::getInstance();
                 $pathList = implode(', ', array_map(fn($p) => "'" . str_replace(["\\", "'"], ["\\\\", "\\'"], $p) . "'", $patterns));
                 $rows = $ch->fetchAll("
-                    SELECT path, formatDateTime(mtime, '%Y-%m-%d %H:%i:%S') as mtime
+                    SELECT path, toString(mtime) as mtime
                     FROM file_catalog
                     WHERE agent_id = {$id} AND archive_id = {$archive_id} AND path IN ({$pathList})
                 ");
