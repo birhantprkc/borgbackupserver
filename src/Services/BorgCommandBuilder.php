@@ -81,12 +81,16 @@ class BorgCommandBuilder
             $cmd[] = '--glob-archives=' . $archivePrefix . '-*';
         }
 
-        if ($plan['prune_minutes'] > 0) $cmd[] = '--keep-minutely=' . $plan['prune_minutes'];
-        if ($plan['prune_hours'] > 0)   $cmd[] = '--keep-hourly=' . $plan['prune_hours'];
-        if ($plan['prune_days'] > 0)    $cmd[] = '--keep-daily=' . $plan['prune_days'];
-        if ($plan['prune_weeks'] > 0)   $cmd[] = '--keep-weekly=' . $plan['prune_weeks'];
-        if ($plan['prune_months'] > 0)  $cmd[] = '--keep-monthly=' . $plan['prune_months'];
-        if ($plan['prune_years'] > 0)   $cmd[] = '--keep-yearly=' . $plan['prune_years'];
+        // 0 means "don't keep by this rule", so the flag is omitted entirely.
+        // A NEGATIVE value is meaningful to borg: it keeps every archive in
+        // that bucket with no limit, so it must be passed through rather than
+        // treated as "off" (#386).
+        if ((int) $plan['prune_minutes'] != 0) $cmd[] = '--keep-minutely=' . (int) $plan['prune_minutes'];
+        if ((int) $plan['prune_hours'] != 0)   $cmd[] = '--keep-hourly=' . (int) $plan['prune_hours'];
+        if ((int) $plan['prune_days'] != 0)    $cmd[] = '--keep-daily=' . (int) $plan['prune_days'];
+        if ((int) $plan['prune_weeks'] != 0)   $cmd[] = '--keep-weekly=' . (int) $plan['prune_weeks'];
+        if ((int) $plan['prune_months'] != 0)  $cmd[] = '--keep-monthly=' . (int) $plan['prune_months'];
+        if ((int) $plan['prune_years'] != 0)   $cmd[] = '--keep-yearly=' . (int) $plan['prune_years'];
 
         $cmd[] = $repo['path'];
 

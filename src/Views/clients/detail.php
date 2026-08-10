@@ -2143,12 +2143,12 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                         <label class="col-md-3 col-form-label fw-semibold">Prune Retention</label>
                         <div class="col-md-9">
                             <div class="row g-2">
-                                <div class="col"><label class="form-label small text-muted">Minutes</label><input type="number" class="form-control" name="prune_minutes" value="<?= $plan['prune_minutes'] ?>" min="0"></div>
-                                <div class="col"><label class="form-label small text-muted">Hours</label><input type="number" class="form-control" name="prune_hours" value="<?= $plan['prune_hours'] ?>" min="0"></div>
-                                <div class="col"><label class="form-label small text-muted">Days</label><input type="number" class="form-control" name="prune_days" value="<?= $plan['prune_days'] ?>" min="0"></div>
-                                <div class="col"><label class="form-label small text-muted">Weeks</label><input type="number" class="form-control" name="prune_weeks" value="<?= $plan['prune_weeks'] ?>" min="0"></div>
-                                <div class="col"><label class="form-label small text-muted">Months</label><input type="number" class="form-control" name="prune_months" value="<?= $plan['prune_months'] ?>" min="0"></div>
-                                <div class="col"><label class="form-label small text-muted">Years</label><input type="number" class="form-control" name="prune_years" value="<?= $plan['prune_years'] ?>" min="0"></div>
+                                <div class="col"><label class="form-label small text-muted">Minutes</label><input type="number" class="form-control" name="prune_minutes" value="<?= $plan['prune_minutes'] ?>" min="-1" title="Number to keep. 0 disables this rule; -1 keeps them all."></div>
+                                <div class="col"><label class="form-label small text-muted">Hours</label><input type="number" class="form-control" name="prune_hours" value="<?= $plan['prune_hours'] ?>" min="-1" title="Number to keep. 0 disables this rule; -1 keeps them all."></div>
+                                <div class="col"><label class="form-label small text-muted">Days</label><input type="number" class="form-control" name="prune_days" value="<?= $plan['prune_days'] ?>" min="-1" title="Number to keep. 0 disables this rule; -1 keeps them all."></div>
+                                <div class="col"><label class="form-label small text-muted">Weeks</label><input type="number" class="form-control" name="prune_weeks" value="<?= $plan['prune_weeks'] ?>" min="-1" title="Number to keep. 0 disables this rule; -1 keeps them all."></div>
+                                <div class="col"><label class="form-label small text-muted">Months</label><input type="number" class="form-control" name="prune_months" value="<?= $plan['prune_months'] ?>" min="-1" title="Number to keep. 0 disables this rule; -1 keeps them all."></div>
+                                <div class="col"><label class="form-label small text-muted">Years</label><input type="number" class="form-control" name="prune_years" value="<?= $plan['prune_years'] ?>" min="-1" title="Number to keep. 0 disables this rule; -1 keeps them all."></div>
                             </div>
                             <div class="form-text">How many archives to keep for each time period.</div>
                         </div>
@@ -2482,27 +2482,27 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                         <div class="row g-2">
                             <div class="col">
                                 <label class="form-label small text-muted">Minutes</label>
-                                <input type="number" class="form-control" name="prune_minutes" value="0" min="0">
+                                <input type="number" class="form-control" name="prune_minutes" value="0" min="-1" title="Number to keep. 0 disables this rule; -1 keeps them all.">
                             </div>
                             <div class="col">
                                 <label class="form-label small text-muted">Hours</label>
-                                <input type="number" class="form-control" name="prune_hours" value="0" min="0">
+                                <input type="number" class="form-control" name="prune_hours" value="0" min="-1" title="Number to keep. 0 disables this rule; -1 keeps them all.">
                             </div>
                             <div class="col">
                                 <label class="form-label small text-muted">Days</label>
-                                <input type="number" class="form-control" name="prune_days" value="7" min="0">
+                                <input type="number" class="form-control" name="prune_days" value="7" min="-1" title="Number to keep. 0 disables this rule; -1 keeps them all.">
                             </div>
                             <div class="col">
                                 <label class="form-label small text-muted">Weeks</label>
-                                <input type="number" class="form-control" name="prune_weeks" value="4" min="0">
+                                <input type="number" class="form-control" name="prune_weeks" value="4" min="-1" title="Number to keep. 0 disables this rule; -1 keeps them all.">
                             </div>
                             <div class="col">
                                 <label class="form-label small text-muted">Months</label>
-                                <input type="number" class="form-control" name="prune_months" value="6" min="0">
+                                <input type="number" class="form-control" name="prune_months" value="6" min="-1" title="Number to keep. 0 disables this rule; -1 keeps them all.">
                             </div>
                             <div class="col">
                                 <label class="form-label small text-muted">Years</label>
-                                <input type="number" class="form-control" name="prune_years" value="0" min="0">
+                                <input type="number" class="form-control" name="prune_years" value="0" min="-1" title="Number to keep. 0 disables this rule; -1 keeps them all.">
                             </div>
                         </div>
                         <div class="form-text">How many archives to keep for each time period.</div>
