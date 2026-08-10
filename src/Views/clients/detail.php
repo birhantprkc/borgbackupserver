@@ -354,6 +354,13 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                             </li>
                             <?php endif; ?>
                             <li><a class="dropdown-item" href="?tab=schedules"><i class="bi bi-pencil text-primary me-2"></i>Edit</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <form method="POST" action="/plans/<?= $nextBackup['plan_id'] ?>/delete" data-confirm="Delete this backup plan and its schedule?" data-confirm-danger>
+                                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                    <button type="submit" class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Delete</button>
+                                </form>
+                            </li>
                         </ul>
                     </div>
                     <?php elseif ($pausedCount > 0): ?>
@@ -2171,11 +2178,19 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                     <?php endif; ?>
 
                     <div class="row">
-                        <div class="col-md-6 offset-md-3">
+                        <div class="col-md-9 offset-md-3 d-flex align-items-center">
                             <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i> Save Changes</button>
                             <button type="button" class="btn btn-outline-secondary ms-2" data-bs-toggle="collapse" data-bs-target="#edit-plan-<?= $plan['id'] ?>">Cancel</button>
+                            <!-- Deleting posts to its own form (declared just below,
+                                 since forms can't nest) via the form= attribute. The
+                                 plan menu has a Delete too, but this is where people
+                                 look once they already have the plan open (#390). -->
+                            <button type="submit" form="delete-plan-<?= $plan['id'] ?>" class="btn btn-outline-danger ms-auto"><i class="bi bi-trash me-1"></i> Delete Plan</button>
                         </div>
                     </div>
+                </form>
+                <form id="delete-plan-<?= $plan['id'] ?>" method="POST" action="/plans/<?= $plan['id'] ?>/delete" data-confirm="Delete this backup plan and its schedule?" data-confirm-danger>
+                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                 </form>
             </div>
         </div>
