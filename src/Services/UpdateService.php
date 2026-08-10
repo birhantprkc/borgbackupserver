@@ -61,22 +61,49 @@ class UpdateService
     }
 
     /**
-     * Agents reporting a version other than the bundled one.
-     * Empty when the bundled version can't be determined — better to show
-     * nothing than to claim every agent is out of date.
+     * Is this agent behind the version bundled with the server?
+     *
+     * Strictly older, compared as a version rather than as a string. An agent
+     * that is NEWER than the server's bundle is not outdated and must never be
+     * offered an "upgrade" — doing so pushed a 2.72.0 agent back down to the
+     * 2.71.0 the server happened to carry (#387). That is easy to hit: a Docker
+     * agent image can be newer than the server image.
      */
-    public function getOutdatedAgents(): array
+    public function isAgentOutdated(?string $agentVersion, ?string $bundled = null): bool
+    {
+        $bundled = $bundled ?? $this->getBundledAgentVersion();
+        if (!$bundled || !$agentVersion) {
+            return false;
+        }
+        return version_compare($agentVersion, $bundled, '<');
+    }
+
+    /**
+     * Agents running a version older than the bundled one.
+     *
+     * Empty when the bundled version can't be determined — better to show
+     * nothing than to claim every agent is out of date. Agents that manage
+     * their own updates (containers, where the image carries the agent) are
+     * excluded: updating them in place is undone by the next restart.
+     */
+    public function getOutdatedAgents(bool $onlineOnly = false): array
     {
         $bundled = $this->getBundledAgentVersion();
         if (!$bundled) {
             return [];
         }
-        return $this->db->fetchAll(
-            "SELECT id, name, agent_version FROM agents
-             WHERE agent_version IS NOT NULL AND agent_version != ?
-             ORDER BY name",
-            [$bundled]
-        );
+
+        $sql = "SELECT id, name, agent_version, status FROM agents
+                WHERE agent_version IS NOT NULL AND auto_update_enabled = 1";
+        if ($onlineOnly) {
+            $sql .= " AND status = 'online'";
+        }
+        $sql .= " ORDER BY name";
+
+        return array_values(array_filter(
+            $this->db->fetchAll($sql),
+            fn($a) => $this->isAgentOutdated($a['agent_version'], $bundled)
+        ));
     }
 
     public function countOutdatedAgents(): int

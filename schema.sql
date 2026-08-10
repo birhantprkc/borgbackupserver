@@ -112,6 +112,9 @@ CREATE TABLE agents (
     platform VARCHAR(20) DEFAULT NULL,
     architecture VARCHAR(20) DEFAULT NULL,
     agent_version VARCHAR(20) DEFAULT NULL,
+    -- 0 when the agent manages its own updates (containers ship the agent in
+    -- the image), so the server neither offers nor queues an update for it.
+    auto_update_enabled TINYINT(1) NOT NULL DEFAULT 1,
     ssh_unix_user VARCHAR(100) DEFAULT NULL,
     ssh_public_key TEXT DEFAULT NULL,
     ssh_private_key_encrypted TEXT DEFAULT NULL,

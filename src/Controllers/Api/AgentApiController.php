@@ -122,6 +122,12 @@ class AgentApiController extends Controller
         if (!empty($input['os_info']))              $data['os_info'] = substr($input['os_info'], 0, 255);
         if (!empty($input['borg_version']))         $data['borg_version'] = substr($input['borg_version'], 0, 20);
         if (!empty($input['agent_version']))        $data['agent_version'] = substr($input['agent_version'], 0, 20);
+        // Agents that manage their own version (containers) opt out of
+        // server-driven updates entirely (#387). array_key_exists, not
+        // !empty — false is the meaningful value here.
+        if (array_key_exists('auto_update_enabled', $input)) {
+            $data['auto_update_enabled'] = !empty($input['auto_update_enabled']) ? 1 : 0;
+        }
         if (!empty($input['borg_install_method']))  $data['borg_install_method'] = substr($input['borg_install_method'], 0, 20);
         if (!empty($input['borg_binary_path']))     $data['borg_binary_path'] = substr($input['borg_binary_path'], 0, 255);
         if (!empty($input['glibc_version']))        $data['glibc_version'] = substr($input['glibc_version'], 0, 20);
@@ -1001,6 +1007,12 @@ class AgentApiController extends Controller
         if (!empty($input['os_info']))              $data['os_info'] = substr($input['os_info'], 0, 255);
         if (!empty($input['borg_version']))         $data['borg_version'] = substr($input['borg_version'], 0, 20);
         if (!empty($input['agent_version']))        $data['agent_version'] = substr($input['agent_version'], 0, 20);
+        // Agents that manage their own version (containers) opt out of
+        // server-driven updates entirely (#387). array_key_exists, not
+        // !empty — false is the meaningful value here.
+        if (array_key_exists('auto_update_enabled', $input)) {
+            $data['auto_update_enabled'] = !empty($input['auto_update_enabled']) ? 1 : 0;
+        }
         if (!empty($input['hostname']))             $data['hostname'] = substr($input['hostname'], 0, 255);
         if (!empty($input['ip_address']))           $data['ip_address'] = substr($input['ip_address'], 0, 45);
         if (!empty($input['mac_address']) && preg_match('/^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$/', $input['mac_address'])) {

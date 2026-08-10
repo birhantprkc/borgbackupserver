@@ -1,23 +1,14 @@
 <?php
 $tab = $_GET['tab'] ?? 'status';
 
-// Detect server's agent version from the bundled bbs-agent.py
-$serverAgentVersion = null;
-$agentFile = dirname(__DIR__, 3) . '/agent/bbs-agent.py';
-if (file_exists($agentFile)) {
-    $handle = fopen($agentFile, 'r');
-    if ($handle) {
-        // Only read first 50 lines to find AGENT_VERSION
-        for ($i = 0; $i < 50 && ($line = fgets($handle)) !== false; $i++) {
-            if (preg_match('/^AGENT_VERSION\s*=\s*["\']([^"\']+)["\']/m', $line, $m)) {
-                $serverAgentVersion = $m[1];
-                break;
-            }
-        }
-        fclose($handle);
-    }
-}
-$agentNeedsUpdate = $serverAgentVersion && $agent['agent_version'] && $agent['agent_version'] !== $serverAgentVersion;
+// The agent version bundled with this server, and whether THIS agent is behind
+// it. Only a strictly older agent is offered an update: a newer one (a
+// container image ahead of the server's) would otherwise be walked backwards
+// by an "upgrade" (#387). Agents that manage their own updates never are.
+$updSvc = new \BBS\Services\UpdateService();
+$serverAgentVersion = $updSvc->getBundledAgentVersion();
+$agentNeedsUpdate = !empty($agent['auto_update_enabled'])
+    && $updSvc->isAgentOutdated($agent['agent_version'] ?? null, $serverAgentVersion);
 ?>
 
 <!-- Client Header -->
@@ -3933,7 +3924,9 @@ const csrfToken = '<?= $this->csrfToken() ?>';
                 // Update agent version display
                 const vw = document.getElementById('agent-version-wrapper');
                 if (vw && data.agent_version) {
-                    const needsUpdate = serverAgentVersion && data.agent_version !== serverAgentVersion;
+                    // Server decides this — see #387; a JS string compare here
+                    // would call a newer agent "outdated" all over again.
+                    const needsUpdate = !!data.agent_needs_update;
                     if (needsUpdate) {
                         vw.innerHTML = '<form method="POST" action="/clients/' + agentId + '/update-agent" class="d-inline">' +
                             '<input type="hidden" name="csrf_token" value="' + csrfToken + '">' +

@@ -426,7 +426,7 @@ class SettingsController extends Controller
         }
 
         $allAgents = $this->db->fetchAll("SELECT id, name, agent_version FROM agents WHERE agent_version IS NOT NULL");
-        $outdated = array_values(array_filter($allAgents, fn($a) => $a['agent_version'] !== $bundledAgentVersion));
+        $outdated = (new \BBS\Services\UpdateService())->getOutdatedAgents();
 
         $this->json([
             'bundled_version' => $bundledAgentVersion,
@@ -665,11 +665,10 @@ class SettingsController extends Controller
             $this->redirect('/settings?tab=updates');
         }
 
-        // Find outdated agents
-        $outdated = $this->db->fetchAll(
-            "SELECT id, name FROM agents WHERE agent_version IS NOT NULL AND agent_version != ?",
-            [$serverAgentVersion]
-        );
+        // Only agents genuinely behind the bundled version, and only ones that
+        // accept server-driven updates — a string comparison here would offer
+        // an "upgrade" that walks a newer agent backwards (#387).
+        $outdated = (new \BBS\Services\UpdateService())->getOutdatedAgents();
 
         // Find agents that already have a pending update job
         $pending = $this->db->fetchAll(

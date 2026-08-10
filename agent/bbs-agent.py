@@ -46,7 +46,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.74.0"
+AGENT_VERSION = "2.75.0"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -322,6 +322,17 @@ def load_ssh_info():
         return None
 
 
+def _in_container():
+    """Best-effort detection of Docker/Podman."""
+    if os.path.exists("/.dockerenv") or os.path.exists("/run/.containerenv"):
+        return True
+    try:
+        with open("/proc/1/cgroup") as f:
+            return any(m in f.read() for m in ("docker", "containerd", "kubepods"))
+    except (OSError, IOError):
+        return False
+
+
 def load_config():
     if not os.path.exists(CONFIG_PATH):
         logger.error("Config file not found: {}".format(CONFIG_PATH))
@@ -330,10 +341,22 @@ def load_config():
     config = ConfigParser()
     config.read(CONFIG_PATH)
 
+    # Whether this agent accepts server-driven updates of its own script.
+    # Containers ship the agent inside the image, so replacing the running copy
+    # is undone by the next restart and hides which version is really deployed
+    # — those default to off and are updated by pulling a new image (#387).
+    # Order: BBS_AUTO_UPDATE env var, then config.ini, then the default.
+    auto_update_default = not _in_container()
+    auto_update = config.getboolean("agent", "auto_update", fallback=auto_update_default)
+    env_auto = os.environ.get("BBS_AUTO_UPDATE")
+    if env_auto is not None:
+        auto_update = env_auto.strip().lower() in ("1", "true", "yes", "on")
+
     return {
         "server_url": config.get("server", "url").rstrip("/"),
         "api_key": config.get("server", "api_key"),
         "poll_interval": config.getint("agent", "poll_interval", fallback=30),
+        "auto_update": auto_update,
     }
 
 
@@ -443,12 +466,16 @@ def get_primary_mac():
     return None
 
 
-def get_system_info():
+def get_system_info(config=None):
     """Gather system information for registration."""
     info = {
         "hostname": socket.gethostname() or socket.getfqdn(),
         "os_info": "{} {} {}".format(platform.system(), platform.release(), platform.machine()),
         "agent_version": AGENT_VERSION,
+        # Tells the server whether to offer/queue updates for this agent at
+        # all. Containers manage their own version via the image (#387).
+        "auto_update_enabled": bool(config.get("auto_update", True)) if config else True,
+        "in_container": _in_container(),
     }
 
     # Try to get more detailed OS info
@@ -557,7 +584,7 @@ def get_system_info():
 
 def register(config):
     """Register this agent with the server."""
-    info = get_system_info()
+    info = get_system_info(config)
     logger.info("Registering with server: {}".format(config['server_url']))
 
     result = api_request(config, "/api/agent/register", method="POST", data=info)
@@ -897,7 +924,7 @@ def execute_update_borg(config, task):
     if result == "completed":
         # Save the source for future reporting
         set_borg_source(source)
-        info = get_system_info()
+        info = get_system_info(config)
         api_request(config, "/api/agent/info", method="POST", data=info)
         logger.info("Updated borg version: {} (source={})".format(info.get('borg_version', 'unknown'), source))
 
@@ -1282,6 +1309,16 @@ def execute_update_agent(config, task):
     job_id = task.get("job_id")
     logger.info("Executing agent update job #{}".format(job_id))
 
+    # Opted out (containers by default): decline rather than replace a script
+    # the image owns. A server older than 2.75.0 doesn't know to skip us.
+    if not config.get("auto_update", True):
+        msg = ("Agent updates are disabled on this client "
+               "(containerised agents are updated by pulling a new image). "
+               "Set auto_update = true in config.ini or BBS_AUTO_UPDATE=1 to allow them.")
+        logger.info(msg)
+        report_status(config, {"job_id": job_id, "result": "failed", "error_log": msg})
+        return
+
     # Report running
     api_request(config, "/api/agent/progress", method="POST", data={
         "job_id": job_id, "files_total": 0, "files_processed": 0,
@@ -1392,7 +1429,7 @@ def execute_update_agent(config, task):
 
     # Re-report system info so agent_version gets updated, then restart
     if result == "completed":
-        info = get_system_info()
+        info = get_system_info(config)
         api_request(config, "/api/agent/info", method="POST", data=info)
         logger.info("Restarting agent with new script...")
         if IS_WINDOWS:
@@ -4321,7 +4358,7 @@ def main():
 
             if time.time() - last_info_report >= info_report_interval:
                 try:
-                    api_request(config, "/api/agent/info", method="POST", data=get_system_info())
+                    api_request(config, "/api/agent/info", method="POST", data=get_system_info(config))
                 except Exception as e:
                     logger.debug("Periodic info report failed: {}".format(e))
                 last_info_report = time.time()

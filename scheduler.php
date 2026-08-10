@@ -2272,24 +2272,13 @@ if (!$lastBorgCheckTime || strtotime($lastBorgCheckTime) < time() - 86400) {
 // Windows launcher exe is never touched).
 $autoUpdAgents = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'auto_update_agents'");
 if (($autoUpdAgents['value'] ?? '1') === '1') {
-    $bundledAgentVersion = null;
-    $agentFile = __DIR__ . '/agent/bbs-agent.py';
-    if (is_readable($agentFile) && ($fh = fopen($agentFile, 'r'))) {
-        for ($i = 0; $i < 50 && ($line = fgets($fh)) !== false; $i++) {
-            if (preg_match('/^AGENT_VERSION\s*=\s*["\']([^"\']+)["\']/', $line, $m)) {
-                $bundledAgentVersion = $m[1];
-                break;
-            }
-        }
-        fclose($fh);
-    }
+    $updSvc = new \BBS\Services\UpdateService();
+    $bundledAgentVersion = $updSvc->getBundledAgentVersion();
     $lastAutoVer = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'auto_update_agents_last_version'");
     if ($bundledAgentVersion && ($lastAutoVer['value'] ?? '') !== $bundledAgentVersion) {
-        $outdated = $db->fetchAll(
-            "SELECT id, name FROM agents
-             WHERE agent_version IS NOT NULL AND agent_version != ? AND status = 'online'",
-            [$bundledAgentVersion]
-        );
+        // Strictly older only — an agent ahead of the server's bundle must not
+        // be dragged backwards (#387) — and never one that manages itself.
+        $outdated = $updSvc->getOutdatedAgents(true);
         $pending = array_column($db->fetchAll(
             "SELECT agent_id FROM backup_jobs WHERE task_type = 'update_agent' AND status IN ('queued','sent','running')"
         ), 'agent_id');
@@ -2690,27 +2679,13 @@ if ($hourOfDay === 3) {
 // Step 14: Auto-update agents when bundled version is newer than reported version
 // Runs every scheduler tick but only queues once — skips agents that already have a pending update_agent job
 {
-    $agentFile = __DIR__ . '/agent/bbs-agent.py';
-    $bundledAgentVersion = null;
-    if (file_exists($agentFile)) {
-        $fh = fopen($agentFile, 'r');
-        if ($fh) {
-            for ($i = 0; $i < 50 && ($line = fgets($fh)) !== false; $i++) {
-                if (preg_match('/^AGENT_VERSION\s*=\s*["\']([^"\']+)["\']/m', $line, $m)) {
-                    $bundledAgentVersion = $m[1];
-                    break;
-                }
-            }
-            fclose($fh);
-        }
-    }
+    $updSvc14 = new \BBS\Services\UpdateService();
+    $bundledAgentVersion = $updSvc14->getBundledAgentVersion();
 
     if ($bundledAgentVersion) {
-        $outdatedAgents = $db->fetchAll(
-            "SELECT id, name, agent_version FROM agents
-             WHERE agent_version IS NOT NULL AND agent_version != ? AND status = 'online'",
-            [$bundledAgentVersion]
-        );
+        // Only agents genuinely behind the bundle, and only ones that accept
+        // server-driven updates (#387).
+        $outdatedAgents = $updSvc14->getOutdatedAgents(true);
 
         if (!empty($outdatedAgents)) {
             $pending = $db->fetchAll(

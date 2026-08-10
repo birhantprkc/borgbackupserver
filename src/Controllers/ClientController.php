@@ -88,12 +88,22 @@ class ClientController extends Controller
                 SELECT MAX(agent_version) as v FROM agents a WHERE agent_version IS NOT NULL AND {$where}
             ", $params)['v'];
         }
+        // Strictly-older only. A string comparison counted an agent that is
+        // AHEAD of the bundled version as needing an update (#387), which is
+        // routine when a container image ships a newer agent than the server.
         $outdatedCount = 0;
         if ($latestVersion) {
-            $outdatedCount = $this->db->fetchOne("
-                SELECT COUNT(*) as cnt FROM agents a
-                WHERE (agent_version IS NULL OR agent_version != ?) AND status != 'setup' AND {$where}
-            ", array_merge([$latestVersion], $params))['cnt'];
+            $rows = $this->db->fetchAll("
+                SELECT a.agent_version FROM agents a
+                WHERE a.agent_version IS NOT NULL AND a.status != 'setup'
+                  AND a.auto_update_enabled = 1 AND {$where}
+            ", $params);
+            $updSvc = new \BBS\Services\UpdateService();
+            foreach ($rows as $r) {
+                if ($updSvc->isAgentOutdated($r['agent_version'], $latestVersion)) {
+                    $outdatedCount++;
+                }
+            }
         }
 
         // 7-day backup activity chart — group by user's local date, segmented by category
@@ -637,6 +647,11 @@ class ClientController extends Controller
             'last_heartbeat' => $agent['last_heartbeat'],
             'seen_ago' => $seenAgo,
             'agent_version' => $agent['agent_version'],
+            // Decided here rather than by comparing strings in the browser, so
+            // an agent ahead of the server's bundle isn't offered a downgrade
+            // dressed up as an upgrade (#387).
+            'agent_needs_update' => !empty($agent['auto_update_enabled'])
+                && (new \BBS\Services\UpdateService())->isAgentOutdated($agent['agent_version'] ?? null),
             'repos_count' => count($repositories),
             'total_archives' => $totalArchives,
             'size_display' => $sizeDisplay,
