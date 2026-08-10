@@ -85,30 +85,13 @@
                 </a>
                 <?php
                 $isAdmin = (($_SESSION['user_role'] ?? '') === 'admin');
-                $upgradeAvailable = $isAdmin ? (new \BBS\Services\UpdateService())->isUpdateAvailable() : false;
-                $agentUpgradeCount = 0;
-                if ($isAdmin && !$upgradeAvailable) {
-                    $bundledAgentVer = null;
-                    $agentFile = dirname(__DIR__, 3) . '/agent/bbs-agent.py';
-                    if (file_exists($agentFile)) {
-                        $h = fopen($agentFile, 'r');
-                        if ($h) {
-                            for ($i = 0; $i < 50 && ($ln = fgets($h)) !== false; $i++) {
-                                if (preg_match('/^AGENT_VERSION\s*=\s*["\']([^"\']+)["\']/m', $ln, $mv)) {
-                                    $bundledAgentVer = $mv[1]; break;
-                                }
-                            }
-                            fclose($h);
-                        }
-                    }
-                    if ($bundledAgentVer) {
-                        $db = \BBS\Core\Database::getInstance();
-                        $agentUpgradeCount = (int)$db->fetchOne(
-                            "SELECT COUNT(*) as cnt FROM agents WHERE agent_version IS NOT NULL AND agent_version != ?",
-                            [$bundledAgentVer]
-                        )['cnt'];
-                    }
-                }
+                $updateService = new \BBS\Services\UpdateService();
+                $upgradeAvailable = $isAdmin ? $updateService->isUpdateAvailable() : false;
+                // Server updates take precedence over agent updates in this menu,
+                // so the agent count is only needed when there's no server update.
+                $agentUpgradeCount = ($isAdmin && !$upgradeAvailable)
+                    ? $updateService->countOutdatedAgents()
+                    : 0;
                 if ($upgradeAvailable): ?>
                 <a href="/settings?tab=updates" class="badge bg-warning text-dark text-decoration-none me-2 me-md-3 py-2 px-2 d-none d-sm-inline-block">
                     <i class="bi bi-cloud-arrow-down me-1"></i> Upgrade

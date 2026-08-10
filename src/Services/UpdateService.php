@@ -31,6 +31,59 @@ class UpdateService
         return file_exists('/.dockerenv') || file_exists('/run/.containerenv');
     }
 
+    /**
+     * The AGENT_VERSION constant bundled with this server.
+     *
+     * Read out of agent/bbs-agent.py, which is the source of truth for what
+     * agents should be running. Lives here because three callers needed it —
+     * the topbar badge, the settings JSON and the bulk upgrade — and the
+     * layout was re-reading the file with fgets() on every page render.
+     */
+    public function getBundledAgentVersion(): ?string
+    {
+        $agentFile = $this->projectRoot . '/agent/bbs-agent.py';
+        if (!file_exists($agentFile)) {
+            return null;
+        }
+        $fh = fopen($agentFile, 'r');
+        if (!$fh) {
+            return null;
+        }
+        $version = null;
+        for ($i = 0; $i < 50 && ($line = fgets($fh)) !== false; $i++) {
+            if (preg_match('/^AGENT_VERSION\s*=\s*["\']([^"\']+)["\']/m', $line, $m)) {
+                $version = $m[1];
+                break;
+            }
+        }
+        fclose($fh);
+        return $version;
+    }
+
+    /**
+     * Agents reporting a version other than the bundled one.
+     * Empty when the bundled version can't be determined — better to show
+     * nothing than to claim every agent is out of date.
+     */
+    public function getOutdatedAgents(): array
+    {
+        $bundled = $this->getBundledAgentVersion();
+        if (!$bundled) {
+            return [];
+        }
+        return $this->db->fetchAll(
+            "SELECT id, name, agent_version FROM agents
+             WHERE agent_version IS NOT NULL AND agent_version != ?
+             ORDER BY name",
+            [$bundled]
+        );
+    }
+
+    public function countOutdatedAgents(): int
+    {
+        return count($this->getOutdatedAgents());
+    }
+
     public function getIncludePrereleases(): bool
     {
         return $this->getSetting('include_prereleases', '0') === '1';

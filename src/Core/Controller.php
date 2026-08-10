@@ -152,7 +152,7 @@ class Controller
      * expiry check, last_used_at / last_seen_ip bump. Role enforcement
      * is the caller's job.
      */
-    private function authenticateBearer(): array
+    protected function authenticateBearer(): array
     {
         $header = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
         $token = '';
@@ -200,6 +200,24 @@ class Controller
             'token_kind' => $apiToken['kind'] ?? 'user',
             'can_read_secrets' => !empty($apiToken['can_read_secrets']),
         ];
+    }
+
+    /**
+     * Authenticate a Bearer token and require the admin role.
+     *
+     * For server-wide endpoints (settings, tokens, updates) that have no
+     * per-agent scoping to fall back on. Unlike requireApiToken() this accepts
+     * mobile tokens, so an admin can use them from the app; unlike
+     * requireApiAuth() it refuses non-admins outright, matching
+     * SettingsController::requireAdmin().
+     */
+    protected function requireApiAdmin(): array
+    {
+        $ctx = $this->authenticateBearer();
+        if (($ctx['role'] ?? '') !== 'admin') {
+            $this->json(['error' => 'Administrator access required'], 403);
+        }
+        return $ctx;
     }
 
     /**

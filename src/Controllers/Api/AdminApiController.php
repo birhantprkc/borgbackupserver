@@ -1718,6 +1718,19 @@ class AdminApiController extends Controller
 
         $maint = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'maintenance_mode'");
 
+        // Feeds the account menu's upgrade item. Admin-only like the web
+        // badge — null for anyone else, and the client hides the item. Both
+        // numbers are sent honestly; the web shows the server update in
+        // preference to the agent count, and clients follow the same rule.
+        $updates = null;
+        if (($ctx['role'] ?? '') === 'admin') {
+            $updateService = new \BBS\Services\UpdateService();
+            $updates = [
+                'server_available' => $updateService->isUpdateAvailable(),
+                'agents_outdated' => $updateService->countOutdatedAgents(),
+            ];
+        }
+
         $this->json([
             'clients' => $clients,
             'jobs' => $jobs,
@@ -1725,6 +1738,7 @@ class AdminApiController extends Controller
             'active' => $active,
             'notifications_unread' => (int) ($unread['c'] ?? 0),
             'maintenance_mode' => ($maint['value'] ?? '0') === '1',
+            'updates' => $updates,
             'generated_at' => date('c'),
         ]);
     }

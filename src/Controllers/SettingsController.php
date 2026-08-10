@@ -418,20 +418,7 @@ class SettingsController extends Controller
     {
         $this->requireAdmin();
 
-        $bundledAgentVersion = null;
-        $agentFile = dirname(__DIR__, 2) . '/agent/bbs-agent.py';
-        if (file_exists($agentFile)) {
-            $fh = fopen($agentFile, 'r');
-            if ($fh) {
-                for ($i = 0; $i < 50 && ($line = fgets($fh)) !== false; $i++) {
-                    if (preg_match('/^AGENT_VERSION\s*=\s*["\']([^"\']+)["\']/m', $line, $mv)) {
-                        $bundledAgentVersion = $mv[1];
-                        break;
-                    }
-                }
-                fclose($fh);
-            }
-        }
+        $bundledAgentVersion = (new \BBS\Services\UpdateService())->getBundledAgentVersion();
 
         if (!$bundledAgentVersion) {
             $this->json(['bundled_version' => null, 'total' => 0, 'outdated' => []]);
@@ -671,21 +658,7 @@ class SettingsController extends Controller
         $this->requireAdmin();
         $this->verifyCsrf();
 
-        // Read bundled agent version
-        $serverAgentVersion = null;
-        $agentFile = dirname(__DIR__, 2) . '/agent/bbs-agent.py';
-        if (file_exists($agentFile)) {
-            $handle = fopen($agentFile, 'r');
-            if ($handle) {
-                for ($i = 0; $i < 50 && ($line = fgets($handle)) !== false; $i++) {
-                    if (preg_match('/^AGENT_VERSION\s*=\s*["\']([^"\']+)["\']/m', $line, $m)) {
-                        $serverAgentVersion = $m[1];
-                        break;
-                    }
-                }
-                fclose($handle);
-            }
-        }
+        $serverAgentVersion = (new \BBS\Services\UpdateService())->getBundledAgentVersion();
 
         if (!$serverAgentVersion) {
             $this->flash('danger', 'Could not determine bundled agent version.');

@@ -360,6 +360,27 @@ class App
         $this->router->map('POST',  '/api/v1/reports/generate', 'Api\\ProfileApiController@generateReport');
         $this->router->map('POST',  '/api/v1/reports/[i:id]/email', 'Api\\ProfileApiController@emailReport');
 
+        // Settings (#bbsapp) — admin-only, shapes documented in docs/API.md
+        $this->router->map('GET',    '/api/v1/settings', 'Api\\SettingsApiController@show');
+        $this->router->map('POST',   '/api/v1/settings/email/test', 'Api\\SettingsApiController@testEmail');
+        $this->router->map('PATCH',  '/api/v1/settings/[a:section]', 'Api\\SettingsApiController@updateSection');
+        $this->router->map('GET',    '/api/v1/notification-services', 'Api\\SettingsApiController@listNotificationServices');
+        $this->router->map('POST',   '/api/v1/notification-services', 'Api\\SettingsApiController@createNotificationService');
+        $this->router->map('PATCH',  '/api/v1/notification-services/[i:id]', 'Api\\SettingsApiController@updateNotificationService');
+        $this->router->map('DELETE', '/api/v1/notification-services/[i:id]', 'Api\\SettingsApiController@deleteNotificationService');
+        $this->router->map('POST',   '/api/v1/notification-services/[i:id]/test', 'Api\\SettingsApiController@testNotificationService');
+        $this->router->map('GET',    '/api/v1/backup-templates', 'Api\\SettingsApiController@listTemplates');
+        $this->router->map('POST',   '/api/v1/backup-templates', 'Api\\SettingsApiController@createTemplate');
+        $this->router->map('PATCH',  '/api/v1/backup-templates/[i:id]', 'Api\\SettingsApiController@updateTemplate');
+        $this->router->map('DELETE', '/api/v1/backup-templates/[i:id]', 'Api\\SettingsApiController@deleteTemplate');
+        $this->router->map('GET',    '/api/v1/tokens', 'Api\\SettingsApiController@listTokens');
+        $this->router->map('POST',   '/api/v1/tokens', 'Api\\SettingsApiController@createToken');
+        $this->router->map('DELETE', '/api/v1/tokens/[i:id]', 'Api\\SettingsApiController@deleteToken');
+        $this->router->map('GET',    '/api/v1/updates', 'Api\\SettingsApiController@updates');
+        $this->router->map('POST',   '/api/v1/updates/check', 'Api\\SettingsApiController@checkUpdates');
+        $this->router->map('POST',   '/api/v1/updates/upgrade-agents', 'Api\\SettingsApiController@upgradeAgents');
+        $this->router->map('POST',   '/api/v1/clients/[i:id]/upgrade-agent', 'Api\\SettingsApiController@upgradeAgent');
+
         // Catalog & Restore (client-facing)
         $this->router->map('GET', '/clients/[i:id]/catalog/[i:archive_id]', 'ClientController@catalog');
         $this->router->map('GET', '/clients/[i:id]/catalog/[i:archive_id]/tree', 'ClientController@catalogTree');
