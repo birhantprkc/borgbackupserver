@@ -314,23 +314,33 @@
     <!-- bootstrap.bundle moved to <head> (see comment there) — no second tag here. -->
     <script>
     // Global dropdown/tooltip escape fix (issue #161 and predecessors).
-    // Every dropdown toggle in the app gets data-bs-strategy="fixed" so Popper
-    // positions the menu with position:fixed, which escapes parent containers
-    // that clip it (cards with overflow:hidden, table wrappers, sticky headers).
+    // Every dropdown menu is positioned with Popper's fixed strategy so it
+    // escapes parent containers that clip it (cards with overflow:hidden,
+    // table wrappers, sticky headers, and `body` itself — which is the app's
+    // scroll container via overflow-y:auto, so on a short page an absolutely
+    // positioned menu is cut off at the end of the content, not the viewport).
     // Tooltips get boundary:'viewport' + container:'body' via a default instance
     // so they also clear parent clipping. This replaces the per-element patches
     // we were adding case-by-case.
+    //
+    // NB: the strategy has to be passed through popperConfig. `strategy` is a
+    // Popper option, not a Bootstrap one — there is no data-bs-strategy, so
+    // setting that attribute (as this did until v2.75.0) silently did nothing
+    // and every menu stayed position:absolute. That is why the plan menu lost
+    // its last item once "Dry Run" made it one row taller (#390).
     (function() {
         function upgradeDropdown(el) {
             if (el.dataset.bsDropdownFixed === '1') return;
-            el.setAttribute('data-bs-strategy', 'fixed');
             el.dataset.bsDropdownFixed = '1';
-            // If Bootstrap already instantiated this dropdown, dispose so the
-            // next open picks up the new strategy.
-            if (window.bootstrap && bootstrap.Dropdown) {
-                var existing = bootstrap.Dropdown.getInstance(el);
-                if (existing) existing.dispose();
-            }
+            if (!(window.bootstrap && bootstrap.Dropdown)) return;
+            // Replace any instance Bootstrap auto-created without our config.
+            var existing = bootstrap.Dropdown.getInstance(el);
+            if (existing) existing.dispose();
+            new bootstrap.Dropdown(el, {
+                popperConfig: function (defaults) {
+                    return Object.assign({}, defaults, { strategy: 'fixed' });
+                }
+            });
         }
         function upgradeTooltip(el) {
             if (el.dataset.bsTooltipFixed === '1') return;
