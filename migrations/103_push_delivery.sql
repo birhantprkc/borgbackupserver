@@ -22,6 +22,13 @@ ALTER TABLE push_tokens
 -- 2. A device belongs to one user at a time. The app holds a single session,
 --    so signing in as someone else on the same handset must move the device
 --    rather than leave a second row delivering to the previous account.
+--
+--    The user_id index has to be added BEFORE the old unique key is dropped:
+--    unique_user_device is what the user_id foreign key relies on, and MySQL
+--    refuses to drop it while it is the only index covering that column
+--    (error 1553).
+ALTER TABLE push_tokens
+  ADD KEY idx_push_user (user_id);
 ALTER TABLE push_tokens
   DROP INDEX unique_user_device,
   ADD UNIQUE KEY unique_device (device_id);
