@@ -46,7 +46,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.75.0"
+AGENT_VERSION = "2.76.0"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -1462,6 +1462,15 @@ PLUGIN_DISPLAY_NAMES = {
 }
 
 
+def _truthy(value):
+    """Config values arrive as real bools or as strings from the settings form."""
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in ("1", "true", "yes", "on")
+
+
 def execute_plugins(plugins, config=None, job_id=None, task=None):
     """Execute pre-backup plugins. Returns a LIST of per-config run records
     (dicts: slug, config_id, config_name, config, result). A plan can attach
@@ -1491,10 +1500,33 @@ def execute_plugins(plugins, config=None, job_id=None, task=None):
         # shell_hook needs the task context to inject BBS_* env vars and
         # (opt-in) BORG_PASSCOMMAND. Other plugins keep the simpler
         # single-arg signature.
-        if slug == "shell_hook":
-            result = func(cfg, task)
-        else:
-            result = func(cfg)
+        try:
+            if slug == "shell_hook":
+                result = func(cfg, task)
+            else:
+                result = func(cfg)
+        except Exception as e:
+            # A failing pre-backup plugin does not have to cost the backup.
+            # Unless this config says otherwise, record the failure, tell the
+            # server, and carry on: the remaining plugins still run and the
+            # archive is still written, marked "completed with warnings".
+            # Aborting instead meant one flaky control-panel dump left a
+            # client with no backups at all.
+            if _truthy(cfg.get("abort_on_failure")):
+                raise
+            logger.error("Plugin {} failed (continuing): {}".format(slug, e))
+            runs.append({
+                "slug": slug,
+                "config_id": plugin.get("config_id"),
+                "config_name": plugin.get("config_name"),
+                "config": cfg,
+                "result": {},
+                "error": str(e),
+            })
+            if config and job_id:
+                log_to_server(config, job_id, "Plugin {} failed, backup continued: {}".format(display, e))
+            continue
+
         runs.append({
             "slug": slug,
             "config_id": plugin.get("config_id"),
@@ -3571,6 +3603,8 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
             logger.info("Running {} pre-backup plugin(s)".format(len(plugins)))
             plugin_runs = execute_plugins(plugins, config, job_id, task=task)
         except Exception as e:
+            # Only reached when a plugin config has abort_on_failure set —
+            # otherwise execute_plugins() records the failure and continues.
             logger.error("Pre-backup plugin failed: {}".format(e))
             report_status(config, {
                 "job_id": job_id,
@@ -3578,6 +3612,10 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
                 "error_log": "Pre-backup plugin failed: {}".format(e),
             })
             return
+
+    # Plugins that failed without aborting: the backup goes ahead, but the job
+    # is flagged so it doesn't read as a clean success.
+    plugin_failures = [r for r in plugin_runs if r.get("error")]
 
     # Pre-count files for progress
     files_total = 0
@@ -4166,6 +4204,15 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
         status_data["archive_name"] = archive_name
     if error_output:
         status_data["error_log"] = error_output[:10000]  # Limit size
+    if plugin_failures:
+        had_warnings = True
+        summary = "; ".join(
+            "{} ({}) failed: {}".format(f.get("slug"), f.get("config_name") or "unnamed", f.get("error"))
+            for f in plugin_failures
+        )
+        note = "Backup completed, but {} plugin(s) failed: {}".format(len(plugin_failures), summary)
+        status_data["error_log"] = (note + "\n\n" + status_data.get("error_log", "")).strip()[:10000]
+
     if had_warnings:
         status_data["had_warnings"] = True
 
@@ -4177,6 +4224,8 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
         for run in plugin_runs:
             if run.get("slug") not in ("mysql_dump", "pg_dump", "mongo_dump"):
                 continue
+            if run.get("error"):
+                continue  # failed dump — nothing was written, don't claim a group
             r = run.get("result", {}) or {}
             db_groups.append({
                 "config_id": run.get("config_id"),

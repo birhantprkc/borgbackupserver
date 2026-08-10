@@ -731,7 +731,29 @@ class PluginManager
             ],
         ];
 
-        return $schemas[$slug] ?? [];
+        $schema = $schemas[$slug] ?? [];
+        if (!$schema) {
+            return [];
+        }
+
+        // Applies to every plugin, so it is appended here rather than repeated
+        // in each schema above.
+        //
+        // Default OFF: a pre-backup plugin that fails should not cost you the
+        // backup. A partially failed control-panel dump used to abort the run
+        // outright, so the filesystem data — which had nothing to do with the
+        // plugin — went unbacked too, and a client could sit for days with no
+        // backup at all while the underlying problem was a handful of domains.
+        // Turn it on for a plugin whose output you consider mandatory, e.g. a
+        // database dump that the archive is worthless without.
+        $schema['abort_on_failure'] = [
+            'type' => 'checkbox',
+            'label' => 'Abort the backup if this plugin fails',
+            'default' => false,
+            'help' => 'Off (default): if this plugin fails, the failure is logged, the backup still runs, and the job is marked "completed with warnings". On: the plugin failing stops the backup entirely — use it when an archive without this plugin\'s output would be worthless.',
+        ];
+
+        return $schema;
     }
 
     /**
