@@ -362,6 +362,7 @@ CREATE TABLE notifications (
     message TEXT NOT NULL,
     occurrence_count INT NOT NULL DEFAULT 1,
     last_emailed_at DATETIME DEFAULT NULL,
+    last_pushed_at DATETIME DEFAULT NULL,
     first_occurred_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_occurred_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     read_at DATETIME DEFAULT NULL,
@@ -496,12 +497,35 @@ CREATE TABLE push_tokens (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     device_id VARCHAR(64) NOT NULL,
-    apns_token VARCHAR(255) NOT NULL,
+    push_token VARCHAR(512) NOT NULL,
     platform VARCHAR(16) NOT NULL DEFAULT 'ios',
+    device_name VARCHAR(100) DEFAULT NULL,
+    -- Per-device event preferences, materialised at registration so nothing
+    -- has to interpret "absent" at query time.
+    events JSON NOT NULL,
+    enabled TINYINT(1) NOT NULL DEFAULT 1,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY unique_user_device (user_id, device_id),
+    -- One row per device: the app holds a single session, so signing in as
+    -- another user moves the device rather than adding a second row.
+    UNIQUE KEY unique_device (device_id),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- --------------------------------------------------------
+-- Outbound push queue
+-- --------------------------------------------------------
+CREATE TABLE push_queue (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    device_id VARCHAR(64) NOT NULL,
+    user_id INT NOT NULL,
+    event VARCHAR(50) NOT NULL,
+    job_id INT NOT NULL DEFAULT 0,
+    client_id INT NOT NULL DEFAULT 0,
+    attempts INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_pending (device_id, event, job_id),
+    KEY idx_created (created_at)
 ) ENGINE=InnoDB;
 
 -- Short-lived single-use secrets for stateless mobile auth flows:

@@ -196,6 +196,16 @@ else
         -e "DELETE FROM backup_jobs WHERE status IN ('queued', 'sent', 'running')" 2>/dev/null
     ok "Cleared stale job queue"
 
+    # Drop the push identity. A restored database carries the identity of the
+    # install it came from, so without this a staging or DR copy comes up as
+    # that server and can deliver notifications to its devices. Clearing these
+    # makes this copy register as its own server on first use, and leaves the
+    # original's registration untouched. The queue goes too — those alerts are
+    # about events on a system this copy no longer represents.
+    mysql -h "${DB_HOST:-localhost}" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" \
+        -e "DELETE FROM settings WHERE \`key\` IN ('push_install_id', 'push_server_id', 'push_serverkey', 'push_relay_fail_count', 'push_relay_cooldown_until'); DELETE FROM push_queue;" 2>/dev/null
+    ok "Cleared push registration (this copy will register as a new server)"
+
     # Enable maintenance mode — prevents scheduler from queuing new jobs before repos are restored
     mysql -h "${DB_HOST:-localhost}" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" \
         -e "INSERT INTO settings (\`key\`, \`value\`) VALUES ('maintenance_mode', '1') ON DUPLICATE KEY UPDATE \`value\` = '1'" 2>/dev/null

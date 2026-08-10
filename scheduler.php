@@ -2841,3 +2841,24 @@ if ((int) date('i') === 30) {
         echo date('Y-m-d H:i:s') . " Pruned {$sessionDeleted} PHP session files older than 30 days\n";
     }
 }
+
+// Step 17: Drain the push notification queue.
+//
+// Sends happen here rather than where the notification is raised, because the
+// places that raise them — the agent-facing API and this tick — are the two
+// that must never wait on a third party. The service bounds itself with a
+// wall-clock budget, a batch cap and a circuit breaker, so a relay that is
+// slow, unreachable or simply not configured costs this tick nothing.
+try {
+    $pushResult = (new \BBS\Services\PushService())->drain();
+    if ($pushResult && ($pushResult['sent'] > 0 || !empty($pushResult['expired']))) {
+        $parts = [];
+        if ($pushResult['sent'] > 0)                  $parts[] = "{$pushResult['sent']} sent";
+        if (!empty($pushResult['expired']))           $parts[] = "{$pushResult['expired']} expired";
+        if (!empty($pushResult['unregistered']))      $parts[] = "{$pushResult['unregistered']} unregistered device(s) dropped";
+        echo date('Y-m-d H:i:s') . " Push queue: " . implode(', ', $parts) . "\n";
+    }
+} catch (\Exception $e) {
+    // Undelivered notifications are not a backup problem — warning, not error.
+    echo date('Y-m-d H:i:s') . " Push queue drain failed: " . $e->getMessage() . "\n";
+}

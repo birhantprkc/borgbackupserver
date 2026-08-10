@@ -118,6 +118,39 @@ class PermissionService
     }
 
     /**
+     * The inverse of getAccessibleAgentIds(): every user who can see this
+     * agent — admins, users flagged all_clients, and users it is assigned to.
+     *
+     * Used to decide who an agent-scoped alert reaches. Access is the whole
+     * rule: someone who can see the client is someone the alert concerns, and
+     * someone who can't should never learn it exists.
+     *
+     * @return int[] user ids
+     */
+    public function getUsersForAgent(int $agentId): array
+    {
+        $rows = $this->db->fetchAll(
+            "SELECT id FROM users WHERE role = 'admin' OR all_clients = 1
+             UNION
+             SELECT user_id AS id FROM user_agents WHERE agent_id = ?",
+            [$agentId]
+        );
+        return array_map('intval', array_column($rows, 'id'));
+    }
+
+    /**
+     * Users who should receive server-wide alerts — ones with no agent to
+     * scope by. Admins only: there is nothing else to key on.
+     *
+     * @return int[] user ids
+     */
+    public function getAdminUserIds(): array
+    {
+        $rows = $this->db->fetchAll("SELECT id FROM users WHERE role = 'admin'");
+        return array_map('intval', array_column($rows, 'id'));
+    }
+
+    /**
      * Get SQL WHERE clause for agent filtering.
      * Returns [where_clause, params] tuple.
      */

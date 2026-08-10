@@ -3324,27 +3324,139 @@ class AdminApiController extends Controller
         $input = $this->getJsonInput();
 
         $deviceId = substr(trim($input['device_id'] ?? ''), 0, 64);
-        $apnsToken = substr(trim($input['apns_token'] ?? ''), 0, 255);
+        // apns_token is the original field name, kept as an alias so clients
+        // written against it keep working.
+        $token = substr(trim($input['push_token'] ?? ($input['apns_token'] ?? '')), 0, 512);
         $platform = substr(trim($input['platform'] ?? 'ios'), 0, 16);
+        $deviceName = substr(trim($input['device_name'] ?? ''), 0, 100) ?: null;
 
-        if ($deviceId === '' || $apnsToken === '') {
-            $this->json(['error' => 'device_id and apns_token are required'], 400);
+        if ($deviceId === '' || $token === '') {
+            $this->json(['error' => 'device_id and push_token are required'], 400);
         }
 
+        // Preferences are materialised now rather than left null: the delivery
+        // filter reads them as JSON, and a null would quietly match nothing.
+        $events = \BBS\Services\PushService::DEFAULT_EVENTS;
+        if (isset($input['events']) && is_array($input['events'])) {
+            foreach ($events as $key => $default) {
+                if (array_key_exists($key, $input['events'])) {
+                    $events[$key] = (bool) $input['events'][$key];
+                }
+            }
+        }
+
+        $userId = (int) $ctx['id'];
+
+        // A device belongs to one account at a time. The app holds a single
+        // session, so registering here means any previous owner's row for this
+        // handset is stale — clear it rather than leave it delivering to an
+        // account the phone can no longer open.
+        $this->db->delete('push_tokens', 'device_id = ? AND user_id != ?', [$deviceId, $userId]);
+
         $this->db->query(
-            "INSERT INTO push_tokens (user_id, device_id, apns_token, platform)
-             VALUES (?, ?, ?, ?)
-             ON DUPLICATE KEY UPDATE apns_token = VALUES(apns_token), platform = VALUES(platform)",
-            [(int) $ctx['id'], $deviceId, $apnsToken, $platform]
+            "INSERT INTO push_tokens (user_id, device_id, push_token, platform, device_name, events, enabled)
+             VALUES (?, ?, ?, ?, ?, ?, 1)
+             ON DUPLICATE KEY UPDATE
+                user_id = VALUES(user_id),
+                push_token = VALUES(push_token),
+                platform = VALUES(platform),
+                device_name = VALUES(device_name),
+                events = VALUES(events)",
+            [$userId, $deviceId, $token, $platform, $deviceName, json_encode($events)]
         );
 
-        $this->json(['status' => 'ok']);
+        (new \BBS\Services\PushService())->registerDevice($userId, $deviceId, $token, $platform);
+
+        $this->json(['status' => 'ok', 'events' => $events]);
     }
 
     /**
-     * DELETE /api/v1/push/register — body or query device_id. Called on
-     * logout so a signed-out phone stops receiving pushes.
+     * GET /api/v1/push/devices?device_id=… — the caller's own devices.
+     * Not admin data: a user sees their devices and nobody else's.
      */
+    public function listPushDevices(): void
+    {
+        $ctx = $this->requireApiAuth();
+        $current = substr(trim($_GET['device_id'] ?? ''), 0, 64);
+
+        $rows = $this->db->fetchAll(
+            "SELECT device_id, device_name, platform, events, enabled, created_at, updated_at
+             FROM push_tokens WHERE user_id = ? ORDER BY created_at",
+            [(int) $ctx['id']]
+        );
+
+        $devices = [];
+        foreach ($rows as $r) {
+            $devices[] = [
+                'device_id' => $r['device_id'],
+                'device_name' => $r['device_name'],
+                'platform' => $r['platform'],
+                'events' => json_decode($r['events'] ?? '{}', true) ?: (object) [],
+                'enabled' => (bool) $r['enabled'],
+                'created_at' => $r['created_at'],
+                'updated_at' => $r['updated_at'],
+                'is_current' => $current !== '' && $r['device_id'] === $current,
+            ];
+        }
+
+        // push_token is deliberately absent: nothing needs to read it back,
+        // and it is the one value here worth stealing.
+        $this->json(['devices' => $devices]);
+    }
+
+    /**
+     * PATCH /api/v1/push/devices/{deviceId} — event preferences, or the
+     * on/off switch. Disabling keeps the registration and stops delivery.
+     */
+    public function updatePushDevice(string $deviceId): void
+    {
+        $ctx = $this->requireApiAuth();
+        $input = $this->getJsonInput();
+        $userId = (int) $ctx['id'];
+
+        $row = $this->db->fetchOne(
+            "SELECT events FROM push_tokens WHERE device_id = ? AND user_id = ?",
+            [$deviceId, $userId]
+        );
+        if (!$row) {
+            $this->json(['error' => 'Device not found'], 404);
+        }
+
+        $data = [];
+        if (array_key_exists('enabled', $input)) {
+            $data['enabled'] = !empty($input['enabled']) ? 1 : 0;
+        }
+        if (isset($input['events']) && is_array($input['events'])) {
+            $events = json_decode($row['events'] ?? '{}', true) ?: [];
+            $events = array_merge(\BBS\Services\PushService::DEFAULT_EVENTS, $events);
+            foreach (\BBS\Services\PushService::DEFAULT_EVENTS as $key => $default) {
+                if (array_key_exists($key, $input['events'])) {
+                    $events[$key] = (bool) $input['events'][$key];
+                }
+            }
+            $data['events'] = json_encode($events);
+        }
+
+        if (!empty($data)) {
+            $this->db->update('push_tokens', $data, 'device_id = ? AND user_id = ?', [$deviceId, $userId]);
+        }
+
+        $updated = $this->db->fetchOne(
+            "SELECT device_id, device_name, platform, events, enabled, created_at, updated_at
+             FROM push_tokens WHERE device_id = ? AND user_id = ?",
+            [$deviceId, $userId]
+        );
+        $this->json(['device' => [
+            'device_id' => $updated['device_id'],
+            'device_name' => $updated['device_name'],
+            'platform' => $updated['platform'],
+            'events' => json_decode($updated['events'] ?? '{}', true) ?: (object) [],
+            'enabled' => (bool) $updated['enabled'],
+            'created_at' => $updated['created_at'],
+            'updated_at' => $updated['updated_at'],
+        ]]);
+    }
+
     public function unregisterPush(): void
     {
         $ctx = $this->requireApiAuth();
@@ -3356,6 +3468,8 @@ class AdminApiController extends Controller
         }
 
         $this->db->delete('push_tokens', 'user_id = ? AND device_id = ?', [(int) $ctx['id'], $deviceId]);
+        // Best-effort, short timeout: a sign-out must not hang on the relay.
+        (new \BBS\Services\PushService())->deleteDevice($deviceId);
         http_response_code(204);
         exit;
     }

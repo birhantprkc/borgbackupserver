@@ -381,6 +381,10 @@ class App
         $this->router->map('POST',   '/api/v1/updates/upgrade-agents', 'Api\\SettingsApiController@upgradeAgents');
         $this->router->map('POST',   '/api/v1/clients/[i:id]/upgrade-agent', 'Api\\SettingsApiController@upgradeAgent');
 
+        // Push notification devices — per-user, not admin data
+        $this->router->map('GET',   '/api/v1/push/devices', 'Api\\AdminApiController@listPushDevices');
+        $this->router->map('PATCH', '/api/v1/push/devices/[*:deviceId]', 'Api\\AdminApiController@updatePushDevice');
+
         // Catalog & Restore (client-facing)
         $this->router->map('GET', '/clients/[i:id]/catalog/[i:archive_id]', 'ClientController@catalog');
         $this->router->map('GET', '/clients/[i:id]/catalog/[i:archive_id]/tree', 'ClientController@catalogTree');
