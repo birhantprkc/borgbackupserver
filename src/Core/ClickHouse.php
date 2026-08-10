@@ -140,6 +140,82 @@ class ClickHouse
     }
 
     /**
+     * Rebuild the catalog_dirs index for one archive, entirely inside
+     * ClickHouse.
+     *
+     * This used to be done in PHP: accumulate a dirPath => [count, size] map
+     * while streaming borg's output, copy it into a second map that also holds
+     * every ancestor directory, then write both out as TSV. Both maps are
+     * proportional to the number of directories in the archive, and both are
+     * alive at once. A real 2.6M-file archive has 720k directories and needed
+     * ~850MB peak — against a 128MB memory_limit, which is what Docker ships.
+     * The result was an "Allowed memory size exhausted" fatal partway through:
+     * borg vanished mid-run and the job simply stopped (#391).
+     *
+     * The aggregation and the ancestor expansion are both things a database is
+     * good at, so they happen there and no rows travel through PHP at all.
+     * Memory is constant regardless of archive size.
+     *
+     * Semantics match the previous implementation exactly: a directory holding
+     * files carries their count and total size, a directory that only exists as
+     * an ancestor carries zeros, and the root itself is not indexed.
+     */
+    public function rebuildDirIndex(int $agentId, int $archiveId): void
+    {
+        $this->exec(
+            "ALTER TABLE catalog_dirs DELETE
+             WHERE agent_id = {$agentId} AND archive_id = {$archiveId}
+             SETTINGS mutations_sync = 1"
+        );
+
+        $this->exec("
+            INSERT INTO catalog_dirs
+                (agent_id, archive_id, dir_path, parent_dir, name, file_count, total_size)
+            SELECT
+                {$agentId} AS agent_id,
+                {$archiveId} AS archive_id,
+                dir_path,
+                if(par = '', '/', par) AS parent_dir,
+                arrayElement(sp, -1) AS name,
+                sum(fc) AS file_count,
+                sum(sz) AS total_size
+            FROM (
+                SELECT dir_path, fc, sz,
+                       splitByChar('/', dir_path) AS sp,
+                       arrayStringConcat(arraySlice(sp, 1, length(sp) - 1), '/') AS par
+                FROM (
+                    -- directories that directly hold files, with their totals
+                    SELECT parent_dir AS dir_path, count() AS fc, sum(file_size) AS sz
+                    FROM file_catalog
+                    WHERE agent_id = {$agentId} AND archive_id = {$archiveId} AND status != 'D'
+                    GROUP BY parent_dir
+
+                    UNION ALL
+
+                    -- every ancestor of those, contributing nothing of its own,
+                    -- so the tree has no gaps when it is browsed
+                    SELECT anc AS dir_path, 0 AS fc, 0 AS sz
+                    FROM (
+                        SELECT arrayJoin(arrayMap(
+                                   i -> arrayStringConcat(arraySlice(parts, 1, i), '/'),
+                                   range(2, length(parts))
+                               )) AS anc
+                        FROM (
+                            SELECT splitByChar('/', parent_dir) AS parts
+                            FROM file_catalog
+                            WHERE agent_id = {$agentId} AND archive_id = {$archiveId}
+                              AND status != 'D'
+                            GROUP BY parent_dir
+                        )
+                    )
+                )
+                WHERE dir_path != '' AND dir_path != '/'
+            )
+            GROUP BY dir_path, par, sp
+        ");
+    }
+
+    /**
      * Check if ClickHouse is reachable.
      */
     public function isAvailable(): bool

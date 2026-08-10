@@ -929,62 +929,16 @@ class AgentApiController extends Controller
      */
     private function buildDirsFromCatalog(int $agentId, int $archiveId): void
     {
-        $ch = \BBS\Core\ClickHouse::getInstance();
-
-        // Remove old dir entries for this archive
+        // Aggregation and ancestor expansion both happen inside ClickHouse.
+        // Doing it in PHP meant pulling one row per directory into memory and
+        // then building a second map of every ancestor — hundreds of megabytes
+        // on a large archive, well past the default memory limit (#391).
         try {
-            $ch->exec("ALTER TABLE catalog_dirs DELETE WHERE agent_id = {$agentId} AND archive_id = {$archiveId} SETTINGS mutations_sync = 1");
-        } catch (\Exception $e) { /* ignore */ }
-
-        // Get dir stats grouped by parent_dir from ClickHouse
-        $dirRows = $ch->fetchAll("
-            SELECT parent_dir, count() as file_count, sum(file_size) as total_size
-            FROM file_catalog
-            WHERE agent_id = ? AND archive_id = ? AND status != 'D'
-            GROUP BY parent_dir
-        ", [$agentId, $archiveId]);
-
-        $allDirs = [];
-        foreach ($dirRows as $d) {
-            $dirPath = $d['parent_dir'];
-            if ($dirPath === '' || $dirPath === '/') continue;
-
-            if (!isset($allDirs[$dirPath])) {
-                $allDirs[$dirPath] = [0, 0];
-            }
-            $allDirs[$dirPath][0] += (int) $d['file_count'];
-            $allDirs[$dirPath][1] += (int) $d['total_size'];
-
-            // Walk up ancestors
-            $p = dirname($dirPath);
-            while ($p !== '/' && $p !== '.' && !isset($allDirs[$p])) {
-                $allDirs[$p] = [0, 0];
-                $p = dirname($p);
-            }
+            \BBS\Core\ClickHouse::getInstance()->rebuildDirIndex($agentId, $archiveId);
+        } catch (\Exception $e) {
+            // Non-fatal: the file catalog is already in place, only the
+            // directory browse index is missing and can be rebuilt later.
         }
-
-        if (empty($allDirs)) return;
-
-        // Write dirs TSV and upload to ClickHouse
-        $escape = fn(string $s) => str_replace(["\t", "\n", "\\"], ["\\t", "\\n", "\\\\"], $s);
-        $dirsTsv = sys_get_temp_dir() . "/catalog_dirs_api_{$agentId}_{$archiveId}_" . getmypid() . '.tsv';
-        $fh = fopen($dirsTsv, 'w');
-        if (!$fh) return;
-
-        foreach ($allDirs as $dirPath => [$fc, $sz]) {
-            $parent = dirname($dirPath);
-            if ($parent === '.') $parent = '/';
-            $name = basename($dirPath);
-            fwrite($fh, "{$agentId}\t{$archiveId}\t{$escape($dirPath)}\t{$escape($parent)}\t{$escape($name)}\t{$fc}\t{$sz}\n");
-        }
-        fclose($fh);
-
-        try {
-            $ch->insertTsv('catalog_dirs', $dirsTsv, [
-                'agent_id', 'archive_id', 'dir_path', 'parent_dir', 'name', 'file_count', 'total_size'
-            ]);
-        } catch (\Exception $e) { /* ignore */ }
-        @unlink($dirsTsv);
     }
 
     public function heartbeat(): void

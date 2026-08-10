@@ -1304,7 +1304,6 @@ foreach ($serverJobs as $sj) {
                 $tsvFile = sys_get_temp_dir() . "/catalog_rebuild_{$agentId}_{$crArchive['id']}_" . getmypid() . '.tsv';
                 $tsvFh = fopen($tsvFile, 'w');
                 $archiveFileCount = 0;
-                $dirStats = [];
 
                 while (($line = fgets($handle['pipes'][1])) !== false) {
                     $line = trim($line);
@@ -1322,12 +1321,6 @@ foreach ($serverJobs as $sj) {
 
                             fwrite($tsvFh, "{$agentId}\t{$crArchive['id']}\t{$escape($path)}\t{$escape(basename($path))}\t{$escape($rawParent)}\t{$size}\tU\t{$mtime}\n");
                             $archiveFileCount++;
-
-                            if (!isset($dirStats[$rawParent])) {
-                                $dirStats[$rawParent] = [0, 0];
-                            }
-                            $dirStats[$rawParent][0]++;
-                            $dirStats[$rawParent][1] += $size;
                         }
                     }
                 }
@@ -1387,7 +1380,6 @@ foreach ($serverJobs as $sj) {
                 $tsvFile = sys_get_temp_dir() . "/catalog_rebuild_{$agentId}_{$crArchive['id']}_" . getmypid() . '.tsv';
                 $tsvFh = fopen($tsvFile, 'w');
                 $archiveFileCount = 0;
-                $dirStats = [];
 
                 while (($line = fgets($crPipes[1])) !== false) {
                     $line = trim($line);
@@ -1405,12 +1397,6 @@ foreach ($serverJobs as $sj) {
 
                             fwrite($tsvFh, "{$agentId}\t{$crArchive['id']}\t{$escape($path)}\t{$escape(basename($path))}\t{$escape($rawParent)}\t{$size}\tU\t{$mtime}\n");
                             $archiveFileCount++;
-
-                            if (!isset($dirStats[$rawParent])) {
-                                $dirStats[$rawParent] = [0, 0];
-                            }
-                            $dirStats[$rawParent][0]++;
-                            $dirStats[$rawParent][1] += $size;
                         }
                     }
                 }
@@ -1439,36 +1425,15 @@ foreach ($serverJobs as $sj) {
                 }
                 $totalFiles += $archiveFileCount;
 
-                // Build dirs for this archive
-                if (!empty($dirStats)) {
-                    $allDirs = [];
-                    foreach ($dirStats as $dirPath => [$fc, $sz]) {
-                        if (!isset($allDirs[$dirPath])) $allDirs[$dirPath] = [0, 0];
-                        $allDirs[$dirPath][0] += $fc;
-                        $allDirs[$dirPath][1] += $sz;
-                        $p = dirname($dirPath);
-                        while ($p !== '/' && $p !== '.' && !isset($allDirs[$p])) {
-                            $allDirs[$p] = [0, 0];
-                            $p = dirname($p);
-                        }
-                    }
-                    unset($allDirs['/']);
-
-                    $dirsTsv = sys_get_temp_dir() . "/catalog_dirs_{$agentId}_{$crArchive['id']}_" . getmypid() . '.tsv';
-                    $dirsFh = fopen($dirsTsv, 'w');
-                    foreach ($allDirs as $dPath => [$dFc, $dSz]) {
-                        $dParent = dirname($dPath);
-                        if ($dParent === '.') $dParent = '/';
-                        $dName = basename($dPath);
-                        fwrite($dirsFh, "{$agentId}\t{$crArchive['id']}\t{$escape($dPath)}\t{$escape($dParent)}\t{$escape($dName)}\t{$dFc}\t{$dSz}\n");
-                    }
-                    fclose($dirsFh);
-                    try {
-                        $ch->insertTsv('catalog_dirs', $dirsTsv, [
-                            'agent_id', 'archive_id', 'dir_path', 'parent_dir', 'name', 'file_count', 'total_size'
-                        ]);
-                    } catch (\Exception $e) { /* non-fatal */ }
-                    @unlink($dirsTsv);
+                // Build the directory index from the rows just inserted.
+                // Done inside ClickHouse: accumulating it in PHP needed a map
+                // per directory plus a second copy holding every ancestor, which
+                // exhausted the memory limit on large archives and killed the
+                // rebuild partway through (#391).
+                try {
+                    $ch->rebuildDirIndex($agentId, (int) $crArchive['id']);
+                } catch (\Exception $e) {
+                    $errors[] = "Archive {$crArchive['archive_name']}: dir index failed: " . $e->getMessage();
                 }
             } else {
                 // Archive genuinely has 0 indexable files (only directories or
