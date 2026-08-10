@@ -112,7 +112,25 @@ class BackupPlanController extends Controller
         if (isset($_POST['directories'])) $data['directories'] = trim($_POST['directories']);
         if (isset($_POST['excludes'])) $data['excludes'] = trim($_POST['excludes']) ?: null;
         if (isset($_POST['advanced_options'])) $data['advanced_options'] = trim($_POST['advanced_options']) ?: null;
-        if (isset($_POST['repository_id'])) $data['repository_id'] = (int) $_POST['repository_id'];
+        // The repository must belong to THIS plan's agent. requirePermission()
+        // above gates the plan, but that is object-level only — without this
+        // property-level check a user with manage_plans on their own client
+        // could repoint the plan at another client's repository by posting its
+        // id, since the backup_plans.repository_id foreign key is global rather
+        // than scoped per agent (GHSA-vm4w-wwpg-v3rc). store() has always
+        // checked this; update() did not.
+        if (isset($_POST['repository_id'])) {
+            $repositoryId = (int) $_POST['repository_id'];
+            $repo = $this->db->fetchOne(
+                "SELECT id FROM repositories WHERE id = ? AND agent_id = ?",
+                [$repositoryId, (int) $plan['agent_id']]
+            );
+            if (!$repo) {
+                $this->flash('danger', 'Repository not found for this client.');
+                $this->redirect("/clients/{$plan['agent_id']}?tab=schedules");
+            }
+            $data['repository_id'] = $repositoryId;
+        }
         if (isset($_POST['prune_minutes'])) $data['prune_minutes'] = (int) $_POST['prune_minutes'];
         if (isset($_POST['prune_hours'])) $data['prune_hours'] = (int) $_POST['prune_hours'];
         if (isset($_POST['prune_days'])) $data['prune_days'] = (int) $_POST['prune_days'];

@@ -110,6 +110,22 @@ class PluginConfigController extends Controller
      * Update a named plugin config.
      * POST /clients/{id}/plugin-configs/{configId}/edit
      */
+    /**
+     * Resolve a plugin config that belongs to this agent.
+     *
+     * Access to the agent is NOT access to an arbitrary config id — the id
+     * comes straight off the URL, so every config-scoped action has to check
+     * both or a user can reach another tenant's configs (the class of bug in
+     * GHSA-vm4w-wwpg-v3rc).
+     */
+    private function configForAgent(int $agentId, int $configId): ?array
+    {
+        return $this->db->fetchOne(
+            "SELECT * FROM plugin_configs WHERE id = ? AND agent_id = ?",
+            [$configId, $agentId]
+        ) ?: null;
+    }
+
     public function update(int $id, int $configId): void
     {
         $this->requireAuth();
@@ -118,6 +134,11 @@ class PluginConfigController extends Controller
         if (!$this->getAgent($id)) {
             $this->flash('danger', 'Access denied.');
             $this->redirect('/clients');
+        }
+
+        if (!$this->configForAgent($id, $configId)) {
+            $this->flash('danger', 'Plugin configuration not found for this client.');
+            $this->redirect("/clients/{$id}?tab=plugins");
         }
 
         $name = trim($_POST['name'] ?? '');
@@ -164,6 +185,11 @@ class PluginConfigController extends Controller
             $this->redirect('/clients');
         }
 
+        if (!$this->configForAgent($id, $configId)) {
+            $this->flash('danger', 'Plugin configuration not found for this client.');
+            $this->redirect("/clients/{$id}?tab=plugins");
+        }
+
         // Check if this S3 config is in use by any repository
         $inUse = $this->db->fetchOne("
             SELECT r.name FROM repository_s3_configs rsc
@@ -199,16 +225,23 @@ class PluginConfigController extends Controller
             $this->json(['error' => 'Access denied'], 403);
         }
 
-        // Check if this is an S3 plugin config — test runs server-side (rclone is on the server)
+        // The config must belong to THIS agent. Access to the agent is not
+        // access to an arbitrary config id: unscoped, a user could test
+        // another tenant's S3 config, using their credentials and reading
+        // their bucket name back out of the success message (same class as
+        // GHSA-vm4w-wwpg-v3rc).
         $pluginSlug = $this->db->fetchOne("
-            SELECT p.slug FROM plugin_configs pc
+            SELECT p.slug, pc.config FROM plugin_configs pc
             JOIN plugins p ON p.id = pc.plugin_id
-            WHERE pc.id = ?
-        ", [$configId]);
+            WHERE pc.id = ? AND pc.agent_id = ?
+        ", [$configId, $id]);
 
-        if ($pluginSlug && $pluginSlug['slug'] === 's3_sync') {
-            $config = $this->db->fetchOne("SELECT config FROM plugin_configs WHERE id = ?", [$configId]);
-            $configData = json_decode($config['config'] ?? '{}', true) ?: [];
+        if (!$pluginSlug) {
+            $this->json(['error' => 'Plugin configuration not found for this client'], 404);
+        }
+
+        if ($pluginSlug['slug'] === 's3_sync') {
+            $configData = json_decode($pluginSlug['config'] ?? '{}', true) ?: [];
 
             $s3Service = new S3SyncService();
             $creds = $s3Service->resolveCredentials($configData);

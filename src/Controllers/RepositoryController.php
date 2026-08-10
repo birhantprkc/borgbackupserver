@@ -401,9 +401,15 @@ class RepositoryController extends Controller
                 JOIN plugin_configs pc ON pc.id = rsc.plugin_config_id
                 WHERE rsc.repository_id = ?
             ", [$id]);
-            // Legacy form fallback: an explicit plugin_config_id with no link rows
+            // Legacy form fallback: an explicit plugin_config_id with no link
+            // rows. Scoped to this repo's agent — an unscoped lookup would let
+            // a user delete from another tenant's bucket using that tenant's
+            // credentials (same class as GHSA-vm4w-wwpg-v3rc).
             if (empty($linkedConfigs) && !empty($_POST['plugin_config_id'])) {
-                $legacy = $this->db->fetchOne("SELECT id, name, config FROM plugin_configs WHERE id = ?", [(int) $_POST['plugin_config_id']]);
+                $legacy = $this->db->fetchOne(
+                    "SELECT id, name, config FROM plugin_configs WHERE id = ? AND agent_id = ?",
+                    [(int) $_POST['plugin_config_id'], $agentId]
+                );
                 if ($legacy) $linkedConfigs = [$legacy];
             }
             $agent = $this->db->fetchOne("SELECT * FROM agents WHERE id = ?", [$agentId]);
@@ -1407,8 +1413,15 @@ class RepositoryController extends Controller
             $this->redirect("/clients/{$id}?tab=repos");
         }
 
-        // Get plugin config and resolve credentials
-        $pluginConfig = $this->db->fetchOne("SELECT config FROM plugin_configs WHERE id = ?", [$pluginConfigId]);
+        // Get plugin config and resolve credentials. Scoped to this agent:
+        // unscoped, a user with manage_repos on their own client could pass
+        // another tenant's S3 config id and pull that tenant's repository out
+        // of their bucket into a repo of their own (same class as
+        // GHSA-vm4w-wwpg-v3rc).
+        $pluginConfig = $this->db->fetchOne(
+            "SELECT config FROM plugin_configs WHERE id = ? AND agent_id = ?",
+            [$pluginConfigId, $id]
+        );
         if (!$pluginConfig) {
             $this->flash('danger', 'S3 configuration not found.');
             $this->redirect("/clients/{$id}?tab=repos");
@@ -1556,7 +1569,11 @@ class RepositoryController extends Controller
         $pluginConfigId = (int) ($_POST['plugin_config_id'] ?? 0);
         $destLabel = '';
         if ($pluginConfigId > 0) {
-            $dest = $this->db->fetchOne("SELECT name FROM plugin_configs WHERE id = ?", [$pluginConfigId]);
+            // Scoped so the label can't echo back another tenant's config name
+            $dest = $this->db->fetchOne(
+                "SELECT name FROM plugin_configs WHERE id = ? AND agent_id = ?",
+                [$pluginConfigId, $agentId]
+            );
             $destLabel = $dest ? " to \"{$dest['name']}\"" : '';
             $this->db->delete('repository_s3_configs', 'repository_id = ? AND plugin_config_id = ?', [$id, $pluginConfigId]);
         } else {
