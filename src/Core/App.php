@@ -329,6 +329,12 @@ class App
         $this->router->map('GET', '/api/v1/plugins/schema', 'Api\\AdminApiController@getPluginSchema');
         $this->router->map('GET', '/api/v1/clients/[i:id]/plugin-configs', 'Api\\AdminApiController@listPluginConfigs');
         $this->router->map('POST', '/api/v1/clients/[i:id]/plugin-configs', 'Api\\AdminApiController@createPluginConfig');
+        $this->router->map('PUT',    '/api/v1/clients/[i:id]/plugin-configs/[i:configId]', 'Api\\AdminApiController@updatePluginConfig');
+        $this->router->map('DELETE', '/api/v1/clients/[i:id]/plugin-configs/[i:configId]', 'Api\\AdminApiController@deletePluginConfig');
+        $this->router->map('POST',   '/api/v1/clients/[i:id]/plugin-configs/[i:configId]/test', 'Api\\AdminApiController@testPluginConfig');
+        $this->router->map('GET',    '/api/v1/clients/[i:id]/install', 'Api\\AdminApiController@clientInstall');
+        $this->router->map('GET',    '/api/v1/clients/[i:id]/stats', 'Api\\AdminApiController@clientStats');
+        $this->router->map('POST',   '/api/v1/clients/[i:id]/repositories/[i:repoId]/check', 'Api\\AdminApiController@checkRepository');
         $this->router->map('GET', '/api/v1/storage', 'Api\\AdminApiController@listStorageLocations');
         $this->router->map('POST', '/api/v1/storage', 'Api\\AdminApiController@createStorageLocation');
         $this->router->map('GET', '/api/v1/storage/capacity', 'Api\\AdminApiController@getStorageCapacity');

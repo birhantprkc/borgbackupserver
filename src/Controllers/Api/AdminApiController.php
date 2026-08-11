@@ -1130,17 +1130,33 @@ class AdminApiController extends Controller
         // Locked archives (legal hold, #314) block deletion — matches the web UI.
         $lockedCount = $this->db->fetchOne("SELECT COUNT(*) as cnt FROM archives WHERE repository_id = ? AND locked = 1", [$repoId]);
         if ((int) ($lockedCount['cnt'] ?? 0) > 0) {
-            $this->json(['error' => 'Cannot delete — repository contains locked archives. Unlock them first.'], 409);
+            $this->json([
+                'error' => 'Cannot delete — repository contains locked archives. Unlock them first.',
+                'reason' => 'locked_archives',
+                'locked_archives' => (int) ($lockedCount['cnt'] ?? 0),
+            ], 409);
         }
 
-        $planCount = $this->db->fetchOne("SELECT COUNT(*) as cnt FROM backup_plans WHERE repository_id = ?", [$repoId]);
-        if ((int) ($planCount['cnt'] ?? 0) > 0) {
-            $this->json(['error' => 'Cannot delete — repository has backup plans attached. Delete the plans first.'], 409);
+        // Name the plans rather than just refusing: a caller can then offer to
+        // open them instead of leaving someone guessing why nothing happened.
+        $plans = $this->db->fetchAll(
+            "SELECT id, name FROM backup_plans WHERE repository_id = ? ORDER BY name",
+            [$repoId]
+        );
+        if (!empty($plans)) {
+            $this->json([
+                'error' => sprintf('In use by %d backup plan(s)', count($plans)),
+                'reason' => 'plans_attached',
+                'plans' => array_map(fn($p) => ['id' => (int) $p['id'], 'name' => $p['name']], $plans),
+            ], 409);
         }
 
         $activeJobs = $this->db->fetchOne("SELECT COUNT(*) as cnt FROM backup_jobs WHERE repository_id = ? AND status IN ('queued', 'sent', 'running')", [$repoId]);
         if ((int) ($activeJobs['cnt'] ?? 0) > 0) {
-            $this->json(['error' => 'Cannot delete — repository has active jobs'], 409);
+            $this->json([
+                'error' => 'Cannot delete — repository has active jobs',
+                'reason' => 'active_jobs',
+            ], 409);
         }
 
         // ?keep_data=1 (or JSON body {"keep_data": true}): unlink only — keep
@@ -1494,9 +1510,21 @@ class AdminApiController extends Controller
         $where = "bj.agent_id = ?";
         $params = [$id];
 
+        // Accepts one status or a comma-separated list ("completed,failed").
+        // A caller plotting finished jobs shouldn't have to over-fetch and
+        // discard: results are ordered by queued_at, so a long backlog would
+        // otherwise return queued rows ahead of the completed ones it wants.
         if ($status) {
-            $where .= " AND bj.status = ?";
-            $params[] = $status;
+            $valid = ['queued', 'sent', 'running', 'completed', 'failed', 'cancelled'];
+            $wanted = array_values(array_intersect(
+                array_map('trim', explode(',', (string) $status)),
+                $valid
+            ));
+            if (empty($wanted)) {
+                $this->json(['error' => 'status must be one or more of: ' . implode(', ', $valid)], 400);
+            }
+            $where .= " AND bj.status IN (" . implode(',', array_fill(0, count($wanted), '?')) . ")";
+            $params = array_merge($params, $wanted);
         }
 
         $jobs = $this->db->fetchAll("
@@ -3345,6 +3373,376 @@ class AdminApiController extends Controller
         $this->requireApiAuth();
         $result = (new \BBS\Services\HealthService())->check();
         $this->json($result, $result['status'] === \BBS\Services\HealthService::CRITICAL ? 503 : 200);
+    }
+
+    // ── Client detail: install, plugin config writes, repo check, stats ──
+
+    /**
+     * GET /api/v1/clients/{id}/install — the agent install command.
+     *
+     * This is the one endpoint that returns an agent's api_key to a mobile
+     * token. It is an install-time enrolment credential, already shown in the
+     * web UI to any admin who opens the client page, and withholding it here
+     * would make the install screen useless without protecting anything the
+     * web does not already expose.
+     *
+     * That is a deliberate exception, kept narrow: admin-only, only when asked
+     * for explicitly, and nowhere else. getClient() still strips api_key for
+     * mobile tokens, and no list endpoint returns it.
+     */
+    public function clientInstall(int $id): void
+    {
+        $this->requireApiAdmin();
+
+        $agent = $this->db->fetchOne("SELECT * FROM agents WHERE id = ?", [$id]);
+        if (!$agent) {
+            $this->json(['error' => 'Client not found'], 404);
+        }
+
+        $apiKey = $this->resolveAgentApiKey($agent);
+        $appUrl = rtrim(\BBS\Core\Config::get('APP_URL', ''), '/');
+        if ($appUrl === '') {
+            $hostRow = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_host'");
+            $host = $hostRow['value'] ?? '';
+            $appUrl = $host !== '' ? 'https://' . $host : '';
+        }
+
+        $platform = strtolower((string) ($agent['platform'] ?? ''));
+        $osInfo = strtolower((string) ($agent['os_info'] ?? ''));
+        $isWindows = str_contains($platform, 'win') || str_contains($osInfo, 'windows');
+        $osHint = $isWindows ? 'windows' : (str_contains($osInfo, 'darwin') || str_contains($osInfo, 'mac') ? 'macos' : 'linux');
+
+        // Assembled here so a caller never builds it from parts and gets a
+        // flag wrong.
+        if ($appUrl === '' || !$apiKey) {
+            $command = null;
+        } elseif ($isWindows) {
+            $command = sprintf(
+                'powershell -ExecutionPolicy Bypass -Command "irm %s/get-agent-windows | iex" -Server %s -Key %s',
+                $appUrl, $appUrl, $apiKey
+            );
+        } else {
+            $command = sprintf(
+                'curl -s %s/get-agent | sudo bash -s -- --server %s --key %s',
+                $appUrl, $appUrl, $apiKey
+            );
+        }
+
+        $this->json([
+            'command' => $command,
+            'api_key' => $apiKey,
+            'server_url' => $appUrl ?: null,
+            'os_hint' => $osHint,
+            'status' => $agent['status'],
+        ]);
+    }
+
+    /**
+     * The stored key, whichever form this install keeps it in.
+     */
+    private function resolveAgentApiKey(array $agent): ?string
+    {
+        if (!empty($agent['api_key'])) {
+            return $agent['api_key'];
+        }
+        if (!empty($agent['api_key_encrypted'])) {
+            try {
+                return Encryption::decrypt($agent['api_key_encrypted']);
+            } catch (\Exception $e) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * PUT /api/v1/clients/{id}/plugin-configs/{configId}
+     *
+     * Unlike the install key, plugin secrets are not an exception: a value is
+     * accepted on write and never returned, and an omitted field keeps what is
+     * stored rather than clearing it.
+     */
+    public function updatePluginConfig(int $id, int $configId): void
+    {
+        $this->requireApiToken();
+        $input = $this->getJsonInput();
+
+        $existing = $this->db->fetchOne(
+            "SELECT pc.*, p.slug FROM plugin_configs pc
+             JOIN plugins p ON p.id = pc.plugin_id
+             WHERE pc.id = ? AND pc.agent_id = ?",
+            [$configId, $id]
+        );
+        if (!$existing) {
+            $this->json(['error' => 'Plugin configuration not found for this client'], 404);
+        }
+
+        $data = [];
+        if (array_key_exists('name', $input)) {
+            $name = trim((string) $input['name']);
+            if ($name === '') {
+                $this->json(['error' => 'name cannot be empty'], 422);
+            }
+            $clash = $this->db->fetchOne(
+                "SELECT id FROM plugin_configs WHERE agent_id = ? AND plugin_id = ? AND name = ? AND id != ?",
+                [$id, $existing['plugin_id'], $name, $configId]
+            );
+            if ($clash) {
+                $this->json(['error' => "A config named \"{$name}\" already exists for this plugin"], 409);
+            }
+            $data['name'] = $name;
+        }
+
+        if (isset($input['config']) && is_array($input['config'])) {
+            $stored = json_decode($existing['config'] ?? '{}', true) ?: [];
+            $schema = (new \BBS\Services\PluginManager())->getPluginSchema($existing['slug']);
+            foreach ($input['config'] as $field => $value) {
+                if (!empty($schema[$field]['sensitive'])) {
+                    // Empty means "leave it alone", not "clear it".
+                    if ($value === '' || $value === null) {
+                        continue;
+                    }
+                    $stored[$field] = Encryption::encrypt((string) $value);
+                    continue;
+                }
+                $stored[$field] = $value;
+            }
+            $data['config'] = json_encode($stored);
+        }
+
+        if (!empty($data)) {
+            $this->db->update('plugin_configs', $data, 'id = ?', [$configId]);
+        }
+
+        $this->json(['config' => $this->pluginConfigPayload($configId)]);
+    }
+
+    /**
+     * DELETE /api/v1/clients/{id}/plugin-configs/{configId}
+     */
+    public function deletePluginConfig(int $id, int $configId): void
+    {
+        $this->requireApiToken();
+
+        $existing = $this->db->fetchOne(
+            "SELECT id FROM plugin_configs WHERE id = ? AND agent_id = ?",
+            [$configId, $id]
+        );
+        if (!$existing) {
+            $this->json(['error' => 'Plugin configuration not found for this client'], 404);
+        }
+
+        // Same guard as the web: a config a repository still syncs through
+        // cannot be removed out from under it.
+        $inUse = $this->db->fetchAll(
+            "SELECT r.id, r.name FROM repository_s3_configs rsc
+             JOIN repositories r ON r.id = rsc.repository_id
+             WHERE rsc.plugin_config_id = ?",
+            [$configId]
+        );
+        if (!empty($inUse)) {
+            $this->json([
+                'error' => sprintf('In use by %d repository/repositories', count($inUse)),
+                'reason' => 'repositories_attached',
+                'repositories' => array_map(fn($r) => ['id' => (int) $r['id'], 'name' => $r['name']], $inUse),
+            ], 409);
+        }
+
+        $this->db->delete('backup_plan_plugins', 'plugin_config_id = ?', [$configId]);
+        $this->db->delete('plugin_configs', 'id = ?', [$configId]);
+        http_response_code(204);
+        exit;
+    }
+
+    /**
+     * POST /api/v1/clients/{id}/plugin-configs/{configId}/test
+     *
+     * S3 configurations are tested here and answer immediately; everything
+     * else has to run on the client, so it queues a job and the caller polls
+     * it like any other.
+     */
+    public function testPluginConfig(int $id, int $configId): void
+    {
+        $this->requireApiToken();
+
+        $config = $this->db->fetchOne(
+            "SELECT pc.*, p.slug FROM plugin_configs pc
+             JOIN plugins p ON p.id = pc.plugin_id
+             WHERE pc.id = ? AND pc.agent_id = ?",
+            [$configId, $id]
+        );
+        if (!$config) {
+            $this->json(['error' => 'Plugin configuration not found for this client'], 404);
+        }
+
+        if ($config['slug'] === 's3_sync') {
+            $configData = json_decode($config['config'] ?? '{}', true) ?: [];
+            $s3 = new \BBS\Services\S3SyncService();
+            $result = $s3->testConnection($s3->resolveCredentials($configData));
+            if (empty($result['success'])) {
+                $this->json(['status' => 'failed', 'error' => $result['error'] ?? 'Connection failed'], 502);
+            }
+            $this->json(['status' => 'completed', 'message' => 'Connection successful']);
+        }
+
+        $jobId = $this->db->insert('backup_jobs', [
+            'agent_id' => $id,
+            'task_type' => 'plugin_test',
+            'status' => 'queued',
+            'plugin_config_id' => $configId,
+        ]);
+        $this->db->insert('server_log', [
+            'agent_id' => $id,
+            'backup_job_id' => $jobId,
+            'level' => 'info',
+            'message' => "Plugin test queued (job #{$jobId}, config #{$configId})",
+        ]);
+
+        $this->json(['status' => 'queued', 'job_id' => (int) $jobId], 202);
+    }
+
+    /** One plugin config, with secrets reported as set/unset rather than returned. */
+    private function pluginConfigPayload(int $configId): array
+    {
+        $row = $this->db->fetchOne(
+            "SELECT pc.id, pc.name, pc.config, pc.created_at, p.slug, p.name AS plugin_name
+             FROM plugin_configs pc JOIN plugins p ON p.id = pc.plugin_id
+             WHERE pc.id = ?",
+            [$configId]
+        );
+        if (!$row) {
+            return [];
+        }
+        $config = json_decode($row['config'] ?? '{}', true) ?: [];
+        $schema = (new \BBS\Services\PluginManager())->getPluginSchema($row['slug']);
+        foreach ($schema as $field => $def) {
+            if (!empty($def['sensitive'])) {
+                $config[$field . '_set'] = !empty($config[$field]);
+                unset($config[$field]);
+            }
+        }
+        return [
+            'id' => (int) $row['id'],
+            'name' => $row['name'],
+            'plugin' => $row['slug'],
+            'plugin_name' => $row['plugin_name'],
+            'config' => $config,
+            'created_at' => $row['created_at'],
+        ];
+    }
+
+    /**
+     * POST /api/v1/clients/{id}/repositories/{repoId}/check — queue an
+     * integrity check, the web's Check button.
+     */
+    public function checkRepository(int $id, int $repoId): void
+    {
+        $ctx = $this->requireApiAuth();
+        if (!$this->apiCanAccessAgent($ctx, $id)) {
+            $this->json(['error' => 'Client not found'], 404);
+        }
+        if (!$this->apiHasPermission($ctx, \BBS\Services\PermissionService::REPO_MAINTENANCE, $id)) {
+            $this->json(['error' => 'Repository maintenance permission required'], 403);
+        }
+
+        $repo = $this->db->fetchOne(
+            "SELECT id, name FROM repositories WHERE id = ? AND agent_id = ?",
+            [$repoId, $id]
+        );
+        if (!$repo) {
+            $this->json(['error' => 'Repository not found'], 404);
+        }
+
+        $pending = $this->db->fetchOne(
+            "SELECT id FROM backup_jobs WHERE repository_id = ? AND task_type = 'repo_check'
+               AND status IN ('queued', 'sent', 'running')",
+            [$repoId]
+        );
+        if ($pending) {
+            $this->json([
+                'status' => 'already_queued',
+                'job_id' => (int) $pending['id'],
+                'message' => 'A check is already queued or running for this repository',
+            ], 409);
+        }
+
+        $jobId = $this->db->insert('backup_jobs', [
+            'agent_id' => $id,
+            'repository_id' => $repoId,
+            'task_type' => 'repo_check',
+            'status' => 'queued',
+        ]);
+        $this->db->insert('server_log', [
+            'agent_id' => $id,
+            'backup_job_id' => $jobId,
+            'level' => 'info',
+            'message' => "Repository check queued for \"{$repo['name']}\" (job #{$jobId})",
+        ]);
+
+        $this->json(['status' => 'queued', 'job_id' => (int) $jobId], 202);
+    }
+
+    /**
+     * GET /api/v1/clients/{id}/stats — the figures the web client page shows.
+     *
+     * A caller can derive these from /jobs, but then the two products can
+     * disagree about the same client whenever the windowing differs. Computed
+     * here so they don't.
+     */
+    public function clientStats(int $id): void
+    {
+        $ctx = $this->requireApiAuth();
+        if (!$this->apiCanAccessAgent($ctx, $id)) {
+            $this->json(['error' => 'Client not found'], 404);
+        }
+
+        $next = $this->db->fetchOne(
+            "SELECT s.next_run, bp.name AS plan_name
+             FROM schedules s JOIN backup_plans bp ON bp.id = s.backup_plan_id
+             WHERE bp.agent_id = ? AND s.enabled = 1 AND bp.enabled = 1 AND s.next_run IS NOT NULL
+             ORDER BY s.next_run ASC LIMIT 1",
+            [$id]
+        );
+
+        // Last 30 completed backups, the same sample the web page averages.
+        $durations = $this->db->fetchAll(
+            "SELECT duration_seconds FROM backup_jobs
+             WHERE agent_id = ? AND task_type = 'backup' AND status = 'completed'
+               AND duration_seconds IS NOT NULL AND duration_seconds > 0
+             ORDER BY completed_at DESC LIMIT 30",
+            [$id]
+        );
+        $avg = count($durations)
+            ? (int) round(array_sum(array_column($durations, 'duration_seconds')) / count($durations))
+            : null;
+
+        $outcomes = $this->db->fetchAll(
+            "SELECT status, COUNT(*) c FROM backup_jobs
+             WHERE agent_id = ? AND task_type = 'backup' AND status IN ('completed', 'failed')
+               AND completed_at > DATE_SUB(NOW(), INTERVAL 30 DAY)
+             GROUP BY status",
+            [$id]
+        );
+        $succeeded = $failed = 0;
+        foreach ($outcomes as $o) {
+            if ($o['status'] === 'completed') $succeeded = (int) $o['c'];
+            else $failed = (int) $o['c'];
+        }
+
+        $errors7d = (int) ($this->db->fetchOne(
+            "SELECT COUNT(*) c FROM backup_jobs
+             WHERE agent_id = ? AND status = 'failed'
+               AND completed_at > DATE_SUB(NOW(), INTERVAL 7 DAY)",
+            [$id]
+        )['c'] ?? 0);
+
+        $this->json([
+            'next_backup' => $next ? ['at' => $next['next_run'], 'plan_name' => $next['plan_name']] : null,
+            'avg_duration_seconds' => $avg,
+            'sample_size' => count($durations),
+            'success_rate' => ['succeeded' => $succeeded, 'total' => $succeeded + $failed],
+            'errors_7d' => $errors7d,
+        ]);
     }
 
     public function registerPush(): void
