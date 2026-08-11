@@ -29,6 +29,11 @@ $updateAvailable = $updateService->isUpdateAvailable();
         </a>
     </li>
     <li class="nav-item">
+        <a class="nav-link <?= $activeTab === 'push_service' ? 'active' : '' ?>" href="/settings?tab=push_service">
+            <i class="bi bi-broadcast me-1"></i><span class="tab-label"><span class="d-none d-sm-inline">Push Service</span><span class="d-sm-none">Service</span></span>
+        </a>
+    </li>
+    <li class="nav-item">
         <a class="nav-link <?= $activeTab === 'templates' ? 'active' : '' ?>" href="/settings?tab=templates">
             <i class="bi bi-clipboard-check me-1"></i><span class="tab-label">Templates</span>
         </a>
@@ -1264,11 +1269,16 @@ function updateBuiltUrl(containerId, schema, prefix) {
     }
 })();
 </script>
+<?php endif; ?>
+
+
+<!-- Push Service Tab -->
+<?php if ($activeTab === 'push_service'): ?>
 <?php
-// Push notification service — separate from the Apprise services above, which
-// deliver to chat/webhook targets and talk to those providers directly. Kept
-// at the end of the tab: it is groundwork for a feature that isn't finished,
-// so it should not be the first thing on the page.
+// Push notification service. Its own tab rather than sharing one with the
+// Apprise services: those deliver to chat and webhook targets and contact
+// those providers directly, which is a different thing entirely, and putting
+// unfinished groundwork next to them invited confusion.
 $pushSvc = new \BBS\Services\PushService();
 $pushOn = $pushSvc->isEnabled();
 $pushRegistered = (bool) $pushSvc->serverId();
@@ -1293,21 +1303,6 @@ $pushRegistered = (bool) $pushSvc->serverId();
             webhook targets and contact those providers directly.
         </p>
 
-        <div class="alert alert-secondary small">
-            <strong>What leaves this server when enabled.</strong> On registration:
-            a random identifier for this installation, this server's hostname and its version.
-            When a device registers: the identifier the device supplies, its notification token
-            and the numeric id of the user it belongs to. When an alert is sent: the device
-            identifiers to notify, the event name, and the job and client numbers so the
-            notification can link back here.
-            <br><br>
-            <strong>What never leaves.</strong> Client names, hostnames, file paths, error text
-            and repository details. Notification text is generic — the details are fetched from
-            this server when the notification is opened. No usernames or email addresses are sent.
-            <br><br>
-            Nothing is contacted until you enable this, and disabling stops all delivery.
-        </div>
-
         <form method="POST" action="/settings/push">
             <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
             <div class="form-check form-switch mb-3">
@@ -1326,7 +1321,6 @@ $pushRegistered = (bool) $pushSvc->serverId();
                 <input type="text" class="form-control form-control-sm" name="push_relay_url"
                        value="<?= htmlspecialchars($settings['push_relay_url'] ?? 'https://push.borgbackupserver.com') ?>"
                        style="max-width: 420px;">
-                <div class="form-text">Leave as-is unless you have been told otherwise.</div>
             </div>
 
             <div class="mb-3 small">
