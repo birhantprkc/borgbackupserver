@@ -1051,61 +1051,17 @@ class ClientController extends Controller
             $this->json(['error' => 'Archive not found'], 404);
         }
 
-        $data = $archive['databases_backed_up'] ? json_decode($archive['databases_backed_up'], true) : null;
+        // Normalising the stored shape and resolving dump timestamps is shared
+        // with the API — see ArchiveDatabaseService.
+        $groups = (new \BBS\Services\ArchiveDatabaseService())
+            ->groups($id, $archive_id, $archive['databases_backed_up']);
 
-        // Normalize into groups so multiple database configs — including two of
-        // the same engine — each restore independently (#382). New format is
-        // {"version":2,"groups":[...]}; older archives store a single flat
-        // object, which we wrap as one group.
-        $groups = [];
-        if (is_array($data) && !empty($data['groups'])) {
-            $groups = $data['groups'];
-        } elseif (is_array($data) && !empty($data['databases'])) {
-            $dumpDir = $data['dump_dir'] ?? null;
-            if (!$dumpDir) {
-                $pluginManager = new \BBS\Services\PluginManager();
-                foreach ($pluginManager->getPluginConfigs($id) as $c) {
-                    if (in_array($c['slug'], ['mysql_dump', 'pg_dump'])) {
-                        $cfgData = json_decode($c['config'] ?? '{}', true);
-                        if (!empty($cfgData['dump_dir'])) { $dumpDir = rtrim($cfgData['dump_dir'], '/'); break; }
-                    }
-                }
-            }
-            $groups = [[
-                'config_id' => null,
-                'config_name' => null,
-                'engine' => null,
-                'dump_dir' => $dumpDir,
-                'databases' => $data['databases'],
-                'per_database' => $data['per_database'] ?? true,
-                'compress' => $data['compress'] ?? true,
-            ]];
-        }
-
-        // Resolve dump-file mtimes from the file catalog, per group's dump dir.
+        // The service returns raw timestamps; this page shows them in the
+        // viewer's timezone.
         foreach ($groups as &$g) {
-            $g['mtimes'] = [];
-            $dumpDir = rtrim($g['dump_dir'] ?? '', '/');
-            $dbs = $g['databases'] ?? [];
-            if ($dumpDir === '' || empty($dbs)) continue;
-            $compress = $g['compress'] ?? true;
-            $patterns = [];
-            foreach ($dbs as $db) {
-                $patterns[] = $dumpDir . '/' . $db . ($compress ? '.sql.gz' : '.sql');
+            foreach (($g['mtimes'] ?? []) as $dbName => $mtime) {
+                $g['mtimes'][$dbName] = $mtime ? \BBS\Core\TimeHelper::format($mtime, 'M j, Y g:i A') : null;
             }
-            try {
-                $ch = \BBS\Core\ClickHouse::getInstance();
-                $pathList = implode(', ', array_map(fn($p) => "'" . str_replace(["\\", "'"], ["\\\\", "\\'"], $p) . "'", $patterns));
-                $rows = $ch->fetchAll("
-                    SELECT path, toString(mtime) as mtime
-                    FROM file_catalog
-                    WHERE agent_id = {$id} AND archive_id = {$archive_id} AND path IN ({$pathList})
-                ");
-                foreach ($rows as $row) {
-                    $dbName = preg_replace('/\\.sql(\\.gz)?$/', '', basename($row['path']));
-                    $g['mtimes'][$dbName] = $row['mtime'] ? \BBS\Core\TimeHelper::format($row['mtime'], 'M j, Y g:i A') : null;
-                }
-            } catch (\Exception $e) { /* catalog unavailable — mtimes optional */ }
         }
         unset($g);
 

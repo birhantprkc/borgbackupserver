@@ -1220,12 +1220,17 @@ class AdminApiController extends Controller
         }
 
         $rows = $this->db->fetchAll(
-            "SELECT id, archive_name, file_count, original_size, deduplicated_size, locked, created_at
+            "SELECT id, archive_name, file_count, original_size, deduplicated_size, locked, created_at,
+                    databases_backed_up IS NOT NULL AND databases_backed_up != '' AS has_databases
              FROM archives WHERE repository_id = ? ORDER BY created_at DESC",
             [$repoId]
         );
         $archives = array_map(static function ($a) {
             return [
+                // Lets a caller show only the restore points a database
+                // restore can actually use, instead of offering every archive
+                // and failing once one is chosen.
+                'has_databases'     => (bool) $a['has_databases'],
                 'id'                => (int) $a['id'],
                 'name'              => $a['archive_name'],
                 'file_count'        => (int) $a['file_count'],
@@ -3559,6 +3564,67 @@ class AdminApiController extends Controller
 
         $this->json(['results' => $results, 'truncated' => $truncated,
                      'catalog' => ['status' => 'ready']]);
+    }
+
+    /**
+     * GET /api/v1/clients/{id}/repositories/{repoId}/archives/{archiveId}/databases
+     *
+     * What a restore point actually contains. Without this a caller can pick
+     * an archive but has nothing to offer for "which databases", which is the
+     * step between choosing a restore point and starting the restore.
+     *
+     * Groups mirror the stored shape: several database configurations —
+     * including two of the same engine — restore independently.
+     */
+    public function listArchiveDatabases(int $id, int $repoId, int $archiveId): void
+    {
+        $ctx = $this->requireApiAuth();
+        if (!$this->apiCanAccessAgent($ctx, $id)) {
+            $this->json(['error' => 'Client not found'], 404);
+        }
+
+        $archive = $this->db->fetchOne(
+            "SELECT ar.id, ar.archive_name, ar.databases_backed_up, ar.created_at
+             FROM archives ar JOIN repositories r ON r.id = ar.repository_id
+             WHERE ar.id = ? AND ar.repository_id = ? AND r.agent_id = ?",
+            [$archiveId, $repoId, $id]
+        );
+        if (!$archive) {
+            $this->json(['error' => 'Archive not found'], 404);
+        }
+
+        $groups = (new \BBS\Services\ArchiveDatabaseService())
+            ->groups($id, $archiveId, $archive['databases_backed_up']);
+
+        // Which connector each group came from, so a caller can pre-select the
+        // right one rather than making someone match it up by name.
+        $out = [];
+        $all = [];
+        foreach ($groups as $g) {
+            $databases = array_values($g['databases'] ?? []);
+            foreach ($databases as $d) {
+                $all[$d] = true;
+            }
+            $out[] = [
+                'connector_id' => $g['config_id'] !== null ? (int) $g['config_id'] : null,
+                'connector_name' => $g['config_name'] ?? null,
+                'engine' => $g['engine'] ?? null,
+                'databases' => $databases,
+                'per_database' => (bool) ($g['per_database'] ?? true),
+                'compress' => (bool) ($g['compress'] ?? true),
+                // Naive UTC, like every other datetime here.
+                'dumped_at' => (object) array_map(fn($m) => $m ?: null, $g['mtimes'] ?? []),
+            ];
+        }
+
+        $this->json([
+            'archive_id' => (int) $archive['id'],
+            'archive_name' => $archive['archive_name'],
+            'backed_up_at' => $archive['created_at'],
+            'has_databases' => !empty($all),
+            'databases' => array_keys($all),
+            'groups' => $out,
+        ]);
     }
 
     /**

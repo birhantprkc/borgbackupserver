@@ -314,6 +314,7 @@ class App
         $this->router->map('PUT', '/api/v1/clients/[i:id]/repositories/[i:repoId]', 'Api\\AdminApiController@renameRepository');
         $this->router->map('DELETE', '/api/v1/clients/[i:id]/repositories/[i:repoId]', 'Api\\AdminApiController@deleteRepository');
         $this->router->map('GET', '/api/v1/clients/[i:id]/repositories/[i:repoId]/archives', 'Api\\AdminApiController@listArchives');
+        $this->router->map('GET', '/api/v1/clients/[i:id]/repositories/[i:repoId]/archives/[i:archiveId]/databases', 'Api\\AdminApiController@listArchiveDatabases');
         $this->router->map('POST', '/api/v1/clients/[i:id]/repositories/[i:repoId]/archives/[i:archiveId]/lock', 'Api\\AdminApiController@setArchiveLock');
         $this->router->map('GET', '/api/v1/clients/[i:id]/plans', 'Api\\AdminApiController@listPlans');
         $this->router->map('POST', '/api/v1/clients/[i:id]/plans', 'Api\\AdminApiController@createPlan');
