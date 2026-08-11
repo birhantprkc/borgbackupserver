@@ -180,6 +180,7 @@ class App
         $this->router->map('POST', '/settings/templates/[i:id]/edit', 'SettingsController@editTemplate');
         $this->router->map('POST', '/settings/templates/[i:id]/delete', 'SettingsController@deleteTemplate');
         $this->router->map('POST', '/settings/branding', 'SettingsController@saveBranding');
+        $this->router->map('POST', '/settings/push', 'SettingsController@savePush');
 
         // Branding icon dispenser — single-source app icon resized on demand
         // (favicons, apple-touch-icon, PWA tiles all served from one upload).

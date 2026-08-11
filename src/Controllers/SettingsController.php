@@ -435,6 +435,42 @@ class SettingsController extends Controller
         ]);
     }
 
+    /**
+     * POST /settings/push — opt in or out of the push notification service.
+     *
+     * Deliberately an explicit action rather than something that happens on
+     * its own. Delivery is brokered by an external service, so the first
+     * contact with it — and everything that leaves this server as a result —
+     * happens only when an administrator asks for it.
+     */
+    public function savePush(): void
+    {
+        $this->requireAdmin();
+        $this->verifyCsrf();
+
+        $push = new \BBS\Services\PushService();
+        $wantEnabled = !empty($_POST['push_enabled']);
+
+        if (!$wantEnabled) {
+            $push->disable();
+            $this->flash('success', 'Push notifications disabled. Nothing further is sent to the push notification service.');
+            $this->redirect('/settings?tab=push');
+            return;
+        }
+
+        // Turn it on first: registration checks the flag before contacting
+        // anything, so a failure leaves it on and retryable rather than
+        // silently reverting.
+        $this->saveSetting('push_enabled', '1');
+        if (!empty($_POST['push_relay_url'])) {
+            $this->saveSetting('push_relay_url', rtrim(trim($_POST['push_relay_url']), '/'));
+        }
+
+        [$ok, $message] = $push->registerInstall();
+        $this->flash($ok ? 'success' : 'danger', $message);
+        $this->redirect('/settings?tab=push');
+    }
+
     public function testSmtp(): void
     {
         $this->requireAdmin();

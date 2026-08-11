@@ -451,6 +451,79 @@ $updateAvailable = $updateService->isUpdateAvailable();
 <!-- Push Notifications Tab -->
 <?php if ($activeTab === 'push'): ?>
 <?php
+// Push notification service — separate from the Apprise services below, which
+// deliver to chat/webhook targets and talk to those providers directly.
+$pushSvc = new \BBS\Services\PushService();
+$pushOn = $pushSvc->isEnabled();
+$pushRegistered = (bool) $pushSvc->serverId();
+?>
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header fw-semibold">
+        <i class="bi bi-broadcast me-1"></i> Push Notification Service
+    </div>
+    <div class="card-body">
+        <p class="text-muted small mb-3">
+            Delivers alerts to registered devices through an external notification service.
+            This is separate from the notification services below, which deliver to chat and
+            webhook targets and contact those providers directly.
+        </p>
+
+        <div class="alert alert-secondary small">
+            <strong>What leaves this server when enabled.</strong> On registration:
+            a random identifier for this installation, this server's hostname and its version.
+            When a device registers: the identifier the device supplies, its notification token
+            and the numeric id of the user it belongs to. When an alert is sent: the device
+            identifiers to notify, the event name, and the job and client numbers so the
+            notification can link back here.
+            <br><br>
+            <strong>What never leaves.</strong> Client names, hostnames, file paths, error text
+            and repository details. Notification text is generic — the details are fetched from
+            this server when the notification is opened. No usernames or email addresses are sent.
+            <br><br>
+            Nothing is contacted until you enable this, and disabling stops all delivery.
+        </div>
+
+        <form method="POST" action="/settings/push">
+            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+            <div class="form-check form-switch mb-3">
+                <input class="form-check-input" type="checkbox" role="switch"
+                       id="push_enabled" name="push_enabled" value="1" <?= $pushOn ? 'checked' : '' ?>>
+                <label class="form-check-label fw-semibold" for="push_enabled">
+                    Register with Push Notification Service
+                </label>
+                <div class="form-text">
+                    Enabling registers this server with the service and allows devices to receive alerts.
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label small text-muted">Service URL</label>
+                <input type="text" class="form-control form-control-sm" name="push_relay_url"
+                       value="<?= htmlspecialchars($settings['push_relay_url'] ?? 'https://push.borgbackupserver.com') ?>"
+                       style="max-width: 420px;">
+                <div class="form-text">Leave as-is unless you have been told otherwise.</div>
+            </div>
+
+            <div class="mb-3 small">
+                Status:
+                <?php if ($pushOn && $pushRegistered): ?>
+                    <span class="badge bg-success">Registered</span>
+                <?php elseif ($pushOn): ?>
+                    <span class="badge bg-warning text-dark">Enabled, not registered</span>
+                    <span class="text-muted ms-1">Save to retry registration.</span>
+                <?php else: ?>
+                    <span class="badge bg-secondary">Disabled</span>
+                <?php endif; ?>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-sm">
+                <i class="bi bi-check-lg me-1"></i> Save
+            </button>
+        </form>
+    </div>
+</div>
+
+<?php
 // Event types grouped by category
 $eventGroups = [
     'Backups' => [

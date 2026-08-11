@@ -192,15 +192,23 @@ class PushService
     }
 
     /**
-     * Register this install with the relay, or confirm an existing
-     * registration. Idempotent by `install_id`: coming back with the same one
-     * returns the same identity rather than rotating the key, so a staging
-     * copy of a database cannot silently deregister production.
+     * Register this install with the service, or confirm an existing
+     * registration.
+     *
+     * Registration is idempotent by `install_id`, and the key comes back on
+     * the FIRST registration only — a repeat returns the same `server_id` with
+     * a null key and `already_registered`. That is deliberate: it stops a
+     * restored database coming up as a second install and silently
+     * deregistering the original. It also means the key must be persisted on
+     * the first call, so this saves whatever it is given immediately and never
+     * overwrites a stored key with a null one.
+     *
+     * Returns [ok, message] so the caller can say what happened.
      */
-    public function registerInstall(): bool
+    public function registerInstall(): array
     {
-        if (!$this->isEnabled() || $this->breakerOpen()) {
-            return false;
+        if (!$this->isEnabled()) {
+            return [false, 'Push notifications are switched off.'];
         }
 
         $result = $this->request('POST', '/v1/servers/register', [
@@ -209,13 +217,42 @@ class PushService
             'hostname' => $this->setting('server_host', '') ?: '',
         ], false);
 
-        if (!$result || empty($result['server_id']) || empty($result['serverkey'])) {
-            return false;
+        if ($result === null) {
+            return [false, 'Could not reach the push notification service. Check outbound HTTPS access, then try again.'];
+        }
+        if (empty($result['server_id'])) {
+            return [false, 'The push notification service did not return a server id.'];
         }
 
         $this->saveSetting('push_server_id', (string) $result['server_id']);
-        $this->saveSetting('push_serverkey', Encryption::encrypt((string) $result['serverkey']));
-        return true;
+
+        // A key is only issued once. Save it the moment it arrives.
+        if (!empty($result['serverkey'])) {
+            $this->saveSetting('push_serverkey', Encryption::encrypt((string) $result['serverkey']));
+            return [true, 'Registered with the push notification service.'];
+        }
+
+        // No key in the response: this install has registered before. Fine if
+        // we still hold the key; unrecoverable here if we don't, since issuing
+        // a replacement requires presenting the old one.
+        if ($this->serverKey()) {
+            return [true, 'Already registered — existing credentials confirmed.'];
+        }
+
+        return [false, 'This server has registered before but its credentials are missing, '
+                     . 'and a replacement can only be issued using the old key. Contact support to reset this registration.'];
+    }
+
+    /**
+     * Stop participating: forget the credentials so nothing can be sent, and
+     * drop anything queued. The registration itself is left alone at the
+     * service — re-enabling reuses the same identity rather than creating a
+     * second one.
+     */
+    public function disable(): void
+    {
+        $this->saveSetting('push_enabled', '0');
+        $this->db->query("DELETE FROM push_queue");
     }
 
     /** Hand a device registration to the relay. Best-effort. */
