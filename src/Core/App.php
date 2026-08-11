@@ -334,6 +334,10 @@ class App
         $this->router->map('POST',   '/api/v1/clients/[i:id]/plugin-configs/[i:configId]/test', 'Api\\AdminApiController@testPluginConfig');
         $this->router->map('GET',    '/api/v1/clients/[i:id]/install', 'Api\\AdminApiController@clientInstall');
         $this->router->map('GET',    '/api/v1/clients/[i:id]/stats', 'Api\\AdminApiController@clientStats');
+        $this->router->map('GET',  '/api/v1/clients/[i:id]/catalog/search', 'Api\\AdminApiController@catalogSearch');
+        $this->router->map('GET',  '/api/v1/clients/[i:id]/db-connectors', 'Api\\AdminApiController@listDbConnectors');
+        $this->router->map('POST', '/api/v1/clients/[i:id]/restore-db', 'Api\\AdminApiController@restoreDatabase');
+        $this->router->map('POST', '/api/v1/clients/[i:id]/download', 'Api\\AdminApiController@downloadArchive');
         $this->router->map('POST',   '/api/v1/clients/[i:id]/repositories/[i:repoId]/check', 'Api\\AdminApiController@checkRepository');
         $this->router->map('GET', '/api/v1/storage', 'Api\\AdminApiController@listStorageLocations');
         $this->router->map('POST', '/api/v1/storage', 'Api\\AdminApiController@createStorageLocation');

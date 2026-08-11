@@ -3170,7 +3170,13 @@ class AdminApiController extends Controller
 
         $ch = \BBS\Core\ClickHouse::getInstance();
         if (!$ch->isAvailable()) {
-            $this->json(['error' => 'File catalog is unavailable on this server'], 503);
+            // Reported as state rather than an error: "unavailable" and "this
+            // archive has nothing in it" must not look the same to a caller.
+            $this->json([
+                'path' => (string) ($_GET['path'] ?? ''),
+                'dirs' => [], 'files' => [], 'next_cursor' => null,
+                'catalog' => ['status' => 'unavailable', 'synced_at' => null],
+            ]);
         }
 
         $prefix = $_GET['path'] ?? '/';
@@ -3236,7 +3242,47 @@ class AdminApiController extends Controller
             'dirs' => $directories,
             'files' => $files,
             'next_cursor' => $nextCursor,
+            // An archive with no catalog rows has either not been catalogued
+            // yet or genuinely holds nothing; a caller showing an empty list
+            // for the first case reads as "this backup is empty", which is
+            // alarming and wrong.
+            'catalog' => $this->catalogState($id, $archiveId),
         ]);
+    }
+
+    /**
+     * Whether this archive's file catalog is ready, still building, or absent.
+     */
+    private function catalogState(int $agentId, int $archiveId): array
+    {
+        try {
+            $ch = \BBS\Core\ClickHouse::getInstance();
+            $row = $ch->fetchOne(
+                "SELECT count() AS c FROM file_catalog
+                 WHERE agent_id = {$agentId} AND archive_id = {$archiveId}"
+            );
+            if ((int) ($row['c'] ?? 0) > 0) {
+                return ['status' => 'ready', 'synced_at' => null];
+            }
+        } catch (\Exception $e) {
+            return ['status' => 'unavailable', 'synced_at' => null];
+        }
+
+        // Nothing catalogued. A queued or running catalog job means it is on
+        // its way; otherwise it has simply never been built.
+        $pending = $this->db->fetchOne(
+            "SELECT id FROM backup_jobs
+             WHERE agent_id = ? AND task_type IN ('catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full')
+               AND status IN ('queued', 'sent', 'running')
+             ORDER BY id DESC LIMIT 1",
+            [$agentId]
+        );
+
+        return [
+            'status' => 'pending',
+            'synced_at' => null,
+            'job_id' => $pending ? (int) $pending['id'] : null,
+        ];
     }
 
     /**
@@ -3373,6 +3419,281 @@ class AdminApiController extends Controller
         $this->requireApiAuth();
         $result = (new \BBS\Services\HealthService())->check();
         $this->json($result, $result['status'] === \BBS\Services\HealthService::CRITICAL ? 503 : 200);
+    }
+
+    // ── Restore: search, download, database restore ─────────────────
+
+    /**
+     * POST /api/v1/clients/{id}/download
+     * Body: {"archive_id": N, "paths": ["/etc/nginx", ...]}
+     *
+     * Streams the selection back as a .tar.gz, the same way the web page
+     * does — same extraction, same staging, same disk pre-flight, because it
+     * is the same service underneath.
+     *
+     * Errors come back as JSON, but only before streaming starts. Once the
+     * body is flowing the status is already sent, so a mid-transfer failure
+     * can only truncate the download; the file itself is verified by the
+     * extraction before a byte is written.
+     */
+    public function downloadArchive(int $id): void
+    {
+        $ctx = $this->requireApiAuth();
+        if (!$this->apiCanAccessAgent($ctx, $id)) {
+            $this->json(['error' => 'Client not found'], 404);
+        }
+        if (!$this->apiHasPermission($ctx, \BBS\Services\PermissionService::RESTORE, $id)) {
+            $this->json(['error' => 'You do not have permission to restore on this client'], 403);
+        }
+
+        $input = $this->getJsonInput();
+        $archiveId = (int) ($input['archive_id'] ?? ($_GET['archive_id'] ?? 0));
+        $paths = is_array($input['paths'] ?? null) ? $input['paths'] : [];
+        if (!$archiveId) {
+            $this->json(['error' => 'archive_id is required'], 400);
+        }
+
+        $agent = $this->db->fetchOne("SELECT * FROM agents WHERE id = ?", [$id]);
+        $archive = (new \BBS\Controllers\ClientController())->loadArchiveForDownload($archiveId, $id);
+        if (!$agent || !$archive) {
+            $this->json(['error' => 'Archive not found'], 404);
+        }
+
+        try {
+            (new \BBS\Services\ArchiveDownloadService())->stream($agent, $archive, $paths);
+        } catch (\BBS\Services\InsufficientSpaceException $e) {
+            // Reported with the figures so a caller can say how much is needed
+            // rather than only that it failed.
+            $this->json([
+                'error' => $e->getMessage(),
+                'reason' => 'insufficient_space',
+                'needed_bytes' => $e->neededBytes,
+                'free_bytes' => $e->freeBytes,
+            ], 507);
+        } catch (\Exception $e) {
+            $this->json(['error' => 'Download failed: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * GET /api/v1/clients/{id}/catalog/search?q=&archive_id=&limit=
+     *
+     * Search is how anyone finds a file on a small screen — nobody taps
+     * through fourteen levels of /var/www/vhosts. Reads the pre-built
+     * ClickHouse catalog, so it is a lookup rather than a walk of the archive.
+     *
+     * `archive_id` optional: omitted searches every restore point, which
+     * answers "which backup still has this file?".
+     */
+    public function catalogSearch(int $id): void
+    {
+        $ctx = $this->requireApiAuth();
+        if (!$this->apiCanAccessAgent($ctx, $id)) {
+            $this->json(['error' => 'Client not found'], 404);
+        }
+
+        $q = trim((string) ($_GET['q'] ?? ''));
+        if ($q === '') {
+            $this->json(['error' => 'q is required'], 400);
+        }
+        $limit = max(1, min(200, (int) ($_GET['limit'] ?? 100)));
+        $archiveId = isset($_GET['archive_id']) ? (int) $_GET['archive_id'] : 0;
+
+        $ch = \BBS\Core\ClickHouse::getInstance();
+        if (!$ch->isAvailable()) {
+            $this->json(['results' => [], 'truncated' => false,
+                         'catalog' => ['status' => 'unavailable']]);
+        }
+
+        if ($archiveId > 0) {
+            $owns = $this->db->fetchOne(
+                "SELECT ar.id FROM archives ar JOIN repositories r ON r.id = ar.repository_id
+                 WHERE ar.id = ? AND r.agent_id = ?",
+                [$archiveId, $id]
+            );
+            if (!$owns) {
+                $this->json(['error' => 'Archive not found'], 404);
+            }
+        }
+
+        // Fetch one more than asked so "truncated" is accurate rather than a
+        // guess from a full page.
+        $fetch = $limit + 1;
+        $like = '%' . str_replace(['\\', "'", '%', '_'], ['\\\\', "\\'", '\\%', '\\_'], $q) . '%';
+        $scope = $archiveId > 0 ? " AND archive_id = {$archiveId}" : '';
+
+        $rows = $ch->fetchAll(
+            "SELECT path, file_name, file_size, archive_id, toString(mtime) AS mtime
+             FROM file_catalog
+             WHERE agent_id = {$id} AND status != 'D'{$scope}
+               AND (file_name LIKE ? OR path LIKE ?)
+             ORDER BY path
+             LIMIT {$fetch}",
+            [$like, $like]
+        );
+
+        $truncated = count($rows) > $limit;
+        $rows = array_slice($rows, 0, $limit);
+
+        // Name the restore point each hit came from — with no archive filter,
+        // "which backup has it" is the whole question.
+        $archiveNames = [];
+        $ids = array_values(array_unique(array_map(fn($r) => (int) $r['archive_id'], $rows)));
+        if (!empty($ids)) {
+            $ph = implode(',', array_fill(0, count($ids), '?'));
+            foreach ($this->db->fetchAll(
+                "SELECT id, archive_name FROM archives WHERE id IN ({$ph})", $ids
+            ) as $a) {
+                $archiveNames[(int) $a['id']] = $a['archive_name'];
+            }
+        }
+
+        $results = array_map(fn($r) => [
+            'file_path' => $r['path'],
+            'file_name' => $r['file_name'],
+            'file_size' => (int) $r['file_size'],
+            'mtime' => $r['mtime'],
+            'archive_id' => (int) $r['archive_id'],
+            'archive_name' => $archiveNames[(int) $r['archive_id']] ?? null,
+        ], $rows);
+
+        $this->json(['results' => $results, 'truncated' => $truncated,
+                     'catalog' => ['status' => 'ready']]);
+    }
+
+    /**
+     * GET /api/v1/clients/{id}/db-connectors
+     *
+     * The database plugin configurations a restore can target. Credentials
+     * are configuration secrets, so only what is needed to choose one is
+     * returned — never the password.
+     */
+    public function listDbConnectors(int $id): void
+    {
+        $ctx = $this->requireApiAuth();
+        if (!$this->apiCanAccessAgent($ctx, $id)) {
+            $this->json(['error' => 'Client not found'], 404);
+        }
+
+        $rows = $this->db->fetchAll(
+            "SELECT pc.id, pc.name, pc.config, p.slug
+             FROM plugin_configs pc JOIN plugins p ON p.id = pc.plugin_id
+             WHERE pc.agent_id = ? AND p.slug IN ('mysql_dump', 'pg_dump', 'mongo_dump')
+             ORDER BY p.slug, pc.name",
+            [$id]
+        );
+
+        $typeBySlug = ['mysql_dump' => 'mysql', 'pg_dump' => 'postgres', 'mongo_dump' => 'mongo'];
+        $connectors = [];
+        foreach ($rows as $r) {
+            $cfg = json_decode($r['config'] ?? '{}', true) ?: [];
+            $connectors[] = [
+                'id' => (int) $r['id'],
+                'name' => $r['name'],
+                'type' => $typeBySlug[$r['slug']] ?? $r['slug'],
+                'host' => $cfg['host'] ?? null,
+                'port' => isset($cfg['port']) ? (int) $cfg['port'] : null,
+                'database' => $cfg['database'] ?? null,
+            ];
+        }
+
+        $this->json(['connectors' => $connectors]);
+    }
+
+    /**
+     * POST /api/v1/clients/{id}/restore-db
+     * Body: {connector_id, archive_id, databases: [{name, mode, target_name?}]}
+     *
+     * One endpoint rather than three: the connector's type decides which task
+     * the agent runs, so a caller isn't switching on a string just to pick a
+     * URL.
+     */
+    public function restoreDatabase(int $id): void
+    {
+        $ctx = $this->requireApiAuth();
+        if (!$this->apiCanAccessAgent($ctx, $id)) {
+            $this->json(['error' => 'Client not found'], 404);
+        }
+        if (!$this->apiHasPermission($ctx, \BBS\Services\PermissionService::RESTORE, $id)) {
+            $this->json(['error' => 'You do not have permission to restore on this client'], 403);
+        }
+
+        $input = $this->getJsonInput();
+        $connectorId = (int) ($input['connector_id'] ?? 0);
+        $archiveId = (int) ($input['archive_id'] ?? 0);
+        $databases = is_array($input['databases'] ?? null) ? $input['databases'] : [];
+
+        if (!$connectorId || !$archiveId || empty($databases)) {
+            $this->json(['error' => 'connector_id, archive_id and databases are required'], 400);
+        }
+
+        $connector = $this->db->fetchOne(
+            "SELECT pc.id, pc.name, p.slug FROM plugin_configs pc
+             JOIN plugins p ON p.id = pc.plugin_id
+             WHERE pc.id = ? AND pc.agent_id = ?
+               AND p.slug IN ('mysql_dump', 'pg_dump', 'mongo_dump')",
+            [$connectorId, $id]
+        );
+        if (!$connector) {
+            $this->json(['error' => 'Database connector not found for this client'], 404);
+        }
+
+        $archive = $this->db->fetchOne(
+            "SELECT ar.id, ar.archive_name, ar.repository_id, ar.databases_backed_up
+             FROM archives ar JOIN repositories r ON r.id = ar.repository_id
+             WHERE ar.id = ? AND r.agent_id = ?",
+            [$archiveId, $id]
+        );
+        if (!$archive) {
+            $this->json(['error' => 'Archive not found'], 404);
+        }
+        if (empty($archive['databases_backed_up'])) {
+            $this->json(['error' => 'That restore point contains no database dumps'], 409);
+        }
+
+        // Same shape the web builds, including the rename target sanitising.
+        $restoreDatabases = [];
+        foreach ($databases as $entry) {
+            $name = is_array($entry) ? ($entry['name'] ?? '') : (string) $entry;
+            $mode = is_array($entry) ? ($entry['mode'] ?? 'replace') : 'replace';
+            if ($name === '' || !in_array($mode, ['replace', 'rename'], true)) {
+                continue;
+            }
+            $item = ['database' => $name, 'mode' => $mode];
+            if ($mode === 'rename' && !empty($entry['target_name'])) {
+                $item['target_name'] = preg_replace('/[^a-zA-Z0-9_]/', '', $entry['target_name']);
+            }
+            $restoreDatabases[] = $item;
+        }
+        if (empty($restoreDatabases)) {
+            $this->json(['error' => 'No valid databases selected'], 422);
+        }
+
+        $taskType = match ($connector['slug']) {
+            'mysql_dump' => 'restore_mysql',
+            'pg_dump' => 'restore_pg',
+            'mongo_dump' => 'restore_mongo',
+        };
+
+        $jobId = $this->db->insert('backup_jobs', [
+            'agent_id' => $id,
+            'repository_id' => $archive['repository_id'],
+            'task_type' => $taskType,
+            'status' => 'queued',
+            'restore_archive_id' => $archiveId,
+            'restore_databases' => json_encode($restoreDatabases),
+            'plugin_config_id' => $connectorId,
+        ]);
+
+        $names = implode(', ', array_column($restoreDatabases, 'database'));
+        $this->db->insert('server_log', [
+            'agent_id' => $id,
+            'backup_job_id' => $jobId,
+            'level' => 'info',
+            'message' => "Database restore queued: {$names} from archive {$archive['archive_name']}",
+        ]);
+
+        $this->json(['job_id' => (int) $jobId, 'task_type' => $taskType, 'status' => 'queued'], 202);
     }
 
     // ── Client detail: install, plugin config writes, repo check, stats ──
