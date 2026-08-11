@@ -185,6 +185,9 @@ class App
         // Branding icon dispenser — single-source app icon resized on demand
         // (favicons, apple-touch-icon, PWA tiles all served from one upload).
         $this->router->map('GET', '/branding/icon/[i:size]', 'BrandingController@icon');
+
+        // Unauthenticated liveness probe for uptime monitors / container checks
+        $this->router->map('GET', '/health', 'Api\\AdminApiController@healthLive');
         $this->router->map('POST', '/settings/oidc', 'SettingsController@saveOidc');
         $this->router->map('POST', '/settings/api/tokens/create', 'SettingsController@createApiToken');
         $this->router->map('POST', '/settings/api/tokens/[i:id]/revoke', 'SettingsController@revokeApiToken');
@@ -300,6 +303,7 @@ class App
         // Admin API (token-authenticated)
         $this->router->map('GET', '/api/v1/summary', 'Api\\AdminApiController@summary');
         $this->router->map('GET', '/api/v1/metrics', 'Api\\AdminApiController@metrics');
+        $this->router->map('GET', '/api/v1/health', 'Api\\AdminApiController@health');
         $this->router->map('GET', '/api/v1/clients', 'Api\\AdminApiController@listClients');
         $this->router->map('POST', '/api/v1/clients', 'Api\\AdminApiController@createClient');
         $this->router->map('GET', '/api/v1/clients/[i:id]', 'Api\\AdminApiController@getClient');

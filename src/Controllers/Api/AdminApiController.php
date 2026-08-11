@@ -3318,6 +3318,35 @@ class AdminApiController extends Controller
      * POST /api/v1/push/register — {device_id, apns_token, platform}.
      * Upserts per (user, device); re-registration refreshes the token.
      */
+    /**
+     * GET /health — unauthenticated liveness.
+     *
+     * For uptime monitors and container health checks: no credentials, no
+     * detail, and cheap enough to poll often. Anything that would tell an
+     * anonymous caller about the state of this install lives on the
+     * authenticated endpoint below.
+     *
+     * 200 when serving, 503 when not.
+     */
+    public function healthLive(): void
+    {
+        $result = (new \BBS\Services\HealthService())->liveness();
+        $this->json($result, $result['status'] === 'ok' ? 200 : 503);
+    }
+
+    /**
+     * GET /api/v1/health — the full picture, for a monitoring system.
+     *
+     * 200 for ok and warning, 503 for critical, so a check that only reads the
+     * status code still alerts on the things that stop backups happening.
+     */
+    public function health(): void
+    {
+        $this->requireApiAuth();
+        $result = (new \BBS\Services\HealthService())->check();
+        $this->json($result, $result['status'] === \BBS\Services\HealthService::CRITICAL ? 503 : 200);
+    }
+
     public function registerPush(): void
     {
         $ctx = $this->requireApiAuth();
