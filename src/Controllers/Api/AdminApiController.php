@@ -259,11 +259,24 @@ class AdminApiController extends Controller
         );
         $plans = $this->db->fetchAll(
             "SELECT bp.id, bp.name, bp.directories, bp.excludes, bp.advanced_options, bp.enabled,
+                    bp.repository_id,
+                    bp.prune_minutes, bp.prune_hours, bp.prune_days,
+                    bp.prune_weeks, bp.prune_months, bp.prune_years,
                     s.frequency, s.times, s.day_of_week, s.day_of_month
              FROM backup_plans bp
              LEFT JOIN schedules s ON s.backup_plan_id = bp.id
              WHERE bp.agent_id = ? ORDER BY bp.name", [$id]
         );
+        foreach ($plans as &$p) {
+            $p['id'] = (int) $p['id'];
+            $p['enabled'] = (bool) $p['enabled'];
+            $p['repository_id'] = $p['repository_id'] !== null ? (int) $p['repository_id'] : null;
+            foreach (['prune_minutes', 'prune_hours', 'prune_days',
+                      'prune_weeks', 'prune_months', 'prune_years'] as $k) {
+                $p[$k] = (int) $p[$k];
+            }
+        }
+        unset($p);
 
         $agent['repositories'] = $repos;
         $agent['plans'] = $plans;
@@ -653,9 +666,15 @@ class AdminApiController extends Controller
             $this->json(['error' => 'Client not found'], 404);
         }
 
+        // Retention is returned as well as accepted. Without it an editor has
+        // no current values to show, and a form rendering blanks would write
+        // zeros back on save and quietly wipe the plan's retention policy —
+        // only noticed later, when archives start disappearing.
         $plans = $this->db->fetchAll("
             SELECT bp.id, bp.name, bp.directories, bp.excludes, bp.advanced_options,
                    bp.enabled, bp.repository_id, r.name as repository_name,
+                   bp.prune_minutes, bp.prune_hours, bp.prune_days,
+                   bp.prune_weeks, bp.prune_months, bp.prune_years,
                    s.frequency, s.times, s.day_of_week, s.day_of_month
             FROM backup_plans bp
             LEFT JOIN schedules s ON s.backup_plan_id = bp.id
@@ -663,6 +682,19 @@ class AdminApiController extends Controller
             WHERE bp.agent_id = ?
             ORDER BY bp.name
         ", [$id]);
+
+        foreach ($plans as &$p) {
+            $p['id'] = (int) $p['id'];
+            $p['enabled'] = (bool) $p['enabled'];
+            $p['repository_id'] = $p['repository_id'] !== null ? (int) $p['repository_id'] : null;
+            // Signed: a negative keep count is borg's "no limit" (#386), so
+            // these must not be coerced to unsigned or clamped at zero.
+            foreach (['prune_minutes', 'prune_hours', 'prune_days',
+                      'prune_weeks', 'prune_months', 'prune_years'] as $k) {
+                $p[$k] = (int) $p[$k];
+            }
+        }
+        unset($p);
 
         $this->json(['plans' => $plans]);
     }
