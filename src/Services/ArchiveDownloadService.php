@@ -324,47 +324,64 @@ class ArchiveDownloadService
     }
 
     /**
-     * Best-effort size of the selection, for the pre-flight. Null when it
-     * cannot be determined, in which case the check is skipped rather than
-     * guessed at.
+     * Best-effort size of the selection, for the pre-flight.
+     * Moved verbatim from ClientController — nested selections are
+     * collapsed to their roots so a parent and child aren't counted twice.
      */
     private function estimateDownloadBytes(int $agentId, int $archiveId, array $selectedFiles, int $archiveOriginalSize): ?int
     {
+        if (empty($selectedFiles)) {
+            return $archiveOriginalSize > 0 ? $archiveOriginalSize : null;
+        }
         try {
             $ch = \BBS\Core\ClickHouse::getInstance();
             if (!$ch->isAvailable()) {
-                return $archiveOriginalSize > 0 ? $archiveOriginalSize : null;
+                return null;
             }
-            if (empty($selectedFiles)) {
-                return $archiveOriginalSize > 0 ? $archiveOriginalSize : null;
+            $paths = array_values(array_filter(array_map(
+                fn($p) => '/' . trim((string) $p, '/'),
+                $selectedFiles
+            ), fn($p) => $p !== '/'));
+            $roots = array_filter($paths, function ($p) use ($paths) {
+                foreach ($paths as $other) {
+                    if ($other !== $p && str_starts_with($p, $other . '/')) return false;
+                }
+                return true;
+            });
+
+            $conds = [];
+            $params = [$agentId, $archiveId];
+            foreach ($roots as $p) {
+                $conds[] = '(path = ? OR startsWith(path, ?))';
+                $params[] = $p;
+                $params[] = $p . '/';
             }
-            $total = 0;
-            foreach ($selectedFiles as $path) {
-                $p = '/' . ltrim((string) $path, '/');
-                $esc = str_replace(["\\", "'"], ["\\\\", "\\'"], $p);
-                $row = $ch->fetchOne(
-                    "SELECT sum(file_size) AS s FROM file_catalog
-                     WHERE agent_id = {$agentId} AND archive_id = {$archiveId}
-                       AND (path = '{$esc}' OR path LIKE '{$esc}/%')"
-                );
-                $total += (int) ($row['s'] ?? 0);
+            if (!$conds) {
+                return null;
             }
-            return $total > 0 ? $total : null;
+            $row = $ch->fetchOne(
+                "SELECT sum(file_size) AS bytes FROM file_catalog
+                 WHERE agent_id = ? AND archive_id = ? AND (" . implode(' OR ', $conds) . ")",
+                $params
+            );
+            $bytes = (int) ($row['bytes'] ?? 0);
+            return $bytes > 0 ? $bytes : null;
         } catch (\Exception $e) {
             return null;
         }
     }
 
-    /** Remove a directory tree, tolerating files owned by the repo user. */
+    /** Remove a staging directory tree. Moved verbatim from ClientController. */
     private function removeDir(string $dir): void
     {
-        if (!is_dir($dir)) {
-            return;
+        if (!is_dir($dir)) return;
+        $items = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($items as $item) {
+            $item->isDir() ? rmdir($item->getPathname()) : unlink($item->getPathname());
         }
-        exec('rm -rf ' . escapeshellarg($dir) . ' 2>/dev/null');
-        if (is_dir($dir)) {
-            exec('sudo /usr/local/bin/bbs-ssh-helper fix-download-perms ' . escapeshellarg($dir) . ' 2>/dev/null');
-            exec('rm -rf ' . escapeshellarg($dir) . ' 2>/dev/null');
-        }
+        rmdir($dir);
     }
 }
