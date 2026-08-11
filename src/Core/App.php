@@ -340,6 +340,9 @@ class App
         $this->router->map('POST', '/api/v1/clients/[i:id]/restore-db', 'Api\\AdminApiController@restoreDatabase');
         $this->router->map('POST', '/api/v1/clients/[i:id]/download', 'Api\\AdminApiController@downloadArchive');
         $this->router->map('POST',   '/api/v1/clients/[i:id]/repositories/[i:repoId]/check', 'Api\\AdminApiController@checkRepository');
+        $this->router->map('POST',   '/api/v1/clients/[i:id]/repositories/[i:repoId]/maintenance', 'Api\\AdminApiController@repositoryMaintenance');
+        $this->router->map('POST',   '/api/v1/clients/[i:id]/repositories/[i:repoId]/catalog/sync', 'Api\\AdminApiController@syncRepositoryCatalog');
+        $this->router->map('DELETE', '/api/v1/clients/[i:id]/repositories/[i:repoId]/archives/[i:archiveId]', 'Api\\AdminApiController@deleteArchive');
         $this->router->map('GET', '/api/v1/storage', 'Api\\AdminApiController@listStorageLocations');
         $this->router->map('POST', '/api/v1/storage', 'Api\\AdminApiController@createStorageLocation');
         $this->router->map('GET', '/api/v1/storage/capacity', 'Api\\AdminApiController@getStorageCapacity');

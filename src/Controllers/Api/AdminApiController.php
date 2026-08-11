@@ -4019,10 +4019,48 @@ class AdminApiController extends Controller
     }
 
     /**
-     * POST /api/v1/clients/{id}/repositories/{repoId}/check — queue an
-     * integrity check, the web's Check button.
+     * POST /api/v1/clients/{id}/repositories/{repoId}/check
+     * Kept as its own route now that maintenance covers every action.
      */
     public function checkRepository(int $id, int $repoId): void
+    {
+        $this->queueRepositoryMaintenance($id, $repoId, 'check');
+    }
+
+    /**
+     * POST /api/v1/clients/{id}/repositories/{repoId}/maintenance
+     * Body: {"action": "check|compact|repair|break_lock|catalog_rebuild|catalog_rebuild_full"}
+     *
+     * The same set the web offers. compact is the one worth having away from a
+     * desk — it is what actually reclaims disk after a prune — and break_lock
+     * is the usual way out of an interrupted backup.
+     */
+    public function repositoryMaintenance(int $id, int $repoId): void
+    {
+        $input = $this->getJsonInput();
+        $action = trim((string) ($input['action'] ?? ($_GET['action'] ?? '')));
+        $this->queueRepositoryMaintenance($id, $repoId, $action);
+    }
+
+    /**
+     * POST /api/v1/clients/{id}/repositories/{repoId}/catalog/sync
+     *
+     * Requests the file catalog for this repository be rebuilt — the action to
+     * offer when browsing reports its catalog as pending.
+     */
+    public function syncRepositoryCatalog(int $id, int $repoId): void
+    {
+        $input = $this->getJsonInput();
+        // Default to filling in what is missing; full re-reads every archive.
+        $full = !empty($input['full']) || !empty($_GET['full']);
+        $this->queueRepositoryMaintenance($id, $repoId, $full ? 'catalog_rebuild_full' : 'catalog_rebuild');
+    }
+
+    /**
+     * Shared by the maintenance routes: same actions, permission and
+     * duplicate-suppression as the web page.
+     */
+    private function queueRepositoryMaintenance(int $id, int $repoId, string $action): void
     {
         $ctx = $this->requireApiAuth();
         if (!$this->apiCanAccessAgent($ctx, $id)) {
@@ -4032,6 +4070,34 @@ class AdminApiController extends Controller
             $this->json(['error' => 'Repository maintenance permission required'], 403);
         }
 
+        // "Rebuild Full" dispatches as catalog_sync, which wipes the archive
+        // records, re-reads them from borg with sizes, then queues the rebuild.
+        $taskType = match ($action) {
+            'check' => 'repo_check',
+            'compact' => 'compact',
+            'repair' => 'repo_repair',
+            'break_lock' => 'break_lock',
+            'catalog_rebuild' => 'catalog_rebuild',
+            'catalog_rebuild_full' => 'catalog_sync',
+            default => null,
+        };
+        if ($taskType === null) {
+            $this->json([
+                'error' => 'Unknown action',
+                'valid_actions' => ['check', 'compact', 'repair', 'break_lock',
+                                    'catalog_rebuild', 'catalog_rebuild_full'],
+            ], 400);
+        }
+
+        $label = match ($action) {
+            'check' => 'Check',
+            'compact' => 'Compact',
+            'repair' => 'Repair',
+            'break_lock' => 'Break Lock',
+            'catalog_rebuild' => 'Rebuild Catalog (Missing)',
+            'catalog_rebuild_full' => 'Rebuild Catalog (Full)',
+        };
+
         $repo = $this->db->fetchOne(
             "SELECT id, name FROM repositories WHERE id = ? AND agent_id = ?",
             [$repoId, $id]
@@ -4040,8 +4106,77 @@ class AdminApiController extends Controller
             $this->json(['error' => 'Repository not found'], 404);
         }
 
+        // One of each kind at a time; different kinds may queue together.
         $pending = $this->db->fetchOne(
-            "SELECT id FROM backup_jobs WHERE repository_id = ? AND task_type = 'repo_check'
+            "SELECT id FROM backup_jobs WHERE repository_id = ? AND task_type = ?
+               AND status IN ('queued', 'sent', 'running')",
+            [$repoId, $taskType]
+        );
+        if ($pending) {
+            $this->json([
+                'status' => 'already_queued',
+                'job_id' => (int) $pending['id'],
+                'action' => $action,
+                'message' => "A {$label} job is already queued or running for this repository",
+            ], 409);
+        }
+
+        $jobId = $this->db->insert('backup_jobs', [
+            'agent_id' => $id,
+            'repository_id' => $repoId,
+            'task_type' => $taskType,
+            'status' => 'queued',
+        ]);
+        $this->db->insert('server_log', [
+            'agent_id' => $id,
+            'backup_job_id' => $jobId,
+            'level' => 'info',
+            'message' => "{$label} job #{$jobId} queued for repository \"{$repo['name']}\"",
+        ]);
+
+        $this->json([
+            'status' => 'queued',
+            'job_id' => (int) $jobId,
+            'action' => $action,
+            'task_type' => $taskType,
+        ], 202);
+    }
+
+    /**
+     * DELETE /api/v1/clients/{id}/repositories/{repoId}/archives/{archiveId}
+     *
+     * Removes one recovery point. Locked archives are refused — a legal hold
+     * has to be lifted deliberately, not stepped over by whichever client
+     * happens to be asking.
+     */
+    public function deleteArchive(int $id, int $repoId, int $archiveId): void
+    {
+        $ctx = $this->requireApiAuth();
+        if (!$this->apiCanAccessAgent($ctx, $id)) {
+            $this->json(['error' => 'Client not found'], 404);
+        }
+        if (!$this->apiHasPermission($ctx, \BBS\Services\PermissionService::MANAGE_REPOS, $id)) {
+            $this->json(['error' => 'Repository management permission required'], 403);
+        }
+
+        $archive = $this->db->fetchOne(
+            "SELECT ar.id, ar.archive_name, ar.locked FROM archives ar
+             JOIN repositories r ON r.id = ar.repository_id
+             WHERE ar.id = ? AND ar.repository_id = ? AND r.agent_id = ?",
+            [$archiveId, $repoId, $id]
+        );
+        if (!$archive) {
+            $this->json(['error' => 'Archive not found'], 404);
+        }
+        if (!empty($archive['locked'])) {
+            $this->json([
+                'error' => 'This recovery point is locked — unlock it first',
+                'reason' => 'locked',
+            ], 409);
+        }
+
+        $pending = $this->db->fetchOne(
+            "SELECT id FROM backup_jobs WHERE repository_id = ? AND task_type = 'archive_delete'
                AND status IN ('queued', 'sent', 'running')",
             [$repoId]
         );
@@ -4049,21 +4184,25 @@ class AdminApiController extends Controller
             $this->json([
                 'status' => 'already_queued',
                 'job_id' => (int) $pending['id'],
-                'message' => 'A check is already queued or running for this repository',
+                'message' => 'A deletion is already queued or running for this repository',
             ], 409);
         }
 
+        // The worker resolves the target from status_message — it runs
+        // `borg delete repo::name` and then clears the row by name. Passing an
+        // id instead would queue a job that deletes nothing.
         $jobId = $this->db->insert('backup_jobs', [
             'agent_id' => $id,
             'repository_id' => $repoId,
-            'task_type' => 'repo_check',
+            'task_type' => 'archive_delete',
             'status' => 'queued',
+            'status_message' => $archive['archive_name'],
         ]);
         $this->db->insert('server_log', [
             'agent_id' => $id,
             'backup_job_id' => $jobId,
             'level' => 'info',
-            'message' => "Repository check queued for \"{$repo['name']}\" (job #{$jobId})",
+            'message' => "Recovery point deletion queued: \"{$archive['archive_name']}\" (job #{$jobId})",
         ]);
 
         $this->json(['status' => 'queued', 'job_id' => (int) $jobId], 202);
