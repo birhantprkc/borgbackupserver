@@ -152,7 +152,19 @@ fi
 
 # 8. Run database migrations
 echo "[8/9] Running database migrations..."
-sudo -u www-data php "$BBS_DIR/migrate.php" 2>&1 || echo "  Warning: migration runner returned an error (migrations may run on next page load)"
+if ! sudo -u www-data php "$BBS_DIR/migrate.php" 2>&1; then
+    # A failed migration leaves the schema behind what the code expects, which
+    # shows up later as unrelated-looking errors. Say so plainly here rather
+    # than letting it scroll past as a warning.
+    echo ""
+    echo "  ================================================================"
+    echo "  DATABASE MIGRATION FAILED — see the errors above."
+    echo "  The update is installed but the schema is not fully up to date."
+    echo "  Migrations are retried on the next update, and until one succeeds"
+    echo "  some features may not work correctly."
+    echo "  ================================================================"
+    echo ""
+fi
 
 # 9. Fix storage path permissions
 echo "[9/9] Checking storage path permissions..."
