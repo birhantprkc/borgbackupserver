@@ -15,6 +15,7 @@ import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.error
@@ -46,7 +47,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.76.0"
+AGENT_VERSION = "2.77.0"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -3530,6 +3531,18 @@ def _build_list_dir_tree(task):
     return _walk(path.rstrip("/") or "/", depth)
 
 
+def _read_catalog_ssh_errors(errfile):
+    """Read what ssh wrote to its stderr file, if anything."""
+    if not errfile:
+        return ""
+    try:
+        errfile.flush()
+        with open(errfile.name, "r", errors="replace") as fh:
+            return fh.read().strip()[-2000:]
+    except (OSError, IOError):
+        return ""
+
+
 def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
                         archive_name, directories, plugins, cwd):
     """Inner task execution logic, wrapped by execute_task for sleep inhibition."""
@@ -3693,6 +3706,7 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
     last_progress_time = time.time()
     catalog_count = 0
     catalog_ssh = None  # SSH subprocess for streaming catalog to server
+    catalog_ssh_errfile = None  # its stderr, a file rather than a pipe (see below)
     catalog_pipe_failed = False
 
     # Dry-run tallies (#257): counts + capped path samples returned as the
@@ -3706,6 +3720,18 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
         ssh_info = load_ssh_info()
         if ssh_info and ssh_info.get("ssh_unix_user") and ssh_info.get("server_host"):
             try:
+                # stdout/stderr go to a file and /dev/null rather than pipes.
+                # Nothing reads them while the backup runs, and an OS pipe
+                # only holds ~64KB: once ssh or the remote fills one, ssh
+                # stops draining its stdin, our catalog write blocks, the
+                # borg read loop below stops, borg blocks on ITS stderr, and
+                # the whole backup freezes with no output and no timeout
+                # (#380, #394 — the same shape as the prune stall in #384).
+                # A file has no such limit, and we can still read the
+                # diagnostics afterwards.
+                catalog_ssh_errfile = tempfile.NamedTemporaryFile(
+                    prefix="bbs-catalog-ssh-", suffix=".log", delete=False
+                )
                 catalog_ssh = subprocess.Popen(
                     [SSH_CMD, "-i", SSH_KEY_PATH, "-p", str(ssh_info.get("ssh_port", 22))]
                     + _ssh_common_opts()
@@ -3714,8 +3740,8 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
                         "catalog-write {}".format(job_id),
                     ],
                     stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
+                    stdout=subprocess.DEVNULL,
+                    stderr=catalog_ssh_errfile,
                 )
                 logger.info("Catalog SSH pipe opened for job {}".format(job_id))
             except Exception as e:
@@ -3911,10 +3937,7 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
                         catalog_ssh.stdin.write(line.encode("utf-8"))
                         catalog_ssh.stdin.flush()
                     except (BrokenPipeError, OSError):
-                        try:
-                            broken_stderr = catalog_ssh.stderr.read().decode("utf-8", errors="replace").strip()
-                        except Exception:
-                            broken_stderr = ""
+                        broken_stderr = _read_catalog_ssh_errors(catalog_ssh_errfile)
                         logger.error("Catalog SSH pipe broken, catalog streaming stopped{}".format(
                             " — " + broken_stderr if broken_stderr else ""))
                         catalog_ssh = None
@@ -4138,9 +4161,13 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
         if catalog_ssh:
             try:
                 catalog_ssh.stdin.close()
-                catalog_ssh.wait(timeout=30)
+                # Closing stdin tells the remote the catalog is complete; it
+                # then finishes writing and exits. Generous but BOUNDED — the
+                # backup itself is already safely stored by this point, so a
+                # catalog that won't finish must never hold the job open.
+                catalog_ssh.wait(timeout=120)
                 if catalog_ssh.returncode != 0:
-                    catalog_ssh_error = catalog_ssh.stderr.read().decode("utf-8", errors="replace").strip()
+                    catalog_ssh_error = _read_catalog_ssh_errors(catalog_ssh_errfile)
                     logger.error("Catalog SSH pipe exited with code {} — {}".format(
                         catalog_ssh.returncode, catalog_ssh_error or "no stderr"))
                     catalog_pipe_failed = True
@@ -4149,14 +4176,20 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
             except Exception as e:
                 logger.error("Error closing catalog SSH pipe: {}".format(e))
                 catalog_pipe_failed = True
+                # Kill FIRST. Reading before killing is what hung the job at
+                # the end of a backup: a still-running process never closes
+                # its stderr, so the read never returns (#394).
                 try:
-                    catalog_ssh_error = catalog_ssh.stderr.read().decode("utf-8", errors="replace").strip()
+                    _kill_process_tree(catalog_ssh)
                 except Exception:
                     pass
-                try:
-                    catalog_ssh.kill()
-                except Exception:
-                    pass
+                catalog_ssh_error = _read_catalog_ssh_errors(catalog_ssh_errfile)
+        if catalog_ssh_errfile:
+            try:
+                catalog_ssh_errfile.close()
+                os.unlink(catalog_ssh_errfile.name)
+            except (OSError, IOError):
+                pass
 
     # Catalog pipe failure is non-critical — the backup data is safely stored.
     # Log a warning but don't override a successful backup result.
