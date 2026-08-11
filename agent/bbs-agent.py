@@ -47,7 +47,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.77.0"
+AGENT_VERSION = "2.79.0"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -3543,6 +3543,32 @@ def _read_catalog_ssh_errors(errfile):
         return ""
 
 
+def _read_borg_stdout(handle):
+    """Read back what borg wrote to its stdout file, then leave it for cleanup."""
+    if handle is None:
+        return ""
+    try:
+        handle.flush()
+        with open(handle.name, "rb") as fh:
+            return fh.read().decode("utf-8", errors="replace")
+    except (OSError, IOError) as e:
+        logger.warning("Could not read borg stdout file: {}".format(e))
+        return ""
+
+
+def _cleanup_borg_stdout(handle):
+    if handle is None:
+        return
+    try:
+        handle.close()
+    except Exception:
+        pass
+    try:
+        os.unlink(handle.name)
+    except (OSError, IOError):
+        pass
+
+
 def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
                         archive_name, directories, plugins, cwd):
     """Inner task execution logic, wrapped by execute_task for sleep inhibition."""
@@ -3706,6 +3732,7 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
     last_progress_time = time.time()
     catalog_count = 0
     catalog_ssh = None  # SSH subprocess for streaming catalog to server
+    borg_stdout_file = None  # borg's stdout, a file rather than a pipe (see below)
     catalog_ssh_errfile = None  # its stderr, a file rather than a pipe (see below)
     catalog_pipe_failed = False
 
@@ -3779,8 +3806,22 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
             return
 
     try:
+        # borg's stdout goes to a FILE, not a pipe.
+        #
+        # We read stderr to EOF in the loop below, then wait() and only then
+        # read stdout. An OS pipe holds ~64KB: once borg's final --json output
+        # exceeds that, borg blocks writing it, so it never exits, so wait()
+        # never returns and nothing ever drains the pipe. The comment that
+        # used to sit on that read — "safe, borg exited normally" — assumed
+        # the thing the deadlock prevents (#394).
+        #
+        # A file has no such limit. Diagnosed by @ArbiterGR, who traced it and
+        # confirmed the fix against the exclusion list that triggered it.
+        borg_stdout_file = tempfile.NamedTemporaryFile(
+            prefix="bbs-borg-stdout-", suffix=".json", delete=False
+        )
         popen_kwargs = {
-            "stdout": subprocess.PIPE,
+            "stdout": borg_stdout_file,
             "stderr": subprocess.PIPE,
             "env": env,
             "cwd": cwd,
@@ -3979,35 +4020,28 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
         job_cancelled = (error_output == "Cancelled by user")
         if not job_cancelled:
             proc.wait(timeout=86400)  # 24h timeout
-            # Safe to read here — borg exited normally so all pipe writers are gone.
-            stdout_output = proc.stdout.read().decode("utf-8", errors="replace")
+            stdout_output = _read_borg_stdout(borg_stdout_file)
         else:
-            # After a cancel kill, never block on stdout.read(): if borg's ssh
-            # transport child somehow survived the group kill it would still
-            # hold the pipe writer end and read() would hang the agent forever
-            # (hangs were observed pre-2.24.1 leaving the agent stuck until
-            # service restart). Drain via communicate() with a hard timeout.
+            # After a cancel kill, wait briefly for the tree to go away. stdout
+            # is a file now, so reading it can never block on a surviving
+            # child holding the writer end — the hang this branch was written
+            # to avoid is no longer reachable through stdout.
             try:
-                drained_stdout, _ = proc.communicate(timeout=10)
-                if isinstance(drained_stdout, bytes):
-                    stdout_output = drained_stdout.decode("utf-8", errors="replace")
-                else:
-                    stdout_output = drained_stdout or ""
+                proc.wait(timeout=10)
             except subprocess.TimeoutExpired:
-                logger.warning("Job #{}: stdout drain timed out after cancel — re-killing tree".format(job_id))
+                logger.warning("Job #{}: borg still running after cancel — re-killing tree".format(job_id))
                 _kill_process_tree(proc)
                 try:
                     proc.wait(timeout=5)
                 except Exception:
                     pass
-                # Close pipes manually so the agent loop doesn't get stuck
-                for pipe in (proc.stdout, proc.stderr, proc.stdin):
+                for pipe in (proc.stderr, proc.stdin):
                     try:
                         if pipe is not None:
                             pipe.close()
                     except Exception:
                         pass
-                stdout_output = ""
+            stdout_output = _read_borg_stdout(borg_stdout_file)
 
         # Parse borg info from stdout if available
         if stdout_output:
@@ -4190,6 +4224,7 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
                 os.unlink(catalog_ssh_errfile.name)
             except (OSError, IOError):
                 pass
+        _cleanup_borg_stdout(borg_stdout_file)
 
     # Catalog pipe failure is non-critical — the backup data is safely stored.
     # Log a warning but don't override a successful backup result.
