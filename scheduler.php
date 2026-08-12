@@ -2799,7 +2799,14 @@ foreach ($agentHomeDirs as $ahd) {
                 "SELECT status FROM backup_jobs WHERE id = ? AND status IN ('completed', 'failed')",
                 [$catJobId]
             );
-            if ($catJob) {
+            // A failed job does not mean the client has stopped writing. When a
+            // job is failed out from under a running backup — the offline sweep,
+            // stall detection, a cancel — borg and the catalog stream carry on,
+            // and deleting the file here pulls it out from under the write. Give
+            // it ten minutes of no growth first; the file is appended to
+            // continuously while a backup is streaming, so anything untouched
+            // that long really is finished with.
+            if ($catJob && (time() - (@filemtime($catFile) ?: 0)) > 600) {
                 @unlink($catFile);
                 $catalogCleaned++;
             }

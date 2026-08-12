@@ -698,17 +698,33 @@ class AgentApiController extends Controller
             }
         }
 
-        // Build catalog import info for after response is sent
+        // Build catalog import info for after response is sent.
+        //
+        // Every branch that declines to import says why. A backup whose files
+        // can't be browsed afterwards is a support conversation that starts
+        // from nothing otherwise: the import is the one step between a
+        // successful backup and an empty file browser, and it used to skip
+        // itself in four different ways without leaving a trace.
         $catalogImport = null;
+        $catalogSkipped = null;
         if ($result === 'completed' && $job['task_type'] === 'backup') {
-            if (!empty($agent['ssh_home_dir'])) {
+            if (empty($agent['ssh_home_dir'])) {
+                $catalogSkipped = 'this client has no SSH home directory on the server, so it has nowhere to stream a catalog to';
+            } else {
                 $catalogPath = $agent['ssh_home_dir'] . '/.catalog-logs/catalog-' . $jobId . '.jsonl';
-                if (file_exists($catalogPath)) {
+                if (!file_exists($catalogPath)) {
+                    $catalogSkipped = "no catalog file arrived at {$catalogPath} — the client either streamed nothing or could not reach the catalog channel";
+                } elseif (filesize($catalogPath) === 0) {
+                    $catalogSkipped = "the catalog file at {$catalogPath} is empty";
+                } else {
                     $archive = $this->db->fetchOne(
                         "SELECT id FROM archives WHERE backup_job_id = ?",
                         [$jobId]
                     );
-                    if ($archive) {
+                    if (!$archive) {
+                        $catalogSkipped = 'no archive record exists for this job, so there is nothing to attach the catalog to'
+                            . (empty($input['archive_name']) ? ' (the client reported no archive name)' : '');
+                    } else {
                         $catalogImport = [
                             'agent_id' => (int) $agent['id'],
                             'archive_id' => (int) $archive['id'],
@@ -718,6 +734,16 @@ class AgentApiController extends Controller
                     }
                 }
             }
+        }
+
+        if ($catalogSkipped !== null) {
+            $this->db->insert('server_log', [
+                'agent_id' => $agent['id'],
+                'backup_job_id' => $jobId,
+                'level' => 'warning',
+                'message' => "File catalog not imported for job #{$jobId} — {$catalogSkipped}. "
+                           . "The backup itself is fine; browsing and file-level restore won't work for it until the catalog is rebuilt.",
+            ]);
         }
 
         // Auto-prune is deferred until after catalog import (see below)
@@ -806,6 +832,22 @@ class AgentApiController extends Controller
             );
             $this->db->update('backup_jobs', [
                 'status' => 'completed',
+                'completed_at' => $this->db->now(),
+                'duration_seconds' => max(0, (int) ($catDurRow['dur'] ?? 0)),
+                'status_message' => null,
+            ], 'id = ?', [$jobId]);
+        } elseif ($hasPendingCatalog) {
+            // A catalog file was on disk when the status came in, so the job was
+            // held at "Importing file catalog..." — but the import never got
+            // built (no archive record to attach it to). Nothing further will
+            // touch this job, so without this it sits at "running" forever on a
+            // backup that actually finished.
+            $catDurRow = $this->db->fetchOne(
+                "SELECT TIMESTAMPDIFF(SECOND, ?, NOW()) as dur",
+                [$startedAt]
+            );
+            $this->db->update('backup_jobs', [
+                'status' => $result,
                 'completed_at' => $this->db->now(),
                 'duration_seconds' => max(0, (int) ($catDurRow['dur'] ?? 0)),
                 'status_message' => null,
