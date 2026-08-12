@@ -328,6 +328,134 @@ class StorageLocationController extends Controller
     }
 
     /**
+     * POST /storage-locations/s3/download-backup — stream one server backup
+     * from off-site storage to the browser.
+     *
+     * The counterpart to Restore: keeping a copy somewhere of your own is a
+     * reasonable thing to want, and until now it meant shelling into the
+     * server to fetch the file by hand.
+     */
+    public function downloadS3Backup(): void
+    {
+        $this->denyIfHosted();
+        $this->requireAdmin();
+        $this->verifyCsrf();
+
+        $filename = trim($_POST['filename'] ?? '');
+        // Same guard as Restore: the name reaches a shell command, and only
+        // the backups this server writes are ever a valid target.
+        if ($filename === '' || !preg_match('/^bbs-backup-[A-Za-z0-9_\-]+\.tar\.gz$/', $filename)) {
+            $this->json(['success' => false, 'error' => 'Invalid backup filename'], 400);
+        }
+
+        $s3Service = new \BBS\Services\S3SyncService();
+        $creds = $s3Service->resolveCredentials(['credential_source' => 'global']);
+        if (empty($creds['bucket']) || empty($creds['access_key'])) {
+            $this->json(['success' => false, 'error' => 'S3 credentials not configured'], 400);
+        }
+
+        // Staged on the data volume rather than /tmp: these land on the root
+        // filesystem otherwise, which is the small one (#344).
+        $stagingBase = '/var/bbs/tmp';
+        if (!is_dir($stagingBase) && !@mkdir($stagingBase, 0770, true)) {
+            $stagingBase = sys_get_temp_dir();
+        }
+        $tmpDir = $stagingBase . '/bbs-s3dl-' . bin2hex(random_bytes(8));
+        if (!@mkdir($tmpDir, 0700, true)) {
+            $this->json(['success' => false, 'error' => 'Could not create a staging directory'], 500);
+        }
+
+        // However the request ends — including the browser hanging up
+        // mid-transfer — the staged copy goes away.
+        ignore_user_abort(true);
+        register_shutdown_function(function () use ($tmpDir) {
+            if (is_dir($tmpDir)) {
+                exec('rm -rf ' . escapeshellarg($tmpDir) . ' 2>/dev/null');
+            }
+        });
+
+        $helper = '/usr/local/bin/bbs-ssh-helper';
+        $cmd = sprintf(
+            'sudo %s rclone-server-download %s %s %s %s %s %s %s %s 2>&1',
+            escapeshellarg($helper),
+            escapeshellarg($filename),
+            escapeshellarg($tmpDir),
+            escapeshellarg($creds['endpoint']),
+            escapeshellarg($creds['region']),
+            escapeshellarg($creds['bucket']),
+            escapeshellarg($creds['access_key']),
+            escapeshellarg($creds['secret_key']),
+            escapeshellarg($creds['path_prefix'] ?? '')
+        );
+        $output = shell_exec($cmd);
+
+        $local = $tmpDir . '/' . $filename;
+        if (!is_file($local)) {
+            $this->json([
+                'success' => false,
+                'error' => 'Could not fetch that backup: ' . trim((string) $output),
+            ], 502);
+        }
+
+        $this->db->insert('server_log', [
+            'level' => 'info',
+            'message' => "Server backup \"{$filename}\" downloaded from off-site storage",
+        ]);
+
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+        header('Content-Type: application/gzip');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Content-Length: ' . filesize($local));
+        header('Cache-Control: no-store');
+        readfile($local);
+        exit;
+    }
+
+    /**
+     * POST /storage-locations/s3/backup-now — take a server backup immediately.
+     *
+     * Worth having before an upgrade or a configuration change, rather than
+     * waiting for the daily run. Uses the same options and the same code as
+     * that run, and pushes it off-site afterwards when that is enabled.
+     */
+    public function backupNow(): void
+    {
+        $this->denyIfHosted();
+        $this->requireAdmin();
+        $this->verifyCsrf();
+
+        $service = new \BBS\Services\ServerBackupService();
+        $result = $service->run();
+
+        if (!$result['success']) {
+            $this->db->insert('server_log', [
+                'level' => 'error',
+                'message' => 'On-demand server backup failed: ' . $result['message'],
+            ]);
+            $this->json(['success' => false, 'error' => $result['message']], 500);
+        }
+
+        $sync = $service->syncToS3();
+
+        $this->db->insert('server_log', [
+            'level' => 'info',
+            'message' => 'Server backup created on demand'
+                . ($result['filename'] ? ": {$result['filename']}" : '')
+                . ($sync['skipped'] ? '' : ' — ' . $sync['message']),
+        ]);
+
+        $this->json([
+            'success' => true,
+            'filename' => $result['filename'],
+            'synced' => !$sync['skipped'] && $sync['success'],
+            'sync_message' => $sync['skipped'] ? null : $sync['message'],
+            'message' => $result['message'],
+        ]);
+    }
+
+    /**
      * POST /storage-locations/s3/restore-backup — download and restore a server backup from S3.
      */
     public function restoreS3Backup(): void

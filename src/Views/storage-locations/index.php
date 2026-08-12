@@ -191,9 +191,20 @@ function escapeHtml(value) {
             <strong>database, configuration, and SSH keys</strong>; repository data is not included and
             is recovered separately (repos restore from S3 per repository, or can be imported from disk).
         </p>
-        <button type="button" class="btn btn-sm btn-outline-primary" id="btnListS3Backups">
-            <i class="bi bi-search me-1"></i> List Available Backups
-        </button>
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <button type="button" class="btn btn-sm btn-outline-primary" id="btnListS3Backups">
+                <i class="bi bi-search me-1"></i> List Available Backups
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-success" id="btnBackupNow">
+                <i class="bi bi-shield-plus me-1"></i> Back Up Now
+            </button>
+            <span id="backupNowResult" class="small ms-1"></span>
+        </div>
+        <div class="form-text mt-2">
+            Selecting a backup's name downloads a copy. <strong>Back Up Now</strong> takes a fresh
+            server backup immediately — worth doing before an upgrade or a configuration change —
+            and uploads it if off-site sync is enabled.
+        </div>
         <div id="s3BackupListError" class="alert alert-danger d-none mt-3"></div>
         <div id="s3BackupList" class="mt-3" style="display:none;"></div>
         <div id="s3RestoreProgress" class="alert alert-warning mt-3" style="display:none;">
@@ -257,6 +268,44 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
         return (Math.round(b * 10) / 10) + ' ' + units[i];
     }
 
+    var backupNowBtn = document.getElementById('btnBackupNow');
+    var backupNowResult = document.getElementById('backupNowResult');
+    if (backupNowBtn) {
+        backupNowBtn.addEventListener('click', function () {
+            backupNowResult.textContent = '';
+            backupNowResult.className = 'small ms-1';
+            backupNowBtn.disabled = true;
+            backupNowBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Backing up...';
+            fetch('/storage-locations/s3/backup-now', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'csrf_token=' + encodeURIComponent(csrf()),
+                credentials: 'same-origin'
+            })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                backupNowBtn.disabled = false;
+                backupNowBtn.innerHTML = '<i class="bi bi-shield-plus me-1"></i> Back Up Now';
+                if (!data.success) {
+                    backupNowResult.className = 'small ms-1 text-danger';
+                    backupNowResult.textContent = data.error || 'Backup failed.';
+                    return;
+                }
+                backupNowResult.className = 'small ms-1 text-success';
+                backupNowResult.textContent = (data.filename || 'Backup created')
+                    + (data.synced ? ' — uploaded off-site' : '');
+                // Refresh the list so the new backup is there to download
+                if (data.synced) { listBtn.click(); }
+            })
+            .catch(function () {
+                backupNowBtn.disabled = false;
+                backupNowBtn.innerHTML = '<i class="bi bi-shield-plus me-1"></i> Back Up Now';
+                backupNowResult.className = 'small ms-1 text-danger';
+                backupNowResult.textContent = 'Request failed.';
+            });
+        });
+    }
+
     listBtn.addEventListener('click', function () {
         errDiv.classList.add('d-none');
         listBtn.disabled = true;
@@ -306,7 +355,14 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
             var tr = document.createElement('tr');
             var tdName = document.createElement('td');
             tdName.className = 'font-monospace small';
-            tdName.textContent = b.filename;
+            // Clickable filename: the quickest way to keep a copy of your own
+            var nameLink = document.createElement('a');
+            nameLink.href = '#';
+            nameLink.className = 'text-decoration-none';
+            nameLink.title = 'Download this backup';
+            nameLink.textContent = b.filename;
+            nameLink.addEventListener('click', function (e) { e.preventDefault(); downloadBackup(b.filename); });
+            tdName.appendChild(nameLink);
             tr.appendChild(tdName);
             var tdSize = document.createElement('td');
             tdSize.className = 'text-nowrap';
@@ -317,7 +373,14 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
             tdDate.textContent = (b.modified || '').replace('T', ' ').substring(0, 19);
             tr.appendChild(tdDate);
             var tdBtn = document.createElement('td');
-            tdBtn.className = 'text-end';
+            tdBtn.className = 'text-end text-nowrap';
+            var dlBtn = document.createElement('button');
+            dlBtn.type = 'button';
+            dlBtn.className = 'btn btn-sm btn-outline-secondary me-2';
+            dlBtn.innerHTML = '<i class="bi bi-download me-1"></i>Download';
+            dlBtn.title = 'Save a copy of this backup';
+            dlBtn.addEventListener('click', function () { downloadBackup(b.filename); });
+            tdBtn.appendChild(dlBtn);
             var btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'btn btn-sm btn-danger';
@@ -330,6 +393,24 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
         table.appendChild(tbody);
         wrap.appendChild(table);
         listDiv.appendChild(wrap);
+    }
+
+    // Submitted as a normal form rather than fetch(): the response is a file,
+    // and this way the browser's own downloader handles it — progress, resume
+    // and "save as" all come free, and a large backup never sits in memory.
+    function downloadBackup(filename) {
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/storage-locations/s3/download-backup';
+        form.style.display = 'none';
+        var f1 = document.createElement('input');
+        f1.type = 'hidden'; f1.name = 'csrf_token'; f1.value = csrf();
+        var f2 = document.createElement('input');
+        f2.type = 'hidden'; f2.name = 'filename'; f2.value = filename;
+        form.appendChild(f1); form.appendChild(f2);
+        document.body.appendChild(form);
+        form.submit();
+        setTimeout(function () { form.remove(); }, 1000);
     }
 
     function startRestore(filename) {
