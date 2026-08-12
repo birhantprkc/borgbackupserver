@@ -360,7 +360,9 @@ class StorageLocationController extends Controller
         if (!is_dir($stagingBase) && !@mkdir($stagingBase, 0770, true)) {
             $stagingBase = sys_get_temp_dir();
         }
-        $tmpDir = $stagingBase . '/bbs-s3dl-' . bin2hex(random_bytes(8));
+        // The helper only writes into a bbs-restore-<hex> directory, so the
+        // name follows that contract rather than inventing one it would reject.
+        $tmpDir = $stagingBase . '/bbs-restore-' . bin2hex(random_bytes(8));
         if (!@mkdir($tmpDir, 0700, true)) {
             $this->json(['success' => false, 'error' => 'Could not create a staging directory'], 500);
         }
@@ -425,6 +427,11 @@ class StorageLocationController extends Controller
         $this->denyIfHosted();
         $this->requireAdmin();
         $this->verifyCsrf();
+
+        // A server backup takes minutes on a large install, and the browser is
+        // waiting on the response — don't let PHP's own clock end it half-way.
+        set_time_limit(0);
+        ignore_user_abort(true);
 
         $service = new \BBS\Services\ServerBackupService();
         $result = $service->run();

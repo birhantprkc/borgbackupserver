@@ -291,6 +291,14 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
                     backupNowResult.textContent = data.error || 'Backup failed.';
                     return;
                 }
+                // The backup itself worked; the upload is reported separately
+                // so a sync failure isn't hidden behind a green message.
+                if (data.sync_message && !data.synced) {
+                    backupNowResult.className = 'small ms-1 text-warning';
+                    backupNowResult.textContent = (data.filename || 'Backup created')
+                        + ' — created locally, but the off-site upload failed: ' + data.sync_message;
+                    return;
+                }
                 backupNowResult.className = 'small ms-1 text-success';
                 backupNowResult.textContent = (data.filename || 'Backup created')
                     + (data.synced ? ' — uploaded off-site' : '');

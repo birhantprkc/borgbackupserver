@@ -90,8 +90,10 @@ class ServerBackupService
         return [
             'success' => true,
             'message' => 'Server backup completed',
-            // Only report a filename when a new one actually appeared.
-            'filename' => ($after && $after !== $before) ? $after : $after,
+            // Null when retention swept the new file away immediately, or the
+            // directory is somehow empty — the caller shouldn't name a file
+            // that isn't there.
+            'filename' => ($after && $after !== $before) ? $after : null,
         ];
     }
 
