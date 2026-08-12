@@ -98,6 +98,20 @@ if (!empty($candidates)) {
 //     agent to come back online and pick them up, not fail at 5am because the
 //     client's laptop was asleep (#144). They get their own grace-period sweep
 //     in Step 2c below.
+// A missed poll is not proof the work died. The offline flag flips after 3
+// missed polls (90s by default) — shorter than the agent's own 60s HTTP
+// timeout, so a single stalled request trips it while borg is still running
+// happily. Failing the job there re-queues a duplicate that re-runs the whole
+// backup from scratch, which on a host already short of CPU keeps it short of
+// CPU, which trips the threshold again: the retry storm in #404.
+//
+// So a running job now has to look genuinely dead before it is failed: the
+// agent silent for the whole grace period AND no progress reported in it.
+// Progress reports refresh last_progress_at (and the heartbeat with it), so
+// a backup that is merely slow keeps itself alive. The agent still *shows*
+// offline immediately — this only governs killing its work.
+$graceMinutes = max(1, (int) ($db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'job_offline_grace_minutes'")['value'] ?? 5));
+
 $staleJobs = $db->fetchAll("
     SELECT bj.id, bj.agent_id, bj.task_type, bj.backup_plan_id, bj.repository_id,
            bj.status, bj.retry_count, a.name as agent_name
@@ -105,6 +119,8 @@ $staleJobs = $db->fetchAll("
     JOIN agents a ON a.id = bj.agent_id
     WHERE bj.status IN ('sent', 'running')
       AND a.status = 'offline'
+      AND (a.last_heartbeat IS NULL OR a.last_heartbeat < DATE_SUB(NOW(), INTERVAL {$graceMinutes} MINUTE))
+      AND (bj.last_progress_at IS NULL OR bj.last_progress_at < DATE_SUB(NOW(), INTERVAL {$graceMinutes} MINUTE))
       AND bj.task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full', 'archive_delete', 'archive_lock', 'update_borg', 'update_agent')
 ");
 
@@ -132,6 +148,16 @@ foreach ($staleJobs as $sj) {
     ], 'id = ?', [$sj['id']]);
 
     if ($willRetry) {
+        // Back off before trying again. A retry that dispatches the instant
+        // the agent reconnects re-runs the full backup while whatever knocked
+        // the agent over is usually still going on — for a plan with millions
+        // of files that is hours of traversal, which is itself enough load to
+        // knock it over again. Doubling from 5 minutes and capped at an hour
+        // spreads a full retry budget over most of a day instead of minutes.
+        $backoffBase = max(1, (int) ($db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'auto_retry_backoff_minutes'")['value'] ?? 5));
+        $backoffMinutes = min(60, $backoffBase * (2 ** ($attempt - 1)));
+        $notBefore = date('Y-m-d H:i:s', time() + $backoffMinutes * 60);
+
         // Re-queue the same plan; agent picks it up when it reconnects.
         // parent_job_id chains the retries so the UI can show history.
         $db->insert('backup_jobs', [
@@ -142,14 +168,34 @@ foreach ($staleJobs as $sj) {
             'status' => 'queued',
             'retry_count' => $attempt,
             'parent_job_id' => $sj['id'],
+            'not_before' => $notBefore,
+            // So the queue shows why it is sitting there rather than looking stuck
+            'status_message' => "Waiting {$backoffMinutes}m before retrying (attempt {$attempt} of {$autoRetryMax})",
         ]);
         $db->insert('server_log', [
             'agent_id' => $sj['agent_id'],
             'backup_job_id' => $sj['id'],
             'level' => 'info',
-            'message' => "Agent \"{$sj['agent_name']}\" went offline during backup — rescheduled (attempt {$attempt} of {$autoRetryMax}) for when agent reconnects",
+            'message' => "Agent \"{$sj['agent_name']}\" went offline during backup — rescheduled (attempt {$attempt} of {$autoRetryMax}), retrying in {$backoffMinutes} minute" . ($backoffMinutes === 1 ? '' : 's'),
         ]);
-        echo date('Y-m-d H:i:s') . " Re-queued: plan {$sj['backup_plan_id']} (attempt {$attempt}/{$autoRetryMax}) — agent \"{$sj['agent_name']}\" offline\n";
+
+        // Repeated retries are themselves the diagnosis: the client is not
+        // dropping off at random, it is being overwhelmed (or the backup is
+        // outliving whatever keeps knocking it out). Say so once, at the
+        // point it stops looking like bad luck, rather than leaving an admin
+        // to infer it from a wall of identical info lines.
+        if ($attempt === 3) {
+            $db->insert('server_log', [
+                'agent_id' => $sj['agent_id'],
+                'backup_job_id' => $sj['id'],
+                'level' => 'warning',
+                'message' => "Client \"{$sj['agent_name']}\" has dropped out of 3 consecutive attempts at this backup. "
+                           . "Repeated offline-retries usually mean the client is running out of CPU, memory or I/O rather than losing its network — "
+                           . "each retry restarts the backup from the beginning, which adds to that load. Worth checking the client before it exhausts its {$autoRetryMax} attempts.",
+            ]);
+        }
+
+        echo date('Y-m-d H:i:s') . " Re-queued: plan {$sj['backup_plan_id']} (attempt {$attempt}/{$autoRetryMax}, in {$backoffMinutes}m) — agent \"{$sj['agent_name']}\" offline\n";
         continue;
     }
 
@@ -238,12 +284,13 @@ foreach ($zombieJobs as $zj) {
 // point the job fails with a clear error. Only works when the BBS server
 // is on the same network as the client.
 $wolJobs = $db->fetchAll("
-    SELECT bj.id, bj.queued_at, bj.status_message, bj.backup_plan_id,
+    SELECT bj.id, bj.queued_at, bj.not_before, bj.status_message, bj.backup_plan_id,
            a.id AS agent_id, a.name AS agent_name, a.ip_address,
            a.wol_mac, a.mac_address, a.wol_broadcast, a.wol_timeout_minutes
     FROM backup_jobs bj
     JOIN agents a ON a.id = bj.agent_id
     WHERE bj.status = 'queued' AND bj.task_type = 'backup'
+      AND (bj.not_before IS NULL OR bj.not_before <= NOW())
       AND a.wol_enabled = 1 AND a.status = 'offline'
 ");
 foreach ($wolJobs as $wj) {
@@ -277,7 +324,10 @@ foreach ($wolJobs as $wj) {
     }
 
     $timeoutSecs = max(1, (int) $wj['wol_timeout_minutes']) * 60;
-    $elapsed = time() - strtotime($wj['queued_at']);
+    // Timed from when the job became eligible, not when it was queued: a
+    // retry that backed off for longer than the wake timeout would otherwise
+    // be declared "didn't wake in time" before a single packet was sent.
+    $elapsed = time() - strtotime($wj['not_before'] ?: $wj['queued_at']);
     if ($elapsed > $timeoutSecs) {
         $wolFail("Client did not wake within {$wj['wol_timeout_minutes']} minute(s) after Wake-on-LAN");
         continue;
@@ -295,8 +345,10 @@ foreach ($wolJobs as $wj) {
             : "Wake-on-LAN send failed — retrying ({$remaining}m left)",
     ], 'id = ?', [$wj['id']]);
 
-    if (empty($wj['status_message'])) {
-        // First attempt for this job — log once, not every minute
+    // First packet for this job — log once, not every minute. Tested against
+    // the WoL message specifically because a retry arrives with its backoff
+    // note already in status_message.
+    if (strpos((string) $wj['status_message'], 'Wake-on-LAN') === false) {
         $db->insert('server_log', [
             'agent_id' => $wj['agent_id'],
             'backup_job_id' => $wj['id'],

@@ -182,6 +182,16 @@ $updateAvailable = $updateService->isUpdateAvailable();
                         <div class="form-text">Cap on offline-induced retries per plan. Once exhausted, a final email is sent (bypassing dedup) so persistent failures aren't hidden. Default: 3.</div>
                     </div>
                     <div class="mb-3">
+                        <label class="form-label fw-semibold">Give Up On Running Jobs After (minutes)</label>
+                        <input type="number" class="form-control" name="job_offline_grace_minutes" value="<?= htmlspecialchars($settings['job_offline_grace_minutes'] ?? '5') ?>" min="1" max="120">
+                        <div class="form-text">How long a client must be silent <em>and</em> report no progress before its running backup is treated as dead and retried. A busy client is hard to tell apart from a disconnected one, and a backup killed at the wrong moment restarts from the beginning — which on a large plan is hours of work and enough extra load to cause the next disconnect. Raise this on clients with very large backups or slow links. Default: 5.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Retry Backoff (minutes)</label>
+                        <input type="number" class="form-control" name="auto_retry_backoff_minutes" value="<?= htmlspecialchars($settings['auto_retry_backoff_minutes'] ?? '5') ?>" min="1" max="60">
+                        <div class="form-text">Wait before the first retry, doubling each attempt and capped at an hour, so retries don't stack up while the client is still struggling. Default: 5.</div>
+                    </div>
+                    <div class="mb-3">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" name="auto_update_agents" value="1"
                                    id="autoUpdateAgents" <?= (($settings['auto_update_agents'] ?? '1') === '1') ? 'checked' : '' ?>>

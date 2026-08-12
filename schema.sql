@@ -252,6 +252,7 @@ CREATE TABLE backup_jobs (
     task_result MEDIUMTEXT DEFAULT NULL,
     had_warnings TINYINT(1) NOT NULL DEFAULT 0,
     retry_count INT NOT NULL DEFAULT 0,
+    not_before DATETIME DEFAULT NULL,
     parent_job_id INT DEFAULT NULL,
     status_message VARCHAR(255) DEFAULT NULL,
     restore_archive_id INT DEFAULT NULL,
@@ -346,7 +347,9 @@ INSERT INTO settings (`key`, `value`) VALUES
     ('apprise_on_missed_schedule', '0'),
     ('self_backup_enabled', '1'),
     ('self_backup_retention', '7'),
-    ('self_backup_catalogs', '0');
+    ('self_backup_catalogs', '0'),
+    ('job_offline_grace_minutes', '5'),
+    ('auto_retry_backoff_minutes', '5');
 
 -- --------------------------------------------------------
 -- Notifications

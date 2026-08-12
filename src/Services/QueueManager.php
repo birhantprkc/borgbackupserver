@@ -104,6 +104,9 @@ class QueueManager
             LEFT JOIN remote_ssh_configs rsc ON rsc.id = r.remote_ssh_config_id
             LEFT JOIN agents a ON a.id = bj.agent_id
             WHERE bj.status = 'queued'
+              -- Retries are held back to give whatever knocked the client
+              -- over time to pass (#404). Everything else has no not_before.
+              AND (bj.not_before IS NULL OR bj.not_before <= NOW())
             ORDER BY
                 CASE WHEN bj.task_type IN ('catalog_rebuild', 'catalog_rebuild_full') THEN 1 ELSE 0 END,
                 bj.queued_at ASC
