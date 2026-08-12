@@ -403,13 +403,41 @@ document.getElementById('btnTestS3')?.addEventListener('click', function() {
         listDiv.appendChild(wrap);
     }
 
+    var downloadFrameSeq = 0;
+
     // Submitted as a normal form rather than fetch(): the response is a file,
     // and this way the browser's own downloader handles it — progress, resume
     // and "save as" all come free, and a large backup never sits in memory.
+    //
+    // It targets a hidden iframe so the page itself never navigates. A file
+    // download leaves that iframe untouched, so anything that does load in it
+    // is the server reporting a problem — which is read back out and shown
+    // here instead of silently disappearing.
     function downloadBackup(filename) {
+        var errBox = document.getElementById('s3BackupListError');
+        errBox.classList.add('d-none');
+
+        var frameName = 'bbsBackupDownload' + (++downloadFrameSeq);
+        var frame = document.createElement('iframe');
+        frame.name = frameName;
+        frame.style.display = 'none';
+        frame.addEventListener('load', function () {
+            var message = 'Could not download that backup.';
+            try {
+                var body = frame.contentDocument.body.innerText || '';
+                var parsed = JSON.parse(body);
+                if (parsed && parsed.error) { message = parsed.error; }
+            } catch (e) { /* not JSON, or not readable — keep the generic message */ }
+            errBox.textContent = message;
+            errBox.classList.remove('d-none');
+            frame.remove();
+        });
+        document.body.appendChild(frame);
+
         var form = document.createElement('form');
         form.method = 'POST';
         form.action = '/storage-locations/s3/download-backup';
+        form.target = frameName;
         form.style.display = 'none';
         var f1 = document.createElement('input');
         f1.type = 'hidden'; f1.name = 'csrf_token'; f1.value = csrf();
