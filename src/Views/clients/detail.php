@@ -3035,17 +3035,38 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                             </div>
                         <?php elseif ($plugin['slug'] === 'shell_hook'): ?>
                             <?php $ev = $cfgData; ?>
-                            <div class="row g-2 mb-2">
-                                <div class="col-6"><label class="form-label small fw-semibold mb-1">Pre-backup Script</label><input type="text" class="form-control form-control-sm" name="plugin_config[pre_script]" value="<?= htmlspecialchars($ev['pre_script'] ?? '') ?>"><div class="form-text small">Absolute path to script</div></div>
-                                <div class="col-6"><label class="form-label small fw-semibold mb-1">Post-backup Script</label><input type="text" class="form-control form-control-sm" name="plugin_config[post_script]" value="<?= htmlspecialchars($ev['post_script'] ?? '') ?>"><div class="form-text small">Absolute path to script</div></div>
+                            <?php $evTiming = $ev['post_script_timing'] ?? 'backup'; ?>
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold mb-1">Pre-backup Script</label>
+                                <input type="text" class="form-control form-control-sm" name="plugin_config[pre_script]" placeholder="/opt/hooks/pre-backup.sh" value="<?= htmlspecialchars($ev['pre_script'] ?? '') ?>">
+                                <div class="form-text small">Runs on the client before borg starts. Leave empty to skip.</div>
                             </div>
-                            <div class="row g-2 mb-2">
-                                <div class="col-auto"><div class="form-check"><input class="form-check-input" type="checkbox" name="plugin_config[abort_on_failure]" value="1" id="editCfg<?= $cfg['id'] ?>_abort" <?= ($ev['abort_on_failure'] ?? true) ? 'checked' : '' ?>><label class="form-check-label small" for="editCfg<?= $cfg['id'] ?>_abort">Abort backup on failure</label></div></div>
-                                <div class="col"><label class="form-label small fw-semibold mb-1">Timeout (seconds)</label><input type="number" class="form-control form-control-sm" name="plugin_config[timeout]" value="<?= htmlspecialchars($ev['timeout'] ?? 300) ?>"></div>
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold mb-1">Post-backup Script</label>
+                                <input type="text" class="form-control form-control-sm" name="plugin_config[post_script]" placeholder="/opt/hooks/post-backup.sh" value="<?= htmlspecialchars($ev['post_script'] ?? '') ?>">
+                                <div class="row g-2 mt-1 align-items-center">
+                                    <div class="col-auto"><span class="form-text small mb-0">Run it</span></div>
+                                    <div class="col-auto">
+                                        <select class="form-select form-select-sm" name="plugin_config[post_script_timing]" style="width:auto;">
+                                            <option value="backup" <?= $evTiming !== 'repo_jobs' ? 'selected' : '' ?>>as soon as the backup finishes</option>
+                                            <option value="repo_jobs" <?= $evTiming === 'repo_jobs' ? 'selected' : '' ?>>after prune and offsite sync finish</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-text small">Prune and offsite sync run on the BBS server after the client has sent its data, so the first option fires while that work is still going. Pick the second if the script does something the repository can't survive mid-prune — powering down its storage host, say. The client must still be online when it's sent.</div>
+                            </div>
+                            <div class="row g-3 mb-2 align-items-end">
+                                <div class="col-sm-4">
+                                    <label class="form-label small fw-semibold mb-1">Timeout (seconds)</label>
+                                    <input type="number" class="form-control form-control-sm" name="plugin_config[timeout]" value="<?= htmlspecialchars($ev['timeout'] ?? 300) ?>">
+                                </div>
+                                <div class="col-sm-8">
+                                    <div class="form-check"><input class="form-check-input" type="checkbox" name="plugin_config[abort_on_failure]" value="1" id="editCfg<?= $cfg['id'] ?>_abort" <?= ($ev['abort_on_failure'] ?? true) ? 'checked' : '' ?>><label class="form-check-label small" for="editCfg<?= $cfg['id'] ?>_abort">Abort the backup if the pre-script fails</label></div>
+                                </div>
                             </div>
                             <div class="mb-2">
                                 <div class="form-check"><input class="form-check-input" type="checkbox" name="plugin_config[expose_passphrase]" value="1" id="editCfg<?= $cfg['id'] ?>_expose" <?= !empty($ev['expose_passphrase']) ? 'checked' : '' ?>><label class="form-check-label small" for="editCfg<?= $cfg['id'] ?>_expose">Expose repository passphrase to script <span class="text-muted">(advanced)</span></label></div>
-                                <div class="form-text small">Exposes <code>BORG_PASSCOMMAND</code> and <code>BORG_REPO</code> so the script can run <code>borg create --content-from-command</code> directly. Credentials are passed via a mode-0600 temp file (not env vars), but only enable this for scripts you've reviewed — see the wiki for details.</div>
+                                <div class="form-text small">Exposes <code>BORG_PASSCOMMAND</code> and <code>BORG_REPO</code> so the script can run <code>borg create --content-from-command</code> directly. Credentials go through a mode-0600 temp file rather than env vars — only enable it for scripts you've reviewed.</div>
                             </div>
                         <?php else: ?>
                             <?php foreach ($schema as $field => $def):
@@ -3157,17 +3178,37 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                                         <div class="col-6"><label class="form-label small fw-semibold mb-1">Bandwidth Limit</label><input type="text" class="form-control form-control-sm" name="plugin_config[bandwidth_limit]"><div class="form-text small">e.g. 50M</div></div>
                                     </div>
                                 <?php elseif ($plugin['slug'] === 'shell_hook'): ?>
-                                    <div class="row g-2 mb-2">
-                                        <div class="col-6"><label class="form-label small fw-semibold mb-1">Pre-backup Script</label><input type="text" class="form-control form-control-sm" name="plugin_config[pre_script]"><div class="form-text small">Absolute path to script</div></div>
-                                        <div class="col-6"><label class="form-label small fw-semibold mb-1">Post-backup Script</label><input type="text" class="form-control form-control-sm" name="plugin_config[post_script]"><div class="form-text small">Absolute path to script</div></div>
+                                    <div class="mb-3">
+                                        <label class="form-label small fw-semibold mb-1">Pre-backup Script</label>
+                                        <input type="text" class="form-control form-control-sm" name="plugin_config[pre_script]" placeholder="/opt/hooks/pre-backup.sh">
+                                        <div class="form-text small">Runs on the client before borg starts. Leave empty to skip.</div>
                                     </div>
-                                    <div class="row g-2 mb-2">
-                                        <div class="col-auto"><div class="form-check"><input class="form-check-input" type="checkbox" name="plugin_config[abort_on_failure]" value="1" id="newCfg<?= $plugin['id'] ?>_abort" checked><label class="form-check-label small" for="newCfg<?= $plugin['id'] ?>_abort">Abort backup on failure</label></div></div>
-                                        <div class="col"><label class="form-label small fw-semibold mb-1">Timeout (seconds)</label><input type="number" class="form-control form-control-sm" name="plugin_config[timeout]" value="300"></div>
+                                    <div class="mb-3">
+                                        <label class="form-label small fw-semibold mb-1">Post-backup Script</label>
+                                        <input type="text" class="form-control form-control-sm" name="plugin_config[post_script]" placeholder="/opt/hooks/post-backup.sh">
+                                        <div class="row g-2 mt-1 align-items-center">
+                                            <div class="col-auto"><span class="form-text small mb-0">Run it</span></div>
+                                            <div class="col-auto">
+                                                <select class="form-select form-select-sm" name="plugin_config[post_script_timing]" style="width:auto;">
+                                                    <option value="backup" selected>as soon as the backup finishes</option>
+                                                    <option value="repo_jobs">after prune and offsite sync finish</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="form-text small">Prune and offsite sync run on the BBS server after the client has sent its data, so the first option fires while that work is still going. Pick the second if the script does something the repository can't survive mid-prune — powering down its storage host, say. The client must still be online when it's sent.</div>
+                                    </div>
+                                    <div class="row g-3 mb-2 align-items-end">
+                                        <div class="col-sm-4">
+                                            <label class="form-label small fw-semibold mb-1">Timeout (seconds)</label>
+                                            <input type="number" class="form-control form-control-sm" name="plugin_config[timeout]" value="300">
+                                        </div>
+                                        <div class="col-sm-8">
+                                            <div class="form-check"><input class="form-check-input" type="checkbox" name="plugin_config[abort_on_failure]" value="1" id="newCfg<?= $plugin['id'] ?>_abort" checked><label class="form-check-label small" for="newCfg<?= $plugin['id'] ?>_abort">Abort the backup if the pre-script fails</label></div>
+                                        </div>
                                     </div>
                                     <div class="mb-2">
                                         <div class="form-check"><input class="form-check-input" type="checkbox" name="plugin_config[expose_passphrase]" value="1" id="newCfg<?= $plugin['id'] ?>_expose"><label class="form-check-label small" for="newCfg<?= $plugin['id'] ?>_expose">Expose repository passphrase to script <span class="text-muted">(advanced)</span></label></div>
-                                        <div class="form-text small">Exposes <code>BORG_PASSCOMMAND</code> and <code>BORG_REPO</code> so the script can run <code>borg create --content-from-command</code> directly. Credentials are passed via a mode-0600 temp file (not env vars), but only enable this for scripts you've reviewed — see the wiki for details.</div>
+                                        <div class="form-text small">Exposes <code>BORG_PASSCOMMAND</code> and <code>BORG_REPO</code> so the script can run <code>borg create --content-from-command</code> directly. Credentials go through a mode-0600 temp file rather than env vars — only enable it for scripts you've reviewed.</div>
                                     </div>
                                 <?php else: ?>
                                     <?php foreach ($schema as $field => $def):
