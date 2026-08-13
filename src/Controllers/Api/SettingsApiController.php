@@ -39,6 +39,11 @@ class SettingsApiController extends Controller
             'agent_offline_notify_minutes' => 'int',
             'auto_retry_failed_backups' => 'bool',
             'auto_retry_max_attempts' => 'int',
+            // Per-install defaults for the two settings a client profile can
+            // override. Null on a profile means "use these".
+            'job_offline_grace_minutes' => 'int',
+            'auto_retry_backoff_minutes' => 'int',
+            'precount_files' => 'bool',
             'auto_update_agents' => 'bool',
             'auto_compact_day' => 'int',
             'auto_compact_hour' => 'int',
@@ -54,6 +59,7 @@ class SettingsApiController extends Controller
             'notification_retention_days' => 'int',
             'force_2fa' => 'bool',
             'telemetry_opt_out' => 'bool',
+            'storage_alert_threshold' => 'int',
         ],
         'email' => [
             'smtp_host' => 'str',
@@ -62,6 +68,12 @@ class SettingsApiController extends Controller
             'smtp_secure' => 'str',
             'smtp_from' => 'str',
             'inapp_notify_success_events' => 'bool',
+            'apprise_urls' => 'str',
+            'apprise_on_backup_failed' => 'bool',
+            'apprise_on_backup_warning' => 'bool',
+            'apprise_on_agent_offline' => 'bool',
+            'apprise_on_storage_low' => 'bool',
+            'apprise_on_missed_schedule' => 'bool',
             'email_on_backup_failed' => 'bool',
             'email_on_backup_warning' => 'bool',
             'email_on_agent_offline' => 'bool',
