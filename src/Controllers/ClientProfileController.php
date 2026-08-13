@@ -158,8 +158,13 @@ class ClientProfileController extends Controller
         $this->redirect('/settings?tab=profiles');
     }
 
-    /** GET /api/client-profiles/{id} — used by the edit form and the impact dialog. */
-    public function json(int $id): void
+    /**
+     * GET /api/client-profiles/{id} — used by the impact dialog.
+     *
+     * Not named json(): the base controller's json() is the response helper,
+     * and an incompatible override of it fatals before routing gets a chance.
+     */
+    public function show(int $id): void
     {
         $this->requireAuth();
         $service = $this->service();

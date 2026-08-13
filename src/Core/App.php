@@ -236,7 +236,7 @@ class App
         $this->router->map('GET', '/api/agent-updates', 'SettingsController@agentUpdatesJson');
         $this->router->map('GET', '/api/borg-status', 'SettingsController@borgStatusJson');
         $this->router->map('GET', '/api/templates/[i:id]', 'SettingsController@templateJson');
-        $this->router->map('GET', '/api/client-profiles/[i:id]', 'ClientProfileController@json');
+        $this->router->map('GET', '/api/client-profiles/[i:id]', 'ClientProfileController@show');
         $this->router->map('POST', '/settings/offsite-storage', 'StorageLocationController@saveS3');
         $this->router->map('POST', '/settings/offsite-storage/test', 'StorageLocationController@testS3');
         $this->router->map('POST', '/settings/borg/sync', 'SettingsController@syncBorgVersions');
