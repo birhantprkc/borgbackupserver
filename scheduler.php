@@ -2204,7 +2204,7 @@ if ((int) date('i') % 15 === 0) {
                 $diskData = $remoteSshService->refreshBorgBaseDiskUsage($rcFull);
             } else {
                 $diskData = $remoteSshService->getDiskUsage($rcFull);
-                $remoteSshService->updateDiskUsage((int) $rc['id'], $diskData, 'df');
+                $remoteSshService->updateDiskUsage((int) $rc['id'], $diskData, 'df', $remoteSshService->lastDiskError());
             }
             if ($diskData) {
                 echo date('Y-m-d H:i:s') . " Remote SSH \"{$rc['name']}\": {$diskData['percent']}% used\n";

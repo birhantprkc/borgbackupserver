@@ -246,9 +246,18 @@ class RemoteSshService
      * Check disk usage on a remote SSH host by running df -k.
      * Returns ['total' => bytes, 'used' => bytes, 'free' => bytes, 'percent' => int] or null if unavailable.
      */
+    /** Why the last getDiskUsage() call came back empty, for the UI to show. */
+    private ?string $lastDiskError = null;
+
+    public function lastDiskError(): ?string
+    {
+        return $this->lastDiskError;
+    }
+
     public function getDiskUsage(array $config): ?array
     {
         $keyFile = null;
+        $this->lastDiskError = null;
         try {
             $sshKey = $this->decryptKey($config);
             $keyFile = $this->writeTempKey($sshKey);
@@ -261,6 +270,7 @@ class RemoteSshService
             // protects the local side). Reject anything that isn't a plain
             // POSIX path so shell metacharacters can't escape.
             if (!preg_match('#^[A-Za-z0-9_./\-]+$#', $basePath)) {
+                $this->lastDiskError = 'Base path contains characters that are unsafe to send to a remote shell';
                 return null;
             }
 
@@ -284,22 +294,31 @@ class RemoteSshService
             ], $pipes, null, $this->buildServerEnv());
 
             if (!is_resource($proc)) {
+                $this->lastDiskError = 'Could not start ssh on the server';
                 return null;
             }
 
             fclose($pipes[0]);
             $stdout = trim(stream_get_contents($pipes[1]));
             fclose($pipes[1]);
+            $stderr = trim(stream_get_contents($pipes[2]));
             fclose($pipes[2]);
             $exitCode = proc_close($proc);
 
             if ($exitCode !== 0 || empty($stdout)) {
+                // ssh's own message is the useful part — "Name or service not
+                // known", "Permission denied", "Connection timed out" — and
+                // saying which of those happened is the whole point.
+                $this->lastDiskError = $stderr !== ''
+                    ? substr(preg_replace('/\s+/', ' ', $stderr), 0, 200)
+                    : "df exited {$exitCode} with no output";
                 return null;
             }
 
             // Parse df -k output (second line has the data)
             $lines = preg_split('/\n/', $stdout);
             if (count($lines) < 2) {
+                $this->lastDiskError = 'This provider does not support df — no usage figures to read';
                 return null;
             }
 
@@ -314,6 +333,7 @@ class RemoteSshService
 
             // Fields: Filesystem 1K-blocks Used Available Use% Mounted
             if (count($fields) < 4) {
+                $this->lastDiskError = 'df output was not in the expected format';
                 return null;
             }
 
@@ -324,6 +344,7 @@ class RemoteSshService
 
             return ['total' => $total, 'used' => $used, 'free' => $free, 'percent' => $percent];
         } catch (\Exception $e) {
+            $this->lastDiskError = substr($e->getMessage(), 0, 200);
             return null;
         } finally {
             $this->cleanupTempKey($keyFile);
@@ -423,7 +444,7 @@ class RemoteSshService
     /**
      * Store disk usage data for a remote SSH config, including the source when known.
      */
-    public function updateDiskUsage(int $configId, ?array $diskData, ?string $source = null): void
+    public function updateDiskUsage(int $configId, ?array $diskData, ?string $source = null, ?string $error = null): void
     {
         $this->db->update('remote_ssh_configs', [
             'disk_total_bytes' => $diskData ? $diskData['total'] : null,
@@ -431,6 +452,7 @@ class RemoteSshService
             'disk_free_bytes' => $diskData ? $diskData['free'] : null,
             'disk_checked_at' => $this->db->now(),
             'borgbase_usage_source' => $source,
+            'disk_check_error' => $diskData ? null : $error,
         ], 'id = ?', [$configId]);
     }
 

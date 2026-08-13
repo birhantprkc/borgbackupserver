@@ -163,6 +163,7 @@ CREATE TABLE remote_ssh_configs (
     disk_used_bytes BIGINT DEFAULT NULL,
     disk_free_bytes BIGINT DEFAULT NULL,
     disk_checked_at DATETIME DEFAULT NULL,
+    disk_check_error VARCHAR(255) DEFAULT NULL,
     borgbase_api_key_encrypted TEXT DEFAULT NULL,
     borgbase_repo_name VARCHAR(255) DEFAULT NULL,
     borgbase_manual_quota_gb DECIMAL(12,3) DEFAULT NULL,

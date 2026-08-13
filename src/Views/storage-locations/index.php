@@ -1591,7 +1591,17 @@ function applyRemotePreset(select, form) {
                     <?php endif; ?>
                 </div>
                 <?php elseif ($wasChecked): ?>
-                <div class="mt-2 small text-muted"><i class="bi bi-exclamation-triangle me-1"></i><?= $isBorgBase ? 'Set quota manually or use API' : 'Quota unavailable — provider does not support disk usage queries' ?></div>
+                <div class="mt-2 small text-muted"><i class="bi bi-exclamation-triangle me-1"></i><?php
+                    if ($isBorgBase) {
+                        echo 'Set quota manually or use API';
+                    } elseif (!empty($rsc['disk_check_error'])) {
+                        // The recorded reason, rather than blaming the provider
+                        // for what is usually a name, key or firewall problem.
+                        echo 'Quota unavailable — ' . htmlspecialchars($rsc['disk_check_error']);
+                    } else {
+                        echo 'Quota unavailable — not checked yet';
+                    }
+                ?></div>
                 <?php endif; ?>
                 <div id="remoteSshTestResult<?= $rsc['id'] ?>" class="mt-2"></div>
             </div>
