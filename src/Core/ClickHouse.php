@@ -193,12 +193,20 @@ class ClickHouse
                     UNION ALL
 
                     -- every ancestor of those, contributing nothing of its own,
-                    -- so the tree has no gaps when it is browsed
+                    -- so the tree has no gaps when it is browsed.
+                    --
+                    -- The range starts at 1, not 2. A POSIX path splits with a
+                    -- leading empty element ('/home/x' -> ['', 'home', 'x']), so
+                    -- i=1 yields '' and is dropped by the filter below. A Windows
+                    -- path has no such element ('C/Users/x' -> ['C', 'Users', 'x']),
+                    -- so skipping i=1 skipped the drive itself — leaving the tree
+                    -- with no entry at the browse root and a file browser that
+                    -- showed nothing at all (#394).
                     SELECT anc AS dir_path, 0 AS fc, 0 AS sz
                     FROM (
                         SELECT arrayJoin(arrayMap(
                                    i -> arrayStringConcat(arraySlice(parts, 1, i), '/'),
-                                   range(2, length(parts))
+                                   range(1, length(parts))
                                )) AS anc
                         FROM (
                             SELECT splitByChar('/', parent_dir) AS parts
