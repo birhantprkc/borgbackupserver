@@ -22,7 +22,19 @@ class ClientController extends Controller
                    (SELECT COUNT(*) FROM repositories r WHERE r.agent_id = a.id) as repo_count,
                    (SELECT COUNT(*) FROM schedules s JOIN backup_plans bp ON bp.id = s.backup_plan_id WHERE bp.agent_id = a.id) as schedule_count,
                    (SELECT COALESCE(SUM(r2.size_bytes), 0) FROM repositories r2 WHERE r2.agent_id = a.id) as total_size,
-                   (SELECT COUNT(*) FROM archives ar JOIN repositories r3 ON r3.id = ar.repository_id WHERE r3.agent_id = a.id) as restore_points
+                   (SELECT COUNT(*) FROM archives ar JOIN repositories r3 ON r3.id = ar.repository_id WHERE r3.agent_id = a.id) as restore_points,
+                   (SELECT MAX(sj.completed_at) FROM backup_jobs sj
+                     WHERE sj.agent_id = a.id AND sj.task_type = 'backup' AND sj.status = 'completed') as last_success_at,
+                   -- Failed backups since that success. Counted from the epoch
+                   -- when there has never been one, so a client that has never
+                   -- backed up successfully shows every attempt rather than 0.
+                   (SELECT COUNT(*) FROM backup_jobs fj
+                     WHERE fj.agent_id = a.id AND fj.task_type = 'backup' AND fj.status = 'failed'
+                       AND fj.completed_at > COALESCE(
+                           (SELECT MAX(sj2.completed_at) FROM backup_jobs sj2
+                             WHERE sj2.agent_id = a.id AND sj2.task_type = 'backup' AND sj2.status = 'completed'),
+                           '1970-01-01 00:00:00')
+                   ) as missed_since_success
             FROM agents a
             LEFT JOIN users u ON u.id = a.user_id
             WHERE {$where}

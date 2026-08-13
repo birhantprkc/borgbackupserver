@@ -113,20 +113,22 @@
             <table class="table table-hover mb-0 small" id="clientsTable">
                 <thead class="table-light">
                     <tr>
-                        <th>Name</th>
-                        <th>Agent Version</th>
-                        <th>Restore Points</th>
-                        <th>Size</th>
-                        <th>Schedules</th>
-                        <th>Repos</th>
-                        <th>Owner</th>
-                        <th>Status</th>
+                        <th data-sortable>Name</th>
+                        <th data-sortable>Agent<br>Version</th>
+                        <th data-sortable>Last<br>Successful</th>
+                        <th data-sortable title="Backup attempts that failed since the last successful one">Missed Since<br>Success</th>
+                        <th data-sortable>Restore<br>Points</th>
+                        <th data-sortable>Size</th>
+                        <th data-sortable>Schedules</th>
+                        <th data-sortable>Repos</th>
+                        <th data-sortable>Owner</th>
+                        <th data-sortable>Status</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php if (empty($agents)): ?>
                     <tr>
-                        <td colspan="8" class="text-center text-muted py-4">No clients configured. Click "Add Client" to get started.</td>
+                        <td colspan="10" class="text-center text-muted py-4">No clients configured. Click "Add Client" to get started.</td>
                     </tr>
                     <?php endif; ?>
                     <?php foreach ($agents as $agent): ?>
@@ -146,8 +148,26 @@
                                 </form>
                             <?php endif; ?>
                         </td>
-                        <td><?= number_format($agent['restore_points']) ?></td>
-                        <td><?php $sz = (int) $agent['total_size']; echo $sz > 0 ? \BBS\Services\ServerStats::formatBytes($sz) : '--'; ?></td>
+                        <?php
+                        $lastSuccess = $agent['last_success_at'] ?? null;
+                        $missed = (int) ($agent['missed_since_success'] ?? 0);
+                        ?>
+                        <td data-sort="<?= $lastSuccess ? strtotime($lastSuccess . ' UTC') : 0 ?>">
+                            <?php if ($lastSuccess): ?>
+                                <span title="<?= htmlspecialchars(\BBS\Core\TimeHelper::format($lastSuccess)) ?>"><?= \BBS\Core\TimeHelper::ago($lastSuccess) ?></span>
+                            <?php else: ?>
+                                <span class="text-muted">Never</span>
+                            <?php endif; ?>
+                        </td>
+                        <td data-sort="<?= $missed ?>">
+                            <?php if ($missed === 0): ?>
+                                <span class="text-muted">--</span>
+                            <?php else: ?>
+                                <span class="badge bg-<?= $missed >= 3 ? 'danger' : 'warning' ?>"><?= $missed ?></span>
+                            <?php endif; ?>
+                        </td>
+                        <td data-sort="<?= (int) $agent['restore_points'] ?>"><?= number_format($agent['restore_points']) ?></td>
+                        <td data-sort="<?= (int) $agent['total_size'] ?>"><?php $sz = (int) $agent['total_size']; echo $sz > 0 ? \BBS\Services\ServerStats::formatBytes($sz) : '--'; ?></td>
                         <td><?= $agent['schedule_count'] ?></td>
                         <td><?= $agent['repo_count'] ?></td>
                         <td><?= htmlspecialchars($agent['owner_name'] ?? '--') ?></td>
@@ -166,6 +186,19 @@
                     <?php endforeach; ?>
                 </tbody>
             </table>
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 px-3 py-2 border-top">
+                <div class="d-flex align-items-center gap-2">
+                    <label class="form-label small text-muted mb-0" for="clientsPageSize">Show</label>
+                    <select id="clientsPageSize" class="form-select form-select-sm" style="width:auto;">
+                        <option value="25" selected>25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="0">All</option>
+                    </select>
+                    <span id="clientsPageInfo" class="small text-muted"></span>
+                </div>
+                <nav><ul class="pagination pagination-sm mb-0" id="clientsPager"></ul></nav>
+            </div>
         </div>
 
         <!-- Mobile card/list view -->
@@ -208,17 +241,133 @@
 
 <?php if (!empty($agents)): ?>
 <script>
-document.getElementById('clientSearch').addEventListener('input', function() {
-    const filter = this.value.toLowerCase();
-    // Filter desktop table
-    document.querySelectorAll('#clientsTable tbody tr').forEach(function(row) {
-        row.style.display = row.textContent.toLowerCase().includes(filter) ? '' : 'none';
+// Sort / search / paginate for the clients table. Hand-rolled rather than
+// pulled in: the whole table is already rendered server-side, this is a
+// hundred lines, and a self-hosted install shouldn't need to reach a CDN.
+(function () {
+    var table = document.getElementById('clientsTable');
+    if (!table) return;
+    var tbody = table.tBodies[0];
+    var allRows = Array.prototype.slice.call(tbody.rows);
+    var pager = document.getElementById('clientsPager');
+    var info = document.getElementById('clientsPageInfo');
+    var sizeSel = document.getElementById('clientsPageSize');
+    var search = document.getElementById('clientSearch');
+
+    var state = { term: '', sortCol: null, sortAsc: true, page: 1, size: parseInt(sizeSel.value, 10) };
+
+    // Sort on the cell's data-sort when it has one. Relative times ("38m ago")
+    // and formatted sizes ("1.2 GB") do not sort as text, so those cells carry
+    // the underlying number and this uses that instead.
+    function keyFor(row, col) {
+        var cell = row.cells[col];
+        if (!cell) return '';
+        if (cell.hasAttribute('data-sort')) return parseFloat(cell.getAttribute('data-sort')) || 0;
+        return cell.textContent.trim().toLowerCase();
+    }
+
+    function visibleRows() {
+        if (!state.term) return allRows;
+        return allRows.filter(function (r) {
+            return r.textContent.toLowerCase().indexOf(state.term) !== -1;
+        });
+    }
+
+    function render() {
+        var rows = visibleRows();
+
+        if (state.sortCol !== null) {
+            rows = rows.slice().sort(function (a, b) {
+                var ka = keyFor(a, state.sortCol), kb = keyFor(b, state.sortCol);
+                var cmp = (typeof ka === 'number' && typeof kb === 'number')
+                    ? ka - kb
+                    : String(ka).localeCompare(String(kb), undefined, { numeric: true });
+                return state.sortAsc ? cmp : -cmp;
+            });
+        }
+
+        var total = rows.length;
+        var pages = state.size === 0 ? 1 : Math.max(1, Math.ceil(total / state.size));
+        if (state.page > pages) state.page = pages;
+        var start = state.size === 0 ? 0 : (state.page - 1) * state.size;
+        var end = state.size === 0 ? total : Math.min(start + state.size, total);
+
+        tbody.textContent = '';
+        if (total === 0) {
+            var tr = document.createElement('tr');
+            var td = document.createElement('td');
+            td.colSpan = table.tHead.rows[0].cells.length;
+            td.className = 'text-center text-muted py-4';
+            td.textContent = 'No clients match "' + state.term + '".';
+            tr.appendChild(td); tbody.appendChild(tr);
+        } else {
+            rows.slice(start, end).forEach(function (r) { tbody.appendChild(r); });
+        }
+
+        info.textContent = total === 0 ? 'No matches'
+            : 'Showing ' + (start + 1) + '\u2013' + end + ' of ' + total
+              + (total === allRows.length ? '' : ' (filtered from ' + allRows.length + ')');
+
+        pager.textContent = '';
+        if (pages > 1) {
+            var mk = function (label, page, disabled, active) {
+                var li = document.createElement('li');
+                li.className = 'page-item' + (disabled ? ' disabled' : '') + (active ? ' active' : '');
+                var a = document.createElement('button');
+                a.type = 'button'; a.className = 'page-link'; a.textContent = label;
+                a.addEventListener('click', function () { state.page = page; render(); });
+                li.appendChild(a); return li;
+            };
+            pager.appendChild(mk('\u2039', state.page - 1, state.page === 1, false));
+            // Window the page numbers so 40 clients don't produce 40 buttons.
+            var from = Math.max(1, state.page - 2), to = Math.min(pages, from + 4);
+            from = Math.max(1, to - 4);
+            for (var i = from; i <= to; i++) pager.appendChild(mk(String(i), i, false, i === state.page));
+            pager.appendChild(mk('\u203a', state.page + 1, state.page === pages, false));
+        }
+    }
+
+    table.querySelectorAll('th[data-sortable]').forEach(function (th, i) {
+        th.style.cursor = 'pointer';
+        th.title = th.title || 'Sort by ' + th.textContent.replace(/\s+/g, ' ').trim();
+        var caret = document.createElement('i');
+        caret.className = 'bi bi-arrow-down-up ms-1 text-muted';
+        caret.style.fontSize = '0.7rem';
+        caret.style.opacity = '0.4';
+        th.appendChild(caret);
+        th.addEventListener('click', function () {
+            var col = Array.prototype.indexOf.call(th.parentNode.cells, th);
+            state.sortAsc = (state.sortCol === col) ? !state.sortAsc : true;
+            state.sortCol = col;
+            state.page = 1;
+            table.querySelectorAll('th[data-sortable] i').forEach(function (ic) {
+                ic.className = 'bi bi-arrow-down-up ms-1 text-muted';
+                ic.style.opacity = '0.4';
+            });
+            caret.className = 'bi ms-1 ' + (state.sortAsc ? 'bi-sort-down-alt' : 'bi-sort-up-alt');
+            caret.style.opacity = '1';
+            render();
+        });
     });
-    // Filter mobile list
-    document.querySelectorAll('#clientsList .list-group-item').forEach(function(item) {
-        item.style.display = item.textContent.toLowerCase().includes(filter) ? '' : 'none';
+
+    sizeSel.addEventListener('change', function () {
+        state.size = parseInt(this.value, 10);
+        state.page = 1;
+        render();
     });
-});
+
+    search.addEventListener('input', function () {
+        state.term = this.value.toLowerCase();
+        state.page = 1;
+        render();
+        // The mobile list is a plain list, so it just filters.
+        document.querySelectorAll('#clientsList .list-group-item').forEach(function (item) {
+            item.style.display = item.textContent.toLowerCase().indexOf(state.term) !== -1 ? '' : 'none';
+        });
+    });
+
+    render();
+})();
 </script>
 <script src="/assets/chartjs/chart.umd.min.js"></script>
 <script>
