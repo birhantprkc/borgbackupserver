@@ -30,6 +30,7 @@ class SettingsController extends Controller
         }
 
         $templates = $this->db->fetchAll("SELECT * FROM backup_templates ORDER BY name");
+        $clientProfiles = (new \BBS\Services\ClientProfileService())->all();
 
         $oidcUsers = $this->db->fetchAll("SELECT id, username, email, role FROM users ORDER BY username");
 
@@ -63,6 +64,7 @@ class SettingsController extends Controller
             'pageTitle' => 'Settings',
             'settings' => $settings,
             'templates' => $templates,
+            'clientProfiles' => $clientProfiles,
             'apiTokens' => $apiTokens,
             'oidcUsers' => $oidcUsers,
             'smtpWarning' => $smtpWarning,

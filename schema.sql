@@ -131,6 +131,7 @@ CREATE TABLE agents (
     status ENUM('setup', 'online', 'offline', 'error') NOT NULL DEFAULT 'setup',
     last_heartbeat DATETIME DEFAULT NULL,
     user_id INT DEFAULT NULL,
+    client_profile_id INT DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
@@ -570,6 +571,35 @@ INSERT INTO backup_templates (name, description, directories, excludes) VALUES
 ('Docker Host', 'Docker/container host', '/opt\n/srv\n/home\n/etc\n/var/lib/docker/volumes', '*.tmp\n*.log\n/var/lib/docker/overlay2'),
 ('Minimal (System Config)', 'Essential system configuration only', '/etc\n/root\n/home\n/var/spool/cron', '*.tmp\n*.log\n*.cache');
 
+CREATE TABLE client_profiles (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    description VARCHAR(255) NOT NULL DEFAULT '',
+    template_id INT DEFAULT NULL,
+    frequency VARCHAR(30) NOT NULL DEFAULT 'daily',
+    times VARCHAR(255) DEFAULT '02:00',
+    day_of_week TINYINT DEFAULT NULL,
+    day_of_month VARCHAR(20) DEFAULT NULL,
+    prune_minutes INT NOT NULL DEFAULT 0,
+    prune_hours INT NOT NULL DEFAULT 0,
+    prune_days INT NOT NULL DEFAULT 7,
+    prune_weeks INT NOT NULL DEFAULT 4,
+    prune_months INT NOT NULL DEFAULT 6,
+    prune_years INT NOT NULL DEFAULT 0,
+    -- Null means "use the server-wide setting" rather than zero.
+    auto_retry_max_attempts INT DEFAULT NULL,
+    job_offline_grace_minutes INT DEFAULT NULL,
+    auto_retry_backoff_minutes INT DEFAULT NULL,
+    is_default TINYINT(1) NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_profile_name (name),
+    FOREIGN KEY (template_id) REFERENCES backup_templates(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+INSERT INTO client_profiles (name, description, is_default)
+VALUES ('Default', 'Every client starts here until it is given a profile of its own.', 1);
+
 -- --------------------------------------------------------
 -- Borg Version Management
 -- --------------------------------------------------------
@@ -602,5 +632,6 @@ CREATE TABLE borg_version_assets (
 -- Foreign Keys (added after all tables created)
 -- --------------------------------------------------------
 
+ALTER TABLE agents ADD FOREIGN KEY (client_profile_id) REFERENCES client_profiles(id) ON DELETE SET NULL;
 ALTER TABLE user_agents ADD FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE;
 ALTER TABLE user_permissions ADD FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE;

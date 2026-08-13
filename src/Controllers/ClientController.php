@@ -226,6 +226,7 @@ class ClientController extends Controller
         $this->view('clients/add', [
             'pageTitle' => 'Clients',
             'users' => $users,
+            'clientProfiles' => (new \BBS\Services\ClientProfileService())->all(),
         ]);
     }
 
@@ -243,12 +244,23 @@ class ClientController extends Controller
         $apiKey = bin2hex(random_bytes(32));
         $userId = !empty($_POST['user_id']) ? (int) $_POST['user_id'] : null;
 
+        // Falls back to the default profile rather than null, so failure
+        // settings and plan defaults always resolve to something.
+        $profileService = new \BBS\Services\ClientProfileService();
+        $profileId = !empty($_POST['client_profile_id'])
+            ? (int) $_POST['client_profile_id']
+            : $profileService->defaultProfileId();
+        if ($profileId && !$profileService->find($profileId)) {
+            $profileId = $profileService->defaultProfileId();
+        }
+
         $id = $this->db->insert('agents', [
             'name' => $name,
             'api_key_hash' => hash('sha256', $apiKey),
             'api_key_encrypted' => \BBS\Services\Encryption::encrypt($apiKey),
             'status' => 'setup',
             'user_id' => $userId,
+            'client_profile_id' => $profileId,
         ]);
 
         // Determine SSH home path: use storage_path unless a separate storage location
@@ -526,6 +538,7 @@ class ClientController extends Controller
         }
 
         $this->view('clients/detail', [
+            'profileDefaults' => (new \BBS\Services\ClientProfileService())->planDefaults((int) $id),
             'pageTitle' => 'Clients',
             'agent' => $agent,
             'totalSize' => $totalSize,

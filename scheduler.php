@@ -110,17 +110,27 @@ if (!empty($candidates)) {
 // Progress reports refresh last_progress_at (and the heartbeat with it), so
 // a backup that is merely slow keeps itself alive. The agent still *shows*
 // offline immediately — this only governs killing its work.
-$graceMinutes = max(1, (int) ($db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'job_offline_grace_minutes'")['value'] ?? 5));
+// The grace period is per client profile where one sets it, and the server
+// setting otherwise: a laptop that sleeps and a database server on a wired LAN
+// deserve different patience. COALESCE picks the profile's value per row, so
+// one sweep still covers the whole fleet.
+$profileService = new \BBS\Services\ClientProfileService();
+$graceMinutes = $profileService->globalFailureSetting('job_offline_grace_minutes');
+$graceMinutes = max(1, $graceMinutes);
 
 $staleJobs = $db->fetchAll("
     SELECT bj.id, bj.agent_id, bj.task_type, bj.backup_plan_id, bj.repository_id,
-           bj.status, bj.retry_count, a.name as agent_name
+           bj.status, bj.retry_count, a.name as agent_name,
+           COALESCE(cp.job_offline_grace_minutes, {$graceMinutes}) AS grace_minutes
     FROM backup_jobs bj
     JOIN agents a ON a.id = bj.agent_id
+    LEFT JOIN client_profiles cp ON cp.id = a.client_profile_id
     WHERE bj.status IN ('sent', 'running')
       AND a.status = 'offline'
-      AND (a.last_heartbeat IS NULL OR a.last_heartbeat < DATE_SUB(NOW(), INTERVAL {$graceMinutes} MINUTE))
-      AND (bj.last_progress_at IS NULL OR bj.last_progress_at < DATE_SUB(NOW(), INTERVAL {$graceMinutes} MINUTE))
+      AND (a.last_heartbeat IS NULL
+           OR a.last_heartbeat < DATE_SUB(NOW(), INTERVAL COALESCE(cp.job_offline_grace_minutes, {$graceMinutes}) MINUTE))
+      AND (bj.last_progress_at IS NULL
+           OR bj.last_progress_at < DATE_SUB(NOW(), INTERVAL COALESCE(cp.job_offline_grace_minutes, {$graceMinutes}) MINUTE))
       AND bj.task_type NOT IN ('prune', 'compact', 's3_sync', 's3_restore', 'repo_check', 'repo_repair', 'break_lock', 'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full', 'archive_delete', 'archive_lock', 'update_borg', 'update_agent')
 ");
 
@@ -128,9 +138,12 @@ $staleJobs = $db->fetchAll("
 // failures; real errors (borg path missing, encryption failed, etc.) are
 // reported by the agent via /api/agent/status and never enter this sweep.
 $autoRetryEnabled = (($db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'auto_retry_failed_backups'")['value'] ?? '1') === '1');
-$autoRetryMax = max(0, (int) ($db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'auto_retry_max_attempts'")['value'] ?? 3));
-
 foreach ($staleJobs as $sj) {
+    // Retry budget and backoff follow the client's profile too, so a fleet of
+    // laptops can be given a longer leash without loosening it for servers.
+    $failure = $profileService->failureSettingsForAgent((int) $sj['agent_id']);
+    $autoRetryMax = $failure['auto_retry_max_attempts'];
+
     $isBackup = ($sj['task_type'] === 'backup' && !empty($sj['backup_plan_id']));
     $attempt = ((int) $sj['retry_count']) + 1;
     $willRetry = $isBackup && $autoRetryEnabled && $attempt <= $autoRetryMax;
@@ -154,7 +167,7 @@ foreach ($staleJobs as $sj) {
         // of files that is hours of traversal, which is itself enough load to
         // knock it over again. Doubling from 5 minutes and capped at an hour
         // spreads a full retry budget over most of a day instead of minutes.
-        $backoffBase = max(1, (int) ($db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'auto_retry_backoff_minutes'")['value'] ?? 5));
+        $backoffBase = max(1, $failure['auto_retry_backoff_minutes']);
         $backoffMinutes = min(60, $backoffBase * (2 ** ($attempt - 1)));
         $notBefore = date('Y-m-d H:i:s', time() + $backoffMinutes * 60);
 

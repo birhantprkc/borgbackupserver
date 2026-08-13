@@ -2340,9 +2340,10 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                             <option value="15min">Every 15 Minutes</option>
                             <option value="30min">Every 30 Minutes</option>
                             <option value="hourly">Every Hour</option>
-                            <option value="daily" selected>Every Day</option>
-                            <option value="weekly">Weekly</option>
-                            <option value="monthly">Monthly</option>
+                            <?php $pf = $profileDefaults['frequency'] ?? 'daily'; ?>
+                            <option value="daily" <?= $pf === 'daily' ? 'selected' : '' ?>>Every Day</option>
+                            <option value="weekly" <?= $pf === 'weekly' ? 'selected' : '' ?>>Weekly</option>
+                            <option value="monthly" <?= $pf === 'monthly' ? 'selected' : '' ?>>Monthly</option>
                         </select>
                     </div>
                 </div>
@@ -2391,7 +2392,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                             <input type="number" class="form-control schedule-minute-offset" min="0" max="59" value="0">
                             <span class="input-group-text">min past the hour</span>
                         </div>
-                        <input type="hidden" name="times" class="schedule-times-hidden" value="01:00">
+                        <input type="hidden" name="times" class="schedule-times-hidden" value="<?= htmlspecialchars($profileDefaults['times'] ?? '01:00') ?>">
                     </div>
                 </div>
 
@@ -2457,7 +2458,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                         <select class="form-select" id="templateSelect">
                             <option value="">None (manual configuration)</option>
                             <?php foreach ($templates as $tpl): ?>
-                            <option value="<?= $tpl['id'] ?>"><?= htmlspecialchars($tpl['name']) ?> — <?= htmlspecialchars($tpl['description'] ?? '') ?></option>
+                            <option value="<?= $tpl['id'] ?>" <?= (int) ($profileDefaults['template_id'] ?? 0) === (int) $tpl['id'] ? 'selected' : '' ?>><?= htmlspecialchars($tpl['name']) ?> — <?= htmlspecialchars($tpl['description'] ?? '') ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -2470,7 +2471,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                     <label class="col-md-3 col-form-label fw-semibold">Backup Directories</label>
                     <div class="col-md-6">
                         <?php if ($isWindows): ?>
-                        <textarea class="form-control" name="directories" id="directoriesInput" rows="3" required placeholder="C:\Users&#10;C:\Projects&#10;C:\inetpub\wwwroot"></textarea>
+                        <textarea class="form-control" name="directories" id="directoriesInput" rows="3" required placeholder="C:\Users&#10;C:\Projects&#10;C:\inetpub\wwwroot"><?= htmlspecialchars($profileDefaults['directories'] ?? '') ?></textarea>
                         <div class="mt-2 d-flex flex-wrap align-items-center gap-1">
                             <?php $agentOnline = ($agent['status'] ?? '') === 'online'; ?>
                             <?php if ($agentOnline): ?>
@@ -2489,7 +2490,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                             <button type="button" class="btn btn-sm btn-outline-secondary dir-btn" data-dir="C:\ProgramData">C:\ProgramData</button>
                         </div>
                         <?php else: ?>
-                        <textarea class="form-control" name="directories" id="directoriesInput" rows="3" required placeholder="/home&#10;/etc&#10;/var/www"></textarea>
+                        <textarea class="form-control" name="directories" id="directoriesInput" rows="3" required placeholder="/home&#10;/etc&#10;/var/www"><?= htmlspecialchars($profileDefaults['directories'] ?? '') ?></textarea>
                         <div class="mt-2 d-flex flex-wrap align-items-center gap-1">
                             <?php $agentOnline = ($agent['status'] ?? '') === 'online'; ?>
                             <?php if ($agentOnline): ?>
@@ -2517,7 +2518,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                 <div class="row mb-3">
                     <label class="col-md-3 col-form-label fw-semibold">Exclude Patterns</label>
                     <div class="col-md-6">
-                        <textarea class="form-control" name="excludes" id="excludesInput" rows="3" placeholder="*.tmp&#10;*.log&#10;*.cache&#10;/home/*/tmp"></textarea>
+                        <textarea class="form-control" name="excludes" id="excludesInput" rows="3" placeholder="*.tmp&#10;*.log&#10;*.cache&#10;/home/*/tmp"><?= htmlspecialchars($profileDefaults['excludes'] ?? '') ?></textarea>
                     </div>
                     <div class="col-md-3 form-text pt-2">
                         One pattern per line.<br>
@@ -2588,27 +2589,27 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                         <div class="row g-2">
                             <div class="col">
                                 <label class="form-label small text-muted">Minutes</label>
-                                <input type="number" class="form-control" name="prune_minutes" value="0" min="-1" title="Number to keep. 0 disables this rule; -1 keeps them all.">
+                                <input type="number" class="form-control" name="prune_minutes" value="<?= htmlspecialchars((string) ($profileDefaults['prune_minutes'] ?? 0)) ?>" min="-1" title="Number to keep. 0 disables this rule; -1 keeps them all.">
                             </div>
                             <div class="col">
                                 <label class="form-label small text-muted">Hours</label>
-                                <input type="number" class="form-control" name="prune_hours" value="0" min="-1" title="Number to keep. 0 disables this rule; -1 keeps them all.">
+                                <input type="number" class="form-control" name="prune_hours" value="<?= htmlspecialchars((string) ($profileDefaults['prune_hours'] ?? 0)) ?>" min="-1" title="Number to keep. 0 disables this rule; -1 keeps them all.">
                             </div>
                             <div class="col">
                                 <label class="form-label small text-muted">Days</label>
-                                <input type="number" class="form-control" name="prune_days" value="7" min="-1" title="Number to keep. 0 disables this rule; -1 keeps them all.">
+                                <input type="number" class="form-control" name="prune_days" value="<?= htmlspecialchars((string) ($profileDefaults['prune_days'] ?? 7)) ?>" min="-1" title="Number to keep. 0 disables this rule; -1 keeps them all.">
                             </div>
                             <div class="col">
                                 <label class="form-label small text-muted">Weeks</label>
-                                <input type="number" class="form-control" name="prune_weeks" value="4" min="-1" title="Number to keep. 0 disables this rule; -1 keeps them all.">
+                                <input type="number" class="form-control" name="prune_weeks" value="<?= htmlspecialchars((string) ($profileDefaults['prune_weeks'] ?? 4)) ?>" min="-1" title="Number to keep. 0 disables this rule; -1 keeps them all.">
                             </div>
                             <div class="col">
                                 <label class="form-label small text-muted">Months</label>
-                                <input type="number" class="form-control" name="prune_months" value="6" min="-1" title="Number to keep. 0 disables this rule; -1 keeps them all.">
+                                <input type="number" class="form-control" name="prune_months" value="<?= htmlspecialchars((string) ($profileDefaults['prune_months'] ?? 6)) ?>" min="-1" title="Number to keep. 0 disables this rule; -1 keeps them all.">
                             </div>
                             <div class="col">
                                 <label class="form-label small text-muted">Years</label>
-                                <input type="number" class="form-control" name="prune_years" value="0" min="-1" title="Number to keep. 0 disables this rule; -1 keeps them all.">
+                                <input type="number" class="form-control" name="prune_years" value="<?= htmlspecialchars((string) ($profileDefaults['prune_years'] ?? 0)) ?>" min="-1" title="Number to keep. 0 disables this rule; -1 keeps them all.">
                             </div>
                         </div>
                         <div class="form-text">How many archives to keep for each time period.</div>

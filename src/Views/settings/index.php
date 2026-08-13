@@ -34,6 +34,11 @@ $updateAvailable = $updateService->isUpdateAvailable();
         </a>
     </li>
     <li class="nav-item">
+        <a class="nav-link <?= $activeTab === 'profiles' ? 'active' : '' ?>" href="/settings?tab=profiles">
+            <i class="bi bi-diagram-3 me-1"></i><span class="tab-label">Profiles</span>
+        </a>
+    </li>
+    <li class="nav-item">
         <a class="nav-link <?= $activeTab === 'templates' ? 'active' : '' ?>" href="/settings?tab=templates">
             <i class="bi bi-clipboard-check me-1"></i><span class="tab-label">Templates</span>
         </a>
@@ -1356,6 +1361,300 @@ $pushRegistered = (bool) $pushSvc->serverId();
 
 
 <!-- Templates Tab -->
+<?php if ($activeTab === 'profiles'): ?>
+<?php
+$freqLabels = ['hourly' => 'Hourly', 'daily' => 'Daily', 'weekly' => 'Weekly', 'monthly' => 'Monthly'];
+$dowLabels = [0 => 'Sunday', 1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 => 'Thursday', 5 => 'Friday', 6 => 'Saturday'];
+// The form is identical for create and edit, so it is written once and the
+// modal is retargeted rather than duplicated — the two drifting apart is how a
+// field ends up saving on one screen and not the other.
+$renderProfileForm = function (?array $p) use ($templates, $freqLabels, $dowLabels) {
+    $v = fn($k, $d = '') => htmlspecialchars((string) ($p[$k] ?? $d));
+    ?>
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label class="form-label fw-semibold">Profile Name</label>
+            <input type="text" name="name" class="form-control" required value="<?= $v('name') ?>" placeholder="e.g. Laptops, DB Servers, Registers">
+        </div>
+        <div class="col-md-6">
+            <label class="form-label fw-semibold">Description</label>
+            <input type="text" name="description" class="form-control" value="<?= $v('description') ?>" placeholder="What kind of machine this is for">
+        </div>
+    </div>
+
+    <hr class="my-3">
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label class="form-label fw-semibold">Backup Template</label>
+            <select name="template_id" class="form-select">
+                <option value="">None — author directories per client</option>
+                <?php foreach ($templates as $t): ?>
+                <option value="<?= (int) $t['id'] ?>" <?= (int) ($p['template_id'] ?? 0) === (int) $t['id'] ? 'selected' : '' ?>><?= htmlspecialchars($t['name']) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <div class="form-text">Supplies the directories, exclude patterns and options a new plan starts with.</div>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label fw-semibold">Frequency</label>
+            <select name="frequency" class="form-select profile-frequency">
+                <?php foreach ($freqLabels as $fk => $fl): ?>
+                <option value="<?= $fk ?>" <?= ($p['frequency'] ?? 'daily') === $fk ? 'selected' : '' ?>><?= $fl ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label fw-semibold">Run Hours</label>
+            <input type="text" name="times" class="form-control" value="<?= $v('times', '02:00') ?>" placeholder="02:00">
+            <div class="form-text">Comma-separated for several runs a day.</div>
+        </div>
+        <div class="col-md-3 profile-dow" style="display:none;">
+            <label class="form-label fw-semibold">Day of Week</label>
+            <select name="day_of_week" class="form-select">
+                <?php foreach ($dowLabels as $dk => $dl): ?>
+                <option value="<?= $dk ?>" <?= (string) ($p['day_of_week'] ?? '0') === (string) $dk ? 'selected' : '' ?>><?= $dl ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div class="col-md-3 profile-dom" style="display:none;">
+            <label class="form-label fw-semibold">Day of Month</label>
+            <input type="text" name="day_of_month" class="form-control" value="<?= $v('day_of_month', '1') ?>" placeholder="1">
+        </div>
+    </div>
+
+    <hr class="my-3">
+    <label class="form-label fw-semibold mb-1">Retention</label>
+    <div class="form-text mb-2">How many backups to keep at each interval. 0 keeps none; -1 keeps every one.</div>
+    <div class="row g-2">
+        <?php foreach (['minutes' => 'Minutely', 'hours' => 'Hourly', 'days' => 'Daily', 'weeks' => 'Weekly', 'months' => 'Monthly', 'years' => 'Yearly'] as $unit => $label): ?>
+        <div class="col-4 col-md-2">
+            <label class="form-label small mb-1"><?= $label ?></label>
+            <input type="number" name="prune_<?= $unit ?>" class="form-control form-control-sm" min="-1"
+                   value="<?= $v('prune_' . $unit, in_array($unit, ['days','weeks','months']) ? ['days'=>7,'weeks'=>4,'months'=>6][$unit] : 0) ?>">
+        </div>
+        <?php endforeach; ?>
+    </div>
+
+    <hr class="my-3">
+    <label class="form-label fw-semibold mb-1">Failure Handling</label>
+    <div class="form-text mb-2">
+        Leave any of these blank to follow the server-wide setting. A fleet of laptops that sleep mid-backup
+        wants more patience than a database server on a wired LAN, which is the reason these live here at all.
+    </div>
+    <div class="row g-3">
+        <div class="col-md-4">
+            <label class="form-label small fw-semibold mb-1">Max Retry Attempts</label>
+            <input type="number" name="auto_retry_max_attempts" class="form-control form-control-sm" min="0" max="10"
+                   value="<?= $v('auto_retry_max_attempts') ?>" placeholder="Server default">
+        </div>
+        <div class="col-md-4">
+            <label class="form-label small fw-semibold mb-1">Give Up On Running Jobs After</label>
+            <div class="input-group input-group-sm">
+                <input type="number" name="job_offline_grace_minutes" class="form-control" min="1" max="120"
+                       value="<?= $v('job_offline_grace_minutes') ?>" placeholder="Server default">
+                <span class="input-group-text">min</span>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label small fw-semibold mb-1">Retry Backoff</label>
+            <div class="input-group input-group-sm">
+                <input type="number" name="auto_retry_backoff_minutes" class="form-control" min="1" max="60"
+                       value="<?= $v('auto_retry_backoff_minutes') ?>" placeholder="Server default">
+                <span class="input-group-text">min</span>
+            </div>
+        </div>
+    </div>
+    <?php
+};
+?>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="bi bi-diagram-3 me-1"></i> Client Profiles</span>
+        <button type="button" class="btn btn-sm btn-success" onclick="openProfileModal(null)">
+            <i class="bi bi-plus-circle me-1"></i> New Profile
+        </button>
+    </div>
+    <div class="card-body">
+        <p class="text-muted small">
+            A profile describes a kind of machine — laptops, database servers, point-of-sale registers — and the
+            settings a new client of that kind should start with. Assign one when you add a client and its first
+            backup plan is filled in for you.
+            <strong>Editing a profile does not touch clients that already exist</strong>; that is what
+            <em>Apply to Clients</em> is for, and it overwrites their settings.
+        </p>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Profile</th>
+                        <th>Template</th>
+                        <th>Schedule</th>
+                        <th>Retention</th>
+                        <th class="text-center">Clients</th>
+                        <th class="text-end">&nbsp;</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($clientProfiles as $p):
+                        $retention = [];
+                        foreach (['minutes' => 'm', 'hours' => 'H', 'days' => 'd', 'weeks' => 'w', 'months' => 'M', 'years' => 'y'] as $unit => $abbr) {
+                            $n = (int) $p['prune_' . $unit];
+                            if ($n !== 0) $retention[] = ($n < 0 ? 'all' : $n) . $abbr;
+                        }
+                    ?>
+                    <tr>
+                        <td>
+                            <span class="fw-semibold"><?= htmlspecialchars($p['name']) ?></span>
+                            <?php if (!empty($p['is_default'])): ?>
+                                <span class="badge bg-body-secondary text-muted border ms-1">default</span>
+                            <?php endif; ?>
+                            <?php if (!empty($p['description'])): ?>
+                                <div class="small text-muted"><?= htmlspecialchars($p['description']) ?></div>
+                            <?php endif; ?>
+                        </td>
+                        <td class="small"><?= $p['template_name'] ? htmlspecialchars($p['template_name']) : '<span class="text-muted">None</span>' ?></td>
+                        <td class="small">
+                            <?= htmlspecialchars($freqLabels[$p['frequency']] ?? $p['frequency']) ?>
+                            <span class="text-muted">at <?= htmlspecialchars($p['times'] ?: '--') ?></span>
+                        </td>
+                        <td class="small text-muted"><?= $retention ? htmlspecialchars(implode(' ', $retention)) : 'Keep nothing' ?></td>
+                        <td class="text-center"><span class="badge bg-body-secondary text-body border"><?= (int) $p['client_count'] ?></span></td>
+                        <td class="text-end text-nowrap">
+                            <button type="button" class="btn btn-sm btn-outline-secondary"
+                                    onclick='openProfileModal(<?= json_encode($p, JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'>
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-warning"
+                                    onclick="confirmApplyProfile(<?= (int) $p['id'] ?>, <?= htmlspecialchars(json_encode($p['name']), ENT_QUOTES) ?>)"
+                                    <?= (int) $p['client_count'] === 0 ? 'disabled title="No clients are in this profile"' : 'title="Overwrite the settings of every client in this profile"' ?>>
+                                <i class="bi bi-arrow-down-square me-1"></i>Apply to Clients
+                            </button>
+                            <?php if (empty($p['is_default'])): ?>
+                            <form method="POST" action="/settings/profiles/<?= (int) $p['id'] ?>/delete" class="d-inline"
+                                  data-confirm="Delete the profile &quot;<?= htmlspecialchars($p['name']) ?>&quot;? Its clients move to the default profile and keep the settings they have.">
+                                <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                                <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                            </form>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Create / edit -->
+<div class="modal fade" id="profileModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <form method="POST" id="profileForm" class="modal-content">
+            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+            <div class="modal-header">
+                <h5 class="modal-title" id="profileModalTitle">New Client Profile</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <?php $renderProfileForm(null); ?>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="profileSubmit">Create Profile</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Apply confirmation. Deliberately not a data-confirm one-liner: this
+     overwrites work someone may have tuned by hand, and the dialog says what
+     it will touch and what it will leave alone. -->
+<div class="modal fade" id="applyProfileModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="POST" id="applyProfileForm" class="modal-content">
+            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+            <div class="modal-header bg-warning-subtle">
+                <h5 class="modal-title"><i class="bi bi-exclamation-triangle me-2"></i>Overwrite existing client settings?</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Applying <strong id="applyProfileName"></strong> replaces settings on every client already assigned to it:</p>
+                <ul class="small mb-3" id="applyImpact"><li class="text-muted">Checking…</li></ul>
+                <p class="small mb-2"><strong>Replaced:</strong> backup directories, exclude patterns, options, retention, and the schedule's frequency and run times.</p>
+                <p class="small mb-3"><strong>Left alone:</strong> which repository each plan writes to, which plugins it runs, and any archives already taken.</p>
+                <div class="alert alert-warning small mb-0">
+                    Anything tuned by hand on those clients is lost. There is no undo.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-warning">Yes, overwrite these clients</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function syncProfileFreqFields(form) {
+    var freq = form.querySelector('.profile-frequency').value;
+    form.querySelector('.profile-dow').style.display = (freq === 'weekly') ? '' : 'none';
+    form.querySelector('.profile-dom').style.display = (freq === 'monthly') ? '' : 'none';
+}
+
+function openProfileModal(profile) {
+    var form = document.getElementById('profileForm');
+    form.action = profile ? '/settings/profiles/' + profile.id + '/edit' : '/settings/profiles/add';
+    document.getElementById('profileModalTitle').textContent = profile ? 'Edit Profile — ' + profile.name : 'New Client Profile';
+    document.getElementById('profileSubmit').textContent = profile ? 'Save Profile' : 'Create Profile';
+
+    // Blank for a new profile, the stored values for an existing one. Nulls
+    // stay empty so the "follow the server setting" placeholder shows through.
+    var fields = ['name','description','template_id','frequency','times','day_of_week','day_of_month',
+                  'prune_minutes','prune_hours','prune_days','prune_weeks','prune_months','prune_years',
+                  'auto_retry_max_attempts','job_offline_grace_minutes','auto_retry_backoff_minutes'];
+    var blanks = {frequency:'daily', times:'02:00', prune_days:'7', prune_weeks:'4', prune_months:'6',
+                  prune_minutes:'0', prune_hours:'0', prune_years:'0'};
+    fields.forEach(function (f) {
+        var el = form.querySelector('[name="' + f + '"]');
+        if (!el) return;
+        var val = profile ? profile[f] : blanks[f];
+        el.value = (val === null || val === undefined) ? '' : val;
+    });
+
+    syncProfileFreqFields(form);
+    new bootstrap.Modal(document.getElementById('profileModal')).show();
+}
+
+function confirmApplyProfile(id, name) {
+    var form = document.getElementById('applyProfileForm');
+    form.action = '/settings/profiles/' + id + '/apply';
+    document.getElementById('applyProfileName').textContent = name;
+    var list = document.getElementById('applyImpact');
+    list.innerHTML = '<li class="text-muted">Checking…</li>';
+    new bootstrap.Modal(document.getElementById('applyProfileModal')).show();
+
+    // Count what is about to be overwritten, so the warning is specific
+    // rather than a generic "are you sure".
+    fetch('/api/client-profiles/' + id, {credentials: 'same-origin'})
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+            var i = d.impact || {};
+            list.innerHTML =
+                '<li><strong>' + (i.clients || 0) + '</strong> client(s)</li>' +
+                '<li><strong>' + (i.plans || 0) + '</strong> backup plan(s)</li>' +
+                '<li><strong>' + (i.schedules || 0) + '</strong> schedule(s)</li>';
+        })
+        .catch(function () { list.innerHTML = '<li class="text-muted">Could not count what would change.</li>'; });
+}
+
+document.addEventListener('change', function (e) {
+    if (e.target.classList && e.target.classList.contains('profile-frequency')) {
+        syncProfileFreqFields(e.target.closest('form'));
+    }
+});
+</script>
+<?php endif; ?>
+
 <?php if ($activeTab === 'templates'): ?>
 <div class="card border-0 shadow-sm">
     <div class="card-header fw-semibold">

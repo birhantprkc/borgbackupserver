@@ -13,6 +13,22 @@
                         <div class="form-text">A descriptive name for this endpoint.</div>
                     </div>
 
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Client Profile</label>
+                        <select class="form-select" name="client_profile_id">
+                            <?php foreach ($clientProfiles as $cp): ?>
+                            <option value="<?= (int) $cp['id'] ?>" <?= !empty($cp['is_default']) ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($cp['name']) ?><?= !empty($cp['description']) ? ' — ' . htmlspecialchars($cp['description']) : '' ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="form-text">
+                            What kind of machine this is. The profile decides what its first backup plan is filled in
+                            with — directories, schedule and retention — and how patient BBS is when it drops out
+                            mid-backup. <a href="/settings?tab=profiles">Manage profiles</a>.
+                        </div>
+                    </div>
+
                     <div class="mb-4">
                         <label class="form-label fw-semibold">Assign to User</label>
                         <select class="form-select" name="user_id">

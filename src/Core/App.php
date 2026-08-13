@@ -176,6 +176,10 @@ class App
         // Settings
         $this->router->map('GET', '/settings', 'SettingsController@index');
         $this->router->map('POST', '/settings', 'SettingsController@update');
+        $this->router->map('POST', '/settings/profiles/add', 'ClientProfileController@store');
+        $this->router->map('POST', '/settings/profiles/[i:id]/edit', 'ClientProfileController@update');
+        $this->router->map('POST', '/settings/profiles/[i:id]/delete', 'ClientProfileController@delete');
+        $this->router->map('POST', '/settings/profiles/[i:id]/apply', 'ClientProfileController@apply');
         $this->router->map('POST', '/settings/templates/add', 'SettingsController@addTemplate');
         $this->router->map('POST', '/settings/templates/[i:id]/edit', 'SettingsController@editTemplate');
         $this->router->map('POST', '/settings/templates/[i:id]/delete', 'SettingsController@deleteTemplate');
@@ -232,6 +236,7 @@ class App
         $this->router->map('GET', '/api/agent-updates', 'SettingsController@agentUpdatesJson');
         $this->router->map('GET', '/api/borg-status', 'SettingsController@borgStatusJson');
         $this->router->map('GET', '/api/templates/[i:id]', 'SettingsController@templateJson');
+        $this->router->map('GET', '/api/client-profiles/[i:id]', 'ClientProfileController@json');
         $this->router->map('POST', '/settings/offsite-storage', 'StorageLocationController@saveS3');
         $this->router->map('POST', '/settings/offsite-storage/test', 'StorageLocationController@testS3');
         $this->router->map('POST', '/settings/borg/sync', 'SettingsController@syncBorgVersions');
