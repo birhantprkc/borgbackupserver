@@ -1686,8 +1686,21 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
             'mysql_dump' => '/images/mysql.png', 'pg_dump' => '/images/postgresql.svg',
             'mongo_dump' => '/images/mongodb.svg', 'interworx' => '/images/interworx-icon.png',
         ];
-        echo '<div class="d-flex flex-wrap gap-2">';
-        foreach ($planPluginConfigCards as $c) {
+        // Selected configs come first, in the order they run, so the sequence
+        // is visible before anyone drags anything. Everything else follows.
+        $checkedOrder = array_values(array_map('intval', $checkedIds));
+        $cards = $planPluginConfigCards;
+        usort($cards, function ($a, $b) use ($checkedOrder) {
+            $pa = array_search((int) $a['id'], $checkedOrder, true);
+            $pb = array_search((int) $b['id'], $checkedOrder, true);
+            if ($pa === false && $pb === false) return 0;
+            if ($pa === false) return 1;
+            if ($pb === false) return -1;
+            return $pa <=> $pb;
+        });
+
+        echo '<div class="d-flex flex-wrap gap-2 ppc-sortable">';
+        foreach ($cards as $c) {
             $slug = $c['slug'] ?? '';
             $checked = in_array((int) $c['id'], array_map('intval', $checkedIds), true);
             $cid = 'ppc_' . $c['id'] . '_' . mt_rand(1000, 9999);
@@ -1698,11 +1711,13 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                     : '<i class="bi bi-puzzle text-secondary" style="font-size:1.3rem;"></i>');
             $type = $typeLabels[$slug] ?? ucfirst(str_replace('_', ' ', $slug));
             ?>
-            <label class="border rounded p-2 position-relative d-flex align-items-center gap-2 <?= $checked ? 'border-primary bg-primary-subtle' : '' ?>" style="width:190px;cursor:pointer;" for="<?= $cid ?>">
-                <input class="form-check-input position-absolute" type="checkbox" name="plan_plugin_configs[]" value="<?= (int) $c['id'] ?>" id="<?= $cid ?>" <?= $checked ? 'checked' : '' ?> style="top:6px;right:6px;margin:0;" onchange="this.closest('label').classList.toggle('border-primary', this.checked); this.closest('label').classList.toggle('bg-primary-subtle', this.checked);">
+            <label class="border rounded p-2 position-relative d-flex align-items-center gap-2 ppc-card <?= $checked ? 'border-primary bg-primary-subtle' : '' ?>" style="width:190px;cursor:pointer;" for="<?= $cid ?>" draggable="true">
+                <input class="form-check-input position-absolute" type="checkbox" name="plan_plugin_configs[]" value="<?= (int) $c['id'] ?>" id="<?= $cid ?>" <?= $checked ? 'checked' : '' ?> style="top:6px;right:6px;margin:0;">
+                <span class="ppc-step badge rounded-pill bg-primary position-absolute" style="top:-7px;left:-7px;font-size:0.65rem;display:none;">1</span>
+                <i class="bi bi-grip-vertical text-muted" style="cursor:grab;font-size:0.9rem;" title="Drag to change the order they run in"></i>
                 <?= $iconHtml ?>
                 <span class="min-width-0" style="min-width:0;">
-                    <span class="d-block fw-semibold text-truncate small" style="max-width:120px;"><?= htmlspecialchars($c['name']) ?></span>
+                    <span class="d-block fw-semibold text-truncate small" style="max-width:96px;"><?= htmlspecialchars($c['name']) ?></span>
                     <span class="d-block text-muted" style="font-size:0.7rem;"><?= htmlspecialchars($type) ?></span>
                 </span>
             </label>
@@ -1713,6 +1728,97 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
     ?>
 
     <script>
+    // Plugin cards: order is the order they run in, and the checkboxes submit
+    // in DOM order — so dragging a card is the whole feature, no hidden field
+    // needed. Numbers show only on selected cards, since an unselected one has
+    // no place in the sequence.
+    (function () {
+        function renumber(list) {
+            var step = 0;
+            list.querySelectorAll('.ppc-card').forEach(function (card) {
+                var box = card.querySelector('input[type=checkbox]');
+                var badge = card.querySelector('.ppc-step');
+                if (box && box.checked) {
+                    step++;
+                    badge.textContent = step;
+                    badge.style.display = '';
+                } else {
+                    badge.style.display = 'none';
+                }
+            });
+        }
+
+        function cardAfter(list, x, y) {
+            // Nearest card whose centre is past the pointer, scanning the row
+            // the pointer is in — a wrapped flex grid has no single axis.
+            var best = null, bestDist = Number.POSITIVE_INFINITY;
+            list.querySelectorAll('.ppc-card:not(.ppc-dragging)').forEach(function (card) {
+                var r = card.getBoundingClientRect();
+                if (y < r.top || y > r.bottom) return;
+                var d = r.left + r.width / 2 - x;
+                if (d > 0 && d < bestDist) { bestDist = d; best = card; }
+            });
+            return best;
+        }
+
+        function wire(list) {
+            if (list.dataset.ppcWired) return;
+            list.dataset.ppcWired = '1';
+            var dragging = null;
+
+            list.addEventListener('dragstart', function (e) {
+                var card = e.target.closest('.ppc-card');
+                if (!card) return;
+                dragging = card;
+                card.classList.add('ppc-dragging');
+                card.style.opacity = '0.4';
+                e.dataTransfer.effectAllowed = 'move';
+                // Firefox will not start a drag without data set
+                e.dataTransfer.setData('text/plain', '');
+            });
+
+            list.addEventListener('dragend', function () {
+                if (!dragging) return;
+                dragging.classList.remove('ppc-dragging');
+                dragging.style.opacity = '';
+                dragging = null;
+                renumber(list);
+            });
+
+            list.addEventListener('dragover', function (e) {
+                if (!dragging) return;
+                e.preventDefault();
+                var after = cardAfter(list, e.clientX, e.clientY);
+                if (after === dragging) return;
+                if (after) { list.insertBefore(dragging, after); }
+                else { list.appendChild(dragging); }
+            });
+
+            // Checking a card changes the sequence, so the numbers follow.
+            list.addEventListener('change', function (e) {
+                if (e.target.type !== 'checkbox') return;
+                var card = e.target.closest('.ppc-card');
+                if (card) {
+                    card.classList.toggle('border-primary', e.target.checked);
+                    card.classList.toggle('bg-primary-subtle', e.target.checked);
+                }
+                renumber(list);
+            });
+
+            renumber(list);
+        }
+
+        function wireAll() { document.querySelectorAll('.ppc-sortable').forEach(wire); }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', wireAll);
+        } else {
+            wireAll();
+        }
+        // Plan forms are revealed rather than loaded, so pick up any that were
+        // hidden when the page first settled.
+        document.addEventListener('click', function () { setTimeout(wireAll, 50); });
+    })();
+
     function showCreatePlan() {
         var grid = document.getElementById('schedule-cards-grid');
         var solo = document.getElementById('add-plan-card-solo');
@@ -2161,7 +2267,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                     <div class="row mb-3">
                         <label class="col-md-3 col-form-label fw-semibold">Plugins</label>
                         <div class="col-md-9">
-                            <div class="form-text mb-2">Run these before each backup &mdash; check any number, including two of the same engine.</div>
+                            <div class="form-text mb-2">Run these before each backup &mdash; check any number, including two of the same engine. They run left to right; drag a card to change the order.</div>
                             <?php $renderPluginCards($checkedIds); ?>
                             <small class="text-muted d-block mt-2"><a href="?tab=plugins">Manage plugin configurations</a></small>
                         </div>
@@ -2514,7 +2620,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                 <div class="row mb-3">
                     <label class="col-md-3 col-form-label fw-semibold">Plugins</label>
                     <div class="col-md-9">
-                        <div class="form-text mb-2">Run these before each backup &mdash; check any number, including two of the same engine.</div>
+                        <div class="form-text mb-2">Run these before each backup &mdash; check any number, including two of the same engine. They run left to right; drag a card to change the order.</div>
                         <?php $renderPluginCards([]); ?>
                         <small class="text-muted d-block mt-2"><a href="?tab=plugins">Manage plugin configurations</a></small>
                     </div>

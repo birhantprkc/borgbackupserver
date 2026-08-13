@@ -760,6 +760,17 @@ class AgentApiController extends Controller
             $archiveId = $archive ? (int) $archive['id'] : null;
         }
 
+        // Everything below this point is work the agent has already been told
+        // was accepted: importing the catalog, then queueing the auto-prune at
+        // the very end. On PHP-FPM the response is flushed and the request runs
+        // on regardless, but under mod_php it stays tied to the client's
+        // connection — and a client that powers itself off in a post-backup
+        // script (#402) drops that connection mid-import, which can take the
+        // tail of this request with it. The prune then never gets queued at
+        // all, and the job is left sitting at "Importing file catalog...".
+        // Finish what we started.
+        ignore_user_abort(true);
+
         // Send response immediately so the agent isn't blocked
         http_response_code(200);
         header('Content-Type: application/json');
