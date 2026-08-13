@@ -19,6 +19,7 @@ class ClientController extends Controller
         $agents = $this->db->fetchAll("
             SELECT a.*,
                    u.username as owner_name,
+                   cp.name as profile_name,
                    (SELECT COUNT(*) FROM repositories r WHERE r.agent_id = a.id) as repo_count,
                    (SELECT COUNT(*) FROM schedules s JOIN backup_plans bp ON bp.id = s.backup_plan_id WHERE bp.agent_id = a.id) as schedule_count,
                    (SELECT COALESCE(SUM(r2.size_bytes), 0) FROM repositories r2 WHERE r2.agent_id = a.id) as total_size,
@@ -37,6 +38,7 @@ class ClientController extends Controller
                    ) as missed_since_success
             FROM agents a
             LEFT JOIN users u ON u.id = a.user_id
+            LEFT JOIN client_profiles cp ON cp.id = a.client_profile_id
             WHERE {$where}
             ORDER BY a.name ASC, a.id DESC
         ", $params);
@@ -539,6 +541,7 @@ class ClientController extends Controller
 
         $this->view('clients/detail', [
             'profileDefaults' => (new \BBS\Services\ClientProfileService())->planDefaults((int) $id),
+            'clientProfiles' => (new \BBS\Services\ClientProfileService())->all(),
             'pageTitle' => 'Clients',
             'agent' => $agent,
             'totalSize' => $totalSize,
@@ -1504,6 +1507,13 @@ class ClientController extends Controller
         }
         if ($this->isAdmin() && array_key_exists('user_id', $_POST)) {
             $data['user_id'] = $_POST['user_id'] !== '' ? (int) $_POST['user_id'] : null;
+        }
+        if ($this->isAdmin() && array_key_exists('client_profile_id', $_POST)) {
+            $profileService = new \BBS\Services\ClientProfileService();
+            $pid = $_POST['client_profile_id'] !== '' ? (int) $_POST['client_profile_id'] : null;
+            // Unknown id falls back to the default rather than nulling the
+            // column, so failure settings always resolve to something.
+            $data['client_profile_id'] = ($pid && $profileService->find($pid)) ? $pid : $profileService->defaultProfileId();
         }
         if ($this->isAdmin() && array_key_exists('server_host_override', $_POST)) {
             $host = trim($_POST['server_host_override']);

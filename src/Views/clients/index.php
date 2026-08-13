@@ -119,8 +119,9 @@
                         <th data-sortable title="Backup attempts that failed since the last successful one">Missed Since<br>Success</th>
                         <th data-sortable>Restore<br>Points</th>
                         <th data-sortable>Size</th>
-                        <th data-sortable>Schedules</th>
-                        <th data-sortable>Repos</th>
+                        <th data-sortable class="text-center" title="Schedules"><i class="bi bi-calendar-event"></i><span class="visually-hidden">Schedules</span></th>
+                        <th data-sortable class="text-center" title="Repositories"><i class="bi bi-hdd"></i><span class="visually-hidden">Repositories</span></th>
+                        <th data-sortable>Profile</th>
                         <th data-sortable>Owner</th>
                         <th data-sortable>Status</th>
                     </tr>
@@ -128,7 +129,7 @@
                 <tbody>
                     <?php if (empty($agents)): ?>
                     <tr>
-                        <td colspan="10" class="text-center text-muted py-4">No clients configured. Click "Add Client" to get started.</td>
+                        <td colspan="11" class="text-center text-muted py-4">No clients configured. Click "Add Client" to get started.</td>
                     </tr>
                     <?php endif; ?>
                     <?php foreach ($agents as $agent): ?>
@@ -168,8 +169,15 @@
                         </td>
                         <td data-sort="<?= (int) $agent['restore_points'] ?>"><?= number_format($agent['restore_points']) ?></td>
                         <td data-sort="<?= (int) $agent['total_size'] ?>"><?php $sz = (int) $agent['total_size']; echo $sz > 0 ? \BBS\Services\ServerStats::formatBytes($sz) : '--'; ?></td>
-                        <td><?= $agent['schedule_count'] ?></td>
-                        <td><?= $agent['repo_count'] ?></td>
+                        <td class="text-center" data-sort="<?= (int) $agent['schedule_count'] ?>"><?= $agent['schedule_count'] ?></td>
+                        <td class="text-center" data-sort="<?= (int) $agent['repo_count'] ?>"><?= $agent['repo_count'] ?></td>
+                        <td>
+                            <?php if (!empty($agent['profile_name'])): ?>
+                                <span class="badge bg-body-secondary text-body border fw-normal"><?= htmlspecialchars($agent['profile_name']) ?></span>
+                            <?php else: ?>
+                                <span class="text-muted">--</span>
+                            <?php endif; ?>
+                        </td>
                         <td><?= htmlspecialchars($agent['owner_name'] ?? '--') ?></td>
                         <td>
                             <?php

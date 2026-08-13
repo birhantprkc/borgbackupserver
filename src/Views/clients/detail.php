@@ -172,6 +172,23 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                             <label class="form-label fw-semibold small">Client Name</label>
                             <input type="text" class="form-control form-control-sm" name="name" value="<?= htmlspecialchars($agent['name']) ?>" required>
                         </div>
+                        <?php if ($this->isAdmin() && !empty($clientProfiles)): ?>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold small">Client Profile</label>
+                            <select name="client_profile_id" class="form-select form-select-sm">
+                                <?php foreach ($clientProfiles as $cp): ?>
+                                <option value="<?= (int) $cp['id'] ?>" <?= (int) ($agent['client_profile_id'] ?? 0) === (int) $cp['id'] ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($cp['name']) ?>
+                                </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-text">
+                                Sets how patient BBS is with this client when it drops out mid-backup, and what its
+                                next new backup plan is filled in with. Moving it here does not rewrite the plans it
+                                already has &mdash; that is what <a href="/settings?tab=profiles">Apply to Clients</a> does.
+                            </div>
+                        </div>
+                        <?php endif; ?>
                         <?php if ($this->isAdmin() && !empty($users)): ?>
                         <div>
                             <label class="form-label fw-semibold small">Owner</label>
