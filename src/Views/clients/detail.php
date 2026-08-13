@@ -29,6 +29,12 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                         <i class="bi bi-display me-2 text-primary"></i><?= htmlspecialchars($agent['name']) ?>
                     </h3>
                     <span class="badge bg-<?= $statusClass ?>" id="agent-status-badge"><?= ucfirst($agent['status']) ?></span>
+                    <?php if (!empty($profileDefaults['profile_name'])): ?>
+                        <span class="badge bg-body-secondary text-body border fw-normal"
+                              title="Client profile — sets how patient BBS is when this client drops out mid-backup, and what a new backup plan starts from. Change it under Edit Client.">
+                            <i class="bi bi-diagram-3 me-1"></i><?= htmlspecialchars($profileDefaults['profile_name']) ?>
+                        </span>
+                    <?php endif; ?>
                     <button class="btn btn-sm btn-outline-secondary border-0" data-bs-toggle="modal" data-bs-target="#editClientModal" title="Edit client">
                         <i class="bi bi-pencil"></i>
                     </button>
