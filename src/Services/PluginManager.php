@@ -711,6 +711,16 @@ class PluginManager
                     'label' => 'Post-Backup Script Path',
                     'help' => 'Absolute path to script on the client (e.g. /home/bbs/hooks/post-backup.sh). Arguments are supported, e.g. /path/script.sh after. Runs after borg completes. Leave empty to skip.',
                 ],
+                'post_script_timing' => [
+                    'type' => 'select',
+                    'label' => 'Run Post-Script',
+                    'options' => [
+                        'backup' => 'After backup — as soon as borg finishes',
+                        'repo_jobs' => 'After all repository jobs — prune and offsite sync too',
+                    ],
+                    'default' => 'backup',
+                    'help' => 'Prune and offsite sync run on the BBS server after the client has finished sending its data, so "after backup" fires while that work is still going. Choose the second option when the script does something the repository cannot survive mid-prune — powering the storage host down being the obvious one. BBS then waits until nothing is left running for this repository and sends the client a job to run the script. The client has to still be online at that point.',
+                ],
                 'abort_on_failure' => [
                     'type' => 'checkbox',
                     'label' => 'Abort backup if pre-script fails',

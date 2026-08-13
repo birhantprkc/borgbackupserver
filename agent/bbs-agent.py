@@ -47,7 +47,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.79.0"
+AGENT_VERSION = "2.80.0"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -2584,13 +2584,23 @@ def execute_plugin_shell_hook(config, task=None):
     return result
 
 
-def cleanup_plugin_shell_hook(config, plugin_result, task=None, backup_result=None):
-    """Run post-backup shell script hook."""
+def cleanup_plugin_shell_hook(config, plugin_result, task=None, backup_result=None, forced=False):
+    """Run post-backup shell script hook.
+
+    When the config asks for it to run after all repository jobs, this is not
+    the moment: prune and offsite sync happen on the server after the client
+    finishes sending data. The server sends the script back as its own job once
+    that work is done, and that job calls in here with forced=True.
+    """
     post_script = config.get("post_script", "").strip()
     timeout = int(config.get("timeout", 300))
 
     if not post_script:
         return None
+
+    if not forced and config.get("post_script_timing", "backup") == "repo_jobs":
+        logger.info("Shell hook: post-script deferred until repository jobs finish")
+        return "post-script deferred until prune and offsite sync finish"
 
     post_argv, post_exe = _parse_script_command(post_script)
 
@@ -3611,6 +3621,29 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
             report_status(config, {
                 "job_id": job_id, "result": "failed",
                 "error_log": "No test handler for plugin: {}".format(slug),
+            })
+        return
+
+    if task_type == "plugin_post":
+        # The deferred half of a shell hook: everything the repository needed
+        # is done, so the post-script can finally run (#402).
+        plugin_data = task.get("plugin", {})
+        cfg = plugin_data.get("config", {})
+        if plugin_data.get("slug") != "shell_hook":
+            report_status(config, {
+                "job_id": job_id, "result": "failed",
+                "error_log": "plugin_post is only supported for shell hooks",
+            })
+            return
+        try:
+            result_msg = cleanup_plugin_shell_hook(cfg, {}, task=task, backup_result="completed", forced=True)
+            report_status(config, {
+                "job_id": job_id, "result": "completed",
+                "output_log": result_msg or "No post-script configured",
+            })
+        except Exception as e:
+            report_status(config, {
+                "job_id": job_id, "result": "failed", "error_log": str(e),
             })
         return
 

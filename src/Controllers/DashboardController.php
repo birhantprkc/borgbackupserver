@@ -18,7 +18,7 @@ class DashboardController extends Controller
         'other'   => [
             'check', 'repo_check', 'repo_repair', 'break_lock',
             'catalog_sync', 'catalog_rebuild', 'catalog_rebuild_full',
-            'archive_delete', 'archive_lock', 'update_borg', 'update_agent', 'plugin_test',
+            'archive_delete', 'archive_lock', 'update_borg', 'update_agent', 'plugin_test', 'plugin_post',
         ],
     ];
 
@@ -418,6 +418,7 @@ class DashboardController extends Controller
                 'update_agent' => 'Agent Update',
                 'update_borg' => 'Borg Update',
                 'plugin_test' => 'Plugin Test',
+                'plugin_post' => 'Post-Script',
                 'prune' => 'Prune',
                 'compact' => 'Compact',
                 'catalog_rebuild' => 'Catalog Rebuild',

@@ -117,7 +117,7 @@ class QueueManager
         // they don't care about the agent's connection state.
         $agentBoundTypes = [
             'backup', 'backup_dry_run', 'restore', 'restore_mysql', 'restore_pg', 'restore_mongo',
-            'update_borg', 'update_agent', 'plugin_test', 'list_dir',
+            'update_borg', 'update_agent', 'plugin_test', 'plugin_post', 'list_dir',
         ];
 
         $promoted = [];
@@ -316,6 +316,15 @@ class QueueManager
                     'job_id' => $job['id'],
                     'plugin' => $testPayload,
                 ];
+            } elseif ($job['task_type'] === 'plugin_post') {
+                // Deferred shell-hook post-script: the same config the backup
+                // ran, sent back once the repository's own work is finished.
+                $pluginManager = new PluginManager();
+                $taskPayload = [
+                    'task' => 'plugin_post',
+                    'job_id' => $job['id'],
+                    'plugin' => $pluginManager->buildTestPayload((int) $job['plugin_config_id']),
+                ];
             } elseif ($job['task_type'] === 'list_dir') {
                 // Browse-filesystem requests from the plan-create modal.
                 // Params (path / depth / show_hidden / show_all / follow_symlinks)
@@ -510,6 +519,13 @@ class QueueManager
                     'task' => 'plugin_test',
                     'job_id' => $job['id'],
                     'plugin' => $testPayload,
+                ];
+            } elseif ($job['task_type'] === 'plugin_post') {
+                $pluginManager = new PluginManager();
+                $tasks[] = [
+                    'task' => 'plugin_post',
+                    'job_id' => $job['id'],
+                    'plugin' => $pluginManager->buildTestPayload((int) $job['plugin_config_id']),
                 ];
             } elseif ($job['task_type'] === 'list_dir') {
                 // Browse-filesystem request from the plan-create modal.

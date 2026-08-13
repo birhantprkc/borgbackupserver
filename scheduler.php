@@ -2785,6 +2785,92 @@ if ($cleaned > 0) {
     echo date('Y-m-d H:i:s') . " Cleaned up {$cleaned} orphaned temp file(s)\n";
 }
 
+// Step 16a: Deferred shell-hook post-scripts (#402).
+//
+// A shell_hook set to "after all repository jobs" does not run its post-script
+// when borg finishes. Prune and offsite sync happen afterwards, here on the
+// server, and a script that powers down the machine holding the repository
+// would cut them off. So the script waits: once nothing is left running for
+// that repository, the client is sent a job to run it.
+//
+// Candidates are completed backups whose repository is now idle and which have
+// no post-script job already. The 24-hour window keeps this from trawling all
+// of history every minute; a repository busy for longer than that has bigger
+// problems than a deferred hook.
+$deferredHooks = $db->fetchAll("
+    SELECT bj.id, bj.agent_id, bj.backup_plan_id, bj.repository_id, a.name AS agent_name
+    FROM backup_jobs bj
+    JOIN agents a ON a.id = bj.agent_id
+    WHERE bj.task_type = 'backup'
+      AND bj.status = 'completed'
+      AND bj.backup_plan_id IS NOT NULL
+      AND bj.repository_id IS NOT NULL
+      AND bj.completed_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
+      AND NOT EXISTS (
+          SELECT 1 FROM backup_jobs c
+          WHERE c.parent_job_id = bj.id AND c.task_type = 'plugin_post'
+      )
+      AND NOT EXISTS (
+          SELECT 1 FROM backup_jobs busy
+          WHERE busy.repository_id = bj.repository_id
+            AND busy.status IN ('queued', 'sent', 'running')
+            AND busy.task_type <> 'plugin_post'
+      )
+");
+
+if (!empty($deferredHooks)) {
+    $hookPluginManager = new \BBS\Services\PluginManager();
+    foreach ($deferredHooks as $dh) {
+        // Read the timing off the resolved config rather than the stored JSON:
+        // a plan may use a named plugin config, in which case the row on the
+        // plan holds nothing useful.
+        foreach ($hookPluginManager->buildPluginPayload((int) $dh['backup_plan_id'], (int) $dh['agent_id']) as $pp) {
+            if (($pp['slug'] ?? '') !== 'shell_hook') {
+                continue;
+            }
+            $hookCfg = $pp['config'] ?? [];
+            if (($hookCfg['post_script_timing'] ?? 'backup') !== 'repo_jobs') {
+                continue;
+            }
+            if (trim((string) ($hookCfg['post_script'] ?? '')) === '') {
+                continue;
+            }
+            if (empty($pp['config_id'])) {
+                // Inline (unnamed) configs can't be addressed by id, and the
+                // job has to name one for the agent to resolve. Say so rather
+                // than silently never running the script.
+                $db->insert('server_log', [
+                    'agent_id' => $dh['agent_id'],
+                    'backup_job_id' => $dh['id'],
+                    'level' => 'warning',
+                    'message' => "Post-script set to run after all repository jobs was skipped — it needs to be a saved plugin configuration, not an inline one.",
+                ]);
+                continue;
+            }
+
+            // repository_id is deliberately left null: this job runs a script on
+            // the client and touches no repository, and setting it would make the
+            // repo look busy and hold up other work.
+            $hookJobId = $db->insert('backup_jobs', [
+                'backup_plan_id' => $dh['backup_plan_id'],
+                'agent_id' => $dh['agent_id'],
+                'task_type' => 'plugin_post',
+                'status' => 'queued',
+                'plugin_config_id' => (int) $pp['config_id'],
+                'parent_job_id' => $dh['id'],
+            ]);
+            $cfgLabel = $pp['config_name'] ?? 'shell hook';
+            $db->insert('server_log', [
+                'agent_id' => $dh['agent_id'],
+                'backup_job_id' => $dh['id'],
+                'level' => 'info',
+                'message' => "Repository work finished — queued post-script for \"{$cfgLabel}\" on client \"{$dh['agent_name']}\" (job #{$hookJobId})",
+            ]);
+            echo date('Y-m-d H:i:s') . " Queued deferred post-script job #{$hookJobId} for plan {$dh['backup_plan_id']}\n";
+        }
+    }
+}
+
 // Step 16b: Clean up imported catalog log files from .catalog-logs directories
 // These are written by the agent via SSH and should be deleted after import,
 // but the unlink may fail if directory permissions haven't been updated yet.
