@@ -165,6 +165,22 @@ $updateAvailable = $updateService->isUpdateAvailable();
                         <div class="form-text">When repositories are auto-compacted (reclaims freed space) each week. Runs at or after this time on the chosen day, so storage that isn't powered on 24/7 still gets compacted. Default: Saturday 02:00.</div>
                     </div>
                     <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="precount_files" value="1"
+                                   id="precountFiles" <?= (($settings['precount_files'] ?? '1') === '1') ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-semibold" for="precountFiles">
+                                Count files before a backup starts
+                            </label>
+                        </div>
+                        <div class="form-text">
+                            Only affects a plan's <em>first</em> backup. After that the progress bar uses what the
+                            previous backup actually stored, which is exact and costs nothing. The first-run count
+                            walks the whole tree without applying the plan's exclude patterns, so on a plan that
+                            excludes a large directory it is an over-estimate — turn this off to skip it and show
+                            progress as a running count with no total. Default: on.
+                        </div>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label fw-semibold">Notify When Agent Offline (minutes)</label>
                         <input type="number" class="form-control" name="agent_offline_notify_minutes" value="<?= htmlspecialchars($settings['agent_offline_notify_minutes'] ?? '5') ?>" min="1" max="60">
                         <div class="form-text">Wait this long before firing an "agent offline" notification or push. Brief network blips and short laptop suspends never become alerts. The agent still <em>shows</em> as offline immediately on dashboards — only the outbound notification is delayed. Default: 5.</div>

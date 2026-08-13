@@ -350,6 +350,7 @@ INSERT INTO settings (`key`, `value`) VALUES
     ('self_backup_retention', '7'),
     ('self_backup_catalogs', '0'),
     ('job_offline_grace_minutes', '5'),
+    ('precount_files', '1'),
     ('auto_retry_backoff_minutes', '5');
 
 -- --------------------------------------------------------

@@ -18,6 +18,18 @@ class QueueManager
     }
 
     /**
+     * Whether clients should walk the tree to estimate a file count before a
+     * backup. Only used for a plan's first run now that the previous archive's
+     * count is sent instead, but a plan whose first run is a very large tree
+     * can still turn it off.
+     */
+    private function precountEnabled(): bool
+    {
+        $row = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'precount_files'");
+        return ($row['value'] ?? '1') === '1';
+    }
+
+    /**
      * Get the SSH port setting (for Docker multi-tenant deployments).
      */
     private function getSshPort(): int
@@ -247,10 +259,30 @@ class QueueManager
 
                 $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPortForAgent($job['agent_id']), $remoteSshConfig);
 
+                // What the last successful backup of this plan actually stored.
+                // The agent uses it as the progress denominator instead of
+                // walking the tree, which is both slow and wrong: the walk
+                // cannot see the plan's exclude patterns, so on a plan that
+                // excludes a large tree it counts files borg will never touch
+                // (#407). The previous archive's count is the real number and
+                // needs no work to obtain.
+                $expectedFiles = 0;
+                if (!empty($job['backup_plan_id'])) {
+                    $expectedFiles = (int) ($this->db->fetchOne("
+                        SELECT ar.file_count
+                        FROM archives ar
+                        JOIN backup_jobs bj ON bj.id = ar.backup_job_id
+                        WHERE bj.backup_plan_id = ? AND ar.file_count > 0
+                        ORDER BY ar.id DESC LIMIT 1
+                    ", [$job['backup_plan_id']])['file_count'] ?? 0);
+                }
+
                 $extra = [
                     'job_id' => $job['id'],
                     'archive_name' => $archiveName,
                     'directories' => $plan['directories'],
+                    'expected_files' => $expectedFiles,
+                    'precount_files' => $this->precountEnabled(),
                     // Context exposed to shell_hook plugin scripts (#250).
                     // The agent injects these as BBS_* env vars when running
                     // pre/post hooks so scripts can target the right repo and
@@ -465,10 +497,30 @@ class QueueManager
                 }
 
                 $env = BorgCommandBuilder::buildEnv($repo, true, $this->getSshPortForAgent($job['agent_id']), $remoteSshConfig);
+                // What the last successful backup of this plan actually stored.
+                // The agent uses it as the progress denominator instead of
+                // walking the tree, which is both slow and wrong: the walk
+                // cannot see the plan's exclude patterns, so on a plan that
+                // excludes a large tree it counts files borg will never touch
+                // (#407). The previous archive's count is the real number and
+                // needs no work to obtain.
+                $expectedFiles = 0;
+                if (!empty($job['backup_plan_id'])) {
+                    $expectedFiles = (int) ($this->db->fetchOne("
+                        SELECT ar.file_count
+                        FROM archives ar
+                        JOIN backup_jobs bj ON bj.id = ar.backup_job_id
+                        WHERE bj.backup_plan_id = ? AND ar.file_count > 0
+                        ORDER BY ar.id DESC LIMIT 1
+                    ", [$job['backup_plan_id']])['file_count'] ?? 0);
+                }
+
                 $extra = [
                     'job_id' => $job['id'],
                     'archive_name' => $archiveName,
                     'directories' => $plan['directories'],
+                    'expected_files' => $expectedFiles,
+                    'precount_files' => $this->precountEnabled(),
                     // Context exposed to shell_hook plugin scripts (#250).
                     // The agent injects these as BBS_* env vars when running
                     // pre/post hooks so scripts can target the right repo and

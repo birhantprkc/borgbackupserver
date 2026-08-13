@@ -437,7 +437,10 @@ class AgentApiController extends Controller
                 'repository_id' => $job['repository_id'],
                 'backup_job_id' => $jobId,
                 'archive_name' => $input['archive_name'],
-                'file_count' => (int) ($input['files_total'] ?? 0),
+                // What borg reported it stored, not the client's pre-count
+                // estimate — the estimate cannot see exclude patterns and on
+                // some plans is orders of magnitude higher (#407).
+                'file_count' => (int) ($input['files_processed'] ?? 0) ?: (int) ($input['files_total'] ?? 0),
                 'original_size' => (int) ($input['original_size'] ?? 0),
                 'deduplicated_size' => (int) ($input['deduplicated_size'] ?? 0),
             ];
@@ -655,7 +658,10 @@ class AgentApiController extends Controller
                     'repository_id' => $job['repository_id'],
                     'backup_job_id' => $jobId,
                     'archive_name' => $input['archive_name'],
-                    'file_count' => (int) ($input['files_total'] ?? 0),
+                    // What borg reported it stored, not the client's pre-count
+                // estimate — the estimate cannot see exclude patterns and on
+                // some plans is orders of magnitude higher (#407).
+                'file_count' => (int) ($input['files_processed'] ?? 0) ?: (int) ($input['files_total'] ?? 0),
                     'original_size' => (int) ($input['original_size'] ?? 0),
                     'deduplicated_size' => (int) ($input['deduplicated_size'] ?? 0),
                 ];

@@ -47,7 +47,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.80.0"
+AGENT_VERSION = "2.82.0"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 
@@ -3689,16 +3689,31 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
     # is flagged so it doesn't read as a clean success.
     plugin_failures = [r for r in plugin_runs if r.get("error")]
 
-    # Pre-count files for progress
+    # Work out a denominator for the progress bar.
+    #
+    # The server sends what the last backup of this plan actually stored, which
+    # is both free and correct. Walking the tree is the fallback for a plan's
+    # first run only: the walk cannot see the plan's exclude patterns, so on a
+    # plan that excludes a large tree it counts files borg will never touch and
+    # the progress bar reads a fraction of a percent all the way through (#407).
     files_total = 0
+    precount_estimated = False
     if task_type == "backup" and directories:
-        api_request(config, "/api/agent/progress", method="POST", data={
-            "job_id": job_id,
-            "status_message": "Counting files...",
-        })
-        one_fs = "--one-file-system" in command
-        files_total = count_files(directories, one_file_system=one_fs)
-        logger.info("Pre-counted {} files to backup".format(files_total))
+        expected = int(task.get("expected_files") or 0)
+        if expected > 0:
+            files_total = expected
+            logger.info("Progress target {} files (what the last backup stored)".format(files_total))
+        elif task.get("precount_files", True):
+            api_request(config, "/api/agent/progress", method="POST", data={
+                "job_id": job_id,
+                "status_message": "Counting files...",
+            })
+            one_fs = "--one-file-system" in command
+            files_total = count_files(directories, one_file_system=one_fs)
+            precount_estimated = True
+            logger.info("Pre-counted {} files (estimate — excludes are not applied to this walk)".format(files_total))
+        else:
+            logger.info("File pre-count disabled; progress will show a count without a total")
 
     # Report initial progress with file count
     api_request(config, "/api/agent/progress", method="POST", data={
@@ -4275,8 +4290,11 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
     # meaningful since borg extract doesn't emit archive stats.
     if task_type == "backup":
         status_data = {
+            # borg's own count is what the archive holds. The pre-count was a
+            # guess for the progress bar and must not be reported as the size
+            # of the archive.
+            "files_total": files_processed if files_processed else files_total,
             "job_id": job_id,
-            "files_total": files_total if files_total else files_processed,
             "files_processed": files_processed,
             "original_size": original_size,
             "deduplicated_size": deduplicated_size,
