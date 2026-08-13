@@ -149,6 +149,23 @@ class RemoteSshConfigController extends Controller
             $data['ssh_private_key_encrypted'] = Encryption::encrypt($sshPrivateKey);
         }
 
+        // Cached usage describes the machine that was there before. Point the
+        // config somewhere else and those figures — and any recorded failure —
+        // are about a host this config no longer refers to, so they go rather
+        // than sit there until the next poll still naming the old hostname.
+        $pointsElsewhere = $remoteHost !== ($existing['remote_host'] ?? '')
+            || $remotePort !== (int) ($existing['remote_port'] ?? 22)
+            || $remoteUser !== ($existing['remote_user'] ?? '')
+            || $remoteBasePath !== ($existing['remote_base_path'] ?? './')
+            || !empty($sshPrivateKey);
+        if ($pointsElsewhere) {
+            $data['disk_total_bytes'] = null;
+            $data['disk_used_bytes'] = null;
+            $data['disk_free_bytes'] = null;
+            $data['disk_checked_at'] = null;
+            $data['disk_check_error'] = null;
+        }
+
         $borgBaseApiChanged = trim($_POST['borgbase_api_key'] ?? '') !== ''
             || ($data['borgbase_repo_name'] ?? null) !== ($existing['borgbase_repo_name'] ?? null)
             || $remoteUser !== ($existing['remote_user'] ?? '');
@@ -257,7 +274,24 @@ class RemoteSshConfigController extends Controller
         $result = $remoteSshService->testConnection($config);
 
         if ($result['success']) {
-            $this->json(['status' => 'ok', 'version' => $result['version'] ?? '']);
+            // The host has just proved it is reachable, which is exactly when
+            // the quota should be re-read — waiting up to fifteen minutes for
+            // the next poll leaves a fixed config still looking broken.
+            $quota = null;
+            $full = $remoteSshService->getDecrypted($id);
+            if ($full) {
+                if (($full['provider'] ?? '') === 'borgbase' || str_contains((string) ($full['remote_host'] ?? ''), '.repo.borgbase.com')) {
+                    $quota = $remoteSshService->refreshBorgBaseDiskUsage($full);
+                } else {
+                    $quota = $remoteSshService->getDiskUsage($full);
+                    $remoteSshService->updateDiskUsage($id, $quota, 'df', $remoteSshService->lastDiskError());
+                }
+            }
+            $this->json([
+                'status' => 'ok',
+                'version' => $result['version'] ?? '',
+                'quota_changed' => $quota !== null,
+            ]);
         } else {
             $this->json(['status' => 'error', 'error' => $result['error'] ?? 'Connection failed']);
         }

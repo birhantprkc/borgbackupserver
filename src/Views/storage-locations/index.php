@@ -1835,6 +1835,12 @@ function testRemoteSsh(id, triggerEl) {
     .then(function(data) {
         if (data.status === 'ok') {
             resultDiv.innerHTML = '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Connected' + (data.version ? ' — ' + data.version.replace(/</g, '&lt;') : '') + '</span>';
+            // The test re-reads the quota, so reload to show it rather than
+            // leaving a stale "unavailable" under a green Connected badge.
+            if (data.quota_changed) {
+                resultDiv.insertAdjacentHTML('beforeend', ' <span class="small text-muted">updating quota…</span>');
+                setTimeout(function () { window.location.reload(); }, 900);
+            }
         } else {
             resultDiv.innerHTML = '<span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>' + (data.error || 'Failed').replace(/</g, '&lt;') + '</span>';
         }
