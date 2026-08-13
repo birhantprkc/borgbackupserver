@@ -399,6 +399,14 @@ class App
         $this->router->map('POST',   '/api/v1/backup-templates', 'Api\\SettingsApiController@createTemplate');
         $this->router->map('PATCH',  '/api/v1/backup-templates/[i:id]', 'Api\\SettingsApiController@updateTemplate');
         $this->router->map('DELETE', '/api/v1/backup-templates/[i:id]', 'Api\\SettingsApiController@deleteTemplate');
+
+        // Client profiles (#402 onboarding model). Admin-only, like templates.
+        $this->router->map('GET',    '/api/v1/client-profiles', 'Api\\SettingsApiController@listProfiles');
+        $this->router->map('POST',   '/api/v1/client-profiles', 'Api\\SettingsApiController@createProfile');
+        $this->router->map('GET',    '/api/v1/client-profiles/[i:id]', 'Api\\SettingsApiController@getProfile');
+        $this->router->map('PATCH',  '/api/v1/client-profiles/[i:id]', 'Api\\SettingsApiController@updateProfile');
+        $this->router->map('DELETE', '/api/v1/client-profiles/[i:id]', 'Api\\SettingsApiController@deleteProfile');
+        $this->router->map('POST',   '/api/v1/client-profiles/[i:id]/apply', 'Api\\SettingsApiController@applyProfile');
         $this->router->map('GET',    '/api/v1/tokens', 'Api\\SettingsApiController@listTokens');
         $this->router->map('POST',   '/api/v1/tokens', 'Api\\SettingsApiController@createToken');
         $this->router->map('DELETE', '/api/v1/tokens/[i:id]', 'Api\\SettingsApiController@deleteToken');

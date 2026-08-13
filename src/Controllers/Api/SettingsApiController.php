@@ -607,6 +607,263 @@ class SettingsApiController extends Controller
         exit;
     }
 
+    // ── Client profiles ─────────────────────────────────────────────
+
+    private function profilePayload(array $row): array
+    {
+        return [
+            'id' => (int) $row['id'],
+            'name' => $row['name'],
+            'description' => $row['description'],
+            'is_default' => !empty($row['is_default']),
+            'template_id' => $row['template_id'] !== null ? (int) $row['template_id'] : null,
+            'template_name' => $row['template_name'] ?? null,
+            'schedule' => [
+                'frequency' => $row['frequency'],
+                'times' => $row['times'],
+                'day_of_week' => $row['day_of_week'] !== null ? (int) $row['day_of_week'] : null,
+                'day_of_month' => $row['day_of_month'],
+            ],
+            'retention' => [
+                'minutes' => (int) $row['prune_minutes'],
+                'hours' => (int) $row['prune_hours'],
+                'days' => (int) $row['prune_days'],
+                'weeks' => (int) $row['prune_weeks'],
+                'months' => (int) $row['prune_months'],
+                'years' => (int) $row['prune_years'],
+            ],
+            // Null means "follow the server-wide setting". The resolved value
+            // is sent alongside so a client can show what will actually happen
+            // without fetching settings and applying the fallback itself.
+            'failure_handling' => [
+                'max_retry_attempts' => $row['auto_retry_max_attempts'] !== null ? (int) $row['auto_retry_max_attempts'] : null,
+                'give_up_after_minutes' => $row['job_offline_grace_minutes'] !== null ? (int) $row['job_offline_grace_minutes'] : null,
+                'retry_backoff_minutes' => $row['auto_retry_backoff_minutes'] !== null ? (int) $row['auto_retry_backoff_minutes'] : null,
+            ],
+            'failure_handling_effective' => $this->profileEffectiveFailure($row),
+            'client_count' => isset($row['client_count']) ? (int) $row['client_count'] : 0,
+            'created_at' => $row['created_at'] ?? null,
+            'updated_at' => $row['updated_at'] ?? null,
+        ];
+    }
+
+    private function profileEffectiveFailure(array $row): array
+    {
+        $svc = new \BBS\Services\ClientProfileService();
+        $map = [
+            'max_retry_attempts' => ['auto_retry_max_attempts', 'auto_retry_max_attempts'],
+            'give_up_after_minutes' => ['job_offline_grace_minutes', 'job_offline_grace_minutes'],
+            'retry_backoff_minutes' => ['auto_retry_backoff_minutes', 'auto_retry_backoff_minutes'],
+        ];
+        $out = [];
+        foreach ($map as $key => [$col, $setting]) {
+            $out[$key] = ($row[$col] !== null && $row[$col] !== '')
+                ? (int) $row[$col]
+                : $svc->globalFailureSetting($setting);
+        }
+        return $out;
+    }
+
+    /** Fields a profile accepts, validated. Returns [data, errorOrNull]. */
+    private function profileInput(array $input, bool $creating): array
+    {
+        $data = [];
+
+        if ($creating || array_key_exists('name', $input)) {
+            $name = trim((string) ($input['name'] ?? ''));
+            if ($name === '') {
+                return [null, 'name is required'];
+            }
+            $data['name'] = $name;
+        }
+        if (array_key_exists('description', $input)) {
+            $data['description'] = substr(trim((string) $input['description']), 0, 255);
+        }
+        if (array_key_exists('template_id', $input)) {
+            $tid = $input['template_id'];
+            if ($tid !== null && $tid !== '') {
+                if (!$this->db->fetchOne("SELECT id FROM backup_templates WHERE id = ?", [(int) $tid])) {
+                    return [null, 'template_id does not exist'];
+                }
+                $data['template_id'] = (int) $tid;
+            } else {
+                $data['template_id'] = null;
+            }
+        }
+
+        $schedule = $input['schedule'] ?? [];
+        if (array_key_exists('frequency', $schedule)) {
+            $freq = (string) $schedule['frequency'];
+            if (!in_array($freq, ['hourly', 'daily', 'weekly', 'monthly'], true)) {
+                return [null, 'schedule.frequency must be hourly, daily, weekly or monthly'];
+            }
+            $data['frequency'] = $freq;
+        }
+        if (array_key_exists('times', $schedule)) {
+            $data['times'] = substr(trim((string) $schedule['times']), 0, 255) ?: '02:00';
+        }
+        if (array_key_exists('day_of_week', $schedule)) {
+            $dow = $schedule['day_of_week'];
+            if ($dow !== null && ($dow < 0 || $dow > 6)) {
+                return [null, 'schedule.day_of_week must be 0-6'];
+            }
+            $data['day_of_week'] = $dow === null ? null : (int) $dow;
+        }
+        if (array_key_exists('day_of_month', $schedule)) {
+            $data['day_of_month'] = $schedule['day_of_month'] === null
+                ? null : substr((string) $schedule['day_of_month'], 0, 20);
+        }
+
+        $retention = $input['retention'] ?? [];
+        foreach (['minutes', 'hours', 'days', 'weeks', 'months', 'years'] as $unit) {
+            if (array_key_exists($unit, $retention)) {
+                // -1 is borg's "keep every one at this interval" (#386).
+                $data['prune_' . $unit] = max(-1, (int) $retention[$unit]);
+            }
+        }
+
+        $failure = $input['failure_handling'] ?? [];
+        $fmap = [
+            'max_retry_attempts' => 'auto_retry_max_attempts',
+            'give_up_after_minutes' => 'job_offline_grace_minutes',
+            'retry_backoff_minutes' => 'auto_retry_backoff_minutes',
+        ];
+        foreach ($fmap as $key => $col) {
+            if (array_key_exists($key, $failure)) {
+                // null is meaningful: it means follow the server-wide setting.
+                $data[$col] = ($failure[$key] === null || $failure[$key] === '')
+                    ? null : max(0, (int) $failure[$key]);
+            }
+        }
+
+        return [$data, null];
+    }
+
+    private function profileRow(int $id): ?array
+    {
+        return $this->db->fetchOne("
+            SELECT cp.*, t.name AS template_name,
+                   (SELECT COUNT(*) FROM agents a WHERE a.client_profile_id = cp.id) AS client_count
+            FROM client_profiles cp
+            LEFT JOIN backup_templates t ON t.id = cp.template_id
+            WHERE cp.id = ?
+        ", [$id]) ?: null;
+    }
+
+    public function listProfiles(): void
+    {
+        $this->requireApiAdmin();
+        $rows = (new \BBS\Services\ClientProfileService())->all();
+        $this->json(['profiles' => array_map(fn($r) => $this->profilePayload($r), $rows)]);
+    }
+
+    public function getProfile(int $id): void
+    {
+        $this->requireApiAdmin();
+        $row = $this->profileRow($id);
+        if (!$row) {
+            $this->json(['error' => 'Profile not found'], 404);
+        }
+        $payload = $this->profilePayload($row);
+        $payload['apply_impact'] = (new \BBS\Services\ClientProfileService())->applyImpact($id);
+        $this->json(['profile' => $payload]);
+    }
+
+    public function createProfile(): void
+    {
+        $this->requireApiAdmin();
+        [$data, $error] = $this->profileInput($this->getJsonInput(), true);
+        if ($error) {
+            $this->json(['error' => $error], 422);
+        }
+
+        try {
+            $id = $this->db->insert('client_profiles', $data);
+        } catch (\Exception $e) {
+            $this->json(['error' => 'A profile with that name already exists'], 409);
+        }
+
+        $this->json(['profile' => $this->profilePayload($this->profileRow($id))], 201);
+    }
+
+    public function updateProfile(int $id): void
+    {
+        $this->requireApiAdmin();
+        if (!$this->profileRow($id)) {
+            $this->json(['error' => 'Profile not found'], 404);
+        }
+
+        [$data, $error] = $this->profileInput($this->getJsonInput(), false);
+        if ($error) {
+            $this->json(['error' => $error], 422);
+        }
+
+        if (!empty($data)) {
+            try {
+                $this->db->update('client_profiles', $data, 'id = ?', [$id]);
+            } catch (\Exception $e) {
+                $this->json(['error' => 'A profile with that name already exists'], 409);
+            }
+        }
+
+        // Deliberately does not touch existing clients — see applyProfile().
+        $this->json(['profile' => $this->profilePayload($this->profileRow($id))]);
+    }
+
+    public function deleteProfile(int $id): void
+    {
+        $this->requireApiAdmin();
+        $row = $this->profileRow($id);
+        if (!$row) {
+            $this->json(['error' => 'Profile not found'], 404);
+        }
+        if (!empty($row['is_default'])) {
+            $this->json(['error' => 'The default profile cannot be deleted'], 409);
+        }
+
+        $svc = new \BBS\Services\ClientProfileService();
+        $this->db->query("UPDATE agents SET client_profile_id = ? WHERE client_profile_id = ?",
+            [$svc->defaultProfileId(), $id]);
+        $this->db->delete('client_profiles', 'id = ?', [$id]);
+
+        http_response_code(204);
+        exit;
+    }
+
+    /**
+     * POST /api/v1/client-profiles/{id}/apply
+     *
+     * Overwrites the plans and schedules of every client in the profile. The
+     * one destructive call here, so it requires confirm:true in the body — a
+     * mistyped id should not be able to rewrite a fleet.
+     */
+    public function applyProfile(int $id): void
+    {
+        $this->requireApiAdmin();
+        $row = $this->profileRow($id);
+        if (!$row) {
+            $this->json(['error' => 'Profile not found'], 404);
+        }
+
+        $input = $this->getJsonInput();
+        $svc = new \BBS\Services\ClientProfileService();
+        if (empty($input['confirm'])) {
+            $this->json([
+                'error' => 'confirm must be true — this overwrites settings on every client in the profile',
+                'apply_impact' => $svc->applyImpact($id),
+            ], 422);
+        }
+
+        $result = $svc->applyToClients($id);
+        $this->db->insert('server_log', [
+            'level' => 'warning',
+            'message' => "Profile \"{$row['name']}\" applied via API to {$result['clients']} client(s): "
+                       . "{$result['plans']} backup plan(s) and {$result['schedules']} schedule(s) overwritten.",
+        ]);
+
+        $this->json(['applied' => $result]);
+    }
+
     // ── API tokens ──────────────────────────────────────────────────
 
     public function listTokens(): void

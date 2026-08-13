@@ -29,9 +29,11 @@ class AdminApiController extends Controller
         $agents = $this->db->fetchAll("
             SELECT a.id, a.name, a.hostname, a.ip_address, a.os_info,
                    a.borg_version, a.agent_version, a.status, a.last_heartbeat,
-                   a.created_at, u.username as owner
+                   a.created_at, u.username as owner,
+                   a.client_profile_id, cp.name AS client_profile_name
             FROM agents a
             LEFT JOIN users u ON u.id = a.user_id
+            LEFT JOIN client_profiles cp ON cp.id = a.client_profile_id
             WHERE {$agentWhere}
             ORDER BY a.name
         ", $agentParams);
@@ -225,9 +227,11 @@ class AdminApiController extends Controller
         $agent = $this->db->fetchOne("
             SELECT a.id, a.name, a.hostname, a.ip_address, a.os_info,
                    a.borg_version, a.agent_version, a.status, a.last_heartbeat,
-                   a.api_key, a.api_key_encrypted, a.created_at, u.username as owner
+                   a.api_key, a.api_key_encrypted, a.created_at, u.username as owner,
+                   a.client_profile_id, cp.name AS client_profile_name
             FROM agents a
             LEFT JOIN users u ON u.id = a.user_id
+            LEFT JOIN client_profiles cp ON cp.id = a.client_profile_id
             WHERE a.id = ?
         ", [$id]);
 
@@ -1516,6 +1520,19 @@ class AdminApiController extends Controller
 
         $data = [];
         if (isset($input['name'])) $data['name'] = trim($input['name']);
+
+        // Moving a client between profiles changes how patient BBS is with it
+        // and what its next new plan starts from. It deliberately does not
+        // rewrite the plans it already has — that is what the profile's apply
+        // endpoint is for.
+        if (array_key_exists('client_profile_id', $input)) {
+            $svc = new \BBS\Services\ClientProfileService();
+            $pid = $input['client_profile_id'] !== null ? (int) $input['client_profile_id'] : null;
+            if ($pid !== null && !$svc->find($pid)) {
+                $this->json(['error' => 'client_profile_id does not exist'], 422);
+            }
+            $data['client_profile_id'] = $pid ?? $svc->defaultProfileId();
+        }
 
         if (empty($data)) {
             $this->json(['error' => 'No fields to update'], 400);
