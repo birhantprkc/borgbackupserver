@@ -411,74 +411,6 @@ html, body {
     pointer-events: none;
 }
 
-/* Mobile bottom navigation */
-.mobile-bottom-nav {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background-color: var(--bbs-nav-bg);
-    display: flex;
-    justify-content: space-around;
-    align-items: center;
-    z-index: 1040;
-    padding: 4px 0;
-    padding-bottom: calc(4px + env(safe-area-inset-bottom));
-    /* Thin lighter top border for definition against the page, plus a
-       stronger upward shadow so the bar clearly separates from content. */
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.35), 0 -1px 0 rgba(255, 255, 255, 0.04);
-}
-
-.mobile-nav-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-decoration: none;
-    color: var(--bbs-nav-color);
-    padding: 4px 8px;
-    font-size: 0.65rem;
-    line-height: 1;
-    transition: color 0.2s;
-    flex: 1;
-    text-align: center;
-    /* Reset <button> defaults so the More trigger looks identical to the <a> items */
-    background: transparent;
-    border: 0;
-    font-family: inherit;
-}
-
-.mobile-nav-item i {
-    font-size: 1.25rem;
-    margin-bottom: 2px;
-}
-
-.mobile-nav-item.active {
-    color: var(--bbs-nav-active-bg);
-}
-
-.mobile-nav-item:hover {
-    color: var(--bbs-nav-hover-color);
-}
-
-/* Mobile "More" bottom sheet — auto-size to content so it doesn't grab the
-   whole screen for just a handful of items. Extra padding at the bottom
-   keeps the last row above the phone's home indicator. */
-.offcanvas-bottom.mobile-more-sheet {
-    height: auto;
-    max-height: 70vh;
-    border-top-left-radius: 12px;
-    border-top-right-radius: 12px;
-}
-.offcanvas-bottom.mobile-more-sheet .offcanvas-body {
-    padding-bottom: env(safe-area-inset-bottom);
-}
-.offcanvas-bottom.mobile-more-sheet .list-group-item {
-    padding: 0.85rem 1rem;
-    border-left: 0;
-    border-right: 0;
-}
-
 /* Offset main content for fixed sidebar on desktop */
 @media (min-width: 768px) {
     .main-content {
@@ -486,21 +418,20 @@ html, body {
     }
 }
 
-/* Add padding at bottom for mobile nav */
 @media (max-width: 767.98px) {
     .main-content {
-        padding-bottom: 64px;
+        /* No bottom bar to clear any more — the drawer overlays instead. */
         min-width: 0;
         overflow-x: hidden;
     }
-    /* Hide the logo entirely on mobile — bottom-nav handles navigation
-       and the page-title gets the full topbar width. */
+    /* Logo stays hidden on a phone: the hamburger and the page title need the
+       width more than a mark that only repeats what the tab already says. */
     .topbar .navbar-brand,
     .topbar-logo {
         display: none !important;
     }
     .topbar .navbar-text {
-        margin-left: 0.75rem !important;
+        margin-left: 0.25rem !important;
     }
 }
 
@@ -1452,4 +1383,30 @@ body.bg-body-secondary {
     border-bottom: 1px solid var(--bbs-set-rule);
     padding-top: 14px;
     padding-bottom: 14px;
+}
+
+
+/* Mobile navigation drawer — replaces the bottom bar, which could only ever
+   show four destinations and pushed the rest behind "More". */
+.mobile-nav-drawer {
+    width: 270px;
+}
+
+.mobile-nav-drawer .list-group-item {
+    border: 0;
+    padding: 11px 18px;
+    font-size: 0.9rem;
+}
+
+.mobile-nav-drawer .mobile-nav-heading {
+    padding: 16px 18px 6px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--bs-secondary-color);
+}
+
+.topbar-burger:focus {
+    box-shadow: none;
 }

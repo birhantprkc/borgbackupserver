@@ -40,6 +40,10 @@
     <!-- Top bar -->
     <nav class="navbar navbar-expand navbar-dark topbar p-0">
         <div class="container-fluid p-0">
+            <button class="btn btn-link text-white d-md-none px-3 border-0 topbar-burger" type="button"
+                    data-bs-toggle="offcanvas" data-bs-target="#mobileNav" aria-controls="mobileNav" aria-label="Menu">
+                <i class="bi bi-list" style="font-size:1.5rem;"></i>
+            </button>
             <a href="/" class="navbar-brand d-flex align-items-center justify-content-center m-0 p-0 topbar-logo">
                 <?php
                     $brandIcon = \BBS\Core\Database::getInstance()->fetchOne("SELECT `value` FROM settings WHERE `key` = 'branding_icon'");
@@ -249,76 +253,54 @@
         </div>
     </div>
 
-    <!-- Bottom nav (mobile only) -->
-    <?php
-        $pt = $pageTitle ?? '';
-        $isAdmin = ($_SESSION['user_role'] ?? '') === 'admin';
-        // Active state for the More menu: true if the current page is one of
-        // the items inside the More sheet, so the user sees which section of
-        // the app they're in even though it's not a top-level tab.
-        $moreActive = in_array($pt, ['Schedules', 'Log', 'Storage'], true)
-            || ($isAdmin && str_contains($pt, 'User'));
-    ?>
-    <nav class="mobile-bottom-nav d-md-none">
-        <a href="/" class="mobile-nav-item <?= $pt === 'Dashboard' ? 'active' : '' ?>">
-            <i class="bi bi-speedometer2"></i>
-            <span>Home</span>
-        </a>
-        <a href="/clients" class="mobile-nav-item <?= $pt === 'Clients' ? 'active' : '' ?>">
-            <i class="bi bi-display"></i>
-            <span>Clients</span>
-        </a>
-        <a href="/queue" class="mobile-nav-item <?= $pt === 'Queue' ? 'active' : '' ?>">
-            <i class="bi bi-clock-history"></i>
-            <span>Queue</span>
-        </a>
-        <?php if ($isAdmin): ?>
-        <a href="/settings" class="mobile-nav-item <?= $pt === 'Settings' ? 'active' : '' ?>">
-            <i class="bi bi-gear"></i>
-            <span>Settings</span>
-        </a>
-        <?php endif; ?>
-        <button type="button" class="mobile-nav-item <?= $moreActive ? 'active' : '' ?>"
-                data-bs-toggle="offcanvas" data-bs-target="#mobileMoreMenu" aria-controls="mobileMoreMenu">
-            <i class="bi bi-three-dots"></i>
-            <span>More</span>
-        </button>
-    </nav>
-
-    <!-- "More" offcanvas — pops up from the bottom with secondary nav items -->
-    <div class="offcanvas offcanvas-bottom mobile-more-sheet" tabindex="-1" id="mobileMoreMenu" aria-labelledby="mobileMoreMenuLabel">
+    <!-- Mobile navigation drawer.
+         One menu with everything the desktop sidebar has, rather than five
+         bottom-bar slots and a "More" sheet holding whatever didn't fit. -->
+    <div class="offcanvas offcanvas-start mobile-nav-drawer" tabindex="-1" id="mobileNav" aria-labelledby="mobileNavLabel">
         <div class="offcanvas-header border-bottom">
-            <h5 class="offcanvas-title" id="mobileMoreMenuLabel">More</h5>
+            <h5 class="offcanvas-title" id="mobileNavLabel">Menu</h5>
             <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
         </div>
         <div class="offcanvas-body p-0">
             <div class="list-group list-group-flush">
+                <a href="/" class="list-group-item list-group-item-action d-flex align-items-center <?= $pt === 'Dashboard' ? 'active' : '' ?>">
+                    <i class="bi bi-speedometer2 fs-6 me-3"></i>Dashboard
+                </a>
+                <a href="/clients" class="list-group-item list-group-item-action d-flex align-items-center <?= $pt === 'Clients' ? 'active' : '' ?>">
+                    <i class="bi bi-display fs-6 me-3"></i>Clients
+                </a>
+                <a href="/queue" class="list-group-item list-group-item-action d-flex align-items-center <?= $pt === 'Queue' ? 'active' : '' ?>">
+                    <i class="bi bi-clock-history fs-6 me-3"></i>Queue
+                </a>
                 <a href="/schedules" class="list-group-item list-group-item-action d-flex align-items-center <?= $pt === 'Schedules' ? 'active' : '' ?>">
-                    <i class="bi bi-calendar-week fs-5 me-3"></i>Schedules
+                    <i class="bi bi-calendar-week fs-6 me-3"></i>Schedules
                 </a>
-                <a href="/log" class="list-group-item list-group-item-action d-flex align-items-center <?= $pt === 'Log' ? 'active' : '' ?>">
-                    <i class="bi bi-journal-text fs-5 me-3"></i>Log
-                </a>
-                <?php if ($isAdmin): ?>
-                <a href="/users" class="list-group-item list-group-item-action d-flex align-items-center <?= str_contains($pt, 'User') ? 'active' : '' ?>">
-                    <i class="bi bi-people fs-5 me-3"></i>Users
-                </a>
-                <?php if (!\BBS\Core\Config::isHosted()): ?>
+                <?php if ($isAdmin && !\BBS\Core\Config::isHosted()): ?>
                 <a href="/storage-locations" class="list-group-item list-group-item-action d-flex align-items-center <?= $pt === 'Storage' ? 'active' : '' ?>">
-                    <i class="bi bi-hdd-stack fs-5 me-3"></i>Storage
+                    <i class="bi bi-hdd-stack fs-6 me-3"></i>Storage
                 </a>
                 <?php endif; ?>
-                <div class="list-group-item text-uppercase small fw-semibold text-body-secondary py-2"
-                     style="letter-spacing:.06em;">Settings</div>
+                <a href="/log" class="list-group-item list-group-item-action d-flex align-items-center <?= $pt === 'Log' ? 'active' : '' ?>">
+                    <i class="bi bi-journal-text fs-6 me-3"></i>Log
+                </a>
+
+                <?php if ($isAdmin): ?>
+                <div class="mobile-nav-heading">Management</div>
+                <a href="/users" class="list-group-item list-group-item-action d-flex align-items-center <?= str_contains($pt, 'User') ? 'active' : '' ?>">
+                    <i class="bi bi-people fs-6 me-3"></i>Users
+                </a>
+
+                <div class="mobile-nav-heading">Settings</div>
                 <?php foreach (\BBS\Services\SettingsNav::pages() as $sp): ?>
                 <a href="/settings?tab=<?= $sp['tab'] ?>"
-                   class="list-group-item list-group-item-action d-flex align-items-center ps-4 <?= ($pt === 'Settings' && ($_GET['tab'] ?? 'general') === $sp['tab']) ? 'active' : '' ?>">
+                   class="list-group-item list-group-item-action d-flex align-items-center <?= ($pt === 'Settings' && ($_GET['tab'] ?? 'general') === $sp['tab']) ? 'active' : '' ?>">
                     <i class="bi <?= $sp['icon'] ?> fs-6 me-3"></i><?= htmlspecialchars($sp['label']) ?>
                 </a>
                 <?php endforeach; ?>
                 <?php endif; ?>
+
                 <a href="/logout" class="list-group-item list-group-item-action d-flex align-items-center text-danger">
-                    <i class="bi bi-box-arrow-right fs-5 me-3"></i>Logout
+                    <i class="bi bi-box-arrow-right fs-6 me-3"></i>Logout
                 </a>
             </div>
         </div>
