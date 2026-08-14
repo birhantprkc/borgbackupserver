@@ -152,21 +152,7 @@
             $sidebarUpdateService = new \BBS\Services\UpdateService();
             $sidebarUpdateAvailable = $sidebarUpdateService->isUpdateAvailable();
 
-            // Same order and labels as the tab strip on the settings page, so
-            // moving between the two doesn't feel like two different products.
-            $settingsPages = [
-                ['general',      'General',            'bi-gear'],
-                ['agent',        'Agent',              'bi-incognito'],
-                ['notifications','Email Settings',     'bi-envelope'],
-                ['push',         'Apprise',            'bi-megaphone'],
-                ['push_service', 'Push Service',       'bi-broadcast'],
-                ['profiles',     'Profiles',           'bi-diagram-3'],
-                ['templates',    'Templates',          'bi-clipboard-check'],
-                ['auth',         'Authentication',     'bi-shield-lock'],
-                ['branding',     'Branding',           'bi-palette'],
-                ['api',          'API',                'bi-key'],
-                ['updates',      'Updates',            'bi-arrow-repeat'],
-            ];
+            $settingsPages = \BBS\Services\SettingsNav::pages();
             ?>
             <ul class="nav flex-column mb-auto">
                 <li class="nav-item">
@@ -220,7 +206,7 @@
                     </button>
                     <div class="collapse <?= $onSettings ? 'show' : '' ?>" id="sidebarSettings">
                         <ul class="sidebar-sub">
-                            <?php foreach ($settingsPages as [$tab, $label, $icon]): ?>
+                            <?php foreach ($settingsPages as $sp): [$tab, $label, $icon] = [$sp['tab'], $sp['label'], $sp['icon']]; ?>
                             <li>
                                 <a href="/settings?tab=<?= $tab ?>"
                                    class="nav-link sidebar-link <?= ($onSettings && $settingsTab === $tab) ? 'active' : '' ?>">
@@ -322,6 +308,14 @@
                     <i class="bi bi-hdd-stack fs-5 me-3"></i>Storage
                 </a>
                 <?php endif; ?>
+                <div class="list-group-item text-uppercase small fw-semibold text-body-secondary py-2"
+                     style="letter-spacing:.06em;">Settings</div>
+                <?php foreach (\BBS\Services\SettingsNav::pages() as $sp): ?>
+                <a href="/settings?tab=<?= $sp['tab'] ?>"
+                   class="list-group-item list-group-item-action d-flex align-items-center ps-4 <?= ($pt === 'Settings' && ($_GET['tab'] ?? 'general') === $sp['tab']) ? 'active' : '' ?>">
+                    <i class="bi <?= $sp['icon'] ?> fs-6 me-3"></i><?= htmlspecialchars($sp['label']) ?>
+                </a>
+                <?php endforeach; ?>
                 <?php endif; ?>
                 <a href="/logout" class="list-group-item list-group-item-action d-flex align-items-center text-danger">
                     <i class="bi bi-box-arrow-right fs-5 me-3"></i>Logout

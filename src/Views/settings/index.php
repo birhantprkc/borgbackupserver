@@ -7,6 +7,21 @@ if ($activeTab === 'borg') { $activeTab = 'updates'; $updatesSection = 'borg'; }
 if ($activeTab === 'updates') { $updatesSection = $updatesSection ?? ($_GET['section'] ?? 'software'); }
 ?>
 
+<!-- Settings navigation on small screens.
+     The sidebar is desktop-only and the tab strip is gone, so without this a
+     phone can reach exactly one settings page: whichever it landed on. -->
+<div class="d-md-none mb-4">
+    <label class="form-label small fw-semibold mb-1" for="settingsJump">Settings page</label>
+    <select class="form-select" id="settingsJump"
+            onchange="if (this.value) window.location = this.value;">
+        <?php foreach (\BBS\Services\SettingsNav::pages() as $sp): ?>
+        <option value="/settings?tab=<?= $sp['tab'] ?>" <?= $activeTab === $sp['tab'] ? 'selected' : '' ?>>
+            <?= htmlspecialchars($sp['label']) ?>
+        </option>
+        <?php endforeach; ?>
+    </select>
+</div>
+
 
 
 <!-- Agent Tab -->
