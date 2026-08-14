@@ -1859,7 +1859,7 @@ document.addEventListener('change', function (e) {
         </div>
         <?php endif; ?>
 
-        <h6>Add Template</h6>
+        <h5 class="settings-group">Add Template</h5>
         <form method="POST" action="/settings/templates/add" class="tpl-form" id="addTplForm">
             <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
             <div class="row g-3 mb-2">
@@ -1923,7 +1923,7 @@ document.addEventListener('change', function (e) {
                     <input type="text" class="form-control form-control-sm font-monospace tpl-adv-field" name="advanced_options" placeholder="e.g. --pattern ...">
                 </div>
                 <div class="col-md-2 d-flex align-items-end">
-                    <button type="submit" class="btn btn-success w-100">Add Template</button>
+                    <button type="submit" class="btn btn-sm btn-success w-100">Add Template</button>
                 </div>
             </div>
         </form>
