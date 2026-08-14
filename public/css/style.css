@@ -1396,3 +1396,60 @@ body.bg-body-secondary {
         padding: 30px 56px;
     }
 }
+
+
+/* ── Apprise URL examples ─────────────────────────────────────────────────
+   Reference material, so it reads as a lookup table: the service name in a
+   fixed column with its URL beside it, rather than "Label: value" run
+   together on one line where the eye has to find each label again. */
+.url-example-panel {
+    border: 1px solid var(--bbs-set-rule);
+    border-radius: 8px;
+    padding: 18px 22px;
+    background-color: var(--bs-tertiary-bg);
+}
+
+.url-example {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    padding: 6px 0;
+    font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-size: 0.82rem;
+}
+
+.url-example-label {
+    flex: 0 0 92px;
+    font-weight: 600;
+    color: #6ea8fe;
+}
+
+[data-bs-theme="light"] .url-example-label {
+    color: #0d6efd;
+}
+
+.url-example-value {
+    color: var(--bbs-set-desc);
+    background: none;
+    padding: 0;
+    word-break: break-all;
+}
+
+/* Table headers on the settings pages: quiet column labels rather than a
+   filled bar competing with the section heading above them. */
+.settings-table thead th {
+    background: none;
+    border-bottom: 1px solid var(--bbs-set-rule);
+    color: var(--bbs-set-meta);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding-bottom: 10px;
+}
+
+.settings-table tbody td {
+    border-bottom: 1px solid var(--bbs-set-rule);
+    padding-top: 14px;
+    padding-bottom: 14px;
+}

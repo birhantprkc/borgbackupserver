@@ -698,10 +698,12 @@ unset($ns);
 
 <!-- Services Table -->
 <?php if (!empty($notifServices)): ?>
-<div class="card border-0 shadow-sm">
+<h5 class="settings-group">Connected Services</h5>
+<p class="settings-group-note">Manage your Apprise services and the events they subscribe to.</p>
+<div>
     <div class="table-responsive d-none d-md-block">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
+        <table class="table table-hover align-middle mb-0 settings-table">
+            <thead>
                 <tr>
                     <th>Service</th>
                     <th class="text-center" style="width: 100px;">Status</th>
@@ -728,8 +730,7 @@ unset($ns);
                         <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">
                             <i class="bi bi-pause-circle me-1"></i>Disabled
                         </span>
-                        
-<?php endif; ?>
+                        <?php endif; ?>
                     </td>
                     <td>
                         <?php
@@ -1321,36 +1322,38 @@ function updateBuiltUrl(containerId, schema, prefix) {
 </script>
 <h5 class="settings-group">Service URL Examples</h5>
 <p class="settings-group-note">Apprise addresses each service with a URL. These are the common ones.</p>
-<!-- URL examples: reference, so they sit at the foot of the page -->
-<div class="mb-4">
-    <div class="d-flex align-items-start">
-        <div class="w-100">
-            <div id="urlExamples">
-                <div class="bg-body-secondary rounded p-3 font-monospace small">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <strong>Discord:</strong> discord://webhook_id/webhook_token<br>
-                            <strong>Telegram:</strong> tgram://bot_token/chat_id[:thread]<br>
-                            <strong>Slack:</strong> slack://tokenA/tokenB/tokenC<br>
-                            <strong>Pushover:</strong> pover://user@token
-                        </div>
-                        <div class="col-md-6">
-                            <strong>ntfy:</strong> ntfy://topic<br>
-                            <strong>Gotify:</strong> gotify://hostname/token<br>
-                            <strong>Email:</strong> mailto://user:pass@smtp.example.com<br>
-                            <strong>Webhook:</strong> json://your-webhook-url
-                        </div>
-                    </div>
-                    <div class="mt-2">
-                        <a href="https://github.com/caronc/apprise/wiki#notification-services" target="_blank" class="text-decoration-none">
-                            View all supported services <i class="bi bi-box-arrow-up-right"></i>
-                        </a>
-                    </div>
-                </div>
+<?php
+$appriseExamples = [
+    ['Discord',  'discord://webhook_id/webhook_token'],
+    ['Telegram', 'tgram://bot_token/chat_id[:thread]'],
+    ['Slack',    'slack://tokenA/tokenB/tokenC'],
+    ['Pushover', 'pover://user@token'],
+    ['ntfy',     'ntfy://topic'],
+    ['Gotify',   'gotify://hostname/token'],
+    ['Email',    'mailto://user:pass@smtp.example.com'],
+    ['Webhook',  'json://your-webhook-url'],
+];
+$half = (int) ceil(count($appriseExamples) / 2);
+?>
+<div class="url-example-panel">
+    <div class="row g-0">
+        <?php foreach ([array_slice($appriseExamples, 0, $half), array_slice($appriseExamples, $half)] as $column): ?>
+        <div class="col-md-6">
+            <?php foreach ($column as [$label, $url]): ?>
+            <div class="url-example">
+                <span class="url-example-label"><?= htmlspecialchars($label) ?>:</span>
+                <code class="url-example-value"><?= htmlspecialchars($url) ?></code>
             </div>
+            <?php endforeach; ?>
         </div>
+        <?php endforeach; ?>
     </div>
 </div>
+<p class="mt-3 mb-4">
+    <a href="https://github.com/caronc/apprise/wiki#notification-services" target="_blank" class="text-decoration-none">
+        View all supported services <i class="bi bi-box-arrow-up-right ms-1" style="font-size:.8em;"></i>
+    </a>
+</p>
 
 <?php endif; ?>
 
