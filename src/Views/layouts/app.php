@@ -257,7 +257,7 @@
             <?php $flash = $flash ?? $this->getFlash(); ?>
 
             <!-- Page content -->
-            <div class="p-3 p-md-4">
+            <div class="page-canvas">
                 <?php require $viewPath . $template . '.php'; ?>
             </div>
         </div>
