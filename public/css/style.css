@@ -1242,7 +1242,10 @@ body.bg-body-secondary {
 }
 
 .settings-row-help {
-    color: var(--bs-secondary-color);
+    /* 60% of the body colour rather than the muted token, so it reads as the
+       same text turned down rather than a different, greyer ink. */
+    color: var(--bs-body-color);
+    opacity: 0.6;
     font-size: 0.8rem;
     line-height: 1.35;
     margin: 0;
@@ -1274,7 +1277,7 @@ body.bg-body-secondary {
 .settings-row-default {
     color: var(--bs-secondary-color);
     font-size: 0.82rem;
-    text-align: right;
+    text-align: left;
 }
 
 .settings-actions {
@@ -1293,8 +1296,5 @@ body.bg-body-secondary {
         grid-template-columns: 1fr;
         gap: 8px;
         padding: 16px 0;
-    }
-    .settings-row-default {
-        text-align: left;
     }
 }
