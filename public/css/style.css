@@ -252,22 +252,25 @@ html, body {
     margin: 0;
 }
 
-.sidebar-section-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+/* Settings is a destination-sized row like Users, not a section label — it
+   just happens to expand. Width and background reset because it is a <button>
+   wearing a link's clothes. */
+.sidebar-group-toggle {
     width: 100%;
     background: none;
     border: 0;
     cursor: pointer;
+    text-align: left;
 }
 
-.sidebar-section-toggle .bi {
-    font-size: 0.75rem;
+.sidebar-group-caret {
+    margin-left: auto;
+    font-size: 0.7rem;
+    opacity: 0.6;
     transition: transform 0.15s;
 }
 
-.sidebar-section-toggle[aria-expanded="false"] .bi {
+.sidebar-group-toggle[aria-expanded="false"] .sidebar-group-caret {
     transform: rotate(-90deg);
 }
 
@@ -1404,12 +1407,12 @@ body.bg-body-secondary {
 
 .mobile-nav-drawer .list-group-item {
     border: 0;
-    padding: 11px 18px;
+    padding: 9px 18px;
     font-size: 0.9rem;
 }
 
 .mobile-nav-drawer .mobile-nav-heading {
-    padding: 16px 18px 6px;
+    padding: 13px 18px 5px;
     font-size: 0.68rem;
     font-weight: 600;
     letter-spacing: 0.08em;

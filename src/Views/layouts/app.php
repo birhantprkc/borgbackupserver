@@ -203,10 +203,11 @@
                 </li>
 
                 <li class="nav-item">
-                    <button class="sidebar-section sidebar-section-toggle" type="button"
-                            data-bs-toggle="collapse" data-bs-target="#sidebarSettings"
+                    <button class="nav-link sidebar-link sidebar-group-toggle <?= $onSettings ? 'active' : '' ?>"
+                            type="button" data-bs-toggle="collapse" data-bs-target="#sidebarSettings"
                             aria-expanded="<?= $onSettings ? 'true' : 'false' ?>" aria-controls="sidebarSettings">
-                        <span>Settings</span><i class="bi bi-chevron-up"></i>
+                        <i class="bi bi-sliders"></i><span class="sidebar-label">Settings</span>
+                        <i class="bi bi-chevron-up sidebar-group-caret"></i>
                     </button>
                     <div class="collapse <?= $onSettings ? 'show' : '' ?>" id="sidebarSettings">
                         <ul class="sidebar-sub">
