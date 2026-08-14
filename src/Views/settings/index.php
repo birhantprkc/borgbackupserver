@@ -2149,11 +2149,13 @@ document.getElementById('oidcNewUserPolicy').addEventListener('change', function
                 <div class="col-md-7">
                     <h6><i class="bi bi-image me-1"></i> Navbar Icon</h6>
                     <p class="text-muted small">
-                        Transparent PNG shown in the top-left corner of every page (sits in a ~115×100px slot
-                        and overflows slightly into the page header). Also reused as the small header logo on
-                        the <strong>mobile login screen</strong>, since the wider Login Page Logo would crowd a
-                        phone-width pane. Wide landscape artwork works best. Will be resized to fit within
-                        360×200 pixels max.
+                        Transparent PNG shown in the top-left corner of every page, in a
+                        <strong>192&times;64 pixel</strong> slot above the menu. Wide landscape artwork suits it
+                        best &mdash; around <strong>3:1</strong> fills the slot edge to edge, and anything taller
+                        than that is scaled to the 64px height with space left either side. Also reused as the
+                        small header logo on the <strong>mobile login screen</strong>, since the wider Login Page
+                        Logo would crowd a phone-width pane. Uploads are resized to fit within 360&times;200
+                        pixels.
                     </p>
                     <input type="file" class="form-control form-control-sm" id="iconFileInput" accept="image/png">
                     <div class="small text-muted mt-1" id="iconDimensions"></div>

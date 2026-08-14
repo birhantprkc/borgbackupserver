@@ -402,11 +402,14 @@ html, body {
    default mascot's "peek over the edge of the topbar" geometry. They get
    constrained to the navbar height and contained without distortion (#261). */
 .topbar-brand-logo {
-    max-height: 58px;
-    max-width: 92px;
+    /* Matches the slot the branding page now advertises: the full 64px bar
+       height and the width of the logo column. The previous 92px cap was
+       sized for the old 98px column and left a custom logo marooned in the
+       middle of the new one. */
+    max-height: 64px;
+    max-width: 192px;
     height: auto;
     width: auto;
-    padding: 3px;
     object-fit: contain;
     z-index: 1031;
     pointer-events: none;
