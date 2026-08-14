@@ -1323,18 +1323,18 @@ body.bg-body-secondary {
    window edge reads as unfinished, and the settings rows in particular need
    the label column to start somewhere other than hard against the sidebar. */
 .page-canvas {
-    padding: 20px 18px;
+    padding: 20px 14px;
 }
 
 @media (min-width: 768px) {
     .page-canvas {
-        padding: 26px 40px;
+        padding: 26px 24px;
     }
 }
 
 @media (min-width: 1400px) {
     .page-canvas {
-        padding: 30px 56px;
+        padding: 30px 28px;
     }
 }
 
@@ -1457,26 +1457,26 @@ body.bg-body-secondary {
        below it. The values track .page-canvas at each breakpoint; change one
        and change the other. */
     margin-top: -20px;
-    margin-left: -18px;
-    margin-right: -18px;
-    padding: 20px 18px;
+    margin-left: -14px;
+    margin-right: -14px;
+    padding: 20px 14px;
 }
 
 @media (min-width: 768px) {
     .settings-page-head {
         margin-top: -26px;
-        margin-left: -40px;
-        margin-right: -40px;
-        padding: 26px 40px;
+        margin-left: -24px;
+        margin-right: -24px;
+        padding: 26px 24px;
     }
 }
 
 @media (min-width: 1400px) {
     .settings-page-head {
         margin-top: -30px;
-        margin-left: -56px;
-        margin-right: -56px;
-        padding: 30px 56px;
+        margin-left: -28px;
+        margin-right: -28px;
+        padding: 30px 28px;
     }
 }
 
