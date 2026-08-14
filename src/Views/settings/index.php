@@ -7,72 +7,7 @@ if ($activeTab === 'borg') { $activeTab = 'updates'; $updatesSection = 'borg'; }
 if ($activeTab === 'updates') { $updatesSection = $updatesSection ?? ($_GET['section'] ?? 'software'); }
 ?>
 
-<!-- Tab Navigation -->
-<?php
-$updateService = new \BBS\Services\UpdateService();
-$updateAvailable = $updateService->isUpdateAvailable();
-?>
-<ul class="nav nav-pills client-tabs mb-0 flex-wrap">
-    <li class="nav-item">
-        <a class="nav-link <?= $activeTab === 'general' ? 'active' : '' ?>" href="/settings?tab=general">
-            <i class="bi bi-gear me-1"></i><span class="tab-label">General</span>
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link <?= $activeTab === 'notifications' ? 'active' : '' ?>" href="/settings?tab=notifications">
-            <i class="bi bi-envelope me-1"></i><span class="tab-label"><span class="d-none d-sm-inline">Email Settings</span><span class="d-sm-none">Email</span></span>
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link <?= $activeTab === 'push' ? 'active' : '' ?>" href="/settings?tab=push">
-            <i class="bi bi-megaphone me-1"></i><span class="tab-label"><span class="d-none d-sm-inline">Push Notifications</span><span class="d-sm-none">Push</span></span>
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link <?= $activeTab === 'push_service' ? 'active' : '' ?>" href="/settings?tab=push_service">
-            <i class="bi bi-broadcast me-1"></i><span class="tab-label"><span class="d-none d-sm-inline">Push Service</span><span class="d-sm-none">Service</span></span>
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link <?= $activeTab === 'profiles' ? 'active' : '' ?>" href="/settings?tab=profiles">
-            <i class="bi bi-diagram-3 me-1"></i><span class="tab-label">Profiles</span>
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link <?= $activeTab === 'templates' ? 'active' : '' ?>" href="/settings?tab=templates">
-            <i class="bi bi-clipboard-check me-1"></i><span class="tab-label">Templates</span>
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link <?= $activeTab === 'auth' ? 'active' : '' ?>" href="/settings?tab=auth">
-            <i class="bi bi-shield-lock me-1"></i><span class="tab-label">Authentication</span>
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link <?= $activeTab === 'branding' ? 'active' : '' ?>" href="/settings?tab=branding">
-            <i class="bi bi-palette me-1"></i><span class="tab-label">Branding</span>
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link <?= $activeTab === 'api' ? 'active' : '' ?>" href="/settings?tab=api">
-            <i class="bi bi-key me-1"></i><span class="tab-label">API</span>
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link <?= $activeTab === 'updates' ? 'active' : '' ?>" href="/settings?tab=updates">
-            <i class="bi bi-cloud-arrow-down me-1"></i><span class="tab-label">Updates</span>
-            <?php if ($updateAvailable): ?>
-                <span class="badge bg-warning text-dark ms-1">New</span>
-            <?php endif; ?>
-        </a>
-    </li>
-    <li class="nav-item d-sm-none">
-        <a class="nav-link" href="/storage-locations">
-            <i class="bi bi-hdd-stack me-1"></i><span class="tab-label">Storage</span>
-        </a>
-    </li>
-</ul>
-<div class="client-tab-content border rounded-bottom p-4 mb-4 shadow-sm">
+
 
 <!-- General Tab -->
 <?php if ($activeTab === 'general'): ?>
@@ -2947,7 +2882,6 @@ docker compose up -d</pre>
 <?php endif; ?>
 
 <?php endif; ?>
-</div><!-- /client-tab-content -->
 
 <script>
 // Remote SSH host management
