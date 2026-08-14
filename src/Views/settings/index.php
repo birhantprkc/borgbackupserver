@@ -56,7 +56,7 @@ $compactHour = (int) ($settings['auto_compact_hour'] ?? 2);
     <div class="settings-row">
         <div>
             <div class="settings-row-label">Auto-update agents when BBS updates</div>
-            <p class="settings-row-help">Queue an agent update for every outdated, online client after BBS updates, so agents stay in step with the server.</p>
+            <p class="settings-row-help">Queue an agent update for every outdated, online client after BBS updates, so agents stay in step with the server. Turning this off may have unexpected results.</p>
         </div>
         <div class="settings-row-control">
             <div class="form-check form-switch mb-0">
