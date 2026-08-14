@@ -1547,25 +1547,28 @@ $renderProfileForm = function (?array $p) use ($templates, $freqLabels, $dowLabe
 };
 ?>
 
-<div class="card border-0 shadow-sm">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <span class="fw-semibold"><i class="bi bi-diagram-3 me-1"></i> Client Profiles</span>
-        <button type="button" class="btn btn-sm btn-success" onclick="openProfileModal(null)">
-            <i class="bi bi-plus-circle me-1"></i> New Profile
-        </button>
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h1 class="settings-page-title">Client Profiles</h1>
+        <p class="settings-page-lede mb-0">A profile describes a kind of machine — laptops, database servers, point-of-sale registers — and the settings a new client of that kind starts with.</p>
     </div>
-    <div class="card-body">
-        <p class="text-muted small">
-            A profile describes a kind of machine — laptops, database servers, point-of-sale registers — and the
-            settings a new client of that kind should start with. Assign one when you add a client and its first
-            backup plan is filled in for you.
-            <strong>Editing a profile does not touch clients that already exist</strong>; that is what
-            <em>Apply to Clients</em> is for, and it overwrites their settings.
+    <button type="button" class="btn btn-sm btn-success flex-shrink-0 ms-3" onclick="openProfileModal(null)">
+        <i class="bi bi-plus-circle me-1"></i> New Profile
+    </button>
+</div>
+
+<div>
+    <div>
+        <h5 class="settings-group">Profiles</h5>
+        <p class="settings-group-note">
+            Assign one when you add a client and its first backup plan is filled in for you.
+            <strong>Editing a profile does not touch clients that already exist</strong> — that is what
+            <em>Apply to Clients</em> does, and it overwrites their settings.
         </p>
 
         <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="table-light">
+            <table class="table table-hover align-middle mb-0 settings-table">
+                <thead>
                     <tr>
                         <th>Profile</th>
                         <th>Template</th>
@@ -1736,17 +1739,16 @@ document.addEventListener('change', function (e) {
 <?php endif; ?>
 
 <?php if ($activeTab === 'templates'): ?>
-<div class="card border-0 shadow-sm">
-    <div class="card-header fw-semibold">
-        <i class="bi bi-clipboard-check me-1"></i> Backup Templates
-    </div>
-    <div class="card-body">
-        <p class="text-muted small mb-3">Templates pre-fill directories, excludes, and borg options when creating backup plans. Select a template to auto-populate the form.</p>
-
+<h1 class="settings-page-title">Backup Templates</h1>
+<p class="settings-page-lede">A template pre-fills the directories, excludes and borg options of a new backup plan, so a kind of machine is described once rather than typed out per client.</p>
+<div>
+    <div>
         <?php if (!empty($templates)): ?>
+        <h5 class="settings-group">Templates</h5>
+        <p class="settings-group-note">Pick one while creating a plan and the form fills itself in. Client profiles can name one as their default.</p>
         <div class="table-responsive mb-4">
-            <table class="table table-hover">
-                <thead class="table-light">
+            <table class="table table-hover settings-table">
+                <thead>
                     <tr>
                         <th>Name</th>
                         <th>Description</th>
@@ -2118,12 +2120,10 @@ document.getElementById('oidcNewUserPolicy').addEventListener('change', function
 
 <!-- Branding Tab -->
 <?php if ($activeTab === 'branding'): ?>
-<div class="card border-0 shadow-sm">
-    <div class="card-header fw-semibold">
-        <i class="bi bi-palette me-1"></i> Branding
-    </div>
-    <div class="card-body">
-        <p class="text-muted small mb-4">Customize the BBS interface with your own logos. Images are stored in the database and persist across updates.</p>
+<h1 class="settings-page-title">Branding</h1>
+<p class="settings-page-lede">Replace the logos with your own. Images are stored in the database, so they survive updates.</p>
+<div>
+    <div>
 
         <form method="POST" action="/settings/branding" enctype="multipart/form-data" id="brandingForm">
             <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
@@ -2327,12 +2327,11 @@ document.getElementById('appIconFileInput').addEventListener('change', function(
 
 <!-- API Tab -->
 <?php if ($activeTab === 'api'): ?>
-<div class="card border-0 shadow-sm">
-    <div class="card-header fw-semibold">
-        <i class="bi bi-key me-1"></i> API Tokens
-    </div>
-    <div class="card-body">
-        <p class="text-muted small mb-3">API tokens allow automated access to the BBS provisioning API. Tokens have full admin access. Keep them secret.</p>
+<h1 class="settings-page-title">API</h1>
+<p class="settings-page-lede">Tokens for automated access to the provisioning API. A token carries full admin access, so treat one like a password.</p>
+<div>
+    <div>
+        <h5 class="settings-group">Tokens</h5>
 
         <?php if (!empty($_SESSION['new_api_token'])): ?>
         <div class="alert alert-success d-flex align-items-center mb-3">
@@ -2353,7 +2352,7 @@ document.getElementById('appIconFileInput').addEventListener('change', function(
         <?php if (!empty($apiTokens)): ?>
         <div class="table-responsive mb-4">
             <table class="table table-hover">
-                <thead class="table-light">
+                <thead>
                     <tr>
                         <th>Name</th>
                         <th>User</th>
@@ -2423,7 +2422,7 @@ document.getElementById('appIconFileInput').addEventListener('change', function(
         <p class="text-muted small mb-3">Use your API token with the <code>Authorization: Bearer &lt;token&gt;</code> header. All endpoints accept and return JSON.</p>
 
         <table class="table table-sm small mb-0">
-            <thead class="table-light">
+            <thead>
                 <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
             </thead>
             <tbody>
@@ -2510,6 +2509,9 @@ sudo /var/www/bbs/bin/bbs-token revoke "ansible"</code></pre>
 
 <!-- Updates Tab -->
 <?php if ($activeTab === 'updates'): ?>
+<h1 class="settings-page-title">Updates</h1>
+<p class="settings-page-lede">The version of BBS on this server, and the borg build its clients run.</p>
+
 
 <!-- Updates Sub-Navigation -->
 <ul class="nav storage-subnav mb-4">
@@ -2679,7 +2681,7 @@ sudo /var/www/bbs/bin/bbs-token revoke "ansible"</code></pre>
                 <?php else: ?>
                     <div class="table-responsive">
                     <table class="table table-sm small mb-0" id="borg-clients-table">
-                        <thead class="table-light">
+                        <thead>
                             <tr>
                                 <th>Client</th>
                                 <th>OS</th>
