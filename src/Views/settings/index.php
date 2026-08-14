@@ -1369,65 +1369,74 @@ $pushSvc = new \BBS\Services\PushService();
 $pushOn = $pushSvc->isEnabled();
 $pushRegistered = (bool) $pushSvc->serverId();
 ?>
-<div class="card border-0 shadow-sm mb-4">
-    <div class="card-header fw-semibold">
-        <i class="bi bi-broadcast me-1"></i> Push Notification Service
-    </div>
-    <div class="card-body">
-        <div class="alert alert-info small d-flex align-items-start">
-            <i class="bi bi-cone-striped me-2 mt-1"></i>
-            <div>
-                <strong>In development.</strong> Groundwork for an upcoming feature.
-                It does nothing yet — enabling it registers this server with the service
-                but no notifications are delivered. Safe to leave switched off.
-            </div>
-        </div>
+<h1 class="settings-page-title">Push Service</h1>
+<p class="settings-page-lede">Delivers alerts to registered devices through an external notification service. Separate from <a href="/settings?tab=push">Apprise</a>, which contacts chat and webhook providers directly.</p>
 
-        <p class="text-muted small mb-3">
-            Will deliver alerts to registered devices through an external notification service.
-            This is separate from the notification services above, which deliver to chat and
-            webhook targets and contact those providers directly.
-        </p>
-
-        <form method="POST" action="/settings/push">
-            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-            <div class="form-check form-switch mb-3">
-                <input class="form-check-input" type="checkbox" role="switch"
-                       id="push_enabled" name="push_enabled" value="1" <?= $pushOn ? 'checked' : '' ?>>
-                <label class="form-check-label fw-semibold" for="push_enabled">
-                    Register with Push Notification Service
-                </label>
-                <div class="form-text">
-                    Enabling registers this server with the service and allows devices to receive alerts.
-                </div>
-            </div>
-
-            <div class="mb-3">
-                <label class="form-label small text-muted">Service URL</label>
-                <input type="text" class="form-control form-control-sm" name="push_relay_url"
-                       value="<?= htmlspecialchars($settings['push_relay_url'] ?? 'https://push.borgbackupserver.com') ?>"
-                       style="max-width: 420px;">
-            </div>
-
-            <div class="mb-3 small">
-                Status:
-                <?php if ($pushOn && $pushRegistered): ?>
-                    <span class="badge bg-success">Registered</span>
-                <?php elseif ($pushOn): ?>
-                    <span class="badge bg-warning text-dark">Enabled, not registered</span>
-                    <span class="text-muted ms-1">Save to retry registration.</span>
-                <?php else: ?>
-                    <span class="badge bg-secondary">Disabled</span>
-                <?php endif; ?>
-            </div>
-
-            <button type="submit" class="btn btn-primary btn-sm">
-                <i class="bi bi-check-lg me-1"></i> Save
-            </button>
-        </form>
+<div class="alert alert-info small d-flex align-items-start" style="max-width:70ch;">
+    <i class="bi bi-cone-striped me-2 mt-1"></i>
+    <div>
+        <strong>In development.</strong> Groundwork for an upcoming feature. It does nothing yet —
+        enabling it registers this server with the service, but no notifications are delivered.
+        Safe to leave switched off.
     </div>
 </div>
 
+<form method="POST" action="/settings/push">
+    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+
+    <h5 class="settings-group">Registration</h5>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">Register with the Push Notification Service</div>
+            <p class="settings-row-help">Registers this server with the service so devices can receive alerts. Nothing is sent to it until this is on.</p>
+        </div>
+        <div class="settings-row-control">
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" role="switch"
+                       id="push_enabled" name="push_enabled" value="1" <?= $pushOn ? 'checked' : '' ?>>
+                <label class="form-check-label" for="push_enabled"
+                       data-on="On" data-off="Off"><?= $pushOn ? 'On' : 'Off' ?></label>
+            </div>
+        </div>
+        <div class="settings-row-default">Default: Off</div>
+    </div>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">Service URL</div>
+            <p class="settings-row-help">Where this server registers. Leave it as it is unless you have been told otherwise.</p>
+        </div>
+        <div class="settings-row-control">
+            <input type="text" class="form-control" name="push_relay_url" style="max-width:340px;"
+                   value="<?= htmlspecialchars($settings['push_relay_url'] ?? 'https://push.borgbackupserver.com') ?>">
+        </div>
+        <div class="settings-row-default">&nbsp;</div>
+    </div>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">Status</div>
+            <p class="settings-row-help">Whether this server currently holds credentials for the service.</p>
+        </div>
+        <div class="settings-row-control">
+            <?php if ($pushOn && $pushRegistered): ?>
+                <span class="badge bg-success">Registered</span>
+            <?php elseif ($pushOn): ?>
+                <span class="badge bg-warning text-dark">Enabled, not registered</span>
+                <span class="settings-row-unit">Save to retry registration.</span>
+            <?php else: ?>
+                <span class="badge bg-secondary">Disabled</span>
+            <?php endif; ?>
+        </div>
+        <div class="settings-row-default">&nbsp;</div>
+    </div>
+
+    <div class="settings-actions">
+        <a href="/settings?tab=push_service" class="btn btn-sm btn-outline-secondary">Cancel</a>
+        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-save me-1"></i> Save Changes</button>
+    </div>
+</form>
 <?php endif; ?>
 
 
@@ -1953,108 +1962,156 @@ document.addEventListener('change', function (e) {
 
 <!-- Authentication Tab -->
 <?php if ($activeTab === 'auth'): ?>
-<div class="card border-0 shadow-sm">
-    <div class="card-header fw-semibold">
-        <i class="bi bi-shield-lock me-1"></i> Single Sign-On (OIDC)
+<?php $policy = $settings['oidc_new_user_policy'] ?? 'deny'; ?>
+<h1 class="settings-page-title">Authentication</h1>
+<p class="settings-page-lede">Let people sign in with an external identity provider — Keycloak, Authentik, Entra ID, Google, Okta and anything else that speaks OpenID Connect.</p>
+
+<form method="POST" action="/settings/oidc">
+    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+
+    <h5 class="settings-group">Single Sign-On</h5>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">Enable OIDC Single Sign-On</div>
+            <p class="settings-row-help">Adds a sign-in button to the login page. Local passwords keep working.</p>
+        </div>
+        <div class="settings-row-control">
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" role="switch" name="oidc_enabled" value="1"
+                       id="oidcEnabled" <?= ($settings['oidc_enabled'] ?? '0') === '1' ? 'checked' : '' ?>>
+                <label class="form-check-label" for="oidcEnabled"
+                       data-on="On" data-off="Off"><?= ($settings['oidc_enabled'] ?? '0') === '1' ? 'On' : 'Off' ?></label>
+            </div>
+        </div>
+        <div class="settings-row-default">Default: Off</div>
     </div>
-    <div class="card-body">
-        <p class="text-muted small mb-3">Configure OpenID Connect (OIDC) to allow users to sign in with an external identity provider (Keycloak, Authentik, Azure AD, Google, Okta, etc.).</p>
 
-        <form method="POST" action="/settings/oidc">
-            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-
-            <div class="form-check form-switch mb-4">
-                <input class="form-check-input" type="checkbox" name="oidc_enabled" id="oidcEnabled" value="1" <?= ($settings['oidc_enabled'] ?? '0') === '1' ? 'checked' : '' ?>>
-                <label class="form-check-label fw-semibold" for="oidcEnabled">Enable OIDC Single Sign-On</label>
-            </div>
-
-            <div class="row g-3 mb-3">
-                <div class="col-md-12">
-                    <label class="form-label fw-semibold">Provider URL</label>
-                    <input type="url" class="form-control" name="oidc_provider_url" value="<?= htmlspecialchars($settings['oidc_provider_url'] ?? '') ?>" placeholder="https://idp.example.com/realms/myrealm">
-                    <div class="form-text">The base URL for OpenID Connect discovery. BBS appends <code>/.well-known/openid-configuration</code> automatically.</div>
-                </div>
-            </div>
-
-            <div class="row g-3 mb-3">
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Client ID</label>
-                    <input type="text" class="form-control" name="oidc_client_id" value="<?= htmlspecialchars($settings['oidc_client_id'] ?? '') ?>" placeholder="bbs">
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Client Secret</label>
-                    <input type="password" class="form-control" name="oidc_client_secret" placeholder="<?= !empty($settings['oidc_client_secret']) ? '(unchanged if empty)' : '' ?>">
-                    <?php if (!empty($settings['oidc_client_secret'])): ?>
-                    <div class="form-text">A value is saved. Leave empty to keep unchanged.</div>
-                    <?php endif; ?>
-                </div>
-            </div>
-
-            <div class="row g-3 mb-3">
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Button Label</label>
-                    <input type="text" class="form-control" name="oidc_button_label" value="<?= htmlspecialchars($settings['oidc_button_label'] ?? 'Login with SSO') ?>">
-                    <div class="form-text">Text shown on the SSO button on the login page.</div>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Scopes</label>
-                    <input type="text" class="form-control" name="oidc_scopes" value="<?= htmlspecialchars($settings['oidc_scopes'] ?? 'openid email profile') ?>">
-                    <div class="form-text">Space-separated OIDC scopes. Must include <code>openid</code> and <code>email</code>.</div>
-                </div>
-            </div>
-
-            <div class="row g-3 mb-3">
-                <div class="col-12">
-                    <label class="form-label fw-semibold">Redirect URL Override <span class="text-muted fw-normal small">(optional)</span></label>
-                    <input type="url" class="form-control" name="oidc_redirect_url" value="<?= htmlspecialchars($settings['oidc_redirect_url'] ?? '') ?>" placeholder="https://bbs.example.com/login/oidc/callback">
-                    <div class="form-text">Leave blank to auto-detect from the request. Set this if BBS sits behind a reverse proxy but your OIDC provider needs a different URL than what the request headers show (e.g. your agents use an internal URL but SSO must use the public hostname).</div>
-                </div>
-            </div>
-
-            <hr>
-
-            <h6 class="mb-3">New User Handling</h6>
-            <p class="text-muted small">When an unknown user authenticates via SSO for the first time:</p>
-
-            <div class="mb-3">
-                <select class="form-select" name="oidc_new_user_policy" id="oidcNewUserPolicy">
-                    <?php $policy = $settings['oidc_new_user_policy'] ?? 'deny'; ?>
-                    <option value="deny" <?= $policy === 'deny' ? 'selected' : '' ?>>Deny access (user must already exist with matching email)</option>
-                    <option value="pending" <?= $policy === 'pending' ? 'selected' : '' ?>>Create user, pending admin approval</option>
-                    <option value="copy" <?= $policy === 'copy' ? 'selected' : '' ?>>Create user with permissions copied from a template user</option>
-                </select>
-            </div>
-
-            <div class="mb-3" id="oidcTemplateUserWrap" style="<?= $policy === 'copy' ? '' : 'display:none;' ?>">
-                <label class="form-label fw-semibold">Template User</label>
-                <select class="form-select" name="oidc_template_user_id">
-                    <option value="">-- Select a user --</option>
-                    <?php foreach ($oidcUsers ?? [] as $u): ?>
-                    <option value="<?= $u['id'] ?>" <?= ($settings['oidc_template_user_id'] ?? '') == $u['id'] ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($u['username']) ?> (<?= htmlspecialchars($u['email']) ?>) — <?= $u['role'] ?>
-                    </option>
-                    <?php endforeach; ?>
-                </select>
-                <div class="form-text">New SSO users will receive the same client access and permissions as this user.</div>
-            </div>
-
-            <hr>
-
-            <div class="form-check form-switch mb-3">
-                <input class="form-check-input" type="checkbox" name="oidc_logout_enabled" id="oidcLogout" value="1" <?= ($settings['oidc_logout_enabled'] ?? '0') === '1' ? 'checked' : '' ?>>
-                <label class="form-check-label" for="oidcLogout">Enable OIDC Logout</label>
-                <div class="form-text">When enabled, logging out of BBS also logs the user out of the identity provider.</div>
-            </div>
-
-            <button type="submit" class="btn btn-primary">
-                <i class="bi bi-check-lg me-1"></i> Save Authentication Settings
-            </button>
-        </form>
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">Provider URL</div>
+            <p class="settings-row-help">The base URL for discovery. BBS appends <code>/.well-known/openid-configuration</code> itself.</p>
+        </div>
+        <div class="settings-row-control">
+            <input type="url" class="form-control" name="oidc_provider_url" style="max-width:380px;"
+                   value="<?= htmlspecialchars($settings['oidc_provider_url'] ?? '') ?>"
+                   placeholder="https://idp.example.com/realms/myrealm">
+        </div>
+        <div class="settings-row-default">&nbsp;</div>
     </div>
-</div>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">Client Credentials</div>
+            <p class="settings-row-help">From the application you registered with the provider. Leave the secret blank to keep the stored one.</p>
+        </div>
+        <div class="settings-row-control">
+            <input type="text" class="form-control" name="oidc_client_id" style="max-width:180px;"
+                   value="<?= htmlspecialchars($settings['oidc_client_id'] ?? '') ?>" placeholder="client id">
+            <input type="password" class="form-control" name="oidc_client_secret" style="max-width:200px;"
+                   placeholder="<?= !empty($settings['oidc_client_secret']) ? '(unchanged if empty)' : 'client secret' ?>">
+        </div>
+        <div class="settings-row-default"><?= !empty($settings['oidc_client_secret']) ? 'A secret is saved' : '&nbsp;' ?></div>
+    </div>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">Button Label</div>
+            <p class="settings-row-help">What the sign-in button says on the login page.</p>
+        </div>
+        <div class="settings-row-control">
+            <input type="text" class="form-control" name="oidc_button_label" style="max-width:260px;"
+                   value="<?= htmlspecialchars($settings['oidc_button_label'] ?? 'Login with SSO') ?>">
+        </div>
+        <div class="settings-row-default">Default: Login with SSO</div>
+    </div>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">Scopes</div>
+            <p class="settings-row-help">Space-separated. Must include <code>openid</code> and <code>email</code>.</p>
+        </div>
+        <div class="settings-row-control">
+            <input type="text" class="form-control" name="oidc_scopes" style="max-width:280px;"
+                   value="<?= htmlspecialchars($settings['oidc_scopes'] ?? 'openid email profile') ?>">
+        </div>
+        <div class="settings-row-default">Default: openid email profile</div>
+    </div>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">Redirect URL Override</div>
+            <p class="settings-row-help">Blank auto-detects from the request. Set it when BBS is behind a proxy and the provider needs a different URL than the request headers show — clients on an internal address, SSO on the public hostname.</p>
+        </div>
+        <div class="settings-row-control">
+            <input type="url" class="form-control" name="oidc_redirect_url" style="max-width:380px;"
+                   value="<?= htmlspecialchars($settings['oidc_redirect_url'] ?? '') ?>"
+                   placeholder="https://bbs.example.com/login/oidc/callback">
+        </div>
+        <div class="settings-row-default">Optional</div>
+    </div>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">Log out of the provider too</div>
+            <p class="settings-row-help">Signing out of BBS also ends the session at the identity provider.</p>
+        </div>
+        <div class="settings-row-control">
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" role="switch" name="oidc_logout_enabled" value="1"
+                       id="oidcLogout" <?= ($settings['oidc_logout_enabled'] ?? '0') === '1' ? 'checked' : '' ?>>
+                <label class="form-check-label" for="oidcLogout"
+                       data-on="On" data-off="Off"><?= ($settings['oidc_logout_enabled'] ?? '0') === '1' ? 'On' : 'Off' ?></label>
+            </div>
+        </div>
+        <div class="settings-row-default">Default: Off</div>
+    </div>
+
+    <h5 class="settings-group">New Users</h5>
+    <p class="settings-group-note">What happens the first time someone unknown authenticates through SSO.</p>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">First Sign-In Policy</div>
+            <p class="settings-row-help">Denying is the safe default — it means SSO can authenticate people you have already created, and cannot create anyone.</p>
+        </div>
+        <div class="settings-row-control">
+            <select class="form-select" name="oidc_new_user_policy" id="oidcNewUserPolicy" style="max-width:380px;">
+                <option value="deny" <?= $policy === 'deny' ? 'selected' : '' ?>>Deny — the user must already exist</option>
+                <option value="pending" <?= $policy === 'pending' ? 'selected' : '' ?>>Create, pending admin approval</option>
+                <option value="copy" <?= $policy === 'copy' ? 'selected' : '' ?>>Create, copying a template user's access</option>
+            </select>
+        </div>
+        <div class="settings-row-default">Default: Deny</div>
+    </div>
+
+    <div class="settings-row" id="oidcTemplateUserWrap" style="<?= $policy === 'copy' ? '' : 'display:none;' ?>">
+        <div>
+            <div class="settings-row-label">Template User</div>
+            <p class="settings-row-help">New SSO users get the same client access and permissions as this one.</p>
+        </div>
+        <div class="settings-row-control">
+            <select class="form-select" name="oidc_template_user_id" style="max-width:380px;">
+                <option value="">-- Select a user --</option>
+                <?php foreach ($oidcUsers ?? [] as $u): ?>
+                <option value="<?= $u['id'] ?>" <?= ($settings['oidc_template_user_id'] ?? '') == $u['id'] ? 'selected' : '' ?>>
+                    <?= htmlspecialchars($u['username']) ?> (<?= htmlspecialchars($u['email']) ?>) — <?= $u['role'] ?>
+                </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div class="settings-row-default">&nbsp;</div>
+    </div>
+
+    <div class="settings-actions">
+        <a href="/settings?tab=auth" class="btn btn-sm btn-outline-secondary">Cancel</a>
+        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-save me-1"></i> Save Changes</button>
+    </div>
+</form>
 <script>
-document.getElementById('oidcNewUserPolicy').addEventListener('change', function() {
-    document.getElementById('oidcTemplateUserWrap').style.display = this.value === 'copy' ? '' : 'none';
+document.getElementById('oidcNewUserPolicy').addEventListener('change', function () {
+    // grid, not block — restoring display:block would collapse the three columns
+    document.getElementById('oidcTemplateUserWrap').style.display = this.value === 'copy' ? 'grid' : 'none';
 });
 </script>
 <?php endif; ?>
