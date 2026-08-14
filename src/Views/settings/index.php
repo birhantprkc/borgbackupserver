@@ -445,10 +445,10 @@ $smtpSecure = $settings['smtp_secure'] ?? match ($smtpPortForDefault) {
 </div>
 <?php endif; ?>
 
-<p class="settings-group-note" style="margin-top:-18px;">
-    For backup alerts &mdash; failures, offline clients, storage warnings &mdash; see
-    <a href="/settings?tab=push">Apprise</a>, which covers Discord, Slack, Telegram and many others.
-</p>
+<div class="alert alert-info small d-flex align-items-center mt-4" role="note">
+    <i class="bi bi-info-circle me-2 flex-shrink-0"></i>
+    <div>For backup alerts &mdash; failures, offline clients, storage warnings &mdash; see <a href="/settings?tab=push" class="alert-link">Apprise</a>, which covers Discord, Slack, Telegram and many others.</div>
+</div>
 
 <form method="POST" action="/settings">
     <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
