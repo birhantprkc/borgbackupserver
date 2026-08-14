@@ -44,7 +44,7 @@
                     data-bs-toggle="offcanvas" data-bs-target="#mobileNav" aria-controls="mobileNav" aria-label="Menu">
                 <i class="bi bi-list" style="font-size:1.5rem;"></i>
             </button>
-            <a href="/" class="navbar-brand d-flex align-items-center justify-content-center m-0 p-0 topbar-logo">
+            <a href="/" class="navbar-brand d-flex align-items-center justify-content-center m-0 p-0 topbar-logo overflow-hidden">
                 <?php
                     $brandIcon = \BBS\Core\Database::getInstance()->fetchOne("SELECT `value` FROM settings WHERE `key` = 'branding_icon'");
                     if (!empty($brandIcon['value'])):

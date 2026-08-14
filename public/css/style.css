@@ -388,10 +388,12 @@ html, body {
        sidebar column, so it is contained within the topbar rather than
        overhanging it the way the old mascot-only image deliberately did. A
        wordmark hanging below the bar reads as a mistake, not as character. */
-    max-width: 180px;
-    max-height: 54px;
+    /* Fills the bar: full 64px height, no padding. At 650x266 that lands it
+       about 156px wide in the 192px column, so it is height-bound — the
+       remaining slack is horizontal and the lockup stays undistorted. */
+    height: 64px;
     width: auto;
-    height: auto;
+    max-width: 192px;
     object-fit: contain;
     pointer-events: none;
 }
