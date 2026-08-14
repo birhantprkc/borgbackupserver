@@ -440,7 +440,7 @@ $smtpSecure = $settings['smtp_secure'] ?? match ($smtpPortForDefault) {
 
 <p class="settings-group-note" style="margin-top:-18px;">
     For backup alerts &mdash; failures, offline clients, storage warnings &mdash; see
-    <a href="/settings?tab=push">Push Notifications</a>, which covers Discord, Slack, Telegram and many others.
+    <a href="/settings?tab=push">Apprise</a>, which covers Discord, Slack, Telegram and many others.
 </p>
 
 <form method="POST" action="/settings">
@@ -597,49 +597,16 @@ foreach ($notifServices as &$ns) {
 unset($ns);
 ?>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-start mb-4">
     <div>
-        <p class="text-muted mb-0 small">Send alerts to Discord, Telegram, Slack, Pushover, and <a href="https://github.com/caronc/apprise/wiki#notification-services" target="_blank">100+ other services</a> using Apprise.</p>
+        <h1 class="settings-page-title">Apprise Notifications</h1>
+        <p class="settings-page-lede mb-0">Send alerts to Discord, Telegram, Slack, Pushover and <a href="https://github.com/caronc/apprise/wiki#notification-services" target="_blank">100+ other services</a> using Apprise. Each service chooses which events it wants.</p>
     </div>
-    <button class="btn btn-success" data-bs-toggle="collapse" data-bs-target="#addServiceForm">
+    <button class="btn btn-success flex-shrink-0 ms-3" data-bs-toggle="collapse" data-bs-target="#addServiceForm">
         <i class="bi bi-plus-circle me-1"></i> Add Service
     </button>
 </div>
 
-<!-- Info banner with URL examples -->
-<div class="alert alert-light border mb-4">
-    <div class="d-flex align-items-start">
-        <i class="bi bi-info-circle text-primary me-2 mt-1"></i>
-        <div class="w-100">
-            <a class="small text-decoration-none" data-bs-toggle="collapse" href="#urlExamples" role="button">
-                <i class="bi bi-chevron-down me-1"></i>Show Service URL Examples
-            </a>
-            <div class="collapse mt-2" id="urlExamples">
-                <div class="bg-body-secondary rounded p-3 font-monospace small">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <strong>Discord:</strong> discord://webhook_id/webhook_token<br>
-                            <strong>Telegram:</strong> tgram://bot_token/chat_id[:thread]<br>
-                            <strong>Slack:</strong> slack://tokenA/tokenB/tokenC<br>
-                            <strong>Pushover:</strong> pover://user@token
-                        </div>
-                        <div class="col-md-6">
-                            <strong>ntfy:</strong> ntfy://topic<br>
-                            <strong>Gotify:</strong> gotify://hostname/token<br>
-                            <strong>Email:</strong> mailto://user:pass@smtp.example.com<br>
-                            <strong>Webhook:</strong> json://your-webhook-url
-                        </div>
-                    </div>
-                    <div class="mt-2">
-                        <a href="https://github.com/caronc/apprise/wiki#notification-services" target="_blank" class="text-decoration-none">
-                            View all supported services <i class="bi bi-box-arrow-up-right"></i>
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 
 <!-- Add Service Form (Collapse) -->
 <div class="collapse mb-4" id="addServiceForm">
@@ -761,7 +728,40 @@ unset($ns);
                         <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">
                             <i class="bi bi-pause-circle me-1"></i>Disabled
                         </span>
-                        <?php endif; ?>
+                        
+<h5 class="settings-group">Service URL Examples</h5>
+<p class="settings-group-note">Apprise addresses each service with a URL. These are the common ones.</p>
+<!-- URL examples: reference, so they sit at the foot of the page -->
+<div class="mb-4">
+    <div class="d-flex align-items-start">
+        <div class="w-100">
+            <div id="urlExamples">
+                <div class="bg-body-secondary rounded p-3 font-monospace small">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <strong>Discord:</strong> discord://webhook_id/webhook_token<br>
+                            <strong>Telegram:</strong> tgram://bot_token/chat_id[:thread]<br>
+                            <strong>Slack:</strong> slack://tokenA/tokenB/tokenC<br>
+                            <strong>Pushover:</strong> pover://user@token
+                        </div>
+                        <div class="col-md-6">
+                            <strong>ntfy:</strong> ntfy://topic<br>
+                            <strong>Gotify:</strong> gotify://hostname/token<br>
+                            <strong>Email:</strong> mailto://user:pass@smtp.example.com<br>
+                            <strong>Webhook:</strong> json://your-webhook-url
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <a href="https://github.com/caronc/apprise/wiki#notification-services" target="_blank" class="text-decoration-none">
+                            View all supported services <i class="bi bi-box-arrow-up-right"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
                     </td>
                     <td>
                         <?php
