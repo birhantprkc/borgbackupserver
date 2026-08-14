@@ -1189,7 +1189,9 @@ body.bg-body-secondary {
     color: var(--bbs-set-desc);
     font-size: 0.875rem;
     margin: 0 0 26px;
-    max-width: 70ch;
+    /* No measure cap: the lede sits inside a full-width band now, and text
+       wrapping at 45% of a wide panel reads as a mistake rather than as
+       considered line length. */
 }
 
 .settings-group {
