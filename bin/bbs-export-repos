@@ -1,0 +1,151 @@
+#!/usr/bin/env python3
+"""Export every repository, its passphrase and its encryption mode.
+
+For escrow: if this server is lost, the repositories on your storage are only
+recoverable with these passphrases. Keep the output somewhere that is not this
+server.
+
+Needs an API token with the "Display Secrets" capability
+(Settings -> API -> New Token). A token without it can still list repositories,
+just without passphrases.
+
+  ./bbs-export-repos --url https://backup.example.com --token bbs_xxx
+  ./bbs-export-repos --url ... --token ... --format json -o repos.json
+  BBS_URL=... BBS_TOKEN=... ./bbs-export-repos --no-secrets
+
+Standard library only, so it runs on any machine with Python 3 — including one
+that has never met this server before.
+"""
+
+import argparse
+import csv
+import json
+import os
+import ssl
+import sys
+import urllib.error
+import urllib.request
+
+FIELDS = [
+    "agent_name", "name", "encryption", "passphrase", "path",
+    "storage_type", "archive_count", "size_bytes", "created_at",
+]
+
+
+def fetch(base_url, token, include_secrets, insecure):
+    url = base_url.rstrip("/") + "/api/v1/repositories"
+    if include_secrets:
+        url += "?include_secrets=1"
+
+    req = urllib.request.Request(url, headers={
+        "Authorization": "Bearer " + token,
+        "Accept": "application/json",
+    })
+    ctx = None
+    if insecure:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+
+    try:
+        with urllib.request.urlopen(req, timeout=60, context=ctx) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", "replace")
+        try:
+            message = json.loads(body).get("error", body)
+        except ValueError:
+            message = body.strip() or e.reason
+
+        if e.code == 403:
+            die("%s\n\nThe token needs the \"Display Secrets\" capability: "
+                "Settings -> API -> New Token, tick Display Secrets.\n"
+                "Or run with --no-secrets to export everything except the passphrases."
+                % message)
+        if e.code == 401:
+            die("%s\n\nCheck the token value and that it has not been revoked." % message)
+        die("HTTP %s from %s: %s" % (e.code, url, message))
+    except urllib.error.URLError as e:
+        die("Could not reach %s: %s" % (url, e.reason))
+
+
+def die(message):
+    print("error: " + message, file=sys.stderr)
+    sys.exit(1)
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description="Export repositories, passphrases and encryption modes from a BBS server.")
+    p.add_argument("--url", default=os.environ.get("BBS_URL"),
+                   help="Server URL, e.g. https://backup.example.com (or set BBS_URL)")
+    p.add_argument("--token", default=os.environ.get("BBS_TOKEN"),
+                   help="API token with Display Secrets (or set BBS_TOKEN)")
+    p.add_argument("--format", choices=["csv", "json", "table"], default="csv")
+    p.add_argument("-o", "--output", help="Write here instead of stdout. Created mode 0600.")
+    p.add_argument("--no-secrets", action="store_true",
+                   help="Omit passphrases — an inventory rather than an escrow copy.")
+    p.add_argument("--insecure", action="store_true",
+                   help="Skip TLS verification. For a self-signed certificate on a LAN.")
+    args = p.parse_args()
+
+    if not args.url or not args.token:
+        p.error("--url and --token are required (or set BBS_URL and BBS_TOKEN)")
+
+    data = fetch(args.url, args.token, not args.no_secrets, args.insecure)
+    repos = data.get("repositories", [])
+    if not repos:
+        print("No repositories found.", file=sys.stderr)
+
+    fields = [f for f in FIELDS if not (f == "passphrase" and args.no_secrets)]
+
+    # Written to a file descriptor opened 0600 rather than created and then
+    # chmod'ed: between those two steps the passphrases would be world-readable.
+    if args.output:
+        fd = os.open(args.output, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        out = os.fdopen(fd, "w", newline="")
+    else:
+        out = sys.stdout
+
+    try:
+        if args.format == "json":
+            json.dump(repos if not args.no_secrets else
+                      [{k: v for k, v in r.items() if k != "passphrase"} for r in repos],
+                      out, indent=2)
+            out.write("\n")
+        elif args.format == "csv":
+            w = csv.DictWriter(out, fieldnames=fields, extrasaction="ignore")
+            w.writeheader()
+            for r in repos:
+                w.writerow(r)
+        else:
+            widths = {f: max(len(f), *(len(str(r.get(f, ""))) for r in repos)) for f in fields}
+            out.write("  ".join(f.upper().ljust(widths[f]) for f in fields) + "\n")
+            for r in repos:
+                out.write("  ".join(str(r.get(f, "") or "").ljust(widths[f]) for f in fields) + "\n")
+    finally:
+        if args.output:
+            out.close()
+
+    missing = [r for r in repos
+               if not args.no_secrets and r.get("encryption") not in (None, "", "none")
+               and not r.get("passphrase")]
+
+    if args.output:
+        print("Wrote %d repositor%s to %s (mode 0600)."
+              % (len(repos), "y" if len(repos) == 1 else "ies", args.output), file=sys.stderr)
+    if not args.no_secrets:
+        print("This output can decrypt your backups. Store it somewhere that is not "
+              "the BBS server, and delete any working copy.", file=sys.stderr)
+    if missing:
+        # An encrypted repo with no passphrase on file is unrecoverable if the
+        # passphrase is not written down elsewhere — worth saying out loud.
+        print("\nWARNING: %d encrypted repositor%s have no stored passphrase:"
+              % (len(missing), "y" if len(missing) == 1 else "ies"), file=sys.stderr)
+        for r in missing:
+            print("  %s / %s (%s)" % (r.get("agent_name"), r.get("name"), r.get("encryption")),
+                  file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()
