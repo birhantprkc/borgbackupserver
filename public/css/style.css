@@ -222,7 +222,7 @@ html, body {
     border-radius: 0 !important;
     transition: background-color 0.15s, color 0.15s;
     line-height: 1.2;
-    font-size: 0.8375rem;
+    font-size: 0.875rem;
     white-space: nowrap;
 }
 
@@ -281,7 +281,7 @@ html, body {
 
 .sidebar-sub .sidebar-link {
     padding: 5px 10px 5px 14px !important;
-    font-size: 0.7875rem;
+    font-size: 0.8125rem;
     margin-bottom: 0;
     position: relative;
 }
@@ -1203,4 +1203,98 @@ body.bg-body-secondary {
 
 [data-bs-theme="dark"] body.bg-body-secondary {
     background-color: #1a1d21 !important;
+}
+
+
+/* ── Settings rows ────────────────────────────────────────────────────────
+   A settings page is a list of decisions, not a stack of boxes. Each row is
+   label + explanation, the control, and the default, on one line with a
+   hairline between. Cards nested inside cards made every page look busier
+   than the handful of choices on it. */
+
+.settings-group {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin: 30px 0 4px;
+}
+
+.settings-group:first-of-type {
+    margin-top: 6px;
+}
+
+.settings-row {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) minmax(240px, 400px) minmax(120px, 200px);
+    gap: 16px;
+    align-items: center;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--bs-border-color);
+}
+
+.settings-row:last-child {
+    border-bottom: 0;
+}
+
+.settings-row-label {
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-bottom: 2px;
+}
+
+.settings-row-help {
+    color: var(--bs-secondary-color);
+    font-size: 0.8rem;
+    line-height: 1.35;
+    margin: 0;
+}
+
+.settings-row-control {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* Inputs sit at their natural size rather than stretching across the column,
+   so a two-digit number doesn't get a 400px box. */
+.settings-row-control .form-control,
+.settings-row-control .form-select {
+    max-width: 190px;
+}
+
+.settings-row-control .form-control-narrow {
+    max-width: 110px;
+}
+
+.settings-row-unit {
+    color: var(--bs-secondary-color);
+    font-size: 0.85rem;
+}
+
+.settings-row-default {
+    color: var(--bs-secondary-color);
+    font-size: 0.82rem;
+    text-align: right;
+}
+
+.settings-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 22px;
+    margin-top: 6px;
+    border-top: 1px solid var(--bs-border-color);
+}
+
+/* Narrow screens: the three columns become one, and the default sits under
+   the control it describes rather than off on its own line far from it. */
+@media (max-width: 991.98px) {
+    .settings-row {
+        grid-template-columns: 1fr;
+        gap: 8px;
+        padding: 16px 0;
+    }
+    .settings-row-default {
+        text-align: left;
+    }
 }
