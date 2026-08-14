@@ -1444,17 +1444,43 @@ body.bg-body-secondary {
     background: linear-gradient(180deg,
         rgba(38, 132, 255, 0.055) 0%,
         rgba(38, 132, 255, 0.02) 100%);
-    border: 1px solid rgba(38, 132, 255, 0.10);
-    border-radius: 10px;
-    padding: 20px 24px;
+    border-bottom: 1px solid rgba(38, 132, 255, 0.10);
     margin-bottom: 26px;
+
+    /* Full bleed: pulled out to the edges of the content area by exactly the
+       canvas padding, then given that padding back on the inside — so the band
+       reaches the edges while its text stays on the same line as everything
+       below it. The values track .page-canvas at each breakpoint; change one
+       and change the other. */
+    margin-top: -20px;
+    margin-left: -18px;
+    margin-right: -18px;
+    padding: 20px 18px;
+}
+
+@media (min-width: 768px) {
+    .settings-page-head {
+        margin-top: -26px;
+        margin-left: -40px;
+        margin-right: -40px;
+        padding: 26px 40px;
+    }
+}
+
+@media (min-width: 1400px) {
+    .settings-page-head {
+        margin-top: -30px;
+        margin-left: -56px;
+        margin-right: -56px;
+        padding: 30px 56px;
+    }
 }
 
 [data-bs-theme="light"] .settings-page-head {
     background: linear-gradient(180deg,
         rgba(13, 110, 253, 0.045) 0%,
         rgba(13, 110, 253, 0.015) 100%);
-    border-color: rgba(13, 110, 253, 0.11);
+    border-bottom-color: rgba(13, 110, 253, 0.11);
 }
 
 .settings-page-head .settings-page-title,
