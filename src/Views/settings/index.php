@@ -182,331 +182,342 @@ $compactHour = (int) ($settings['auto_compact_hour'] ?? 2);
         </button>
     </div>
 </form>
-<script>
-// The switch says what it is, not just which way it points.
-document.querySelectorAll('.settings-row .form-switch input[type=checkbox]').forEach(function (box) {
-    box.addEventListener('change', function () {
-        var label = document.querySelector('label[for="' + box.id + '"]');
-        if (label) label.textContent = box.checked ? label.dataset.on : label.dataset.off;
-    });
-});
-</script>
 <?php endif; ?>
 
 <!-- General Tab -->
 <?php if ($activeTab === 'general'): ?>
+<?php
+$mmOn = ($settings['maintenance_mode'] ?? '0') === '1';
+$sslEnabled = str_starts_with(\BBS\Core\Config::get('APP_URL', 'https://'), 'https://');
+?>
 <form method="POST" action="/settings">
     <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
     <input type="hidden" name="_tab" value="general">
     <input type="hidden" name="_checkboxes" value="debug_mode,force_2fa,maintenance_mode,self_backup_catalogs,self_backup_enabled,telemetry_opt_out">
 
-    <div class="row g-4">
-        <div class="col-lg-6">
-            <div class="card border-0 shadow-sm">
-                <div class="card-header fw-semibold">
-                    <i class="bi bi-server me-1"></i> Server
-                </div>
-                <div class="card-body">
-                    <?php $mmOn = ($settings['maintenance_mode'] ?? '0') === '1'; ?>
-                    <div class="rounded p-3 mb-3 d-flex align-items-center justify-content-between <?= $mmOn ? 'bg-warning bg-opacity-10 border border-warning' : 'bg-body-tertiary' ?>">
-                        <div>
-                            <div class="form-check form-switch mb-0">
-                                <input class="form-check-input" type="checkbox" role="switch" name="maintenance_mode" id="maintenance_mode" value="1" <?= $mmOn ? 'checked' : '' ?>>
-                                <label class="form-check-label fw-semibold" for="maintenance_mode">Maintenance Mode</label>
-                            </div>
-                            <div class="form-text mb-0">Pauses all new backup jobs. Existing running jobs will complete.</div>
-                        </div>
-                        <?php if ($mmOn): ?>
-                        <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle-fill me-1"></i>Active</span>
-                        <?php endif; ?>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Max Concurrent Jobs</label>
-                        <input type="number" class="form-control" name="max_queue" value="<?= htmlspecialchars($settings['max_queue'] ?? '4') ?>" min="1" max="20">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Server Host / IP</label>
-                        <?php $currentUrl = \BBS\Core\Config::get('APP_URL', 'https://'); $sslEnabled = str_starts_with($currentUrl, 'https://'); ?>
-                        <div class="input-group">
-                            <select class="form-select" name="url_protocol" style="max-width: 110px;">
-                                <option value="https" <?= $sslEnabled ? 'selected' : '' ?>>https://</option>
-                                <option value="http" <?= !$sslEnabled ? 'selected' : '' ?>>http://</option>
-                            </select>
-                            <input type="text" class="form-control" name="server_host" value="<?= htmlspecialchars($settings['server_host'] ?? '') ?>">
-                        </div>
-                        <div class="form-text">The address agents use to reach this server. Use https:// for public servers, http:// for LAN/internal installs.
-                            <?php if (!$sslEnabled): ?>
-                                <br>To enable SSL, first obtain a certificate: <code>sudo certbot --apache -d <?= htmlspecialchars($settings['server_host'] ?? 'your-hostname') ?></code>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">SSH Port</label>
-                        <input type="number" class="form-control" name="ssh_port" value="<?= (int) ($settings['ssh_port'] ?? 22) ?>" min="1" max="65535" style="max-width: 120px;">
-                        <div class="form-text">The SSH port agents use to connect for backups. Default is 22. Docker setups typically map to a different port (e.g. 2222).</div>
-                    </div>
-                </div>
-            </div>
+    <h5 class="settings-group">Server</h5>
 
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">
+                Maintenance Mode
+                <?php if ($mmOn): ?>
+                    <span class="badge bg-warning text-dark ms-1"><i class="bi bi-exclamation-triangle-fill me-1"></i>Active</span>
+                <?php endif; ?>
+            </div>
+            <p class="settings-row-help">Pauses all new backup jobs. Jobs already running finish normally.</p>
         </div>
-
-        <div class="col-lg-6">
-            <div class="card border-0 shadow-sm">
-                <div class="card-header fw-semibold">
-                    <i class="bi bi-shield-lock me-1"></i> Security
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="force_2fa" value="1"
-                                   id="force2fa" <?= ($settings['force_2fa'] ?? '0') === '1' ? 'checked' : '' ?>>
-                            <label class="form-check-label fw-semibold" for="force2fa">
-                                Require Two-Factor Authentication for All Users
-                            </label>
-                        </div>
-                        <div class="form-text">
-                            When enabled, users without 2FA will be redirected to set it up on their next page load.
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Session Timeout (hours)</label>
-                        <input type="number" class="form-control" name="session_timeout_hours" value="<?= htmlspecialchars($settings['session_timeout_hours'] ?? '8') ?>" min="1" max="720">
-                        <div class="form-text">Log out after this many hours of inactivity.</div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Default Theme</label>
-                        <select class="form-select" name="default_theme">
-                            <option value="dark" <?= ($settings['default_theme'] ?? 'dark') === 'dark' ? 'selected' : '' ?>>Dark</option>
-                            <option value="light" <?= ($settings['default_theme'] ?? 'dark') === 'light' ? 'selected' : '' ?>>Light</option>
-                        </select>
-                        <div class="form-text">Default theme for the login page and new users. Users can override this in their profile.</div>
-                    </div>
-                    <?php if (isset($_GET['debug']) && $_GET['debug'] === '1'): ?>
-                    <div class="mb-0">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="debug_mode" value="1"
-                                   id="debugMode" <?= ($settings['debug_mode'] ?? '0') === '1' ? 'checked' : '' ?>>
-                            <label class="form-check-label fw-semibold" for="debugMode">
-                                Enable Debug Mode
-                            </label>
-                        </div>
-                        <div class="form-text">
-                            Shows detailed error pages with stack traces. Disable in production for security.
-                        </div>
-                    </div>
-                    <?php endif; ?>
-                </div>
-            </div>
-
-            <div class="card border-0 shadow-sm mt-4">
-                <div class="card-header fw-semibold">
-                    <i class="bi bi-shield-check me-1"></i> Server Backups
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="self_backup_enabled" value="1"
-                                   id="selfBackupEnabled" <?= ($settings['self_backup_enabled'] ?? '1') === '1' ? 'checked' : '' ?>>
-                            <label class="form-check-label fw-semibold" for="selfBackupEnabled">
-                                Enable Daily Server Backups
-                            </label>
-                        </div>
-                        <div class="form-text">
-                            Automatically backs up the database, configuration, and SSH keys to <code>/var/bbs/backups</code> once per day.
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Keep Last</label>
-                        <div class="input-group" style="max-width: 200px;">
-                            <input type="number" class="form-control" name="self_backup_retention"
-                                   value="<?= htmlspecialchars($settings['self_backup_retention'] ?? '7') ?>"
-                                   min="1" max="90">
-                            <span class="input-group-text">backups</span>
-                        </div>
-                        <div class="form-text">Older backups are automatically deleted.</div>
-                    </div>
-                    <div class="mb-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="self_backup_catalogs" value="1"
-                                   id="selfBackupCatalogs" <?= ($settings['self_backup_catalogs'] ?? '0') === '1' ? 'checked' : '' ?>>
-                            <label class="form-check-label fw-semibold" for="selfBackupCatalogs">
-                                Include File Catalog Data
-                            </label>
-                        </div>
-                        <div class="form-text">
-                            Catalogs can be large but save time on restore. If excluded, they will be rebuilt automatically from your repositories.
-                        </div>
-                    </div>
-                    <div class="alert alert-info mb-0 small">
-                        <i class="bi bi-info-circle me-1"></i>
-                        <?php if (\BBS\Core\Config::isHosted()): ?>
-                        To back up your server settings off-site, make sure you've added S3 Storage in your Hosted Account.
-                        <?php else: ?>
-                        Server backups include the database, configuration, and SSH host keys &mdash; <strong>not repository data</strong>.
-                        To protect your backup repositories, configure <a href="/settings?tab=offsite" class="alert-link">S3 Offsite Sync</a>.
-                        <?php endif; ?>
-                    </div>
-                </div>
+        <div class="settings-row-control">
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" role="switch" name="maintenance_mode" value="1"
+                       id="maintenance_mode" <?= $mmOn ? 'checked' : '' ?>>
+                <label class="form-check-label" for="maintenance_mode"
+                       data-on="On" data-off="Off"><?= $mmOn ? 'On' : 'Off' ?></label>
             </div>
         </div>
+        <div class="settings-row-default">Default: Off</div>
     </div>
 
-    <div class="card border-0 shadow-sm mt-4">
-        <div class="card-header fw-semibold">
-            <i class="bi bi-bar-chart me-1"></i> Usage Statistics
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">Server Host / IP</div>
+            <p class="settings-row-help">The address clients use to reach this server. Use https:// for public servers, http:// for a LAN or internal install. Changing it rewrites the repository paths of every client without an override.</p>
         </div>
-        <div class="card-body">
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="telemetry_opt_out" value="1"
+        <div class="settings-row-control">
+            <select class="form-select" name="url_protocol" style="max-width:110px;">
+                <option value="https" <?= $sslEnabled ? 'selected' : '' ?>>https://</option>
+                <option value="http" <?= !$sslEnabled ? 'selected' : '' ?>>http://</option>
+            </select>
+            <input type="text" class="form-control" name="server_host" style="max-width:260px;"
+                   value="<?= htmlspecialchars($settings['server_host'] ?? '') ?>" placeholder="backup.example.com">
+        </div>
+        <div class="settings-row-default">&nbsp;</div>
+    </div>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">SSH Port</div>
+            <p class="settings-row-help">The port clients connect to for backups. Docker installs usually map this to something else.</p>
+        </div>
+        <div class="settings-row-control">
+            <input type="number" class="form-control form-control-narrow" name="ssh_port"
+                   value="<?= (int) ($settings['ssh_port'] ?? 22) ?>" min="1" max="65535">
+        </div>
+        <div class="settings-row-default">Default: 22</div>
+    </div>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">Max Concurrent Jobs</div>
+            <p class="settings-row-help">How many backups may run at once across all clients.</p>
+        </div>
+        <div class="settings-row-control">
+            <input type="number" class="form-control form-control-narrow" name="max_queue"
+                   value="<?= htmlspecialchars($settings['max_queue'] ?? '4') ?>" min="1" max="20">
+            <span class="settings-row-unit">jobs</span>
+        </div>
+        <div class="settings-row-default">Default: 4 jobs</div>
+    </div>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">Default Theme</div>
+            <p class="settings-row-help">Used for the login page and new users. Anyone can override it in their profile.</p>
+        </div>
+        <div class="settings-row-control">
+            <select class="form-select" name="default_theme" style="max-width:150px;">
+                <option value="dark" <?= ($settings['default_theme'] ?? 'dark') === 'dark' ? 'selected' : '' ?>>Dark</option>
+                <option value="light" <?= ($settings['default_theme'] ?? 'dark') === 'light' ? 'selected' : '' ?>>Light</option>
+            </select>
+        </div>
+        <div class="settings-row-default">Default: Dark</div>
+    </div>
+
+    <h5 class="settings-group">Security</h5>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">Require Two-Factor Authentication</div>
+            <p class="settings-row-help">Users without 2FA are sent to set it up on their next page load.</p>
+        </div>
+        <div class="settings-row-control">
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" role="switch" name="force_2fa" value="1"
+                       id="force2fa" <?= ($settings['force_2fa'] ?? '0') === '1' ? 'checked' : '' ?>>
+                <label class="form-check-label" for="force2fa"
+                       data-on="On" data-off="Off"><?= ($settings['force_2fa'] ?? '0') === '1' ? 'On' : 'Off' ?></label>
+            </div>
+        </div>
+        <div class="settings-row-default">Default: Off</div>
+    </div>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">Session Timeout</div>
+            <p class="settings-row-help">Log out after this long without activity.</p>
+        </div>
+        <div class="settings-row-control">
+            <input type="number" class="form-control form-control-narrow" name="session_timeout_hours"
+                   value="<?= htmlspecialchars($settings['session_timeout_hours'] ?? '8') ?>" min="1" max="720">
+            <span class="settings-row-unit">hours</span>
+        </div>
+        <div class="settings-row-default">Default: 8 hours</div>
+    </div>
+
+    <?php if (isset($_GET['debug']) && $_GET['debug'] === '1'): ?>
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">Debug Mode</div>
+            <p class="settings-row-help">Shows detailed error pages with stack traces. Leave off in production.</p>
+        </div>
+        <div class="settings-row-control">
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" role="switch" name="debug_mode" value="1"
+                       id="debugMode" <?= ($settings['debug_mode'] ?? '0') === '1' ? 'checked' : '' ?>>
+                <label class="form-check-label" for="debugMode"
+                       data-on="On" data-off="Off"><?= ($settings['debug_mode'] ?? '0') === '1' ? 'On' : 'Off' ?></label>
+            </div>
+        </div>
+        <div class="settings-row-default">Default: Off</div>
+    </div>
+    <?php endif; ?>
+
+    <h5 class="settings-group">Server Backups</h5>
+    <p class="settings-row-help mb-2" style="max-width:70ch;">
+        <?php if (\BBS\Core\Config::isHosted()): ?>
+        These cover the database, configuration and SSH host keys &mdash; <strong>not repository data</strong>. To keep them off-site, add S3 storage to your hosted account.
+        <?php else: ?>
+        These cover the database, configuration and SSH host keys &mdash; <strong>not repository data</strong>. To protect the repositories themselves, configure <a href="/storage-locations?section=s3">S3 offsite sync</a>.
+        <?php endif; ?>
+    </p>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">Daily Server Backup</div>
+            <p class="settings-row-help">Backs up the database, configuration and SSH keys to <code>/var/bbs/backups</code> once a day.</p>
+        </div>
+        <div class="settings-row-control">
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" role="switch" name="self_backup_enabled" value="1"
+                       id="selfBackupEnabled" <?= ($settings['self_backup_enabled'] ?? '1') === '1' ? 'checked' : '' ?>>
+                <label class="form-check-label" for="selfBackupEnabled"
+                       data-on="On" data-off="Off"><?= ($settings['self_backup_enabled'] ?? '1') === '1' ? 'On' : 'Off' ?></label>
+            </div>
+        </div>
+        <div class="settings-row-default">Default: On</div>
+    </div>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">Keep Last</div>
+            <p class="settings-row-help">Older server backups are deleted automatically.</p>
+        </div>
+        <div class="settings-row-control">
+            <input type="number" class="form-control form-control-narrow" name="self_backup_retention"
+                   value="<?= htmlspecialchars($settings['self_backup_retention'] ?? '7') ?>" min="1" max="90">
+            <span class="settings-row-unit">backups</span>
+        </div>
+        <div class="settings-row-default">Default: 7 backups</div>
+    </div>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">Include File Catalog Data</div>
+            <p class="settings-row-help">Catalogs can be large but save time on a restore. Left out, they are rebuilt from the repositories.</p>
+        </div>
+        <div class="settings-row-control">
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" role="switch" name="self_backup_catalogs" value="1"
+                       id="selfBackupCatalogs" <?= ($settings['self_backup_catalogs'] ?? '0') === '1' ? 'checked' : '' ?>>
+                <label class="form-check-label" for="selfBackupCatalogs"
+                       data-on="On" data-off="Off"><?= ($settings['self_backup_catalogs'] ?? '0') === '1' ? 'On' : 'Off' ?></label>
+            </div>
+        </div>
+        <div class="settings-row-default">Default: Off</div>
+    </div>
+
+    <h5 class="settings-group">Usage Statistics</h5>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">Disable Anonymous Usage Statistics</div>
+            <p class="settings-row-help">BBS reports its version and OS once per version, so the developer knows which versions and platforms are in use. Nothing identifying is collected.</p>
+        </div>
+        <div class="settings-row-control">
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" role="switch" name="telemetry_opt_out" value="1"
                        id="telemetryOptOut" <?= ($settings['telemetry_opt_out'] ?? '0') === '1' ? 'checked' : '' ?>>
-                <label class="form-check-label fw-semibold" for="telemetryOptOut">
-                    Disable Anonymous Usage Statistics
-                </label>
-            </div>
-            <div class="form-text">
-                BBS sends anonymous version and OS information once per version to help the developer understand what versions and platforms are in use. No identifying data is collected.
+                <label class="form-check-label" for="telemetryOptOut"
+                       data-on="On" data-off="Off"><?= ($settings['telemetry_opt_out'] ?? '0') === '1' ? 'On' : 'Off' ?></label>
             </div>
         </div>
+        <div class="settings-row-default">Default: Off</div>
     </div>
 
-    <div class="mt-4">
-        <button type="submit" class="btn btn-warning">
-            <i class="bi bi-check-lg me-1"></i> Save General Settings
-        </button>
+    <div class="settings-actions">
+        <a href="/settings?tab=general" class="btn btn-outline-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i> Save Changes</button>
     </div>
 </form>
 <?php endif; ?>
 
 <!-- Email Settings Tab -->
 <?php if ($activeTab === 'notifications'): ?>
+<?php
+$smtpPortForDefault = (int) ($settings['smtp_port'] ?? 587);
+$smtpSecure = $settings['smtp_secure'] ?? match ($smtpPortForDefault) {
+    465 => 'ssl',
+    25 => 'none',
+    default => 'starttls',
+};
+?>
 <?php if (!empty($smtpWarning)): ?>
 <div class="alert alert-warning d-flex align-items-start mb-4" role="alert">
     <i class="bi bi-exclamation-triangle-fill me-2 mt-1"></i>
     <div>
         <strong>Email notifications won't actually send.</strong>
-        One or more <em>Email on …</em> toggles below are enabled, but SMTP isn't configured yet — failure events fire the in-app notification only and the email is silently skipped. Fill in the SMTP card below and click <em>Test SMTP</em> to verify.
+        Something is set to notify by email, but SMTP isn't configured — those events fire the in-app notification only and the email is skipped. Fill in the fields below and use <em>Send Test Email</em> to check.
     </div>
 </div>
 <?php endif; ?>
-<div class="row g-4">
-    <div class="col-lg-7">
-        <div class="card border-0 shadow-sm">
-            <div class="card-header fw-semibold">
-                <i class="bi bi-envelope me-1"></i> SMTP Configuration
-            </div>
-            <div class="card-body">
-                <form method="POST" action="/settings">
-                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                    <input type="hidden" name="_tab" value="notifications">
-    <input type="hidden" name="_checkboxes" value="">
 
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-8">
-                            <label class="form-label fw-semibold">SMTP Host</label>
-                            <input type="text" class="form-control" name="smtp_host" value="<?= htmlspecialchars($settings['smtp_host'] ?? '') ?>" placeholder="smtp.example.com">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label fw-semibold">Port</label>
-                            <input type="number" class="form-control" name="smtp_port" value="<?= htmlspecialchars($settings['smtp_port'] ?? '587') ?>">
-                        </div>
-                    </div>
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold">SMTP User</label>
-                            <input type="text" class="form-control" name="smtp_user" value="<?= htmlspecialchars($settings['smtp_user'] ?? '') ?>">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold">SMTP Password</label>
-                            <input type="password" class="form-control" name="smtp_pass"
-                                   autocomplete="new-password"
-                                   placeholder="<?= !empty($settings['smtp_pass']) ? '(unchanged if empty)' : '' ?>">
-                        </div>
-                    </div>
-                    <?php
-                    // Default encryption choice based on port when smtp_secure is unset.
-                    $smtpPortForDefault = (int) ($settings['smtp_port'] ?? 587);
-                    $smtpSecureDefault = match ($smtpPortForDefault) {
-                        465 => 'ssl',
-                        25 => 'none',
-                        default => 'starttls',
-                    };
-                    $smtpSecure = $settings['smtp_secure'] ?? $smtpSecureDefault;
-                    ?>
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold">Encryption</label>
-                            <select class="form-select" name="smtp_secure">
-                                <option value="starttls" <?= $smtpSecure === 'starttls' ? 'selected' : '' ?>>STARTTLS (typically port 587)</option>
-                                <option value="ssl" <?= $smtpSecure === 'ssl' ? 'selected' : '' ?>>SSL/TLS (typically port 465)</option>
-                                <option value="none" <?= $smtpSecure === 'none' ? 'selected' : '' ?>>None (plaintext)</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold">From Address</label>
-                            <input type="email" class="form-control" name="smtp_from" value="<?= htmlspecialchars($settings['smtp_from'] ?? '') ?>" placeholder="backups@example.com">
-                        </div>
-                    </div>
+<p class="settings-row-help mb-3" style="max-width:70ch;">
+    Used for password resets, upgrade notices and other system mail. For backup alerts &mdash; failures,
+    offline clients, storage warnings &mdash; see <a href="/settings?tab=push">Push Notifications</a>,
+    which covers Discord, Slack, Telegram and many others.
+</p>
 
-                    <div class="d-flex align-items-center gap-3">
-                        <button type="submit" class="btn btn-warning">
-                            <i class="bi bi-check-lg me-1"></i> Save Email Settings
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary" id="btnTestSmtp">
-                            <i class="bi bi-envelope-check me-1"></i> Test SMTP
-                        </button>
-                        <span id="smtpTestResult" class="small"></span>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-lg-5">
-        <div class="card border-0 shadow-sm mb-3">
-            <div class="card-header fw-semibold">
-                <i class="bi bi-bell me-1"></i> In-App Notifications
-            </div>
-            <div class="card-body">
-                <form method="POST" action="/settings">
-                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                    <input type="hidden" name="_tab" value="notifications">
+<form method="POST" action="/settings">
+    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+    <input type="hidden" name="_tab" value="notifications">
     <input type="hidden" name="_checkboxes" value="inapp_notify_success_events">
-                    <div class="form-check form-switch mb-2">
-                        <input class="form-check-input" type="checkbox" role="switch"
-                               id="inapp_notify_success_events" name="inapp_notify_success_events" value="1"
-                               <?= ($settings['inapp_notify_success_events'] ?? '0') === '1' ? 'checked' : '' ?>>
-                        <label class="form-check-label" for="inapp_notify_success_events">
-                            Show successful backups / restores in the notification bell
-                        </label>
-                    </div>
-                    <p class="small text-muted mb-3">
-                        Off by default. When off, only failures, agent-offline, storage-low, and other
-                        alert-worthy events show up in the bell menu — so routine success messages
-                        don't pile up and bury real issues. Email and push notifications stay
-                        independent of this setting.
-                    </p>
-                    <button type="submit" class="btn btn-sm btn-warning">
-                        <i class="bi bi-check-lg me-1"></i> Save
-                    </button>
-                </form>
-            </div>
-        </div>
-        <div class="card border-0 bg-body-secondary">
-            <div class="card-body">
-                <h6 class="card-title"><i class="bi bi-lightbulb me-1 text-warning"></i> Tip</h6>
-                <p class="card-text small text-muted mb-2">
-                    Email settings are used for password resets, upgrade notices, and other system messages.
-                </p>
-                <p class="card-text small text-muted mb-0">
-                    For backup alerts (failures, offline clients, storage warnings), configure
-                    <a href="/settings?tab=push">Push Notifications</a> using Discord, Slack, Telegram, or 100+ other services.
-                </p>
-            </div>
-        </div>
-    </div>
-</div>
-<?php endif; ?>
 
+    <h5 class="settings-group">Outgoing Mail</h5>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">SMTP Server</div>
+            <p class="settings-row-help">Host and port of the mail server to send through.</p>
+        </div>
+        <div class="settings-row-control">
+            <input type="text" class="form-control" name="smtp_host" style="max-width:250px;"
+                   value="<?= htmlspecialchars($settings['smtp_host'] ?? '') ?>" placeholder="smtp.example.com">
+            <input type="number" class="form-control form-control-narrow" name="smtp_port"
+                   value="<?= htmlspecialchars($settings['smtp_port'] ?? '587') ?>" placeholder="587">
+        </div>
+        <div class="settings-row-default">Default port: 587</div>
+    </div>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">Encryption</div>
+            <p class="settings-row-help">Match this to the port — the wrong pairing is the usual reason mail silently fails.</p>
+        </div>
+        <div class="settings-row-control">
+            <select class="form-select" name="smtp_secure" style="max-width:280px;">
+                <option value="starttls" <?= $smtpSecure === 'starttls' ? 'selected' : '' ?>>STARTTLS (typically port 587)</option>
+                <option value="ssl" <?= $smtpSecure === 'ssl' ? 'selected' : '' ?>>SSL/TLS (typically port 465)</option>
+                <option value="none" <?= $smtpSecure === 'none' ? 'selected' : '' ?>>None (plaintext)</option>
+            </select>
+        </div>
+        <div class="settings-row-default">Default: STARTTLS</div>
+    </div>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">Credentials</div>
+            <p class="settings-row-help">Leave the password blank to keep the stored one. Leave both blank if the server accepts unauthenticated mail from this host.</p>
+        </div>
+        <div class="settings-row-control">
+            <input type="text" class="form-control" name="smtp_user" style="max-width:220px;"
+                   value="<?= htmlspecialchars($settings['smtp_user'] ?? '') ?>" placeholder="username">
+            <input type="password" class="form-control" name="smtp_pass" style="max-width:220px;"
+                   autocomplete="new-password"
+                   placeholder="<?= !empty($settings['smtp_pass']) ? '(unchanged if empty)' : 'password' ?>">
+        </div>
+        <div class="settings-row-default">&nbsp;</div>
+    </div>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">From Address</div>
+            <p class="settings-row-help">Who the mail appears to come from. Some providers require this to match the account.</p>
+        </div>
+        <div class="settings-row-control">
+            <input type="email" class="form-control" name="smtp_from" style="max-width:280px;"
+                   value="<?= htmlspecialchars($settings['smtp_from'] ?? '') ?>" placeholder="backups@example.com">
+        </div>
+        <div class="settings-row-default">&nbsp;</div>
+    </div>
+
+    <h5 class="settings-group">In-App Notifications</h5>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">Show successful backups in the bell</div>
+            <p class="settings-row-help">Off by default, so the bell holds failures, offline clients, low storage and other things worth acting on rather than burying them under routine successes. Email and push are unaffected.</p>
+        </div>
+        <div class="settings-row-control">
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" role="switch" name="inapp_notify_success_events" value="1"
+                       id="inapp_notify_success_events" <?= ($settings['inapp_notify_success_events'] ?? '0') === '1' ? 'checked' : '' ?>>
+                <label class="form-check-label" for="inapp_notify_success_events"
+                       data-on="On" data-off="Off"><?= ($settings['inapp_notify_success_events'] ?? '0') === '1' ? 'On' : 'Off' ?></label>
+            </div>
+        </div>
+        <div class="settings-row-default">Default: Off</div>
+    </div>
+
+    <div class="settings-actions">
+        <span id="smtpTestResult" class="small me-auto"></span>
+        <button type="button" class="btn btn-outline-secondary" id="btnTestSmtp">
+            <i class="bi bi-envelope-check me-1"></i> Send Test Email
+        </button>
+        <a href="/settings?tab=notifications" class="btn btn-outline-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i> Save Changes</button>
+    </div>
+</form>
+<?php endif; ?>
 
 <!-- Push Notifications Tab -->
 <?php if ($activeTab === 'push'): ?>
@@ -3102,4 +3113,17 @@ document.getElementById('btnTestSmtp')?.addEventListener('click', function() {
             .catch(function() {});
     }, 10000);
 })();
+</script>
+
+<script>
+// Every settings switch says what it is, not just which way it points. Lives
+// outside the per-tab blocks because three pages use it now.
+document.querySelectorAll('.settings-row .form-switch input[type=checkbox]').forEach(function (box) {
+    box.addEventListener('change', function () {
+        var label = document.querySelector('label[for="' + box.id + '"]');
+        if (label && label.dataset.on) {
+            label.textContent = box.checked ? label.dataset.on : label.dataset.off;
+        }
+    });
+});
 </script>
