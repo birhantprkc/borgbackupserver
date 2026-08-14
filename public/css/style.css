@@ -381,19 +381,18 @@ html, body {
     }
 }
 
-/* Mascot logo. Width-anchored at ~97px so it sits close to the 90px
-   sidebar column with just a few pixels of overflow on the right.
-   At the artwork's 3:2 aspect this gives ~65px tall — barely past
-   the 64px topbar, so the robot's hands appear to brush the edge
-   between the topbar and the page content without dominating.
-   pointer-events: none keeps the navbar-brand link clickable. */
+/* Mascot logo. Contained inside the topbar and centred in the logo column,
+   which is the width of the sidebar. */
 .topbar-mascot {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 115px;
+    /* The artwork is a full lockup — wordmark and mascot — sized for the wider
+       sidebar column, so it is contained within the topbar rather than
+       overhanging it the way the old mascot-only image deliberately did. A
+       wordmark hanging below the bar reads as a mistake, not as character. */
+    max-width: 180px;
+    max-height: 54px;
+    width: auto;
     height: auto;
-    z-index: 1031;
+    object-fit: contain;
     pointer-events: none;
 }
 
