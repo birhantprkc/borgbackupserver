@@ -139,72 +139,113 @@
     <div class="d-flex">
         <!-- Sidebar (desktop only) -->
         <nav id="sidebar" class="sidebar d-none d-md-flex flex-column flex-shrink-0 text-white">
-            <ul class="nav nav-pills flex-column mb-auto text-center">
+            <?php
+            $pt = $pageTitle ?? '';
+            $isAdmin = ($_SESSION['user_role'] ?? '') === 'admin';
+            // Which settings page is showing, so the matching child highlights
+            // and the group starts open on the page you are already on.
+            $settingsTab = $_GET['tab'] ?? 'general';
+            $onSettings = $pt === 'Settings';
+
+            // Reads the cached latest_version the update checker already
+            // stores — no network call on a page render.
+            $sidebarUpdateService = new \BBS\Services\UpdateService();
+            $sidebarUpdateAvailable = $sidebarUpdateService->isUpdateAvailable();
+
+            // Same order and labels as the tab strip on the settings page, so
+            // moving between the two doesn't feel like two different products.
+            $settingsPages = [
+                ['general',      'General',            'bi-gear'],
+                ['notifications','Email Settings',     'bi-envelope'],
+                ['push',         'Push Notifications', 'bi-megaphone'],
+                ['push_service', 'Push Service',       'bi-broadcast'],
+                ['profiles',     'Profiles',           'bi-diagram-3'],
+                ['templates',    'Templates',          'bi-clipboard-check'],
+                ['auth',         'Authentication',     'bi-shield-lock'],
+                ['branding',     'Branding',           'bi-palette'],
+                ['api',          'API',                'bi-key'],
+                ['updates',      'Updates',            'bi-arrow-repeat'],
+            ];
+            ?>
+            <ul class="nav flex-column mb-auto">
                 <li class="nav-item">
-                    <a href="/" class="nav-link sidebar-link <?= ($pageTitle ?? '') === 'Dashboard' ? 'active' : '' ?>">
-                        <i class="bi bi-speedometer2 d-block mb-1 fs-4"></i>
-                        <span class="small">Dashboard</span>
+                    <a href="/" class="nav-link sidebar-link <?= $pt === 'Dashboard' ? 'active' : '' ?>">
+                        <i class="bi bi-speedometer2"></i><span class="sidebar-label">Dashboard</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="/clients" class="nav-link sidebar-link <?= ($pageTitle ?? '') === 'Clients' ? 'active' : '' ?>">
-                        <i class="bi bi-display d-block mb-1 fs-4"></i>
-                        <span class="small">Clients</span>
+                    <a href="/clients" class="nav-link sidebar-link <?= $pt === 'Clients' ? 'active' : '' ?>">
+                        <i class="bi bi-display"></i><span class="sidebar-label">Clients</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="/queue" class="nav-link sidebar-link <?= ($pageTitle ?? '') === 'Queue' ? 'active' : '' ?>">
-                        <i class="bi bi-clock-history d-block mb-1 fs-4"></i>
-                        <span class="small">Queue</span>
+                    <a href="/queue" class="nav-link sidebar-link <?= $pt === 'Queue' ? 'active' : '' ?>">
+                        <i class="bi bi-clock-history"></i><span class="sidebar-label">Queue</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="/schedules" class="nav-link sidebar-link <?= ($pageTitle ?? '') === 'Schedules' ? 'active' : '' ?>">
-                        <i class="bi bi-calendar-week d-block mb-1 fs-4"></i>
-                        <span class="small">Schedules</span>
+                    <a href="/schedules" class="nav-link sidebar-link <?= $pt === 'Schedules' ? 'active' : '' ?>">
+                        <i class="bi bi-calendar-week"></i><span class="sidebar-label">Schedules</span>
                     </a>
                 </li>
+                <?php if ($isAdmin && !\BBS\Core\Config::isHosted()): ?>
                 <li class="nav-item">
-                    <a href="/log" class="nav-link sidebar-link <?= ($pageTitle ?? '') === 'Log' ? 'active' : '' ?>">
-                        <i class="bi bi-journal-text d-block mb-1 fs-4"></i>
-                        <span class="small">Log</span>
-                    </a>
-                </li>
-                <?php if (($_SESSION['user_role'] ?? '') === 'admin'): ?>
-                <?php if (!\BBS\Core\Config::isHosted()): ?>
-                <li class="nav-item">
-                    <a href="/storage-locations" class="nav-link sidebar-link <?= ($pageTitle ?? '') === 'Storage' ? 'active' : '' ?>">
-                        <i class="bi bi-hdd-stack d-block mb-1 fs-4"></i>
-                        <span class="small">Storage</span>
+                    <a href="/storage-locations" class="nav-link sidebar-link <?= $pt === 'Storage' ? 'active' : '' ?>">
+                        <i class="bi bi-hdd-stack"></i><span class="sidebar-label">Storage</span>
                     </a>
                 </li>
                 <?php endif; ?>
                 <li class="nav-item">
-                    <a href="/settings" class="nav-link sidebar-link <?= ($pageTitle ?? '') === 'Settings' ? 'active' : '' ?>">
-                        <i class="bi bi-gear d-block mb-1 fs-4"></i>
-                        <span class="small">Settings</span>
+                    <a href="/log" class="nav-link sidebar-link <?= $pt === 'Log' ? 'active' : '' ?>">
+                        <i class="bi bi-journal-text"></i><span class="sidebar-label">Log</span>
                     </a>
                 </li>
+
+                <?php if ($isAdmin): ?>
                 <li class="nav-item">
-                    <a href="/users" class="nav-link sidebar-link <?= str_contains($pageTitle ?? '', 'User') ? 'active' : '' ?>">
-                        <i class="bi bi-people d-block mb-1 fs-4"></i>
-                        <span class="small">Users</span>
+                    <div class="sidebar-section">Management</div>
+                </li>
+                <li class="nav-item">
+                    <a href="/users" class="nav-link sidebar-link <?= str_contains($pt, 'User') ? 'active' : '' ?>">
+                        <i class="bi bi-people"></i><span class="sidebar-label">Users</span>
                     </a>
+                </li>
+
+                <li class="nav-item">
+                    <button class="sidebar-section sidebar-section-toggle" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#sidebarSettings"
+                            aria-expanded="<?= $onSettings ? 'true' : 'false' ?>" aria-controls="sidebarSettings">
+                        <span>Settings</span><i class="bi bi-chevron-up"></i>
+                    </button>
+                    <div class="collapse <?= $onSettings ? 'show' : '' ?>" id="sidebarSettings">
+                        <ul class="sidebar-sub">
+                            <?php foreach ($settingsPages as [$tab, $label, $icon]): ?>
+                            <li>
+                                <a href="/settings?tab=<?= $tab ?>"
+                                   class="nav-link sidebar-link <?= ($onSettings && $settingsTab === $tab) ? 'active' : '' ?>">
+                                    <i class="bi <?= $icon ?>"></i><span class="sidebar-label"><?= $label ?></span>
+                                    <?php if ($tab === 'updates' && !empty($sidebarUpdateAvailable)): ?>
+                                        <span class="badge bg-warning text-dark ms-1" style="font-size:.6rem;">New</span>
+                                    <?php endif; ?>
+                                </a>
+                            </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
                 </li>
                 <?php endif; ?>
             </ul>
             <?php
-                $bbsVersionForSidebar = (new \BBS\Services\UpdateService())->getCurrentVersion();
+                $bbsVersionForSidebar = $sidebarUpdateService->getCurrentVersion();
             ?>
             <div class="text-center pb-2">
                 <span class="badge rounded-pill sidebar-version-pill">
                     v<?= htmlspecialchars($bbsVersionForSidebar) ?>
                 </span>
             </div>
-            <div class="border-top p-2 text-center">
+            <div class="border-top p-2">
                 <a href="/logout" class="nav-link sidebar-link">
-                    <i class="bi bi-box-arrow-left d-block mb-1 fs-4"></i>
-                    <span class="small">Logout</span>
+                    <i class="bi bi-box-arrow-left"></i><span class="sidebar-label">Logout</span>
                 </a>
             </div>
         </nav>
