@@ -2966,11 +2966,11 @@ docker compose up -d</pre>
         <?php if ($bundledAgentVersion): ?>
         <div class="card border-0 shadow-sm mt-4">
             <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-pc-display me-1"></i> BBS Client</span>
+                <span><i class="bi bi-pc-display me-1"></i> Borg Backup Server Agents</span>
                 <span class="badge bg-success" id="agent-bundled-ver">v<?= htmlspecialchars($bundledAgentVersion) ?></span>
             </div>
             <div class="card-body" id="agent-updates-body">
-                <p class="text-muted small mb-3">The BBS Client receives commands from the server to initiate backups, perform restores, and update Borg software.</p>
+                <p class="text-muted small mb-3">The BBS Agents receive commands from this server to start backups, run restores, and update their own software and Borg.</p>
                 <?php if ($totalAgents === 0): ?>
                     <p class="text-muted small mb-0">No clients connected yet.</p>
                 <?php elseif ($outdatedCount === 0): ?>
@@ -3002,6 +3002,25 @@ docker compose up -d</pre>
         </div>
         <?php endif; ?>
         </div>
+<?php if (!$isDocker): ?>
+        <div class="card border-0 shadow-sm mt-4">
+            <div class="card-header fw-semibold">
+                <i class="bi bi-git me-1"></i> Developer Sync
+            </div>
+            <div class="card-body">
+                <div class="alert alert-secondary small py-2 px-3 mb-3">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    <strong>Developer Use Only:</strong> Syncs unpublished development code from the main branch. This may include incomplete features and untested changes. Only use if directed by a developer for troubleshooting purposes.
+                </div>
+                <form method="POST" action="/settings/sync" data-confirm="This will sync to the latest code from the main branch (may include unreleased changes). You'll be redirected to a progress page.&#10;&#10;Active backups must complete first. New backups will be paused during the sync.&#10;&#10;Proceed?">
+                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                    <button type="submit" class="btn btn-outline-secondary btn-sm" title="Pulls latest from main branch (may include unreleased changes)">
+                        <i class="bi bi-git me-1"></i> Sync Dev Code
+                    </button>
+                </form>
+            </div>
+        </div>
+<?php endif; ?>
     </div>
 
     <?php if (!empty($latest['notes'])): ?>
@@ -3023,31 +3042,6 @@ docker compose up -d</pre>
     <?php endif; ?>
 </div>
 
-<?php if (!$isDocker): ?>
-<hr>
-
-<div class="row g-4">
-    <div class="col-lg-6">
-        <div class="card border-0 shadow-sm">
-            <div class="card-header fw-semibold">
-                <i class="bi bi-git me-1"></i> Developer Sync
-            </div>
-            <div class="card-body">
-                <div class="alert alert-secondary small py-2 px-3 mb-3">
-                    <i class="bi bi-exclamation-triangle me-1"></i>
-                    <strong>Developer Use Only:</strong> Syncs unpublished development code from the main branch. This may include incomplete features and untested changes. Only use if directed by a developer for troubleshooting purposes.
-                </div>
-                <form method="POST" action="/settings/sync" data-confirm="This will sync to the latest code from the main branch (may include unreleased changes). You'll be redirected to a progress page.&#10;&#10;Active backups must complete first. New backups will be paused during the sync.&#10;&#10;Proceed?">
-                    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                    <button type="submit" class="btn btn-outline-secondary btn-sm" title="Pulls latest from main branch (may include unreleased changes)">
-                        <i class="bi bi-git me-1"></i> Sync Dev Code
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-<?php endif; ?>
 
 <?php if ($upgradeResult): ?>
 <div class="card border-0 shadow-sm mt-4">
@@ -3167,7 +3161,7 @@ document.getElementById('btnTestSmtp')?.addEventListener('click', function() {
                 var verEl = document.getElementById('agent-bundled-ver');
                 if (verEl) verEl.textContent = 'v' + data.bundled_version;
                 var html = '';
-                var descHtml = '<p class="text-muted small mb-3">The BBS Client receives commands from the server to initiate backups, perform restores, and update Borg software.</p>';
+                var descHtml = '<p class="text-muted small mb-3">The BBS Agents receive commands from this server to start backups, run restores, and update their own software and Borg.</p>';
                 if (data.total === 0) {
                     html = descHtml + '<p class="text-muted small mb-0">No clients connected yet.</p>';
                 } else if (data.outdated.length === 0) {
