@@ -44,6 +44,7 @@ class SettingsApiController extends Controller
             'job_offline_grace_minutes' => 'int',
             'auto_retry_backoff_minutes' => 'int',
             'precount_files' => 'bool',
+            'backup_overdue_hours' => 'int',
             'auto_update_agents' => 'bool',
             'auto_compact_day' => 'int',
             'auto_compact_hour' => 'int',
@@ -127,6 +128,7 @@ class SettingsApiController extends Controller
         'job_offline_grace_minutes' => '5',
         'auto_retry_backoff_minutes' => '5',
         'precount_files' => '1',
+        'backup_overdue_hours' => '48',
         'auto_update_agents' => '1',
         'auto_compact_day' => '6',
         'auto_compact_hour' => '2',
@@ -763,6 +765,7 @@ class SettingsApiController extends Controller
                 'max_retry_attempts' => $row['auto_retry_max_attempts'] !== null ? (int) $row['auto_retry_max_attempts'] : null,
                 'give_up_after_minutes' => $row['job_offline_grace_minutes'] !== null ? (int) $row['job_offline_grace_minutes'] : null,
                 'retry_backoff_minutes' => $row['auto_retry_backoff_minutes'] !== null ? (int) $row['auto_retry_backoff_minutes'] : null,
+                'backup_overdue_hours' => $row['backup_overdue_hours'] !== null ? (int) $row['backup_overdue_hours'] : null,
             ],
             'failure_handling_effective' => $this->profileEffectiveFailure($row),
             'client_count' => isset($row['client_count']) ? (int) $row['client_count'] : 0,
@@ -778,6 +781,7 @@ class SettingsApiController extends Controller
             'max_retry_attempts' => ['auto_retry_max_attempts', 'auto_retry_max_attempts'],
             'give_up_after_minutes' => ['job_offline_grace_minutes', 'job_offline_grace_minutes'],
             'retry_backoff_minutes' => ['auto_retry_backoff_minutes', 'auto_retry_backoff_minutes'],
+            'backup_overdue_hours' => ['backup_overdue_hours', 'backup_overdue_hours'],
         ];
         $out = [];
         foreach ($map as $key => [$col, $setting]) {
@@ -851,6 +855,7 @@ class SettingsApiController extends Controller
             'max_retry_attempts' => 'auto_retry_max_attempts',
             'give_up_after_minutes' => 'job_offline_grace_minutes',
             'retry_backoff_minutes' => 'auto_retry_backoff_minutes',
+            'backup_overdue_hours' => 'backup_overdue_hours',
         ];
         foreach ($fmap as $key => $col) {
             if (array_key_exists($key, $failure)) {

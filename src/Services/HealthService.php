@@ -277,17 +277,66 @@ class HealthService
         return ['status' => $status, 'message' => $message, 'counts' => $counts];
     }
 
+    /**
+     * Are backups actually happening?
+     *
+     * This used to warn whenever any backup had failed in the last 24 hours,
+     * which made the endpoint unusable for monitoring: a laptop switched off
+     * for the weekend fails its scheduled runs, and that is a laptop, not a
+     * fault (#409). Retry attempts could not stand in for a threshold either —
+     * capped at ten they cover about eight hours, and raising the cap only
+     * stacks retries on top of the next day's scheduled runs.
+     *
+     * So the question is per client and per profile: has this machine gone
+     * longer than its kind is allowed to go without a successful backup?
+     * Fourteen days for laptops, a day for a database server.
+     */
     private function checkBackups(): array
     {
-        $failed = (int) ($this->db->fetchOne(
-            "SELECT COUNT(*) c FROM backup_jobs
-             WHERE status = 'failed' AND completed_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)"
-        )['c'] ?? 0);
+        $profiles = new \BBS\Services\ClientProfileService();
+        $globalOverdue = max(1, $profiles->globalFailureSetting('backup_overdue_hours'));
 
-        $stallMinutes = (int) $this->setting('stall_timeout_minutes', '120');
+        // Only clients that are supposed to be backing up. One with no enabled
+        // plan is not overdue, it is unconfigured, and saying otherwise would
+        // put every half-set-up client into the monitoring signal.
+        $rows = $this->db->fetchAll("
+            SELECT a.id, a.name,
+                   COALESCE(cp.backup_overdue_hours, {$globalOverdue}) AS overdue_hours,
+                   (SELECT MAX(bj.completed_at) FROM backup_jobs bj
+                     WHERE bj.agent_id = a.id AND bj.task_type = 'backup'
+                       AND bj.status = 'completed') AS last_success,
+                   a.created_at
+            FROM agents a
+            LEFT JOIN client_profiles cp ON cp.id = a.client_profile_id
+            WHERE EXISTS (
+                SELECT 1 FROM backup_plans bp WHERE bp.agent_id = a.id AND bp.enabled = 1
+            )
+        ");
+
+        $overdue = [];
+        foreach ($rows as $r) {
+            $hours = max(1, (int) $r['overdue_hours']);
+            // Never backed up: measure from when the client was added, so a
+            // machine that has never worked shows up rather than hiding behind
+            // a null.
+            $since = $r['last_success'] ?: $r['created_at'];
+            if (!$since) {
+                continue;
+            }
+            $ageHours = (time() - strtotime($since)) / 3600;
+            if ($ageHours > $hours) {
+                $overdue[] = [
+                    'client' => $r['name'],
+                    'last_success' => $r['last_success'],
+                    'hours_since' => (int) round($ageHours),
+                    'allowed_hours' => $hours,
+                ];
+            }
+        }
+
+        $stallMinutes = max(1, (int) $this->setting('stall_timeout_minutes', '120'));
         // Interpolated, not bound: MySQL will not accept a placeholder for an
         // INTERVAL quantity. Cast to int first so it is safe to inline.
-        $stallMinutes = max(1, $stallMinutes);
         $stalled = (int) ($this->db->fetchOne(
             "SELECT COUNT(*) c FROM backup_jobs
              WHERE status IN ('sent', 'running')
@@ -298,19 +347,36 @@ class HealthService
             "SELECT COUNT(*) c FROM backup_jobs WHERE status IN ('queued', 'sent', 'running')"
         )['c'] ?? 0);
 
+        // Reported for context, never for status: a failure inside a client's
+        // allowance is exactly what the allowance is for.
+        $failed = (int) ($this->db->fetchOne(
+            "SELECT COUNT(*) c FROM backup_jobs
+             WHERE status = 'failed' AND completed_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)"
+        )['c'] ?? 0);
+
         $status = self::OK;
-        $message = 'No failures in the last 24 hours';
-        if ($stalled > 0) {
+        $message = 'Every client has backed up within its allowance';
+        if (!empty($overdue)) {
+            $status = self::WARNING;
+            $names = array_map(
+                fn($o) => sprintf('%s (%dh, allows %dh)', $o['client'], $o['hours_since'], $o['allowed_hours']),
+                array_slice($overdue, 0, 5)
+            );
+            $message = sprintf('%d client(s) overdue: %s', count($overdue), implode(', ', $names));
+            if (count($overdue) > 5) {
+                $message .= sprintf(' and %d more', count($overdue) - 5);
+            }
+        } elseif ($stalled > 0) {
             $status = self::WARNING;
             $message = sprintf('%d job(s) with no progress for over %d minutes', $stalled, $stallMinutes);
-        } elseif ($failed > 0) {
-            $status = self::WARNING;
-            $message = sprintf('%d backup(s) failed in the last 24 hours', $failed);
         }
 
         return [
             'status' => $status,
             'message' => $message,
+            'overdue_clients' => count($overdue),
+            'overdue' => $overdue,
+            'default_overdue_hours' => $globalOverdue,
             'failed_24h' => $failed,
             'stalled' => $stalled,
             'in_queue' => $running,

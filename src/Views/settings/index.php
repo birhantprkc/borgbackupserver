@@ -159,6 +159,19 @@ $compactHour = (int) ($settings['auto_compact_hour'] ?? 2);
         <div class="settings-row-default">Default: 5 minutes</div>
     </div>
 
+    <div class="settings-row">
+        <div>
+            <div class="settings-row-label">Backup Overdue After</div>
+            <p class="settings-row-help">How long a client may go without a successful backup before health monitoring reports it as overdue. A client profile can override this per kind of machine &mdash; a laptop that is off for the weekend is not a fault, a database server silent for a day is.</p>
+        </div>
+        <div class="settings-row-control">
+            <input type="number" class="form-control form-control-narrow" name="backup_overdue_hours"
+                   value="<?= htmlspecialchars($settings['backup_overdue_hours'] ?? '48') ?>" min="1" max="8760">
+            <span class="settings-row-unit">hours</span>
+        </div>
+        <div class="settings-row-default">Default: 48 hours</div>
+    </div>
+
     <h5 class="settings-group">Repository Maintenance</h5>
 
     <div class="settings-row">
@@ -1550,6 +1563,25 @@ $renderProfileForm = function (?array $p) use ($templates, $freqLabels, $dowLabe
             </div>
         </div>
     </div>
+
+    <hr class="my-3">
+    <label class="form-label fw-semibold mb-1">Backup Freshness</label>
+    <div class="form-text mb-2">
+        How long a machine of this kind may go without a successful backup before health monitoring
+        calls it overdue. A laptop that spends the weekend switched off is not a fault; a database
+        server silent for a day is. Blank follows the server-wide setting.
+    </div>
+    <div class="row g-3">
+        <div class="col-md-4">
+            <label class="form-label small fw-semibold mb-1">Overdue After</label>
+            <div class="input-group input-group-sm">
+                <input type="number" name="backup_overdue_hours" class="form-control" min="1" max="8760"
+                       value="<?= $v('backup_overdue_hours') ?>" placeholder="Server default">
+                <span class="input-group-text">hours</span>
+            </div>
+            <div class="form-text">24 = a day, 168 = a week, 336 = two weeks.</div>
+        </div>
+    </div>
     <?php
 };
 ?>
@@ -1701,7 +1733,7 @@ function openProfileModal(profile) {
     // stay empty so the "follow the server setting" placeholder shows through.
     var fields = ['name','description','template_id','frequency','times','day_of_week','day_of_month',
                   'prune_minutes','prune_hours','prune_days','prune_weeks','prune_months','prune_years',
-                  'auto_retry_max_attempts','job_offline_grace_minutes','auto_retry_backoff_minutes'];
+                  'auto_retry_max_attempts','job_offline_grace_minutes','auto_retry_backoff_minutes','backup_overdue_hours'];
     var blanks = {frequency:'daily', times:'02:00', prune_days:'7', prune_weeks:'4', prune_months:'6',
                   prune_minutes:'0', prune_hours:'0', prune_years:'0'};
     fields.forEach(function (f) {

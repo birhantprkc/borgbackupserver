@@ -25,6 +25,10 @@ class ClientProfileService
         'auto_retry_max_attempts'    => ['setting' => 'auto_retry_max_attempts',    'default' => 3],
         'job_offline_grace_minutes'  => ['setting' => 'job_offline_grace_minutes',  'default' => 5],
         'auto_retry_backoff_minutes' => ['setting' => 'auto_retry_backoff_minutes', 'default' => 5],
+        // How long a client of this kind may go without a successful backup
+        // before it counts as overdue (#409). A laptop that is off for the
+        // weekend is not a fault; a database server silent for a day is.
+        'backup_overdue_hours'       => ['setting' => 'backup_overdue_hours',       'default' => 48],
     ];
 
     private Database $db;
@@ -86,6 +90,12 @@ class ClientProfileService
             $out[$field] = $this->resolveFailureSetting($field, $profile[$field] ?? null);
         }
         return $out;
+    }
+
+    /** Hours a client may go without a successful backup before it is overdue. */
+    public function overdueHoursForAgent(int $agentId): int
+    {
+        return $this->failureSettingsForAgent($agentId)['backup_overdue_hours'];
     }
 
     /** Global value for one failure setting, used when a profile doesn't override it. */

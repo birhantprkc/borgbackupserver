@@ -35,7 +35,7 @@ class ClientProfileController extends Controller
         }
 
         // Blank means "follow the server setting", which is different from zero.
-        foreach (['auto_retry_max_attempts', 'job_offline_grace_minutes', 'auto_retry_backoff_minutes'] as $f) {
+        foreach (['auto_retry_max_attempts', 'job_offline_grace_minutes', 'auto_retry_backoff_minutes', 'backup_overdue_hours'] as $f) {
             $raw = $_POST[$f] ?? '';
             $data[$f] = ($raw === '' || $raw === null) ? null : max(0, (int) $raw);
         }

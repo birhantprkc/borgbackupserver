@@ -352,6 +352,7 @@ INSERT INTO settings (`key`, `value`) VALUES
     ('self_backup_catalogs', '0'),
     ('job_offline_grace_minutes', '5'),
     ('precount_files', '1'),
+    ('backup_overdue_hours', '48'),
     ('auto_retry_backoff_minutes', '5');
 
 -- --------------------------------------------------------
@@ -592,6 +593,9 @@ CREATE TABLE client_profiles (
     auto_retry_max_attempts INT DEFAULT NULL,
     job_offline_grace_minutes INT DEFAULT NULL,
     auto_retry_backoff_minutes INT DEFAULT NULL,
+    -- How long a client may go without a successful backup before health
+    -- calls it overdue. Null follows the server-wide setting (#409).
+    backup_overdue_hours INT DEFAULT NULL,
     is_default TINYINT(1) NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
