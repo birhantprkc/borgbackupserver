@@ -187,7 +187,7 @@ html, body {
 
 /* Sidebar */
 .sidebar {
-    width: 232px;
+    width: 192px;
     height: calc(100vh - 64px);
     background-color: var(--bbs-nav-bg);
     position: fixed;
@@ -369,7 +369,7 @@ html, body {
 .topbar-logo {
     /* Matches the sidebar so the logo sits over its column rather than
        floating short of it. */
-    width: 232px;
+    width: 192px;
     overflow: visible;
 }
 
@@ -482,7 +482,7 @@ html, body {
 /* Offset main content for fixed sidebar on desktop */
 @media (min-width: 768px) {
     .main-content {
-        margin-left: 232px;
+        margin-left: 192px;
     }
 }
 
