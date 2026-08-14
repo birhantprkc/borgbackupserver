@@ -602,7 +602,7 @@ unset($ns);
         <h1 class="settings-page-title">Apprise Notifications</h1>
         <p class="settings-page-lede mb-0">Send alerts to Discord, Telegram, Slack, Pushover and <a href="https://github.com/caronc/apprise/wiki#notification-services" target="_blank">100+ other services</a> using Apprise. Each service chooses which events it wants.</p>
     </div>
-    <button class="btn btn-success flex-shrink-0 ms-3" data-bs-toggle="collapse" data-bs-target="#addServiceForm">
+    <button class="btn btn-sm btn-success flex-shrink-0 ms-3" data-bs-toggle="collapse" data-bs-target="#addServiceForm">
         <i class="bi bi-plus-circle me-1"></i> Add Service
     </button>
 </div>
@@ -1349,9 +1349,9 @@ $half = (int) ceil(count($appriseExamples) / 2);
         <?php endforeach; ?>
     </div>
 </div>
-<p class="mt-3 mb-4">
+<p class="mt-3 mb-4" style="font-size:13px;">
     <a href="https://github.com/caronc/apprise/wiki#notification-services" target="_blank" class="text-decoration-none">
-        View all supported services <i class="bi bi-box-arrow-up-right ms-1" style="font-size:.8em;"></i>
+        View all supported services <i class="bi bi-box-arrow-up-right ms-1" style="font-size:.85em;"></i>
     </a>
 </p>
 
