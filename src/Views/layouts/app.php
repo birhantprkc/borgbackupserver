@@ -210,12 +210,12 @@
                     </button>
                     <div class="collapse <?= $onSettings ? 'show' : '' ?>" id="sidebarSettings">
                         <ul class="sidebar-sub">
-                            <?php foreach ($settingsPages as $sp): [$tab, $label, $icon] = [$sp['tab'], $sp['label'], $sp['icon']]; ?>
+                            <?php foreach ($settingsPages as $sp): ?>
                             <li>
-                                <a href="/settings?tab=<?= $tab ?>"
-                                   class="nav-link sidebar-link <?= ($onSettings && $settingsTab === $tab) ? 'active' : '' ?>">
-                                    <i class="bi <?= $icon ?>"></i><span class="sidebar-label"><?= $label ?></span>
-                                    <?php if ($tab === 'updates' && !empty($sidebarUpdateAvailable)): ?>
+                                <a href="/settings?tab=<?= $sp['tab'] ?>"
+                                   class="nav-link sidebar-link <?= ($onSettings && $settingsTab === $sp['tab']) ? 'active' : '' ?>">
+                                    <i class="bi <?= $sp['icon'] ?>"></i><span class="sidebar-label"><?= htmlspecialchars($sp['label']) ?></span>
+                                    <?php if ($sp['tab'] === 'updates' && !empty($sidebarUpdateAvailable)): ?>
                                         <span class="badge bg-warning text-dark ms-1" style="font-size:.6rem;">New</span>
                                     <?php endif; ?>
                                 </a>
