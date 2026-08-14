@@ -1430,3 +1430,43 @@ body.bg-body-secondary {
 .settings-row-control .form-select {
     max-width: 100%;
 }
+
+
+/* Settings page headline band.
+   A faint blue cast so the top of the page has somewhere to start, rather than
+   a title floating on the same flat surface as everything under it. Kept very
+   low contrast — this is a backdrop, not a callout, and it must not compete
+   with the warning and info alerts that appear directly below it on some
+   pages. */
+.settings-page-head {
+    background: linear-gradient(180deg,
+        rgba(38, 132, 255, 0.055) 0%,
+        rgba(38, 132, 255, 0.02) 100%);
+    border: 1px solid rgba(38, 132, 255, 0.10);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 26px;
+}
+
+[data-bs-theme="light"] .settings-page-head {
+    background: linear-gradient(180deg,
+        rgba(13, 110, 253, 0.045) 0%,
+        rgba(13, 110, 253, 0.015) 100%);
+    border-color: rgba(13, 110, 253, 0.11);
+}
+
+.settings-page-head .settings-page-title,
+.settings-page-head .settings-page-lede {
+    margin-bottom: 0;
+}
+
+.settings-page-head .settings-page-title {
+    margin-bottom: 4px;
+}
+
+/* The first section heading sits closer to the band than it would to a bare
+   title, since the band already provides the separation. */
+.settings-page-head + .settings-group,
+.settings-page-head + div > .settings-group:first-of-type {
+    margin-top: 0;
+}

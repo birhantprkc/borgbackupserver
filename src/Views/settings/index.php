@@ -12,8 +12,10 @@ if ($activeTab === 'updates') { $updatesSection = $updatesSection ?? ($_GET['sec
 
 <!-- Agent Tab -->
 <?php if ($activeTab === 'agent'): ?>
-<h1 class="settings-page-title">Agent</h1>
-<p class="settings-page-lede">How clients check in, how their backups are watched, and what happens when one drops out.</p>
+<div class="settings-page-head">
+    <h1 class="settings-page-title">Agent</h1>
+    <p class="settings-page-lede mb-0">How clients check in, how their backups are watched, and what happens when one drops out.</p>
+</div>
 
 <?php
 $dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -190,8 +192,10 @@ $compactHour = (int) ($settings['auto_compact_hour'] ?? 2);
 
 <!-- General Tab -->
 <?php if ($activeTab === 'general'): ?>
-<h1 class="settings-page-title">General</h1>
-<p class="settings-page-lede">Core configuration for this Borg Backup Server instance.</p>
+<div class="settings-page-head">
+    <h1 class="settings-page-title">General</h1>
+    <p class="settings-page-lede mb-0">Core configuration for this Borg Backup Server instance.</p>
+</div>
 
 <?php
 $mmOn = ($settings['maintenance_mode'] ?? '0') === '1';
@@ -418,8 +422,10 @@ $sslEnabled = str_starts_with(\BBS\Core\Config::get('APP_URL', 'https://'), 'htt
 
 <!-- Email Settings Tab -->
 <?php if ($activeTab === 'notifications'): ?>
-<h1 class="settings-page-title">Email Settings</h1>
-<p class="settings-page-lede">Outgoing mail for password resets, upgrade notices and other system messages.</p>
+<div class="settings-page-head">
+    <h1 class="settings-page-title">Email Settings</h1>
+    <p class="settings-page-lede mb-0">Outgoing mail for password resets, upgrade notices and other system messages.</p>
+</div>
 
 <?php
 $smtpPortForDefault = (int) ($settings['smtp_port'] ?? 587);
@@ -598,7 +604,7 @@ foreach ($notifServices as &$ns) {
 unset($ns);
 ?>
 
-<div class="d-flex justify-content-between align-items-start mb-4">
+<div class="settings-page-head d-flex justify-content-between align-items-start">
     <div>
         <h1 class="settings-page-title">Apprise Notifications</h1>
         <p class="settings-page-lede mb-0">Send alerts to Discord, Telegram, Slack, Pushover and <a href="https://github.com/caronc/apprise/wiki#notification-services" target="_blank">100+ other services</a> using Apprise. Each service chooses which events it wants.</p>
@@ -1370,8 +1376,10 @@ $pushSvc = new \BBS\Services\PushService();
 $pushOn = $pushSvc->isEnabled();
 $pushRegistered = (bool) $pushSvc->serverId();
 ?>
-<h1 class="settings-page-title">Push Service</h1>
-<p class="settings-page-lede">Delivers alerts to registered devices through an external notification service. Separate from <a href="/settings?tab=push">Apprise</a>, which contacts chat and webhook providers directly.</p>
+<div class="settings-page-head">
+    <h1 class="settings-page-title">Push Service</h1>
+    <p class="settings-page-lede mb-0">Delivers alerts to registered devices through an external notification service. Separate from <a href="/settings?tab=push">Apprise</a>, which contacts chat and webhook providers directly.</p>
+</div>
 
 <div class="alert alert-info small d-flex align-items-start" style="max-width:70ch;">
     <i class="bi bi-cone-striped me-2 mt-1"></i>
@@ -1548,7 +1556,7 @@ $renderProfileForm = function (?array $p) use ($templates, $freqLabels, $dowLabe
 };
 ?>
 
-<div class="d-flex justify-content-between align-items-start mb-4">
+<div class="settings-page-head d-flex justify-content-between align-items-start">
     <div>
         <h1 class="settings-page-title">Client Profiles</h1>
         <p class="settings-page-lede mb-0">A profile describes a kind of machine — laptops, database servers, point-of-sale registers — and the settings a new client of that kind starts with.</p>
@@ -1740,8 +1748,10 @@ document.addEventListener('change', function (e) {
 <?php endif; ?>
 
 <?php if ($activeTab === 'templates'): ?>
-<h1 class="settings-page-title">Backup Templates</h1>
-<p class="settings-page-lede">A template pre-fills the directories, excludes and borg options of a new backup plan, so a kind of machine is described once rather than typed out per client.</p>
+<div class="settings-page-head">
+    <h1 class="settings-page-title">Backup Templates</h1>
+    <p class="settings-page-lede mb-0">A template pre-fills the directories, excludes and borg options of a new backup plan, so a kind of machine is described once rather than typed out per client.</p>
+</div>
 <div>
     <div>
         <?php if (!empty($templates)): ?>
@@ -1966,8 +1976,10 @@ document.addEventListener('change', function (e) {
 <!-- Authentication Tab -->
 <?php if ($activeTab === 'auth'): ?>
 <?php $policy = $settings['oidc_new_user_policy'] ?? 'deny'; ?>
-<h1 class="settings-page-title">Authentication</h1>
-<p class="settings-page-lede">Let people sign in with an external identity provider — Keycloak, Authentik, Entra ID, Google, Okta and anything else that speaks OpenID Connect.</p>
+<div class="settings-page-head">
+    <h1 class="settings-page-title">Authentication</h1>
+    <p class="settings-page-lede mb-0">Let people sign in with an external identity provider — Keycloak, Authentik, Entra ID, Google, Okta and anything else that speaks OpenID Connect.</p>
+</div>
 
 <form method="POST" action="/settings/oidc">
     <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
@@ -2121,8 +2133,10 @@ document.getElementById('oidcNewUserPolicy').addEventListener('change', function
 
 <!-- Branding Tab -->
 <?php if ($activeTab === 'branding'): ?>
-<h1 class="settings-page-title">Branding</h1>
-<p class="settings-page-lede">Replace the logos with your own. Images are stored in the database, so they survive updates.</p>
+<div class="settings-page-head">
+    <h1 class="settings-page-title">Branding</h1>
+    <p class="settings-page-lede mb-0">Replace the logos with your own. Images are stored in the database, so they survive updates.</p>
+</div>
 <div>
     <div>
 
@@ -2328,8 +2342,10 @@ document.getElementById('appIconFileInput').addEventListener('change', function(
 
 <!-- API Tab -->
 <?php if ($activeTab === 'api'): ?>
-<h1 class="settings-page-title">API</h1>
-<p class="settings-page-lede">Tokens for automated access to the provisioning API. A token carries full admin access, so treat one like a password.</p>
+<div class="settings-page-head">
+    <h1 class="settings-page-title">API</h1>
+    <p class="settings-page-lede mb-0">Tokens for automated access to the provisioning API. A token carries full admin access, so treat one like a password.</p>
+</div>
 <div>
     <div>
         <h5 class="settings-group">Tokens</h5>
@@ -2510,8 +2526,10 @@ sudo /var/www/bbs/bin/bbs-token revoke "ansible"</code></pre>
 
 <!-- Updates Tab -->
 <?php if ($activeTab === 'updates'): ?>
-<h1 class="settings-page-title">Updates</h1>
-<p class="settings-page-lede">The version of BBS on this server, and the borg build its clients run.</p>
+<div class="settings-page-head">
+    <h1 class="settings-page-title">Updates</h1>
+    <p class="settings-page-lede mb-0">The version of BBS on this server, and the borg build its clients run.</p>
+</div>
 
 
 <!-- Updates Sub-Navigation -->
