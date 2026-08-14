@@ -180,8 +180,8 @@ $compactHour = (int) ($settings['auto_compact_hour'] ?? 2);
     </div>
 
     <div class="settings-actions">
-        <a href="/settings?tab=agent" class="btn btn-outline-secondary">Cancel</a>
-        <button type="submit" class="btn btn-primary">
+        <a href="/settings?tab=agent" class="btn btn-sm btn-outline-secondary">Cancel</a>
+        <button type="submit" class="btn btn-sm btn-primary">
             <i class="bi bi-save me-1"></i> Save Changes
         </button>
     </div>
@@ -410,8 +410,8 @@ $sslEnabled = str_starts_with(\BBS\Core\Config::get('APP_URL', 'https://'), 'htt
     </div>
 
     <div class="settings-actions">
-        <a href="/settings?tab=general" class="btn btn-outline-secondary">Cancel</a>
-        <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i> Save Changes</button>
+        <a href="/settings?tab=general" class="btn btn-sm btn-outline-secondary">Cancel</a>
+        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-save me-1"></i> Save Changes</button>
     </div>
 </form>
 <?php endif; ?>
@@ -527,11 +527,11 @@ $smtpSecure = $settings['smtp_secure'] ?? match ($smtpPortForDefault) {
 
     <div class="settings-actions">
         <span id="smtpTestResult" class="small me-auto"></span>
-        <button type="button" class="btn btn-outline-secondary" id="btnTestSmtp">
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnTestSmtp">
             <i class="bi bi-envelope-check me-1"></i> Send Test Email
         </button>
-        <a href="/settings?tab=notifications" class="btn btn-outline-secondary">Cancel</a>
-        <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i> Save Changes</button>
+        <a href="/settings?tab=notifications" class="btn btn-sm btn-outline-secondary">Cancel</a>
+        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-save me-1"></i> Save Changes</button>
     </div>
 </form>
 <?php endif; ?>
@@ -685,7 +685,7 @@ unset($ns);
                 </div>
 
                 <div>
-                    <button type="submit" class="btn btn-success">
+                    <button type="submit" class="btn btn-sm btn-success">
                         <i class="bi bi-plus-circle me-1"></i> Create Service
                     </button>
                     <button type="button" class="btn btn-outline-secondary ms-2" data-bs-toggle="collapse" data-bs-target="#addServiceForm">
@@ -967,7 +967,7 @@ unset($ns);
         <i class="bi bi-megaphone text-muted" style="font-size: 3rem;"></i>
         <h5 class="mt-3">No Notification Services</h5>
         <p class="text-muted mb-3">Add a notification service to receive alerts about backup failures, client status changes, and more.</p>
-        <button class="btn btn-success" data-bs-toggle="collapse" data-bs-target="#addServiceForm">
+        <button class="btn btn-sm btn-success" data-bs-toggle="collapse" data-bs-target="#addServiceForm">
             <i class="bi bi-plus-circle me-1"></i> Add Your First Service
         </button>
     </div>
@@ -2249,7 +2249,7 @@ document.getElementById('oidcNewUserPolicy').addEventListener('change', function
                 </select>
             </div>
 
-            <button type="submit" class="btn btn-primary">
+            <button type="submit" class="btn btn-sm btn-primary">
                 <i class="bi bi-check-lg me-1"></i> Save Branding
             </button>
         </form>
@@ -2408,7 +2408,7 @@ document.getElementById('appIconFileInput').addEventListener('change', function(
                     <div class="form-text small">Allows this token to return repository passphrases and S3 credentials in API responses (e.g. <code>?include_secrets=1</code> on <code>GET&nbsp;/api/v1/repositories</code>). Leave unchecked unless you specifically need an escrow / disaster-recovery export.</div>
                 </div>
                 <div class="col-md-2">
-                    <button type="submit" class="btn btn-success w-100"><i class="bi bi-plus-circle me-1"></i>Create Token</button>
+                    <button type="submit" class="btn btn-sm btn-success w-100"><i class="bi bi-plus-circle me-1"></i>Create Token</button>
                 </div>
             </div>
         </form>
