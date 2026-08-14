@@ -1214,7 +1214,11 @@ body.bg-body-secondary {
 
 .settings-row {
     display: grid;
-    grid-template-columns: minmax(480px, 680px) minmax(300px, 400px) minmax(140px, 1fr);
+    /* Proportional, not fixed minimums. Hard minima (480 + 300 + 140 plus the
+       gaps) came to 992px, which a 1280px window cannot give once the sidebar
+       and the canvas padding are taken out — so the grid overflowed and ate the
+       right-hand padding. minmax(0, …) lets every column shrink instead. */
+    grid-template-columns: minmax(0, 1.9fr) minmax(0, 1fr) minmax(0, 0.62fr);
     column-gap: 36px;
     align-items: center;
     min-height: 82px;
@@ -1298,7 +1302,7 @@ body.bg-body-secondary {
 
 /* Below the grid's natural width the three columns stack, and the default
    sits under the control it describes rather than stranded on its own line. */
-@media (max-width: 1199.98px) {
+@media (max-width: 991.98px) {
     .settings-row {
         grid-template-columns: 1fr;
         gap: 10px;
@@ -1409,4 +1413,20 @@ body.bg-body-secondary {
 
 .topbar-burger:focus {
     box-shadow: none;
+}
+
+
+/* A long unbroken value — an Apprise URL, a token, a repo path — must wrap
+   rather than widen its column and shove the page out from under its own
+   right-hand padding. */
+.settings-row,
+.settings-row-control,
+.settings-row-label,
+.settings-row-help {
+    min-width: 0;
+}
+
+.settings-row-control .form-control,
+.settings-row-control .form-select {
+    max-width: 100%;
 }
