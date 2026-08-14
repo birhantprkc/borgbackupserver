@@ -1384,9 +1384,7 @@ $pushRegistered = (bool) $pushSvc->serverId();
 <div class="alert alert-info small d-flex align-items-start">
     <i class="bi bi-cone-striped me-2 mt-1"></i>
     <div>
-        <strong>In development.</strong> Groundwork for an upcoming feature. It does nothing yet —
-        enabling it registers this server with the service, but no notifications are delivered.
-        Safe to leave switched off.
+        These settings are for a new feature that is in development. Safe to leave off.
     </div>
 </div>
 
