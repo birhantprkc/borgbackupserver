@@ -11,6 +11,9 @@ if ($activeTab === 'updates') { $updatesSection = $updatesSection ?? ($_GET['sec
 
 <!-- Agent Tab -->
 <?php if ($activeTab === 'agent'): ?>
+<h1 class="settings-page-title">Agent</h1>
+<p class="settings-page-lede">How clients check in, how their backups are watched, and what happens when one drops out.</p>
+
 <?php
 $dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 $compactDay  = (int) ($settings['auto_compact_day'] ?? 6);
@@ -186,6 +189,9 @@ $compactHour = (int) ($settings['auto_compact_hour'] ?? 2);
 
 <!-- General Tab -->
 <?php if ($activeTab === 'general'): ?>
+<h1 class="settings-page-title">General</h1>
+<p class="settings-page-lede">Core configuration for this Borg Backup Server instance.</p>
+
 <?php
 $mmOn = ($settings['maintenance_mode'] ?? '0') === '1';
 $sslEnabled = str_starts_with(\BBS\Core\Config::get('APP_URL', 'https://'), 'https://');
@@ -331,7 +337,7 @@ $sslEnabled = str_starts_with(\BBS\Core\Config::get('APP_URL', 'https://'), 'htt
     <?php endif; ?>
 
     <h5 class="settings-group">Server Backups</h5>
-    <p class="settings-row-help mb-2" style="max-width:70ch;">
+    <p class="settings-group-note">
         <?php if (\BBS\Core\Config::isHosted()): ?>
         These cover the database, configuration and SSH host keys &mdash; <strong>not repository data</strong>. To keep them off-site, add S3 storage to your hosted account.
         <?php else: ?>
@@ -411,6 +417,9 @@ $sslEnabled = str_starts_with(\BBS\Core\Config::get('APP_URL', 'https://'), 'htt
 
 <!-- Email Settings Tab -->
 <?php if ($activeTab === 'notifications'): ?>
+<h1 class="settings-page-title">Email Settings</h1>
+<p class="settings-page-lede">Outgoing mail for password resets, upgrade notices and other system messages.</p>
+
 <?php
 $smtpPortForDefault = (int) ($settings['smtp_port'] ?? 587);
 $smtpSecure = $settings['smtp_secure'] ?? match ($smtpPortForDefault) {
@@ -429,10 +438,9 @@ $smtpSecure = $settings['smtp_secure'] ?? match ($smtpPortForDefault) {
 </div>
 <?php endif; ?>
 
-<p class="settings-row-help mb-3" style="max-width:70ch;">
-    Used for password resets, upgrade notices and other system mail. For backup alerts &mdash; failures,
-    offline clients, storage warnings &mdash; see <a href="/settings?tab=push">Push Notifications</a>,
-    which covers Discord, Slack, Telegram and many others.
+<p class="settings-group-note" style="margin-top:-18px;">
+    For backup alerts &mdash; failures, offline clients, storage warnings &mdash; see
+    <a href="/settings?tab=push">Push Notifications</a>, which covers Discord, Slack, Telegram and many others.
 </p>
 
 <form method="POST" action="/settings">

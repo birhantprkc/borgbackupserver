@@ -1059,17 +1059,20 @@ body.bg-body-secondary {
 
 /* Dark mode — low-contrast palette */
 [data-bs-theme="dark"] {
-    --bs-body-bg: #1a1d21;
+    /* Three surfaces, deliberately separated: topbar, sidebar, canvas. They
+       used to sit within a couple of points of each other, which read as one
+       flat plane with lines drawn on it. */
+    --bs-body-bg: #1a1f25;
     --bs-body-color: #b0b8c1;
     --bs-secondary-color: #8b929a;
     --bs-secondary-bg: #23272b;
     --bs-tertiary-bg: #23272b;
     --bs-border-color: rgba(255, 255, 255, 0.08);
-    --bbs-nav-bg: #16191d;
+    --bbs-nav-bg: #151a1f;
     --bbs-nav-color: rgba(255, 255, 255, 0.5);
     --bbs-nav-hover-bg: rgba(255, 255, 255, 0.06);
     --bbs-nav-hover-color: rgba(255, 255, 255, 0.9);
-    --bbs-topbar-bg: #111315;
+    --bbs-topbar-bg: #101417;
 }
 
 [data-bs-theme="dark"] .card {
@@ -1208,27 +1211,84 @@ body.bg-body-secondary {
 
 /* ── Settings rows ────────────────────────────────────────────────────────
    A settings page is a list of decisions, not a stack of boxes. Each row is
-   label + explanation, the control, and the default, on one line with a
-   hairline between. Cards nested inside cards made every page look busier
-   than the handful of choices on it. */
+   label + explanation, the control, and the default.
+
+   The typography carries the hierarchy: page title, section, setting name,
+   description, metadata — five weights of emphasis rather than five shades of
+   the same grey. Tokens so light mode isn't a hardcoded dark palette. */
+
+:root {
+    --bbs-set-title:   #1f2429;   /* page + section headings */
+    --bbs-set-label:   #2c333b;   /* the setting's name */
+    --bbs-set-desc:    #6b7581;   /* what it does */
+    --bbs-set-meta:    #7f8895;   /* the default */
+    --bbs-set-rule:    rgba(0, 0, 0, 0.07);
+    --bbs-set-control-bg: #fff;
+    --bbs-set-control-border: #ced4da;
+    --bbs-set-control-hover-bg: #fff;
+    --bbs-set-control-hover-border: #adb5bd;
+    --bbs-set-control-color: #212529;
+}
+
+[data-bs-theme="dark"] {
+    --bbs-set-title:   #e5e9ef;
+    --bbs-set-label:   #d8dde5;
+    --bbs-set-desc:    #88919d;
+    --bbs-set-meta:    #7f8895;
+    /* Faint on purpose: rows are separated by air, and the rule only
+       reinforces it. A full-strength line per row reads as a spreadsheet. */
+    --bbs-set-rule:    rgba(255, 255, 255, 0.055);
+    --bbs-set-control-bg: #1d2228;
+    --bbs-set-control-border: #343b45;
+    --bbs-set-control-hover-bg: #20262d;
+    --bbs-set-control-hover-border: #46505c;
+    --bbs-set-control-color: #dce2ea;
+}
+
+/* Page heading — the level above the sections, so a page reads
+   page → section → setting → description rather than starting mid-hierarchy. */
+.settings-page-title {
+    font-size: 1.4rem;
+    font-weight: 650;
+    color: var(--bbs-set-title);
+    margin: 0 0 4px;
+}
+
+.settings-page-lede {
+    color: var(--bbs-set-desc);
+    font-size: 0.875rem;
+    margin: 0 0 26px;
+    max-width: 70ch;
+}
 
 .settings-group {
-    font-size: 1.05rem;
-    font-weight: 600;
-    margin: 30px 0 4px;
+    font-size: 17px;
+    font-weight: 650;
+    color: var(--bbs-set-title);
+    margin: 30px 0 8px;
 }
 
 .settings-group:first-of-type {
-    margin-top: 6px;
+    margin-top: 4px;
+}
+
+/* Section copy that explains a group rather than one setting. */
+.settings-group-note {
+    color: var(--bbs-set-desc);
+    font-size: 13px;
+    line-height: 1.45;
+    max-width: 70ch;
+    margin: -2px 0 10px;
 }
 
 .settings-row {
     display: grid;
-    grid-template-columns: minmax(220px, 1fr) minmax(240px, 400px) minmax(120px, 200px);
-    gap: 16px;
+    grid-template-columns: minmax(480px, 680px) minmax(300px, 400px) minmax(140px, 1fr);
+    column-gap: 36px;
     align-items: center;
-    padding: 14px 0;
-    border-bottom: 1px solid var(--bs-border-color);
+    min-height: 82px;
+    padding: 17px 0;
+    border-bottom: 1px solid var(--bbs-set-rule);
 }
 
 .settings-row:last-child {
@@ -1236,18 +1296,17 @@ body.bg-body-secondary {
 }
 
 .settings-row-label {
+    font-size: 15px;
     font-weight: 600;
-    font-size: 0.9rem;
-    margin-bottom: 2px;
+    color: var(--bbs-set-label);
+    margin-bottom: 3px;
 }
 
 .settings-row-help {
-    /* 60% of the body colour rather than the muted token, so it reads as the
-       same text turned down rather than a different, greyer ink. */
-    color: var(--bs-body-color);
-    opacity: 0.6;
-    font-size: 0.8rem;
-    line-height: 1.35;
+    color: var(--bbs-set-desc);
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 1.45;
     margin: 0;
 }
 
@@ -1258,11 +1317,27 @@ body.bg-body-secondary {
     flex-wrap: wrap;
 }
 
-/* Inputs sit at their natural size rather than stretching across the column,
-   so a two-digit number doesn't get a 400px box. */
+/* Controls sit on a slightly raised surface so they read as things you can
+   act on, rather than dissolving into the page. */
 .settings-row-control .form-control,
 .settings-row-control .form-select {
     max-width: 190px;
+    background-color: var(--bbs-set-control-bg);
+    border: 1px solid var(--bbs-set-control-border);
+    border-radius: 6px;
+    color: var(--bbs-set-control-color);
+}
+
+.settings-row-control .form-control:hover,
+.settings-row-control .form-select:hover {
+    background-color: var(--bbs-set-control-hover-bg);
+    border-color: var(--bbs-set-control-hover-border);
+}
+
+.settings-row-control .form-control:focus,
+.settings-row-control .form-select:focus {
+    border-color: #2684ff;
+    box-shadow: 0 0 0 2px rgba(38, 132, 255, 0.12);
 }
 
 .settings-row-control .form-control-narrow {
@@ -1270,31 +1345,33 @@ body.bg-body-secondary {
 }
 
 .settings-row-unit {
-    color: var(--bs-secondary-color);
-    font-size: 0.85rem;
+    color: var(--bbs-set-desc);
+    font-size: 13px;
 }
 
 .settings-row-default {
-    color: var(--bs-secondary-color);
-    font-size: 0.82rem;
+    color: var(--bbs-set-meta);
+    font-size: 13px;
     text-align: left;
 }
 
 .settings-actions {
     display: flex;
+    align-items: center;
     justify-content: flex-end;
     gap: 10px;
-    padding-top: 22px;
-    margin-top: 6px;
-    border-top: 1px solid var(--bs-border-color);
+    padding-top: 26px;
+    margin-top: 10px;
+    border-top: 1px solid var(--bbs-set-rule);
 }
 
-/* Narrow screens: the three columns become one, and the default sits under
-   the control it describes rather than off on its own line far from it. */
-@media (max-width: 991.98px) {
+/* Below the grid's natural width the three columns stack, and the default
+   sits under the control it describes rather than stranded on its own line. */
+@media (max-width: 1199.98px) {
     .settings-row {
         grid-template-columns: 1fr;
-        gap: 8px;
-        padding: 16px 0;
+        gap: 10px;
+        min-height: 0;
+        padding: 18px 0;
     }
 }
