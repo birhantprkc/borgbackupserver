@@ -156,6 +156,7 @@
             // moving between the two doesn't feel like two different products.
             $settingsPages = [
                 ['general',      'General',            'bi-gear'],
+                ['agent',        'Agent',              'bi-incognito'],
                 ['notifications','Email Settings',     'bi-envelope'],
                 ['push',         'Push Notifications', 'bi-megaphone'],
                 ['push_service', 'Push Service',       'bi-broadcast'],

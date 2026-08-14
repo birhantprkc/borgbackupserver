@@ -9,11 +9,126 @@ if ($activeTab === 'updates') { $updatesSection = $updatesSection ?? ($_GET['sec
 
 
 
+<!-- Agent Tab -->
+<?php if ($activeTab === 'agent'): ?>
+<form method="POST" action="/settings">
+    <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+    <input type="hidden" name="_tab" value="agent">
+    <input type="hidden" name="_checkboxes" value="auto_retry_failed_backups,auto_update_agents,precount_files">
+    <div class="row g-4">
+        <div class="col-lg-8">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header fw-semibold">
+                            <i class="bi bi-incognito me-1"></i> Agent
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Agent Poll Interval (seconds)</label>
+                                <input type="number" class="form-control" name="agent_poll_interval" value="<?= htmlspecialchars($settings['agent_poll_interval'] ?? '30') ?>" min="5" max="300">
+                                <div class="form-text">How often agents check for new tasks.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Stall Detection Timeout (minutes)</label>
+                                <input type="number" class="form-control" name="stall_timeout_minutes" value="<?= htmlspecialchars($settings['stall_timeout_minutes'] ?? '120') ?>" min="10" max="1440">
+                                <div class="form-text">Kill backup jobs with no progress after this many minutes. Set higher for large files. Default: 120 (2 hours).</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Weekly Compact Schedule</label>
+                                <?php
+                                    $compactDay  = (int) ($settings['auto_compact_day'] ?? 6);
+                                    $compactHour = (int) ($settings['auto_compact_hour'] ?? 2);
+                                    $dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                                ?>
+                                <div class="d-flex gap-2">
+                                    <select class="form-select" name="auto_compact_day">
+                                        <?php foreach ($dayNames as $i => $dn): ?>
+                                        <option value="<?= $i ?>"<?= $i === $compactDay ? ' selected' : '' ?>><?= $dn ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <select class="form-select" name="auto_compact_hour">
+                                        <?php for ($h = 0; $h < 24; $h++): ?>
+                                        <option value="<?= $h ?>"<?= $h === $compactHour ? ' selected' : '' ?>><?= sprintf('%02d:00', $h) ?></option>
+                                        <?php endfor; ?>
+                                    </select>
+                                </div>
+                                <div class="form-text">When repositories are auto-compacted (reclaims freed space) each week. Runs at or after this time on the chosen day, so storage that isn't powered on 24/7 still gets compacted. Default: Saturday 02:00.</div>
+                            </div>
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="precount_files" value="1"
+                                           id="precountFiles" <?= (($settings['precount_files'] ?? '1') === '1') ? 'checked' : '' ?>>
+                                    <label class="form-check-label fw-semibold" for="precountFiles">
+                                        Count files before a backup starts
+                                    </label>
+                                </div>
+                                <div class="form-text">
+                                    Only affects a plan's <em>first</em> backup. After that the progress bar uses what the
+                                    previous backup actually stored, which is exact and costs nothing. The first-run count
+                                    walks the whole tree without applying the plan's exclude patterns, so on a plan that
+                                    excludes a large directory it is an over-estimate — turn this off to skip it and show
+                                    progress as a running count with no total. Default: on.
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Notify When Agent Offline (minutes)</label>
+                                <input type="number" class="form-control" name="agent_offline_notify_minutes" value="<?= htmlspecialchars($settings['agent_offline_notify_minutes'] ?? '5') ?>" min="1" max="60">
+                                <div class="form-text">Wait this long before firing an "agent offline" notification or push. Brief network blips and short laptop suspends never become alerts. The agent still <em>shows</em> as offline immediately on dashboards — only the outbound notification is delayed. Default: 5.</div>
+                            </div>
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="auto_retry_failed_backups" value="1"
+                                           id="autoRetryFailed" <?= (($settings['auto_retry_failed_backups'] ?? '1') === '1') ? 'checked' : '' ?>>
+                                    <label class="form-check-label fw-semibold" for="autoRetryFailed">
+                                        Auto-retry backups when agent goes offline
+                                    </label>
+                                </div>
+                                <div class="form-text">
+                                    If a backup fails because the agent disconnects mid-run (laptop closed, network drop), automatically re-queue it so it picks up when the agent reconnects. Real errors (borg path missing, repo locked, etc.) are not retried.
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Max Retry Attempts</label>
+                                <input type="number" class="form-control" name="auto_retry_max_attempts" value="<?= htmlspecialchars($settings['auto_retry_max_attempts'] ?? '3') ?>" min="1" max="10">
+                                <div class="form-text">Cap on offline-induced retries per plan. Once exhausted, a final email is sent (bypassing dedup) so persistent failures aren't hidden. Default: 3.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Give Up On Running Jobs After (minutes)</label>
+                                <input type="number" class="form-control" name="job_offline_grace_minutes" value="<?= htmlspecialchars($settings['job_offline_grace_minutes'] ?? '5') ?>" min="1" max="120">
+                                <div class="form-text">How long a client must be silent <em>and</em> report no progress before its running backup is treated as dead and retried. A busy client is hard to tell apart from a disconnected one, and a backup killed at the wrong moment restarts from the beginning — which on a large plan is hours of work and enough extra load to cause the next disconnect. Raise this on clients with very large backups or slow links. Default: 5.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Retry Backoff (minutes)</label>
+                                <input type="number" class="form-control" name="auto_retry_backoff_minutes" value="<?= htmlspecialchars($settings['auto_retry_backoff_minutes'] ?? '5') ?>" min="1" max="60">
+                                <div class="form-text">Wait before the first retry, doubling each attempt and capped at an hour, so retries don't stack up while the client is still struggling. Default: 5.</div>
+                            </div>
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="auto_update_agents" value="1"
+                                           id="autoUpdateAgents" <?= (($settings['auto_update_agents'] ?? '1') === '1') ? 'checked' : '' ?>>
+                                    <label class="form-check-label fw-semibold" for="autoUpdateAgents">
+                                        Auto-update agents when BBS updates
+                                    </label>
+                                </div>
+                                <div class="form-text">
+                                    After BBS updates to a new version, automatically queue an agent update for every outdated, online client so agents stay in sync. Updates the agent script through the normal mechanism. Default: on.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+        </div>
+    </div>
+    <button type="submit" class="btn btn-primary mt-4">
+        <i class="bi bi-save me-1"></i> Save Settings
+    </button>
+</form>
+<?php endif; ?>
+
 <!-- General Tab -->
 <?php if ($activeTab === 'general'): ?>
 <form method="POST" action="/settings">
     <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
     <input type="hidden" name="_tab" value="general">
+    <input type="hidden" name="_checkboxes" value="debug_mode,force_2fa,maintenance_mode,self_backup_catalogs,self_backup_enabled,telemetry_opt_out">
 
     <div class="row g-4">
         <div class="col-lg-6">
@@ -63,104 +178,6 @@ if ($activeTab === 'updates') { $updatesSection = $updatesSection ?? ($_GET['sec
                 </div>
             </div>
 
-            <div class="card border-0 shadow-sm mt-4">
-                <div class="card-header fw-semibold">
-                    <i class="bi bi-incognito me-1"></i> Agent
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Agent Poll Interval (seconds)</label>
-                        <input type="number" class="form-control" name="agent_poll_interval" value="<?= htmlspecialchars($settings['agent_poll_interval'] ?? '30') ?>" min="5" max="300">
-                        <div class="form-text">How often agents check for new tasks.</div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Stall Detection Timeout (minutes)</label>
-                        <input type="number" class="form-control" name="stall_timeout_minutes" value="<?= htmlspecialchars($settings['stall_timeout_minutes'] ?? '120') ?>" min="10" max="1440">
-                        <div class="form-text">Kill backup jobs with no progress after this many minutes. Set higher for large files. Default: 120 (2 hours).</div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Weekly Compact Schedule</label>
-                        <?php
-                            $compactDay  = (int) ($settings['auto_compact_day'] ?? 6);
-                            $compactHour = (int) ($settings['auto_compact_hour'] ?? 2);
-                            $dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-                        ?>
-                        <div class="d-flex gap-2">
-                            <select class="form-select" name="auto_compact_day">
-                                <?php foreach ($dayNames as $i => $dn): ?>
-                                <option value="<?= $i ?>"<?= $i === $compactDay ? ' selected' : '' ?>><?= $dn ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                            <select class="form-select" name="auto_compact_hour">
-                                <?php for ($h = 0; $h < 24; $h++): ?>
-                                <option value="<?= $h ?>"<?= $h === $compactHour ? ' selected' : '' ?>><?= sprintf('%02d:00', $h) ?></option>
-                                <?php endfor; ?>
-                            </select>
-                        </div>
-                        <div class="form-text">When repositories are auto-compacted (reclaims freed space) each week. Runs at or after this time on the chosen day, so storage that isn't powered on 24/7 still gets compacted. Default: Saturday 02:00.</div>
-                    </div>
-                    <div class="mb-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="precount_files" value="1"
-                                   id="precountFiles" <?= (($settings['precount_files'] ?? '1') === '1') ? 'checked' : '' ?>>
-                            <label class="form-check-label fw-semibold" for="precountFiles">
-                                Count files before a backup starts
-                            </label>
-                        </div>
-                        <div class="form-text">
-                            Only affects a plan's <em>first</em> backup. After that the progress bar uses what the
-                            previous backup actually stored, which is exact and costs nothing. The first-run count
-                            walks the whole tree without applying the plan's exclude patterns, so on a plan that
-                            excludes a large directory it is an over-estimate — turn this off to skip it and show
-                            progress as a running count with no total. Default: on.
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Notify When Agent Offline (minutes)</label>
-                        <input type="number" class="form-control" name="agent_offline_notify_minutes" value="<?= htmlspecialchars($settings['agent_offline_notify_minutes'] ?? '5') ?>" min="1" max="60">
-                        <div class="form-text">Wait this long before firing an "agent offline" notification or push. Brief network blips and short laptop suspends never become alerts. The agent still <em>shows</em> as offline immediately on dashboards — only the outbound notification is delayed. Default: 5.</div>
-                    </div>
-                    <div class="mb-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="auto_retry_failed_backups" value="1"
-                                   id="autoRetryFailed" <?= (($settings['auto_retry_failed_backups'] ?? '1') === '1') ? 'checked' : '' ?>>
-                            <label class="form-check-label fw-semibold" for="autoRetryFailed">
-                                Auto-retry backups when agent goes offline
-                            </label>
-                        </div>
-                        <div class="form-text">
-                            If a backup fails because the agent disconnects mid-run (laptop closed, network drop), automatically re-queue it so it picks up when the agent reconnects. Real errors (borg path missing, repo locked, etc.) are not retried.
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Max Retry Attempts</label>
-                        <input type="number" class="form-control" name="auto_retry_max_attempts" value="<?= htmlspecialchars($settings['auto_retry_max_attempts'] ?? '3') ?>" min="1" max="10">
-                        <div class="form-text">Cap on offline-induced retries per plan. Once exhausted, a final email is sent (bypassing dedup) so persistent failures aren't hidden. Default: 3.</div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Give Up On Running Jobs After (minutes)</label>
-                        <input type="number" class="form-control" name="job_offline_grace_minutes" value="<?= htmlspecialchars($settings['job_offline_grace_minutes'] ?? '5') ?>" min="1" max="120">
-                        <div class="form-text">How long a client must be silent <em>and</em> report no progress before its running backup is treated as dead and retried. A busy client is hard to tell apart from a disconnected one, and a backup killed at the wrong moment restarts from the beginning — which on a large plan is hours of work and enough extra load to cause the next disconnect. Raise this on clients with very large backups or slow links. Default: 5.</div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Retry Backoff (minutes)</label>
-                        <input type="number" class="form-control" name="auto_retry_backoff_minutes" value="<?= htmlspecialchars($settings['auto_retry_backoff_minutes'] ?? '5') ?>" min="1" max="60">
-                        <div class="form-text">Wait before the first retry, doubling each attempt and capped at an hour, so retries don't stack up while the client is still struggling. Default: 5.</div>
-                    </div>
-                    <div class="mb-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="auto_update_agents" value="1"
-                                   id="autoUpdateAgents" <?= (($settings['auto_update_agents'] ?? '1') === '1') ? 'checked' : '' ?>>
-                            <label class="form-check-label fw-semibold" for="autoUpdateAgents">
-                                Auto-update agents when BBS updates
-                            </label>
-                        </div>
-                        <div class="form-text">
-                            After BBS updates to a new version, automatically queue an agent update for every outdated, online client so agents stay in sync. Updates the agent script through the normal mechanism. Default: on.
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
 
         <div class="col-lg-6">
@@ -311,6 +328,7 @@ if ($activeTab === 'updates') { $updatesSection = $updatesSection ?? ($_GET['sec
                 <form method="POST" action="/settings">
                     <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                     <input type="hidden" name="_tab" value="notifications">
+    <input type="hidden" name="_checkboxes" value="">
 
                     <div class="row g-3 mb-3">
                         <div class="col-md-8">
@@ -382,6 +400,7 @@ if ($activeTab === 'updates') { $updatesSection = $updatesSection ?? ($_GET['sec
                 <form method="POST" action="/settings">
                     <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                     <input type="hidden" name="_tab" value="notifications">
+    <input type="hidden" name="_checkboxes" value="inapp_notify_success_events">
                     <div class="form-check form-switch mb-2">
                         <input class="form-check-input" type="checkbox" role="switch"
                                id="inapp_notify_success_events" name="inapp_notify_success_events" value="1"

@@ -150,9 +150,28 @@ class SettingsController extends Controller
             $this->saveSetting('smtp_pass', \BBS\Services\Encryption::encrypt($_POST['smtp_pass']));
         }
 
-        // Checkbox toggles: unchecked = not posted, so explicitly save '0'
+        // Checkbox toggles: unchecked = not posted, so an explicit '0' has to be
+        // written. The catch is which ones — this handler serves several forms,
+        // and resetting every known toggle on every save turns off everything
+        // that happened to be on another page. That is not hypothetical: none
+        // of these forms carries the email_on_* or apprise_on_* boxes any more,
+        // so each save was quietly clearing them, and email_on_* still gates
+        // whether notification email is sent at all.
+        //
+        // So each form declares what it owns in _checkboxes, and only those are
+        // reset. A form that predates this (a page left open across an update)
+        // sends nothing, and then only the boxes actually ticked are written —
+        // it can still turn something on, never silently off.
         $checkboxKeys = ['maintenance_mode', 'email_on_backup_failed', 'email_on_backup_warning', 'email_on_agent_offline', 'email_on_storage_low', 'email_on_missed_schedule', 'apprise_on_backup_failed', 'apprise_on_backup_warning', 'apprise_on_agent_offline', 'apprise_on_storage_low', 'apprise_on_missed_schedule', 'force_2fa', 'debug_mode', 'self_backup_enabled', 'self_backup_catalogs', 'telemetry_opt_out', 'inapp_notify_success_events', 'auto_retry_failed_backups', 'auto_update_agents', 'precount_files'];
-        foreach ($checkboxKeys as $key) {
+
+        if (array_key_exists('_checkboxes', $_POST)) {
+            $declared = array_filter(array_map('trim', explode(',', (string) $_POST['_checkboxes'])));
+            $toWrite = array_values(array_intersect($checkboxKeys, $declared));
+        } else {
+            $toWrite = array_values(array_filter($checkboxKeys, fn($k) => isset($_POST[$k])));
+        }
+
+        foreach ($toWrite as $key) {
             $value = isset($_POST[$key]) ? '1' : '0';
             $existing = $this->db->fetchOne("SELECT `key` FROM settings WHERE `key` = ?", [$key]);
             if ($existing) {
