@@ -729,38 +729,6 @@ unset($ns);
                             <i class="bi bi-pause-circle me-1"></i>Disabled
                         </span>
                         
-<h5 class="settings-group">Service URL Examples</h5>
-<p class="settings-group-note">Apprise addresses each service with a URL. These are the common ones.</p>
-<!-- URL examples: reference, so they sit at the foot of the page -->
-<div class="mb-4">
-    <div class="d-flex align-items-start">
-        <div class="w-100">
-            <div id="urlExamples">
-                <div class="bg-body-secondary rounded p-3 font-monospace small">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <strong>Discord:</strong> discord://webhook_id/webhook_token<br>
-                            <strong>Telegram:</strong> tgram://bot_token/chat_id[:thread]<br>
-                            <strong>Slack:</strong> slack://tokenA/tokenB/tokenC<br>
-                            <strong>Pushover:</strong> pover://user@token
-                        </div>
-                        <div class="col-md-6">
-                            <strong>ntfy:</strong> ntfy://topic<br>
-                            <strong>Gotify:</strong> gotify://hostname/token<br>
-                            <strong>Email:</strong> mailto://user:pass@smtp.example.com<br>
-                            <strong>Webhook:</strong> json://your-webhook-url
-                        </div>
-                    </div>
-                    <div class="mt-2">
-                        <a href="https://github.com/caronc/apprise/wiki#notification-services" target="_blank" class="text-decoration-none">
-                            View all supported services <i class="bi bi-box-arrow-up-right"></i>
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 <?php endif; ?>
                     </td>
                     <td>
@@ -1351,6 +1319,39 @@ function updateBuiltUrl(containerId, schema, prefix) {
     }
 })();
 </script>
+<h5 class="settings-group">Service URL Examples</h5>
+<p class="settings-group-note">Apprise addresses each service with a URL. These are the common ones.</p>
+<!-- URL examples: reference, so they sit at the foot of the page -->
+<div class="mb-4">
+    <div class="d-flex align-items-start">
+        <div class="w-100">
+            <div id="urlExamples">
+                <div class="bg-body-secondary rounded p-3 font-monospace small">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <strong>Discord:</strong> discord://webhook_id/webhook_token<br>
+                            <strong>Telegram:</strong> tgram://bot_token/chat_id[:thread]<br>
+                            <strong>Slack:</strong> slack://tokenA/tokenB/tokenC<br>
+                            <strong>Pushover:</strong> pover://user@token
+                        </div>
+                        <div class="col-md-6">
+                            <strong>ntfy:</strong> ntfy://topic<br>
+                            <strong>Gotify:</strong> gotify://hostname/token<br>
+                            <strong>Email:</strong> mailto://user:pass@smtp.example.com<br>
+                            <strong>Webhook:</strong> json://your-webhook-url
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <a href="https://github.com/caronc/apprise/wiki#notification-services" target="_blank" class="text-decoration-none">
+                            View all supported services <i class="bi bi-box-arrow-up-right"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <?php endif; ?>
 
 
