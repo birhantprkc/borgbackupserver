@@ -193,7 +193,15 @@ $sslEnabled = str_starts_with(\BBS\Core\Config::get('APP_URL', 'https://'), 'htt
 <form method="POST" action="/settings">
     <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
     <input type="hidden" name="_tab" value="general">
-    <input type="hidden" name="_checkboxes" value="debug_mode,force_2fa,maintenance_mode,self_backup_catalogs,self_backup_enabled,telemetry_opt_out">
+    <?php
+    // Declared dynamically: the debug row only renders with ?debug=1, and
+    // naming a toggle that isn't on screen is exactly the bug this mechanism
+    // exists to prevent — saving General would switch debug mode off.
+    $generalToggles = ['force_2fa', 'maintenance_mode', 'self_backup_catalogs', 'self_backup_enabled', 'telemetry_opt_out'];
+    $showDebugRow = isset($_GET['debug']) && $_GET['debug'] === '1';
+    if ($showDebugRow) { $generalToggles[] = 'debug_mode'; }
+    ?>
+    <input type="hidden" name="_checkboxes" value="<?= implode(',', $generalToggles) ?>">
 
     <h5 class="settings-group">Server</h5>
 
@@ -304,7 +312,7 @@ $sslEnabled = str_starts_with(\BBS\Core\Config::get('APP_URL', 'https://'), 'htt
         <div class="settings-row-default">Default: 8 hours</div>
     </div>
 
-    <?php if (isset($_GET['debug']) && $_GET['debug'] === '1'): ?>
+    <?php if ($showDebugRow): ?>
     <div class="settings-row">
         <div>
             <div class="settings-row-label">Debug Mode</div>
