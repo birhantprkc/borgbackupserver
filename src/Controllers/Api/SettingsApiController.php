@@ -109,10 +109,48 @@ class SettingsApiController extends Controller
         return is_array($decoded) ? $decoded : [];
     }
 
+    /**
+     * Defaults the web form applies when a setting has no row.
+     *
+     * Without these, GET reports 0/false for anything never explicitly saved —
+     * so a server whose auto-retry is on with 3 attempts (the shipped
+     * behaviour, no row written) told the app it was off with 0. The number a
+     * client shows has to be the number that will actually be used.
+     */
+    private const DEFAULTS = [
+        'max_queue' => '4',
+        'agent_poll_interval' => '30',
+        'stall_timeout_minutes' => '120',
+        'agent_offline_notify_minutes' => '5',
+        'auto_retry_failed_backups' => '1',
+        'auto_retry_max_attempts' => '3',
+        'job_offline_grace_minutes' => '5',
+        'auto_retry_backoff_minutes' => '5',
+        'precount_files' => '1',
+        'auto_update_agents' => '1',
+        'auto_compact_day' => '6',
+        'auto_compact_hour' => '2',
+        'self_backup_enabled' => '1',
+        'self_backup_retention' => '7',
+        'session_timeout_hours' => '8',
+        'notification_retention_days' => '30',
+        'storage_alert_threshold' => '90',
+        'default_theme' => 'dark',
+        'ssh_port' => '22',
+        'smtp_port' => '587',
+        'push_relay_url' => 'https://push.borgbackupserver.com',
+    ];
+
     private function allSettings(): array
     {
-        $out = [];
+        $out = self::DEFAULTS;
         foreach ($this->db->fetchAll("SELECT `key`, `value` FROM settings") as $row) {
+            // A stored empty string is a real choice for text fields, but for
+            // the numeric and boolean ones it means "never set" and the
+            // default still applies — same as the web form reads it.
+            if ($row['value'] === '' && array_key_exists($row['key'], self::DEFAULTS)) {
+                continue;
+            }
             $out[$row['key']] = $row['value'];
         }
         return $out;
@@ -617,6 +655,80 @@ class SettingsApiController extends Controller
         $this->db->delete('backup_templates', 'id = ?', [$id]);
         http_response_code(204);
         exit;
+    }
+
+    // ── Push notification service ───────────────────────────────────
+
+    /**
+     * GET /api/v1/settings/push
+     *
+     * Not part of the settings section map on purpose. Turning this on is not
+     * a value being saved — it registers the install with an external relay,
+     * which is the first thing that ever leaves the server on its behalf. That
+     * deserves its own endpoint and its own response rather than being one
+     * key in a bulk PATCH that could enable it by accident.
+     */
+    public function showPush(): void
+    {
+        $this->requireApiAdmin();
+        $push = new \BBS\Services\PushService();
+        $this->json(['push' => [
+            'enabled' => $push->isEnabled(),
+            'relay_url' => $push->relayUrl(),
+            'registered' => $push->isConfigured(),
+            'server_id' => $push->serverId(),
+        ]]);
+    }
+
+    /**
+     * PUT /api/v1/settings/push — opt in or out.
+     *
+     * Enabling registers with the relay and reports whether that worked; the
+     * flag is left on either way so a transient failure is retryable rather
+     * than silently reverting, matching the web form.
+     */
+    public function updatePush(): void
+    {
+        $this->requireApiAdmin();
+        $input = $this->getJsonInput();
+        $push = new \BBS\Services\PushService();
+
+        if (!array_key_exists('enabled', $input)) {
+            $this->json(['error' => 'enabled is required'], 422);
+        }
+
+        if (empty($input['enabled'])) {
+            $push->disable();
+            $this->json(['push' => [
+                'enabled' => false,
+                'relay_url' => $push->relayUrl(),
+                'registered' => false,
+                'server_id' => null,
+            ], 'message' => 'Push notifications disabled. Nothing further is sent to the push notification service.']);
+        }
+
+        $this->saveSetting('push_enabled', '1');
+        if (!empty($input['relay_url'])) {
+            $url = rtrim(trim((string) $input['relay_url']), '/');
+            if (!filter_var($url, FILTER_VALIDATE_URL) || !str_starts_with($url, 'https://')) {
+                $this->json(['error' => 'relay_url must be an https URL'], 422);
+            }
+            $this->saveSetting('push_relay_url', $url);
+        }
+
+        $fresh = new \BBS\Services\PushService();
+        [$ok, $message] = $fresh->registerInstall();
+
+        $this->json([
+            'push' => [
+                'enabled' => true,
+                'relay_url' => $fresh->relayUrl(),
+                'registered' => $fresh->isConfigured(),
+                'server_id' => $fresh->serverId(),
+            ],
+            'registered_ok' => $ok,
+            'message' => $message,
+        ], $ok ? 200 : 502);
     }
 
     // ── Client profiles ─────────────────────────────────────────────

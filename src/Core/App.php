@@ -400,6 +400,9 @@ class App
         $this->router->map('PATCH',  '/api/v1/backup-templates/[i:id]', 'Api\\SettingsApiController@updateTemplate');
         $this->router->map('DELETE', '/api/v1/backup-templates/[i:id]', 'Api\\SettingsApiController@deleteTemplate');
 
+        $this->router->map('GET', '/api/v1/settings/push', 'Api\\SettingsApiController@showPush');
+        $this->router->map('PUT', '/api/v1/settings/push', 'Api\\SettingsApiController@updatePush');
+
         // Client profiles (#402 onboarding model). Admin-only, like templates.
         $this->router->map('GET',    '/api/v1/client-profiles', 'Api\\SettingsApiController@listProfiles');
         $this->router->map('POST',   '/api/v1/client-profiles', 'Api\\SettingsApiController@createProfile');
