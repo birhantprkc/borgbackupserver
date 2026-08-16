@@ -326,6 +326,10 @@ class HealthService
             $ageHours = (time() - strtotime($since)) / 3600;
             if ($ageHours > $hours) {
                 $overdue[] = [
+                    // The id so a client of this API can link the row to the
+                    // client it names — the obvious next tap, and it was in
+                    // hand here all along.
+                    'client_id' => (int) $r['id'],
                     'client' => $r['name'],
                     'last_success' => $r['last_success'],
                     'hours_since' => (int) round($ageHours),
