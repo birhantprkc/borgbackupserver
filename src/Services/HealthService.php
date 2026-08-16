@@ -28,7 +28,7 @@ class HealthService
     private const SCHEDULER_CRITICAL_SECONDS = 900;  // 15 minutes
 
     /** Storage fullness, overridable per install. */
-    private const STORAGE_WARN_PERCENT = 85;
+    private const STORAGE_WARN_PERCENT = 90;
     private const STORAGE_CRITICAL_PERCENT = 95;
 
     public const OK = 'ok';
@@ -161,8 +161,17 @@ class HealthService
      */
     private function checkStorage(): array
     {
-        $warnAt = (int) $this->setting('health_storage_warn_percent', (string) self::STORAGE_WARN_PERCENT);
-        $critAt = (int) $this->setting('health_storage_critical_percent', (string) self::STORAGE_CRITICAL_PERCENT);
+        // The same number the low-storage alerts use (Settings → General).
+        // Health and the notification used to disagree — health warned at a
+        // hardcoded 85 while the server setting said 90 — which made the
+        // endpoint look wrong to anyone who had set the field.
+        $warnAt = (int) $this->setting('storage_alert_threshold', (string) self::STORAGE_WARN_PERCENT);
+        if ($warnAt < 1 || $warnAt > 100) {
+            $warnAt = self::STORAGE_WARN_PERCENT;
+        }
+        // Critical stays above the warning even when the warning is set high,
+        // so a threshold of 97 doesn't report every location as critical.
+        $critAt = max(self::STORAGE_CRITICAL_PERCENT, min(100, $warnAt + 1));
 
         $locations = [];
         $statuses = [];

@@ -2215,11 +2215,14 @@ if ((int) date('i') % 15 === 0) {
     }
 }
 
-// Step 6: Check storage for low disk space — per-user thresholds (#156).
-// Each user picks their own trigger: percent-used, free-gb, or disabled.
-// We collect every storage endpoint's stats once, then evaluate each user's
-// threshold against them so the disk_total_space / df syscalls only run once
-// regardless of how many users are on the server.
+// Step 6: Check storage for low disk space.
+// One server-wide threshold (Settings → General), which is also what
+// /api/v1/health reports its storage warning from. Users can still mute the
+// notification for themselves, but they no longer each carry their own number:
+// three different figures in three different places meant the alert, the health
+// endpoint and the settings field could all disagree about the same disk.
+// Stats are collected once and evaluated per user, so the disk_total_space / df
+// syscalls run once regardless of how many users are on the server.
 $notificationService = $notificationService ?? new NotificationService();
 
 $storageLocations = $db->fetchAll("SELECT * FROM storage_locations ORDER BY id");
@@ -2260,32 +2263,21 @@ foreach ($remoteConfigs as $rc) {
     ];
 }
 
-// Evaluate each active user's threshold against the collected stats.
-$users = $db->fetchAll("SELECT id, storage_alert_mode, storage_alert_value FROM users WHERE storage_alert_mode != 'disabled'");
+// The server-wide threshold, shared with HealthService::checkStorage().
+$thresholdRow = $db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'storage_alert_threshold'");
+$storageThreshold = (int) ($thresholdRow['value'] ?? 90);
+if ($storageThreshold < 1 || $storageThreshold > 100) $storageThreshold = 90;
+
+// Notify everyone who hasn't muted low-storage alerts in their profile.
+$users = $db->fetchAll("SELECT id FROM users WHERE storage_alert_mode != 'disabled'");
 foreach ($users as $u) {
-    $mode  = $u['storage_alert_mode'];
-    $value = (int) $u['storage_alert_value'];
     $userId = (int) $u['id'];
     $anyLow = false;
 
     foreach ($storageStats as $st) {
-        $triggered = false;
-        $suffix    = '';
-        if ($mode === 'percent') {
-            if ($st['used_percent'] >= $value) {
-                $triggered = true;
-                $suffix = "{$st['used_percent']}% used";
-            }
-        } elseif ($mode === 'gb_free') {
-            $freeGb = round($st['free_bytes'] / 1073741824, 1);
-            if ($freeGb <= $value) {
-                $triggered = true;
-                $suffix = "{$freeGb} GB free";
-            }
-        }
-        if (!$triggered) continue;
+        if ($st['used_percent'] < $storageThreshold) continue;
 
-        $msg = "{$st['label']} is low on space ({$suffix}) — {$st['detail']}";
+        $msg = "{$st['label']} is low on space ({$st['used_percent']}% used) — {$st['detail']}";
         $notificationService->notify('storage_low', null, null, $msg, 'warning', $userId);
         $anyLow = true;
     }

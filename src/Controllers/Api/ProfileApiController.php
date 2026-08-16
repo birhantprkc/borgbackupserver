@@ -62,8 +62,7 @@ class ProfileApiController extends Controller
     private function storageAlertsPayload(array $user): array
     {
         return [
-            'mode' => $user['storage_alert_mode'] ?: 'percent',
-            'value' => (int) $user['storage_alert_value'],
+            'enabled' => ($user['storage_alert_mode'] ?: 'percent') !== 'disabled',
         ];
     }
 
@@ -262,7 +261,11 @@ class ProfileApiController extends Controller
     }
 
     /**
-     * PUT /api/v1/profile/storage-alerts — the Low-Storage Alerts card (#156).
+     * PUT /api/v1/profile/storage-alerts — {"enabled": true|false}.
+     *
+     * A mute switch only. The threshold itself is server-wide
+     * (`storage_alert_threshold` under /api/v1/settings), so the alert and the
+     * health endpoint report the same disk the same way.
      */
     public function storageAlerts(): void
     {
@@ -270,22 +273,16 @@ class ProfileApiController extends Controller
         $user = $this->apiUser($ctx);
         $input = $this->getJsonInput();
 
-        $mode = (string) ($input['mode'] ?? '');
-        if (!in_array($mode, ['percent', 'gb_free', 'disabled'], true)) {
-            $this->json(['error' => 'mode must be percent, gb_free or disabled'], 422);
+        if (!array_key_exists('enabled', $input)) {
+            $this->json(['error' => 'enabled is required'], 422);
         }
-
-        $value = max(1, (int) ($input['value'] ?? 90));
-        if ($mode === 'percent' && $value > 100) {
-            $value = 100;
-        }
+        $enabled = filter_var($input['enabled'], FILTER_VALIDATE_BOOLEAN);
 
         $this->db->update('users', [
-            'storage_alert_mode' => $mode,
-            'storage_alert_value' => $value,
+            'storage_alert_mode' => $enabled ? 'percent' : 'disabled',
         ], 'id = ?', [(int) $user['id']]);
 
-        $this->json(['storage_alerts' => ['mode' => $mode, 'value' => $value]]);
+        $this->json(['storage_alerts' => ['enabled' => $enabled]]);
     }
 
     // ── Two-factor ──────────────────────────────────────────────────

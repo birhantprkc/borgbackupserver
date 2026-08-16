@@ -293,6 +293,19 @@ $sslEnabled = str_starts_with(\BBS\Core\Config::get('APP_URL', 'https://'), 'htt
 
     <div class="settings-row">
         <div>
+            <div class="settings-row-label">Low-Storage Alert At</div>
+            <p class="settings-row-help">How full a storage location may get before it raises a low-space alert. The same figure decides when <code>/api/v1/health</code> reports a storage warning.</p>
+        </div>
+        <div class="settings-row-control">
+            <input type="number" class="form-control form-control-narrow" name="storage_alert_threshold"
+                   value="<?= htmlspecialchars($settings['storage_alert_threshold'] ?? '90') ?>" min="50" max="99">
+            <span class="settings-row-unit">% full</span>
+        </div>
+        <div class="settings-row-default">Default: 90% full</div>
+    </div>
+
+    <div class="settings-row">
+        <div>
             <div class="settings-row-label">Default Theme</div>
             <p class="settings-row-help">Used for the login page and new users. Anyone can override it in their profile.</p>
         </div>
