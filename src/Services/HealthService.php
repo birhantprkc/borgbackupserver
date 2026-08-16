@@ -263,25 +263,45 @@ class HealthService
                'message' => 'Catalog engine not reachable — browsing and file-level restore are unavailable, backups are unaffected'];
     }
 
+    /**
+     * Who is reachable — reported, but deliberately not a fault on its own.
+     *
+     * Offline used to set a warning, which meant shutting a laptop turned the
+     * whole endpoint yellow while checkBackups() sat next to it saying every
+     * client was inside its allowance. Both sentences were true; only one was
+     * a fault, and worst() gave the naive one the last word. A check that goes
+     * yellow whenever somebody closes a lid is a check people mute, and the
+     * real warnings get muted with it.
+     *
+     * So backups owns the judgement, because it is the check that knows what
+     * each machine is allowed: a client that stays off past its window appears
+     * in overdue[] with its name, how long, and what it was allowed. An agent
+     * reporting an error is still a fault — that is broken regardless of any
+     * backup window.
+     */
     private function checkClients(): array
     {
+        // Same population as checkBackups(): a client with no enabled plan is
+        // not supposed to be backing up, so it has no business colouring the
+        // monitoring signal. Clients still being provisioned are excluded from
+        // the total too, so "23 of 24" can't be stuck one short forever.
         $counts = ['online' => 0, 'offline' => 0, 'error' => 0, 'setup' => 0];
-        foreach ($this->db->fetchAll("SELECT status, COUNT(*) c FROM agents GROUP BY status") as $r) {
+        foreach ($this->db->fetchAll("
+            SELECT a.status, COUNT(*) c
+            FROM agents a
+            WHERE EXISTS (
+                SELECT 1 FROM backup_plans bp WHERE bp.agent_id = a.id AND bp.enabled = 1
+            )
+            GROUP BY a.status
+        ") as $r) {
             $counts[$r['status']] = (int) $r['c'];
         }
-        $total = array_sum($counts);
+        $total = $counts['online'] + $counts['offline'] + $counts['error'];
 
-        // Clients still being set up have never checked in, so they are not a
-        // fault. Ones that went offline after working are.
-        $status = self::OK;
-        $message = sprintf('%d of %d online', $counts['online'], $total);
-        if ($counts['error'] > 0) {
-            $status = self::WARNING;
-            $message = sprintf('%d client(s) reporting an error', $counts['error']);
-        } elseif ($counts['offline'] > 0) {
-            $status = self::WARNING;
-            $message = sprintf('%d of %d client(s) offline', $counts['offline'], $total);
-        }
+        $status = $counts['error'] > 0 ? self::WARNING : self::OK;
+        $message = $counts['error'] > 0
+            ? sprintf('%d client(s) reporting an error', $counts['error'])
+            : sprintf('%d of %d online', $counts['online'], $total);
 
         return ['status' => $status, 'message' => $message, 'counts' => $counts];
     }
