@@ -1505,7 +1505,17 @@ $renderProfileForm = function (?array $p) use ($templates, $freqLabels, $dowLabe
         <div class="col-md-3">
             <label class="form-label fw-semibold">Run Hours</label>
             <input type="text" name="times" class="form-control" value="<?= $v('times', '02:00') ?>" placeholder="02:00">
-            <div class="form-text">Comma-separated for several runs a day.</div>
+            <div class="form-text">24-hour, comma-separated for several runs a day.</div>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label fw-semibold">Timezone</label>
+            <select name="timezone" class="form-select">
+                <option value="">Server timezone (<?= htmlspecialchars((new \BBS\Services\ClientProfileService())->timezoneFor([])) ?>)</option>
+                <?php foreach (\DateTimeZone::listIdentifiers() as $tzId): ?>
+                <option value="<?= htmlspecialchars($tzId) ?>" <?= ($p['timezone'] ?? '') === $tzId ? 'selected' : '' ?>><?= htmlspecialchars($tzId) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <div class="form-text">The zone those run hours are in. Applying the profile sets it on every client's schedule, so they all run at the same moment.</div>
         </div>
         <div class="col-md-3 profile-dow" style="display:none;">
             <label class="form-label fw-semibold">Day of Week</label>
@@ -1732,7 +1742,7 @@ function openProfileModal(profile) {
     // Blank for a new profile, the stored values for an existing one. Nulls
     // stay empty so the "follow the server setting" placeholder shows through.
     var fields = ['name','description','template_id','frequency','times','day_of_week','day_of_month',
-                  'prune_minutes','prune_hours','prune_days','prune_weeks','prune_months','prune_years',
+                  'timezone','prune_minutes','prune_hours','prune_days','prune_weeks','prune_months','prune_years',
                   'auto_retry_max_attempts','job_offline_grace_minutes','auto_retry_backoff_minutes','backup_overdue_hours'];
     var blanks = {frequency:'daily', times:'02:00', prune_days:'7', prune_weeks:'4', prune_months:'6',
                   prune_minutes:'0', prune_hours:'0', prune_years:'0'};

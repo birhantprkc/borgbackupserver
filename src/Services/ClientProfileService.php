@@ -92,6 +92,22 @@ class ClientProfileService
         return $out;
     }
 
+    /**
+     * The timezone a profile's run hours are stated in.
+     *
+     * Null on the profile means the server's own zone rather than whoever
+     * happens to be looking — a schedule that moved when a different admin
+     * applied a profile would be a worse bug than the one this fixes.
+     */
+    public function timezoneFor(array $profile): string
+    {
+        if (!empty($profile['timezone'])) {
+            return $profile['timezone'];
+        }
+        $row = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'server_timezone'");
+        return ($row['value'] ?? '') ?: date_default_timezone_get();
+    }
+
     /** Hours a client may go without a successful backup before it is overdue. */
     public function overdueHoursForAgent(int $agentId): int
     {
@@ -143,6 +159,7 @@ class ClientProfileService
             'template_name' => $template['name'] ?? null,
             'frequency'    => $profile['frequency'],
             'times'        => $profile['times'],
+            'timezone'     => $this->timezoneFor($profile),
             'day_of_week'  => $profile['day_of_week'],
             'day_of_month' => $profile['day_of_month'],
             'prune_minutes' => (int) $profile['prune_minutes'],
@@ -212,6 +229,11 @@ class ClientProfileService
                 $this->db->update('schedules', [
                     'frequency'    => $profile['frequency'],
                     'times'        => $profile['times'],
+                    // The zone goes with the time. Without this the same
+                    // "01:00" lands in schedules that each read it in their
+                    // own zone, and the profile appears to run at different
+                    // hours on different clients (#411).
+                    'timezone'     => $this->timezoneFor($profile),
                     'day_of_week'  => $profile['day_of_week'],
                     'day_of_month' => $profile['day_of_month'],
                     // next_run is recalculated by the scheduler on its next

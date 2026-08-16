@@ -747,6 +747,10 @@ class SettingsApiController extends Controller
             'schedule' => [
                 'frequency' => $row['frequency'],
                 'times' => $row['times'],
+                // Null = the server's zone; 'timezone_effective' is what an
+                // apply would actually write onto the schedules.
+                'timezone' => $row['timezone'],
+                'timezone_effective' => (new \BBS\Services\ClientProfileService())->timezoneFor($row),
                 'day_of_week' => $row['day_of_week'] !== null ? (int) $row['day_of_week'] : null,
                 'day_of_month' => $row['day_of_month'],
             ],
@@ -829,6 +833,13 @@ class SettingsApiController extends Controller
         }
         if (array_key_exists('times', $schedule)) {
             $data['times'] = substr(trim((string) $schedule['times']), 0, 255) ?: '02:00';
+        }
+        if (array_key_exists('timezone', $schedule)) {
+            $tz = $schedule['timezone'];
+            if ($tz !== null && $tz !== '' && !in_array($tz, \DateTimeZone::listIdentifiers(), true)) {
+                return [null, 'schedule.timezone must be a valid timezone identifier'];
+            }
+            $data['timezone'] = ($tz === '' ) ? null : $tz;
         }
         if (array_key_exists('day_of_week', $schedule)) {
             $dow = $schedule['day_of_week'];

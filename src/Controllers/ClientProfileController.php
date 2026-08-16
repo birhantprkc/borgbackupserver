@@ -24,6 +24,10 @@ class ClientProfileController extends Controller
             'template_id' => !empty($_POST['template_id']) ? (int) $_POST['template_id'] : null,
             'frequency'   => in_array($frequency, ['hourly', 'daily', 'weekly', 'monthly'], true) ? $frequency : 'daily',
             'times'       => $times !== '' ? substr($times, 0, 255) : '02:00',
+            // Blank stays blank: it means "the server's zone", resolved when
+            // the profile is applied rather than frozen at edit time.
+            'timezone'    => in_array($_POST['timezone'] ?? '', \DateTimeZone::listIdentifiers(), true)
+                ? $_POST['timezone'] : null,
             'day_of_week'  => ($frequency === 'weekly' && $_POST['day_of_week'] !== '') ? (int) $_POST['day_of_week'] : null,
             'day_of_month' => ($frequency === 'monthly' && $_POST['day_of_month'] !== '') ? substr((string) $_POST['day_of_month'], 0, 20) : null,
         ];

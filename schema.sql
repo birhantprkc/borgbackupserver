@@ -581,6 +581,8 @@ CREATE TABLE client_profiles (
     template_id INT DEFAULT NULL,
     frequency VARCHAR(30) NOT NULL DEFAULT 'daily',
     times VARCHAR(255) DEFAULT '02:00',
+    -- The zone those run hours are in. Null = the server's (#411).
+    timezone VARCHAR(64) DEFAULT NULL,
     day_of_week TINYINT DEFAULT NULL,
     day_of_month VARCHAR(20) DEFAULT NULL,
     prune_minutes INT NOT NULL DEFAULT 0,

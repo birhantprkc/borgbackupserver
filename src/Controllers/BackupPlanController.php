@@ -70,13 +70,19 @@ class BackupPlanController extends Controller
         // Create associated schedule
         $nextRun = $this->calculateNextRun($frequency, $times, $dayOfWeek, $dayOfMonth);
 
+        // The zone comes from the client's profile, not from whoever is
+        // creating the plan: two admins in different places would otherwise
+        // produce schedules that run hours apart from the same profile (#411).
+        $planTz = (new \BBS\Services\ClientProfileService())->planDefaults($agentId)['timezone']
+            ?? ($_SESSION['timezone'] ?? 'America/New_York');
+
         $this->db->insert('schedules', [
             'backup_plan_id' => $planId,
             'frequency' => $frequency,
             'times' => $times ?: null,
             'day_of_week' => $dayOfWeek,
             'day_of_month' => $dayOfMonth,
-            'timezone' => $_SESSION['timezone'] ?? 'America/New_York',
+            'timezone' => $planTz,
             'enabled' => $frequency === 'manual' ? 0 : 1,
             'next_run' => $nextRun,
         ]);
