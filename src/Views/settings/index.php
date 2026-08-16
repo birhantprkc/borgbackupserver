@@ -2426,7 +2426,7 @@ document.getElementById('appIconFileInput').addEventListener('change', function(
                         <td class="fw-semibold">
                             <?php if (($token['kind'] ?? 'user') === 'mobile'): ?>
                             <i class="bi bi-phone me-1 text-muted"></i><?= htmlspecialchars($token['device_name'] ?: $token['name']) ?>
-                            <span class="badge bg-info-subtle text-info-emphasis ms-2" title="Signed in from the mobile app<?= !empty($token['last_seen_ip']) ? ' — last seen from ' . htmlspecialchars($token['last_seen_ip']) : '' ?>">mobile</span>
+                            <span class="badge bg-info-subtle text-info-emphasis ms-2" title="Signed in from a mobile session<?= !empty($token['last_seen_ip']) ? ' — last seen from ' . htmlspecialchars($token['last_seen_ip']) : '' ?>">mobile</span>
                             <?php else: ?>
                             <i class="bi bi-key me-1 text-muted"></i><?= htmlspecialchars($token['name']) ?>
                             <?php endif; ?>

@@ -10,7 +10,7 @@ use BBS\Services\Mailer;
 use BBS\Services\SshKeyManager;
 
 /**
- * Token-authenticated settings API (#bbsapp) — see docs/API.md for the shapes.
+ * Token-authenticated settings API — see docs/API.md for the shapes.
  *
  * Settings are server-wide, so everything here is admin-only, matching
  * SettingsController::requireAdmin(). The web controller writes the whole

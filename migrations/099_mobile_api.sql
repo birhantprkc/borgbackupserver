@@ -1,6 +1,6 @@
--- Mobile app API support (#bbsapp):
+-- Token-authenticated API support:
 -- 1. api_tokens grows device/expiry metadata for kind='mobile' tokens
---    minted by password/SSO login from the mobile app.
+--    minted by password or SSO login through the API.
 -- 2. auth_challenges stores short-lived single-use secrets for the
 --    stateless mobile auth flows: the 2FA challenge between password
 --    and TOTP verification, and the OIDC exchange code between the

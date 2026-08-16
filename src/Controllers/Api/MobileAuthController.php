@@ -8,7 +8,7 @@ use BBS\Services\OidcService;
 use BBS\Services\TwoFactorService;
 
 /**
- * Auth endpoints for the mobile app (bbsapp). Password/TOTP/SSO sign-in
+ * Token-authenticated sign-in endpoints. Password/TOTP/SSO sign-in
  * flows that mint kind='mobile' bearer tokens, plus session management.
  *
  * Mobile tokens authenticate through requireApiAuth() (no admin gate) and

@@ -498,8 +498,8 @@ CREATE TABLE api_tokens (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- Push notification device registrations for the mobile app.
--- One row per (user, device); re-registration updates the APNs token.
+-- Push notification device registrations.
+-- One row per (user, device); re-registration updates the device token.
 CREATE TABLE push_tokens (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,

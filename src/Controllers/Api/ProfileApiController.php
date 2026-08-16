@@ -10,7 +10,7 @@ use BBS\Services\Mailer;
 use BBS\Services\Encryption;
 
 /**
- * Token-authenticated equivalents of the web My Profile page (#bbsapp).
+ * Token-authenticated equivalents of the web My Profile page.
  *
  * ProfileController does all of this already, but as session-authenticated,
  * CSRF-guarded form posts that answer with a redirect and a flash message.

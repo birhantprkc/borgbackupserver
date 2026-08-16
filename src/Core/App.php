@@ -283,7 +283,7 @@ class App
         $this->router->map('GET', '/get-agent', 'Api\\AgentApiController@getAgent');
         $this->router->map('GET', '/get-agent-windows', 'Api\\AgentApiController@getAgentWindows');
 
-        // Mobile app auth + session API (#bbsapp). discover/login/2fa/oidc
+        // Token auth + session API. discover/login/2fa/oidc
         // are unauthenticated by design (they ARE the login); the rest use
         // requireApiAuth() (Bearer, no admin gate, PermissionService scoping).
         $this->router->map('GET', '/api/v1/auth/discover', 'Api\\MobileAuthController@discover');
@@ -371,7 +371,7 @@ class App
         $this->router->map('GET', '/api/v1/schedules', 'Api\\AdminApiController@listSchedules');
         $this->router->map('GET', '/api/v1/schedules/day', 'Api\\AdminApiController@schedulesDay');
 
-        // My Profile (#bbsapp) — token-authenticated twins of ProfileController
+        // My Profile — token-authenticated twins of ProfileController
         $this->router->map('GET',   '/api/v1/profile', 'Api\\ProfileApiController@show');
         $this->router->map('PATCH', '/api/v1/profile', 'Api\\ProfileApiController@update');
         $this->router->map('GET',   '/api/v1/profile/timezones', 'Api\\ProfileApiController@timezones');
@@ -387,7 +387,7 @@ class App
         $this->router->map('POST',  '/api/v1/reports/generate', 'Api\\ProfileApiController@generateReport');
         $this->router->map('POST',  '/api/v1/reports/[i:id]/email', 'Api\\ProfileApiController@emailReport');
 
-        // Settings (#bbsapp) — admin-only, shapes documented in docs/API.md
+        // Settings — admin-only, shapes documented in docs/API.md
         $this->router->map('GET',    '/api/v1/settings', 'Api\\SettingsApiController@show');
         $this->router->map('POST',   '/api/v1/settings/email/test', 'Api\\SettingsApiController@testEmail');
         $this->router->map('PATCH',  '/api/v1/settings/[a:section]', 'Api\\SettingsApiController@updateSection');

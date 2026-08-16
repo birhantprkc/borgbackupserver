@@ -1717,8 +1717,8 @@ class AdminApiController extends Controller
     }
 
     /**
-     * GET /api/v1/dashboard — one round trip for the mobile dashboard,
-     * scoped to the caller's agents (#bbsapp).
+     * GET /api/v1/dashboard — one round trip for a status screen,
+     * scoped to the caller's agents .
      */
     public function dashboard(): void
     {
@@ -2805,7 +2805,7 @@ class AdminApiController extends Controller
     /**
      * GET /api/v1/schedules/day?date=YYYY-MM-DD&client_id=N
      *
-     * The mobile Schedules screen: one day of concrete occurrences for the
+     * A schedules screen: one day of concrete occurrences for the
      * whole server — what already ran and what is still coming — plus the
      * Mon–Sun day-picker counts for the surrounding week.
      *
@@ -3161,7 +3161,7 @@ class AdminApiController extends Controller
         return $occurrences;
     }
 
-    // ── Notifications (#bbsapp) ─────────────────────────────────────
+    // ── Notifications ─────────────────────────────────────
 
     /**
      * GET /api/v1/notifications?limit=N&offset=N
@@ -3211,7 +3211,7 @@ class AdminApiController extends Controller
         $this->json(['status' => 'ok', 'unread' => 0]);
     }
 
-    // ── Jobs by id / queue actions (#bbsapp) ────────────────────────
+    // ── Jobs by id / queue actions ────────────────────────
 
     /**
      * GET /api/v1/jobs/{id} — job detail + live progress without needing
@@ -3382,7 +3382,7 @@ class AdminApiController extends Controller
         $this->json(['status' => 'ok', 'job_id' => (int) $newJobId, 'message' => "Job #{$id} retried as #{$newJobId}"]);
     }
 
-    // ── Catalog browse + restore (#bbsapp) ──────────────────────────
+    // ── Catalog browse + restore ──────────────────────────
 
     /**
      * GET /api/v1/clients/{id}/repositories/{repoId}/archives/{archiveId}/files
@@ -3625,7 +3625,7 @@ class AdminApiController extends Controller
         $this->json(['status' => 'ok', 'job_id' => (int) $jobId]);
     }
 
-    // ── Push registration (#bbsapp) ─────────────────────────────────
+    // ── Push registration ─────────────────────────────────
 
     /**
      * POST /api/v1/push/register — {device_id, apns_token, platform}.

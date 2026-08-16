@@ -1,5 +1,5 @@
--- Push notification device registrations for the mobile app (#bbsapp).
--- One row per (user, device); re-registration updates the APNs token.
+-- Push notification device registrations.
+-- One row per (user, device); re-registration updates the device token.
 -- Server-side push delivery consumes this table.
 CREATE TABLE IF NOT EXISTS push_tokens (
     id INT AUTO_INCREMENT PRIMARY KEY,

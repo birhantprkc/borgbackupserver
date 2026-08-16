@@ -40,7 +40,7 @@ class AuthController extends Controller
     }
 
     /**
-     * Reusable (also from the mobile API): is password login disabled in
+     * Reusable (also from the API): is password login disabled in
      * favour of SSO-only sign-in?
      */
     public static function isLocalLoginDisabled(?OidcService $oidc = null): bool
@@ -193,7 +193,7 @@ class AuthController extends Controller
             $redirectUri = "{$scheme}://{$host}/login/oidc/callback";
         }
 
-        // Mobile-app brokered SSO (#bbsapp): /api/v1/auth/oidc/start stashed
+        // API-brokered SSO: /api/v1/auth/oidc/start stashed
         // device info in the session before redirecting to the IdP. The IdP
         // returns to this same registered callback URL (so customers never
         // touch their IdP config); when the marker is present we finish by

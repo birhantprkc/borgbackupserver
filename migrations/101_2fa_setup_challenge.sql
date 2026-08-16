@@ -1,4 +1,4 @@
--- Mobile profile API (#bbsapp): pending 2FA enrolment secrets.
+-- Profile API: pending 2FA enrolment secrets.
 --
 -- The web 2FA setup flow parks the not-yet-confirmed secret in
 -- $_SESSION['2fa_setup_secret'] between "show me the QR" and "here is my
