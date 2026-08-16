@@ -7,6 +7,7 @@ use BBS\Core\Controller;
 use BBS\Controllers\StorageLocationController;
 use BBS\Services\BorgCommandBuilder;
 use BBS\Services\Encryption;
+use BBS\Services\ServerStats;
 use BBS\Services\SshKeyManager;
 
 class AdminApiController extends Controller
@@ -1798,6 +1799,92 @@ class AdminApiController extends Controller
                 array_merge([(int) $ctx['id']], $agentParams));
         }
 
+        // ── Backup Summary ──────────────────────────────────────────────
+        // Scoped like everything else here: a non-admin sees the totals for
+        // the clients they can reach, not the install's.
+        $arch = $this->db->fetchOne("
+            SELECT COUNT(*) AS recovery_points,
+                   COALESCE(SUM(ar.original_size), 0) AS original_bytes,
+                   COALESCE(SUM(ar.deduplicated_size), 0) AS deduplicated_bytes,
+                   MAX(ar.created_at) AS last_backup_at
+            FROM archives ar
+            JOIN repositories r ON r.id = ar.repository_id
+            JOIN agents a ON a.id = r.agent_id
+            WHERE {$agentWhere}", $agentParams) ?: [];
+
+        // "On disk" is what the repositories actually occupy, which is not the
+        // same as the sum of archive dedup sizes — compaction and pruning move
+        // one without the other. The web's tile reads repository size, so this
+        // does too.
+        $onDisk = (int) ($this->db->fetchOne("
+            SELECT COALESCE(SUM(r.size_bytes), 0) AS b
+            FROM repositories r JOIN agents a ON a.id = r.agent_id
+            WHERE {$agentWhere}", $agentParams)['b'] ?? 0);
+
+        $origBytes = (int) ($arch['original_bytes'] ?? 0);
+        $dedupBytes = (int) ($arch['deduplicated_bytes'] ?? 0);
+        $savings = 0.0;
+        if ($origBytes > 0) {
+            $savings = round((1 - $dedupBytes / $origBytes) * 100, 1);
+            // Clamped exactly as the web does (#191): rounding can reach 100
+            // while dedup is still non-zero, and "100% saved" reads as a bug.
+            if ($savings >= 100 && $dedupBytes > 0) {
+                $savings = 99.9;
+            }
+        }
+
+        $archives = [
+            'recovery_points' => (int) ($arch['recovery_points'] ?? 0),
+            'original_bytes' => $origBytes,
+            'deduplicated_bytes' => $dedupBytes,
+            'on_disk_bytes' => $onDisk,
+            'dedup_savings_percent' => $savings,
+            'last_backup_at' => $arch['last_backup_at'] ?? null,
+        ];
+
+        // ── Jobs (last 24h), one bucket per hour ────────────────────────
+        // Always 24 buckets including the empty ones: a chart with gaps is a
+        // different shape from a chart with zeroes, and every client
+        // reconstructing the missing hours would be re-deriving them against a
+        // clock it does not share with this server.
+        $rows = $this->db->fetchAll("
+            SELECT DATE_FORMAT(bj.completed_at, '%Y-%m-%d %H:00:00') AS hour,
+                   bj.task_type, bj.status, COUNT(*) AS c
+            FROM backup_jobs bj
+            JOIN agents a ON a.id = bj.agent_id
+            WHERE bj.completed_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
+              AND bj.status IN ('completed', 'failed')
+              AND {$agentWhere}
+            GROUP BY hour, bj.task_type, bj.status", $agentParams);
+
+        $restoreTypes = ['restore', 'restore_mysql', 'restore_pg', 'restore_mongo'];
+        $buckets = [];
+        foreach ($rows as $row) {
+            $h = $row['hour'];
+            $buckets[$h] ??= ['backup' => 0, 'restore' => 0, 's3_sync' => 0, 'failed' => 0];
+            $n = (int) $row['c'];
+            // A failed job is counted once, in `failed` only — the four series
+            // stack, so counting it in its type as well would overstate the bar.
+            if ($row['status'] === 'failed') {
+                $buckets[$h]['failed'] += $n;
+                continue;
+            }
+            if ($row['task_type'] === 'backup') {
+                $buckets[$h]['backup'] += $n;
+            } elseif (in_array($row['task_type'], $restoreTypes, true)) {
+                $buckets[$h]['restore'] += $n;
+            } elseif ($row['task_type'] === 's3_sync') {
+                $buckets[$h]['s3_sync'] += $n;
+            }
+        }
+
+        $jobs24h = [];
+        $hourDt = new \DateTime('now', new \DateTimeZone('UTC'));
+        for ($i = 23; $i >= 0; $i--) {
+            $h = (clone $hourDt)->modify("-{$i} hours")->format('Y-m-d H:00:00');
+            $jobs24h[] = ['hour' => $h] + ($buckets[$h] ?? ['backup' => 0, 'restore' => 0, 's3_sync' => 0, 'failed' => 0]);
+        }
+
         $maint = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'maintenance_mode'");
 
         // Feeds the account menu's upgrade item. Admin-only like the web
@@ -1814,6 +1901,8 @@ class AdminApiController extends Controller
         }
 
         $this->json([
+            'archives' => $archives,
+            'jobs_24h' => $jobs24h,
             'clients' => $clients,
             'jobs' => $jobs,
             'storage' => $storage,
@@ -1822,6 +1911,102 @@ class AdminApiController extends Controller
             'maintenance_mode' => ($maint['value'] ?? '0') === '1',
             'updates' => $updates,
             'generated_at' => date('c'),
+        ]);
+    }
+
+    /**
+     * GET /api/v1/server-stats
+     *
+     * Its own endpoint rather than more keys on /dashboard, for the same
+     * reason the web split them: this is the part worth polling on a short
+     * timer, and it shells out to read the system.
+     *
+     * Numbers, not formatted strings. The web endpoint formats server-side
+     * because its JavaScript only swaps text; a client that draws meters needs
+     * the figures.
+     */
+    public function serverStats(): void
+    {
+        $ctx = $this->requireApiAuth();
+        if (($ctx['role'] ?? '') !== 'admin') {
+            $this->json(['error' => 'Admin access required'], 403);
+        }
+
+        $cpu = ServerStats::getCpuLoad();
+        $mem = ServerStats::getMemory();
+        $net = ServerStats::getNetworkThroughput();
+
+        // Byte figures per mount, rather than getPartitions()'s df-formatted
+        // strings ("4.0T"), which a client cannot do arithmetic on.
+        $partitions = [];
+        foreach (ServerStats::getPartitions() as $p) {
+            $mount = $p['mount'] ?? null;
+            if (!$mount) {
+                continue;
+            }
+            $du = ServerStats::getDiskUsage($mount);
+            $partitions[] = [
+                'mount' => $mount,
+                'used_bytes' => $du ? (int) $du['used'] : null,
+                'total_bytes' => $du ? (int) $du['total'] : null,
+                'percent' => (int) ($p['percent'] ?? ($du['percent'] ?? 0)),
+            ];
+        }
+
+        // Which mount the health card features. Same fallback the web uses —
+        // sent rather than described, so a client doesn't reimplement it and
+        // arrive somewhere else.
+        $featured = null;
+        if (\BBS\Core\Config::isHosted()) {
+            $row = $this->db->fetchOne("SELECT path FROM storage_locations WHERE is_default = 1");
+            if ($row && !empty($row['path'])) {
+                $featured = rtrim($row['path'], '/') ?: '/';
+            }
+        }
+        $mounts = array_column($partitions, 'mount');
+        if ($featured === null || !in_array($featured, $mounts, true)) {
+            foreach (['/var/bbs', '/'] as $candidate) {
+                if (in_array($candidate, $mounts, true)) {
+                    $featured = $candidate;
+                    break;
+                }
+            }
+        }
+        // A hosted default mount that df didn't list still gets measured, so
+        // the card has something to feature.
+        if ($featured !== null && !in_array($featured, $mounts, true)) {
+            $du = ServerStats::getDiskUsage($featured);
+            if ($du) {
+                $partitions[] = [
+                    'mount' => $featured,
+                    'used_bytes' => (int) $du['used'],
+                    'total_bytes' => (int) $du['total'],
+                    'percent' => (int) $du['percent'],
+                ];
+            } else {
+                $featured = $mounts[0] ?? null;
+            }
+        }
+
+        $this->json([
+            'cpu' => [
+                'percent' => (float) ($cpu['percent'] ?? 0),
+                'load_1min' => (float) ($cpu['1min'] ?? 0),
+                'cores' => (int) ($cpu['cores'] ?? 1),
+            ],
+            'memory' => [
+                'percent' => (float) ($mem['percent'] ?? 0),
+                'used_bytes' => (int) ($mem['used'] ?? 0),
+                'total_bytes' => (int) ($mem['total'] ?? 0),
+            ],
+            // null rather than 0 when throughput cannot be read at all, so
+            // "idle" and "unavailable" stay distinguishable.
+            'network' => [
+                'rx_bytes_per_sec' => $net ? (int) $net['rx_bps'] : null,
+                'tx_bytes_per_sec' => $net ? (int) $net['tx_bps'] : null,
+            ],
+            'partitions' => $partitions,
+            'featured_mount' => $featured,
         ]);
     }
 
