@@ -187,12 +187,31 @@ except:
         exit 1
     fi
 
-    # Refuse to install inside a container without an init system: the service
-    # can't be kept running there, so the agent registers once and then drops
-    # offline permanently (#370). `command -v systemctl` is not enough — the
-    # binary can exist in containers where systemd isn't PID 1.
+    # Refuse to install inside a container with no service manager: the agent
+    # can't be kept running there, so it registers once and then drops offline
+    # permanently (#370). `command -v systemctl` is not enough — the binary can
+    # exist in containers where systemd isn't PID 1.
+    #
+    # But "no systemd" is not the same as "no init". LXC/LXD system containers
+    # commonly run sysvinit or OpenRC, and this installer has a working
+    # /etc/init.d path for exactly those — refusing them turned away hosts it
+    # was already serving. PID 1 is what actually answers the question: a real
+    # init supervises services, whereas a Docker container usually runs the
+    # payload itself as PID 1 and restarts nothing. tini and dumb-init are
+    # deliberately absent below; they reap zombies for one process, they do not
+    # start init scripts.
     if [ ! -d /run/systemd/system ] && { [ -f /.dockerenv ] || grep -qE 'docker|containerd|kubepods|lxc' /proc/1/cgroup 2>/dev/null; }; then
-        print_error "This looks like a container without an init system (no systemd)."
+        pid1_comm="$(cat /proc/1/comm 2>/dev/null || echo unknown)"
+        case "$pid1_comm" in
+            systemd|init|sysvinit|openrc-init|runit|s6-svscan|supervisord|launchd) has_init=1 ;;
+            *) has_init=0 ;;
+        esac
+    else
+        has_init=1
+    fi
+
+    if [ "${has_init:-1}" -eq 0 ]; then
+        print_error "This looks like a container with no service manager (PID 1 is '${pid1_comm}')."
         print_error "The agent needs a service manager to keep running — installing here"
         print_error "would register the client once and then leave it permanently offline."
         print_error "Install the agent on the host that owns the data, or run it as its own"
