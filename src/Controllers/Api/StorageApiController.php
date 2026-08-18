@@ -26,6 +26,14 @@ class StorageApiController extends Controller
     /** Providers the web wizard offers; anything else is a plain SSH host. */
     private const PROVIDERS = ['borgbase', 'hetzner', 'rsync.net'];
 
+    /** Same private helper the other Api\* controllers each carry. */
+    private function getJsonInput(): array
+    {
+        $raw = file_get_contents('php://input');
+        $data = json_decode($raw, true);
+        return is_array($data) ? $data : [];
+    }
+
     // ── Local storage locations ─────────────────────────────────────
 
     /**
