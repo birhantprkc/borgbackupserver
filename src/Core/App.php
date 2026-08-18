@@ -354,6 +354,19 @@ class App
         $this->router->map('GET', '/api/v1/storage', 'Api\\AdminApiController@listStorageLocations');
         $this->router->map('POST', '/api/v1/storage', 'Api\\AdminApiController@createStorageLocation');
         $this->router->map('GET', '/api/v1/storage/capacity', 'Api\\AdminApiController@getStorageCapacity');
+        // Rename / re-default / unregister a local location. The path is not
+        // editable — repositories live under it.
+        $this->router->map('PUT',    '/api/v1/storage/[i:id]', 'Api\\StorageApiController@updateLocation');
+        $this->router->map('DELETE', '/api/v1/storage/[i:id]', 'Api\\StorageApiController@deleteLocation');
+
+        // Remote SSH targets. /test before /[i:id] so the literal wins.
+        $this->router->map('GET',    '/api/v1/remote-ssh-configs', 'Api\\StorageApiController@listRemote');
+        $this->router->map('POST',   '/api/v1/remote-ssh-configs', 'Api\\StorageApiController@createRemote');
+        $this->router->map('POST',   '/api/v1/remote-ssh-configs/test', 'Api\\StorageApiController@testNewRemote');
+        $this->router->map('GET',    '/api/v1/remote-ssh-configs/[i:id]', 'Api\\StorageApiController@showRemote');
+        $this->router->map('PUT',    '/api/v1/remote-ssh-configs/[i:id]', 'Api\\StorageApiController@updateRemote');
+        $this->router->map('DELETE', '/api/v1/remote-ssh-configs/[i:id]', 'Api\\StorageApiController@deleteRemote');
+        $this->router->map('POST',   '/api/v1/remote-ssh-configs/[i:id]/test', 'Api\\StorageApiController@testRemote');
         $this->router->map('GET', '/api/v1/s3-credentials', 'Api\\AdminApiController@getS3Credentials');
         $this->router->map('POST', '/api/v1/s3-credentials', 'Api\\AdminApiController@setS3Credentials');
         $this->router->map('DELETE', '/api/v1/s3-credentials', 'Api\\AdminApiController@clearS3Credentials');
