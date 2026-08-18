@@ -202,6 +202,7 @@ class App
         // Storage Locations
         $this->router->map('GET', '/storage-locations', 'StorageLocationController@index');
         $this->router->map('POST', '/storage-locations', 'StorageLocationController@store');
+        $this->router->map('POST', '/storage-locations/[i:id]/update', 'StorageLocationController@update');
         $this->router->map('POST', '/storage-locations/[i:id]/delete', 'StorageLocationController@destroy');
         $this->router->map('POST', '/storage-locations/s3', 'StorageLocationController@saveS3');
         $this->router->map('POST', '/storage-locations/s3/test', 'StorageLocationController@testS3');

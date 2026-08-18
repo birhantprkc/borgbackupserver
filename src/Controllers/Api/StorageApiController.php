@@ -37,7 +37,7 @@ class StorageApiController extends Controller
     // ── Local storage locations ─────────────────────────────────────
 
     /**
-     * PUT /api/v1/storage/{id} — {label?, is_default?}
+     * PUT /api/v1/storage/{id} — {label?, is_default?, capacity_bytes?}
      */
     public function updateLocation(int $id): void
     {
@@ -69,6 +69,19 @@ class StorageApiController extends Controller
             $update['label'] = $label;
         }
 
+        // A stated capacity for mounts df can't measure (#415). null/0 clears
+        // it and returns the location to being measured.
+        if (array_key_exists('capacity_bytes', $input)) {
+            $cap = $input['capacity_bytes'];
+            if ($cap === null || $cap === '' || (int) $cap <= 0) {
+                $update['capacity_bytes'] = null;
+            } elseif (!is_numeric($cap)) {
+                $this->json(['error' => 'capacity_bytes must be a positive integer of bytes, or null'], 422);
+            } else {
+                $update['capacity_bytes'] = (int) $cap;
+            }
+        }
+
         $makeDefault = array_key_exists('is_default', $input)
             ? filter_var($input['is_default'], FILTER_VALIDATE_BOOLEAN)
             : null;
@@ -85,7 +98,7 @@ class StorageApiController extends Controller
         }
 
         if (empty($update)) {
-            $this->json(['error' => 'Nothing to update — send label and/or is_default'], 422);
+            $this->json(['error' => 'Nothing to update — send label, is_default and/or capacity_bytes'], 422);
         }
 
         $this->db->update('storage_locations', $update, 'id = ?', [$id]);
@@ -417,10 +430,11 @@ class StorageApiController extends Controller
     private function locationPayload(int $id): array
     {
         $row = $this->db->fetchOne(
-            "SELECT id, label AS name, path, is_default, created_at FROM storage_locations WHERE id = ?",
+            "SELECT id, label AS name, path, capacity_bytes, is_default, created_at FROM storage_locations WHERE id = ?",
             [$id]
         );
         $row['is_default'] = (bool) $row['is_default'];
+        $row['capacity_bytes'] = $row['capacity_bytes'] !== null ? (int) $row['capacity_bytes'] : null;
         return $row;
     }
 

@@ -26,11 +26,18 @@ class StorageLocationController extends Controller
                 [$loc['id']]
             )['total'] ?? 0);
 
-            $diskUsage = ServerStats::getDiskUsage($loc['path']);
-            $loc['disk_total'] = $diskUsage['total'] ?? 0;
-            $loc['disk_used'] = $diskUsage['used'] ?? 0;
-            $loc['disk_free'] = $diskUsage['free'] ?? 0;
-            $loc['disk_percent'] = $diskUsage['percent'] ?? 0;
+            // capacityForLocation() prefers a stated capacity and refuses to
+            // repeat the local cache disk's figures for a mount that cannot
+            // report its own size (#415).
+            $capacity = ServerStats::capacityForLocation($loc);
+            $loc['disk_total'] = $capacity['total'] ?? 0;
+            $loc['disk_used'] = $capacity['used'] ?? 0;
+            $loc['disk_free'] = $capacity['free'] ?? 0;
+            $loc['disk_percent'] = $capacity['percent'] ?? 0;
+            $loc['capacity_source'] = $capacity['source'] ?? null;
+            $loc['capacity_unknown_reason'] = $capacity === null
+                ? ServerStats::capacityUnknownReason($loc)
+                : null;
         }
         unset($loc);
 
@@ -91,6 +98,7 @@ class StorageLocationController extends Controller
         $label = trim($_POST['label'] ?? '');
         $path = rtrim(trim($_POST['path'] ?? ''), '/');
         $isDefault = !empty($_POST['is_default']) ? 1 : 0;
+        $capacityBytes = $this->capacityFromPost();
 
         if (empty($label) || empty($path)) {
             $this->flash('danger', 'Label and path are required.');
@@ -110,6 +118,7 @@ class StorageLocationController extends Controller
         $this->db->insert('storage_locations', [
             'label' => $label,
             'path' => $path,
+            'capacity_bytes' => $capacityBytes,
             'is_default' => $isDefault,
         ]);
 
@@ -133,7 +142,9 @@ class StorageLocationController extends Controller
         }
 
         $label = trim($_POST['label'] ?? '');
-        $path = rtrim(trim($_POST['path'] ?? ''), '/');
+        // The edit form doesn't offer the path — repositories live under it, so
+        // moving one is a filesystem operation rather than a settings change.
+        $path = rtrim(trim($_POST['path'] ?? $location['path']), '/');
         $isDefault = !empty($_POST['is_default']) ? 1 : 0;
 
         if (empty($label) || empty($path)) {
@@ -159,6 +170,7 @@ class StorageLocationController extends Controller
         $this->db->update('storage_locations', [
             'label' => $label,
             'path' => $path,
+            'capacity_bytes' => $this->capacityFromPost(),
             'is_default' => $isDefault,
         ], 'id = ?', [$id]);
 
@@ -571,6 +583,20 @@ class StorageLocationController extends Controller
      * Public because the admin API also creates storage locations and needs
      * to refresh the allow-list.
      */
+    /**
+     * A stated capacity in GB from the form, as bytes. Blank or zero means
+     * "measure it" (#415) — only mounts that cannot report their own size
+     * need this, so an empty field is the normal case.
+     */
+    private function capacityFromPost(): ?int
+    {
+        $raw = trim((string) ($_POST['capacity_gb'] ?? ''));
+        if ($raw === '' || !is_numeric($raw) || (float) $raw <= 0) {
+            return null;
+        }
+        return (int) round((float) $raw * 1073741824);
+    }
+
     public function updateAllowedPaths(): void
     {
         $locations = $this->db->fetchAll("SELECT path FROM storage_locations");

@@ -144,6 +144,9 @@ CREATE TABLE storage_locations (
     id INT AUTO_INCREMENT PRIMARY KEY,
     label VARCHAR(100) NOT NULL,
     path VARCHAR(500) NOT NULL,
+    -- Stated capacity for mounts whose real size df cannot see (#415), e.g.
+    -- WebDAV. NULL means measure it, which is right for any ordinary path.
+    capacity_bytes BIGINT DEFAULT NULL,
     is_default TINYINT(1) NOT NULL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;

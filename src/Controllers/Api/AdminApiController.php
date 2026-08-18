@@ -972,7 +972,7 @@ class AdminApiController extends Controller
     {
         $this->requireApiToken();
 
-        $locations = $this->db->fetchAll("SELECT id, label as name, path, is_default, created_at FROM storage_locations ORDER BY label");
+        $locations = $this->db->fetchAll("SELECT id, label as name, path, capacity_bytes, is_default, created_at FROM storage_locations ORDER BY label");
         $remoteConfigs = $this->db->fetchAll("
             SELECT id, name, provider, remote_host, remote_port, remote_user, remote_base_path,
                    borg_remote_path, append_repo_name, disk_total_bytes, disk_used_bytes,
@@ -982,8 +982,15 @@ class AdminApiController extends Controller
 
         // Decorate local locations with live df capacity/usage (#157).
         foreach ($locations as &$loc) {
-            $disk = \BBS\Services\ServerStats::getDiskUsage($loc['path']);
-            if ($disk) {
+            // capacityForLocation() prefers a stated capacity and returns null
+            // rather than the local cache disk's figures for a mount that
+            // can't report its own size (#415).
+            $disk = \BBS\Services\ServerStats::capacityForLocation($loc);
+            $loc['capacity_source'] = $disk['source'] ?? null;
+            $loc['capacity_unknown_reason'] = $disk === null
+                ? \BBS\Services\ServerStats::capacityUnknownReason($loc)
+                : null;
+            if ($disk && $disk['total'] > 0 && $disk['used'] !== null) {
                 $loc['total_bytes'] = (int) $disk['total'];
                 $loc['used_bytes'] = (int) $disk['used'];
                 $loc['free_bytes'] = (int) $disk['free'];

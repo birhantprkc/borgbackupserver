@@ -2238,15 +2238,18 @@ $storageStats = []; // [{label, detail, total_bytes, free_bytes, used_percent}]
 foreach ($storageLocations as $sl) {
     $slPath = $sl['path'] ?? '';
     if (empty($slPath) || !is_dir($slPath)) continue;
-    $total = @disk_total_space($slPath);
-    $free  = @disk_free_space($slPath);
-    if ($total === false || $free === false || $total <= 0) continue;
+    // Not disk_free_space(): a WebDAV mount answers it from the local cache
+    // disk, which would mail everyone that a 100 GB share was full because the
+    // server's own disk was (#415). A location whose capacity we cannot
+    // establish is skipped — no figure is better than a wrong one.
+    $capacity = \BBS\Services\ServerStats::capacityForLocation($sl);
+    if ($capacity === null || ($capacity['free'] ?? null) === null) continue;
     $storageStats[] = [
         'label'        => $sl['label'] ?? $slPath,
         'detail'       => $slPath,
-        'total_bytes'  => (int) $total,
-        'free_bytes'   => (int) $free,
-        'used_percent' => round((($total - $free) / $total) * 100, 1),
+        'total_bytes'  => (int) $capacity['total'],
+        'free_bytes'   => (int) $capacity['free'],
+        'used_percent' => $capacity['percent'],
     ];
 }
 $remoteConfigs = $db->fetchAll("SELECT * FROM remote_ssh_configs WHERE disk_total_bytes IS NOT NULL AND disk_total_bytes > 0");

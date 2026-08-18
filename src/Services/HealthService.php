@@ -176,11 +176,11 @@ class HealthService
         $locations = [];
         $statuses = [];
 
-        $rows = $this->db->fetchAll("SELECT label, path FROM storage_locations ORDER BY id");
+        $rows = $this->db->fetchAll("SELECT id, label, path, capacity_bytes FROM storage_locations ORDER BY id");
         if (empty($rows)) {
             $path = $this->setting('storage_path');
             if ($path) {
-                $rows = [['label' => 'Default', 'path' => $path]];
+                $rows = [['id' => null, 'label' => 'Default', 'path' => $path, 'capacity_bytes' => null]];
             }
         }
 
@@ -195,12 +195,27 @@ class HealthService
                 $statuses[] = self::WARNING;
                 continue;
             }
-            $total = @disk_total_space($path);
-            $free = @disk_free_space($path);
-            if ($total === false || $free === false || $total <= 0) {
+
+            // Not disk_free_space(): a WebDAV mount answers that from its local
+            // cache disk, so the share's figures would be the server's own and
+            // a full cache would report the share as full (#415). A location
+            // whose size we cannot know is reported as unknown rather than
+            // guessed at — an alarm from an invented number is worse than none.
+            $capacity = \BBS\Services\ServerStats::capacityForLocation($sl);
+            if ($capacity === null || ($capacity['free'] ?? null) === null) {
+                $locations[] = [
+                    'name' => $sl['label'] ?: $path,
+                    'status' => self::OK,
+                    'message' => 'Capacity unknown',
+                    'capacity_known' => false,
+                ];
+                $statuses[] = self::OK;
                 continue;
             }
-            $locations[] = $this->storageEntry($sl['label'] ?: $path, (int) $total, (int) $free, $warnAt, $critAt, $statuses);
+
+            $locations[] = $this->storageEntry(
+                $sl['label'] ?: $path, (int) $capacity['total'], (int) $capacity['free'], $warnAt, $critAt, $statuses
+            );
         }
 
         foreach ($this->db->fetchAll(

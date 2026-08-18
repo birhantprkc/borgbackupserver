@@ -1415,13 +1415,21 @@ function applyRemotePreset(select, form) {
                                 <input type="text" class="form-control" name="path" placeholder="/mnt/storage2" required>
                                 <div class="form-text">Absolute path to the storage directory. Must exist and be writable.</div>
                             </div>
-                            <div class="col-md-2 d-flex align-items-center pt-4">
+                            <div class="col-md-2">
+                                <label class="form-label fw-semibold">Capacity</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" name="capacity_gb" min="0" step="0.001" placeholder="auto">
+                                    <span class="input-group-text">GB</span>
+                                </div>
+                                <div class="form-text">Only for mounts that can't report their own size, such as WebDAV. Leave blank to measure it.</div>
+                            </div>
+                            <div class="col-md-1 d-flex align-items-center pt-4">
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox" name="is_default" id="newIsDefault">
                                     <label class="form-check-label" for="newIsDefault">Default</label>
                                 </div>
                             </div>
-                            <div class="col-md-2 d-flex align-items-end">
+                            <div class="col-md-1 d-flex align-items-end">
                                 <button type="submit" class="btn btn-sm btn-success w-100">Create</button>
                             </div>
                         </div>
@@ -1448,15 +1456,48 @@ function applyRemotePreset(select, form) {
                         </h6>
                         <code class="small text-muted"><?= htmlspecialchars($loc['path']) ?></code>
                     </div>
-                    <?php if (!$loc['is_default'] && $loc['repo_count'] === 0): ?>
-                    <form method="POST" action="/storage-locations/<?= $loc['id'] ?>/delete"
-                          onsubmit="return confirm('Delete storage location \'<?= htmlspecialchars($loc['label'], ENT_QUOTES) ?>\'?')">
-                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
-                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
-                            <i class="bi bi-trash"></i>
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse"
+                                data-bs-target="#editLoc<?= $loc['id'] ?>" title="Edit">
+                            <i class="bi bi-pencil"></i>
                         </button>
+                        <?php if (!$loc['is_default'] && $loc['repo_count'] === 0): ?>
+                        <form method="POST" action="/storage-locations/<?= $loc['id'] ?>/delete"
+                              onsubmit="return confirm('Delete storage location \'<?= htmlspecialchars($loc['label'], ENT_QUOTES) ?>\'?')">
+                            <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <div class="collapse mb-3" id="editLoc<?= $loc['id'] ?>">
+                    <form method="POST" action="/storage-locations/<?= $loc['id'] ?>/update" class="border rounded p-2 bg-body-tertiary">
+                        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+                        <div class="mb-2">
+                            <label class="form-label small fw-semibold mb-1">Label</label>
+                            <input type="text" class="form-control form-control-sm" name="label"
+                                   value="<?= htmlspecialchars($loc['label']) ?>" required>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-semibold mb-1">Capacity</label>
+                            <div class="input-group input-group-sm">
+                                <input type="number" class="form-control" name="capacity_gb" min="0" step="0.001"
+                                       placeholder="auto"
+                                       value="<?= !empty($loc['capacity_bytes']) ? rtrim(rtrim(number_format($loc['capacity_bytes'] / 1073741824, 3, '.', ''), '0'), '.') : '' ?>">
+                                <span class="input-group-text">GB</span>
+                            </div>
+                            <div class="form-text">Blank measures the filesystem. Set this only for mounts that can't report their own size, such as WebDAV — BBS then counts what it has written here.</div>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" name="is_default" id="defLoc<?= $loc['id'] ?>"
+                                   <?= $loc['is_default'] ? 'checked' : '' ?>>
+                            <label class="form-check-label small" for="defLoc<?= $loc['id'] ?>">Default location</label>
+                        </div>
+                        <button type="submit" class="btn btn-sm btn-primary">Save</button>
                     </form>
-                    <?php endif; ?>
                 </div>
 
                 <!-- Disk Usage -->
@@ -1475,7 +1516,15 @@ function applyRemotePreset(select, form) {
                     </div>
                     <div class="text-muted small mt-1">
                         <?= formatStorageBytes($loc['disk_total']) ?> total &middot; <?= $pct ?>% used
+                        <?php if (($loc['capacity_source'] ?? '') === 'stated'): ?>
+                        <span class="ms-1" title="This mount can't report its own size, so BBS uses the capacity you set and counts what it has written there.">(stated)</span>
+                        <?php endif; ?>
                     </div>
+                </div>
+                <?php elseif (!empty($loc['capacity_unknown_reason'])): ?>
+                <div class="small text-muted mb-2">
+                    <i class="bi bi-question-circle me-1"></i>Capacity unknown
+                    <div class="mt-1"><?= htmlspecialchars($loc['capacity_unknown_reason']) ?></div>
                 </div>
                 <?php else: ?>
                 <div class="text-muted small mb-2"><i class="bi bi-exclamation-triangle me-1"></i>Path not accessible</div>
