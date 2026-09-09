@@ -194,18 +194,35 @@ class ReportService
 
         // Aggregate disk usage across every configured local storage location.
         // Falls back to the default storage_path if no locations are configured.
-        $locations = $this->db->fetchAll("SELECT id, label, path FROM storage_locations ORDER BY label");
+        $locations = $this->db->fetchAll("SELECT id, label, path, capacity_bytes FROM storage_locations ORDER BY label");
         $locationStats = [];
         $seenPartitions = [];
         $aggTotal = 0; $aggUsed = 0; $aggFree = 0;
         foreach ($locations as $loc) {
-            $u = ServerStats::getDiskUsage($loc['path']);
-            if (!$u) continue;
-            // Dedupe by (total + free) as a cheap partition fingerprint so
-            // multiple logical locations on the same disk aren't double-counted.
-            $fp = $u['total'] . ':' . $u['free'];
-            $isDup = isset($seenPartitions[$fp]);
-            if (!$isDup) {
+            // capacityForLocation(), as the dashboard and Storage page use: a
+            // stated capacity wins, and a mount that can't report its own size
+            // (WebDAV answers df from the local cache disk) is marked unknown
+            // rather than shown with the server disk's figures (#415, #473).
+            $u = ServerStats::capacityForLocation($loc);
+            if ($u === null || ($u['used'] ?? null) === null) {
+                $locationStats[] = [
+                    'label' => $loc['label'] ?: $loc['path'],
+                    'path'  => $loc['path'],
+                    'disk_total' => 0,
+                    'disk_used'  => 0,
+                    'disk_free'  => 0,
+                    'disk_percent' => 0.0,
+                    'capacity_unknown' => true,
+                ];
+                continue;
+            }
+            // Dedupe df-backed locations by (total + free) as a cheap partition
+            // fingerprint so multiple logical locations on the same disk aren't
+            // double-counted. A stated capacity is its own pool.
+            $fp = ($u['source'] ?? 'df') === 'stated'
+                ? 'stated:' . $loc['id']
+                : $u['total'] . ':' . $u['free'];
+            if (!isset($seenPartitions[$fp])) {
                 $aggTotal += (int) $u['total'];
                 $aggUsed  += (int) $u['used'];
                 $aggFree  += (int) $u['free'];
@@ -221,7 +238,7 @@ class ReportService
             ];
         }
         // Fallback when no storage_locations rows are configured (fresh install)
-        if (empty($locationStats)) {
+        if (empty($locations)) {
             $u = ServerStats::getDiskUsage($storagePath);
             if ($u) {
                 $aggTotal = (int) $u['total'];
@@ -553,6 +570,11 @@ class ReportService
             if (count($locations) > 1) {
                 foreach ($locations as $loc) {
                     $locLabel = htmlspecialchars($loc['label']);
+                    if (!empty($loc['capacity_unknown'])) {
+                        $html .= "<tr><td style='padding:2px 16px 2px 16px;color:#adb5bd;font-size:12px;'>&nbsp;&nbsp;&bull; {$locLabel}</td>"
+                                . "<td style='padding:2px 0;font-size:12px;color:#6c757d;'>capacity unknown &mdash; set it on the Storage page</td></tr>";
+                        continue;
+                    }
                     $locPct = $loc['disk_percent'];
                     $locUsed = self::formatBytes($loc['disk_used']);
                     $locTotal = self::formatBytes($loc['disk_total']);
