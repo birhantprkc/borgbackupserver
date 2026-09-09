@@ -695,12 +695,27 @@ class RepositoryController extends Controller
             $planName = $jobInfo['plan_name'] ?? null;
         }
 
-        // Previous archive for deleted-files comparison
+        // Previous (older) archive for deleted-files comparison, and the
+        // next (newer) one so the page can step through the repository's
+        // archives in the order the recovery points list shows them (#475).
+        // Ties on created_at are broken by id so the walk never skips or
+        // repeats an archive.
         $prevArchive = $this->db->fetchOne("
             SELECT id, archive_name, created_at FROM archives
-            WHERE repository_id = ? AND created_at < ?
-            ORDER BY created_at DESC LIMIT 1
-        ", [$id, $archive['created_at']]);
+            WHERE repository_id = ? AND (created_at < ? OR (created_at = ? AND id < ?))
+            ORDER BY created_at DESC, id DESC LIMIT 1
+        ", [$id, $archive['created_at'], $archive['created_at'], $archiveId]);
+        $nextArchive = $this->db->fetchOne("
+            SELECT id, archive_name, created_at FROM archives
+            WHERE repository_id = ? AND (created_at > ? OR (created_at = ? AND id > ?))
+            ORDER BY created_at ASC, id ASC LIMIT 1
+        ", [$id, $archive['created_at'], $archive['created_at'], $archiveId]);
+        $archiveCount = (int) $this->db->fetchOne("SELECT COUNT(*) AS c FROM archives WHERE repository_id = ?", [$id])['c'];
+        // 1-based position in the newest-first list.
+        $archivePosition = (int) $this->db->fetchOne("
+            SELECT COUNT(*) AS c FROM archives
+            WHERE repository_id = ? AND (created_at > ? OR (created_at = ? AND id >= ?))
+        ", [$id, $archive['created_at'], $archive['created_at'], $archiveId])['c'];
 
         // ClickHouse stats — only the queries that finish quickly run inline.
         // The "deleted vs previous archive" summary used to run a large
@@ -765,6 +780,9 @@ class RepositoryController extends Controller
             'planName' => $planName,
             'jobInfo' => $jobInfo,
             'prevArchive' => $prevArchive,
+            'nextArchive' => $nextArchive,
+            'archiveCount' => $archiveCount,
+            'archivePosition' => $archivePosition,
             'statusBreakdown' => $statusBreakdown,
             'largestFiles' => $largestFiles,
             'clickhouseAvailable' => $clickhouseAvailable,

@@ -350,7 +350,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
             <div class="card border-0 shadow-sm h-100 metric-card-blue">
                 <div class="card-body d-flex align-items-center position-relative">
                     <?php if ($nextBackup && $nextBackup['plan_id']): ?>
-                    <div class="dropdown position-absolute top-0 end-0 mt-2 me-2" style="z-index:2147483647;">
+                    <div class="dropdown position-absolute top-0 end-0 mt-2 me-2" style="z-index:2;">
                         <button class="btn btn-sm btn-link text-muted p-1 border-0" type="button" data-bs-toggle="dropdown" data-bs-strategy="fixed">
                             <i class="bi bi-three-dots-vertical"></i>
                         </button>
@@ -1122,7 +1122,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
         <div class="col-md-6 col-lg-4">
             <div class="card border-0 shadow-sm h-100 repo-card position-relative" style="cursor: pointer; overflow: visible;" onclick="window.location='/clients/<?= $agent['id'] ?>/repo/<?= $repo['id'] ?>'">
                 <!-- Maintenance menu in upper right -->
-                <div class="position-absolute dropdown" style="top: 6px; right: 6px; z-index: 10;" onclick="event.stopPropagation()">
+                <div class="position-absolute dropdown" style="top: 6px; right: 6px; z-index: 2;" onclick="event.stopPropagation()">
                     <button class="btn btn-sm btn-link text-muted p-1" type="button" data-bs-toggle="dropdown" data-bs-strategy="fixed" aria-expanded="false" title="Actions">
                         <i class="bi bi-three-dots-vertical"></i>
                     </button>
@@ -1900,7 +1900,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
         <div class="col-md-6 col-lg-4">
             <div class="card border-0 shadow-sm h-100 schedule-card" style="overflow: visible;">
                 <div class="card-body p-3 position-relative">
-                    <div class="dropdown position-absolute" style="top:8px;right:8px;z-index:2147483647;">
+                    <div class="dropdown position-absolute" style="top:8px;right:8px;z-index:2;">
                         <button class="btn btn-sm btn-link text-muted p-1 border-0" type="button" data-bs-toggle="dropdown" data-bs-strategy="fixed" aria-expanded="false">
                             <i class="bi bi-three-dots-vertical"></i>
                         </button>

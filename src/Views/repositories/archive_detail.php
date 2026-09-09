@@ -103,7 +103,24 @@ if ($savings >= 100 && $archive['deduplicated_size'] > 0) {
                 <div class="text-muted small"><code><?= htmlspecialchars($archive['archive_name']) ?></code></div>
                 <?php endif; ?>
             </div>
-            <div class="d-flex gap-2 flex-wrap">
+            <div class="d-flex gap-2 flex-wrap align-items-center">
+                <?php
+                // Step through the repository's archives newest-first, the
+                // order of the recovery points list (#475). Left/right arrow
+                // keys do the same (see script below).
+                $archiveUrl = "/clients/{$agentId}/repo/{$repo['id']}/archive/";
+                $newerTitle = $nextArchive ? 'Newer: ' . \BBS\Core\TimeHelper::format($nextArchive['created_at'], 'M j, Y g:i A') . ' (←)' : 'This is the newest archive';
+                $olderTitle = $prevArchive ? 'Older: ' . \BBS\Core\TimeHelper::format($prevArchive['created_at'], 'M j, Y g:i A') . ' (→)' : 'This is the oldest archive';
+                ?>
+                <div class="btn-group btn-group-sm me-2" role="group" aria-label="Step through archives">
+                    <a href="<?= $nextArchive ? $archiveUrl . (int) $nextArchive['id'] : '#' ?>" id="archive-nav-newer" class="btn btn-outline-secondary<?= $nextArchive ? '' : ' disabled' ?>" title="<?= htmlspecialchars($newerTitle) ?>"<?= $nextArchive ? '' : ' aria-disabled="true" tabindex="-1"' ?>>
+                        <i class="bi bi-chevron-left"></i><span class="d-none d-md-inline ms-1">Newer</span>
+                    </a>
+                    <span class="btn btn-outline-secondary disabled text-body" style="opacity:1;" title="Position in the recovery points list, newest first"><?= (int) $archivePosition ?> / <?= (int) $archiveCount ?></span>
+                    <a href="<?= $prevArchive ? $archiveUrl . (int) $prevArchive['id'] : '#' ?>" id="archive-nav-older" class="btn btn-outline-secondary<?= $prevArchive ? '' : ' disabled' ?>" title="<?= htmlspecialchars($olderTitle) ?>"<?= $prevArchive ? '' : ' aria-disabled="true" tabindex="-1"' ?>>
+                        <span class="d-none d-md-inline me-1">Older</span><i class="bi bi-chevron-right"></i>
+                    </a>
+                </div>
                 <a href="/clients/<?= $agentId ?>?tab=restore&archive=<?= $archive['id'] ?>&mode=files" class="btn btn-sm btn-primary">
                     <i class="bi bi-cloud-download me-1"></i>Restore Files
                 </a>
@@ -384,6 +401,20 @@ if ($savings >= 100 && $archive['deduplicated_size'] > 0) {
 </div>
 
 <script>
+// Left/right arrow keys step to the newer/older archive (#475), unless the
+// user is typing in a field or a modal is open.
+document.addEventListener('keydown', function(e) {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    if (document.querySelector('.modal.show')) return;
+    var link = document.getElementById(e.key === 'ArrowLeft' ? 'archive-nav-newer' : 'archive-nav-older');
+    if (link && !link.classList.contains('disabled')) {
+        e.preventDefault();
+        window.location = link.href;
+    }
+});
 (function() {
     var agentId = <?= $agentId ?>;
     var repoId = <?= $repo['id'] ?>;

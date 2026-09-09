@@ -133,7 +133,7 @@ $taskLabel = ucfirst(str_replace('_', ' ', $job['task_type']));
 <div class="card border-0 shadow-sm queue-detail-hero mb-4">
     <div class="card-body d-flex align-items-center justify-content-between flex-wrap gap-3">
         <div class="d-flex align-items-center gap-3">
-            <a href="/queue" class="btn btn-sm btn-outline-secondary" title="Back to Queue"><i class="bi bi-arrow-left"></i></a>
+            <a href="<?= htmlspecialchars($backUrl ?? '/queue') ?>" class="btn btn-sm btn-outline-secondary" title="<?= ($backUrl ?? '/queue') === '/queue' ? 'Back to Queue' : 'Back' ?>"><i class="bi bi-arrow-left"></i></a>
             <div>
                 <h4 class="mb-1">
                     Job #<?= $job['id'] ?>

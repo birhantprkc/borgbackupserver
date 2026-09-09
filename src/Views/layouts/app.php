@@ -401,6 +401,25 @@
             // bleeds through — e.g. a plan's Actions kebab showing inside the
             // Browse Filesystem modal (#328). Close any open dropdown when a
             // modal is shown.
+            // A menu inside a positioned wrapper that has its own z-index
+            // (the kebab on a plan or repository card) paints inside that
+            // wrapper's stacking context, so the wrappers of the cards after
+            // it, at the same z-index and later in the DOM, cover the open
+            // menu (#463). Lift only the open menu's wrapper above its
+            // siblings and put it back when the menu closes.
+            document.addEventListener('show.bs.dropdown', function(e) {
+                var wrap = e.target.closest('.dropdown, .btn-group, .dropup, .dropend, .dropstart');
+                if (!wrap || wrap.dataset.bbsZ !== undefined) return;
+                wrap.dataset.bbsZ = wrap.style.zIndex;
+                wrap.style.zIndex = '2147483647';
+            });
+            document.addEventListener('hidden.bs.dropdown', function(e) {
+                var wrap = e.target.closest('.dropdown, .btn-group, .dropup, .dropend, .dropstart');
+                if (!wrap || wrap.dataset.bbsZ === undefined) return;
+                wrap.style.zIndex = wrap.dataset.bbsZ;
+                delete wrap.dataset.bbsZ;
+            });
+
             document.addEventListener('show.bs.modal', function() {
                 document.querySelectorAll('[data-bs-toggle="dropdown"][aria-expanded="true"]').forEach(function(t) {
                     if (window.bootstrap && bootstrap.Dropdown) {

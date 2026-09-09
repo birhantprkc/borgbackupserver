@@ -146,6 +146,20 @@ class QueueController extends Controller
             $this->redirect('/queue');
         }
 
+        // The back arrow returns to the page that linked here (a client's
+        // repository tab, a repository page, the dashboard), not always to
+        // the queue (#469). Same-origin referrers only, and never another
+        // job page, which is where a retry or cancel lands.
+        $backUrl = '/queue';
+        $ref = parse_url($_SERVER['HTTP_REFERER'] ?? '');
+        $host = strtolower(explode(':', $_SERVER['HTTP_HOST'] ?? '')[0]);
+        if (!empty($ref['path']) && $ref['path'][0] === '/'
+            && (empty($ref['host']) || strtolower($ref['host']) === $host)
+            && !preg_match('#^/queue/\d+#', $ref['path'])
+            && !preg_match('#^/(login|logout)#', $ref['path'])) {
+            $backUrl = $ref['path'] . (isset($ref['query']) ? '?' . $ref['query'] : '');
+        }
+
         // Get log entries for this job
         $logs = $this->db->fetchAll("
             SELECT * FROM server_log
@@ -189,6 +203,7 @@ class QueueController extends Controller
             'queuePosition' => $queuePosition,
             'pollInterval' => $pollInterval,
             'pruneStats' => $pruneStats,
+            'backUrl' => $backUrl,
         ]);
     }
 
