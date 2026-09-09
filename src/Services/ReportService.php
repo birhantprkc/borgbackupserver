@@ -605,7 +605,7 @@ HTML;
         };
         $html .= "<tr><td style=\"padding:8px 12px 20px;\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"><tr>"
             . $stat($successStr, 'Job success rate', $totalJobs > 0 ? "{$completed} of {$totalJobs} jobs" : 'No jobs in this period', $successColor, false)
-            . $stat($e($dedupStr), 'Data added', 'After deduplication', '#0b5ed7', true)
+            . $stat($dedupStr, 'Data added', 'After deduplication', '#0b5ed7', true)
             . $stat("{$okCount} / {$totalAgents}", 'Clients up to date', $needCount > 0 ? "{$needCount} need" . ($needCount === 1 ? 's' : '') . ' attention' : 'None need attention', '#111827', true)
             . "</tr></table></td></tr>";
 
