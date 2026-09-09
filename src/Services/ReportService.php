@@ -837,7 +837,10 @@ HTML;
 
     private static function formatBytes(int $bytes): string
     {
-        $nbsp = "\u{00A0}";
+        // An entity, not the raw U+00A0: the string only ever lands in HTML,
+        // and a relay that downgrades an 8-bit body would turn the raw
+        // character into "Â " in front of every unit.
+        $nbsp = '&nbsp;';
         if ($bytes <= 0) return "0{$nbsp}B";
         if ($bytes >= 1099511627776) return round($bytes / 1099511627776, 1) . "{$nbsp}TB";
         if ($bytes >= 1073741824) return round($bytes / 1073741824, 1) . "{$nbsp}GB";
