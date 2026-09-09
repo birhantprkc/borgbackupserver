@@ -133,6 +133,12 @@ class AgentApiController extends Controller
         if (!empty($input['glibc_version']))        $data['glibc_version'] = substr($input['glibc_version'], 0, 20);
         if (!empty($input['platform']))             $data['platform'] = substr($input['platform'], 0, 20);
         if (!empty($input['architecture']))         $data['architecture'] = substr($input['architecture'], 0, 20);
+        // What the host can snapshot (LVM, btrfs, ZFS), so the plan editor
+        // offers "Back up from a snapshot" only where it can work.
+        if (isset($input['snapshot_support']) && is_array($input['snapshot_support'])) {
+            $data['snapshot_capable'] = !empty($input['snapshot_support']['capable']) ? 1 : 0;
+            $data['snapshot_support'] = json_encode($input['snapshot_support']);
+        }
         $data['status'] = 'online';
 
         if (!empty($data)) {
@@ -1101,6 +1107,12 @@ class AgentApiController extends Controller
         if (!empty($input['glibc_version']))        $data['glibc_version'] = substr($input['glibc_version'], 0, 20);
         if (!empty($input['platform']))             $data['platform'] = substr($input['platform'], 0, 20);
         if (!empty($input['architecture']))         $data['architecture'] = substr($input['architecture'], 0, 20);
+        // What the host can snapshot (LVM, btrfs, ZFS), so the plan editor
+        // offers "Back up from a snapshot" only where it can work.
+        if (isset($input['snapshot_support']) && is_array($input['snapshot_support'])) {
+            $data['snapshot_capable'] = !empty($input['snapshot_support']['capable']) ? 1 : 0;
+            $data['snapshot_support'] = json_encode($input['snapshot_support']);
+        }
 
         if (!empty($data)) {
             $this->db->update('agents', $data, 'id = ?', [$agent['id']]);

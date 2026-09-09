@@ -344,7 +344,7 @@ class AdminApiController extends Controller
                    a.client_profile_id, cp.name AS client_profile_name,
                    a.user_id, a.server_host_override, a.ssh_port_override,
                    a.wol_enabled, a.wol_mac, a.mac_address, a.wol_broadcast, a.wol_timeout_minutes,
-                   a.notes
+                   a.notes, a.snapshot_capable, a.snapshot_support
             FROM agents a
             LEFT JOIN users u ON u.id = a.user_id
             LEFT JOIN client_profiles cp ON cp.id = a.client_profile_id
@@ -371,6 +371,8 @@ class AdminApiController extends Controller
             }
             unset($agent['api_key_encrypted']);
         }
+        $agent['snapshot_capable'] = $agent['snapshot_capable'] === null ? null : (bool) $agent['snapshot_capable'];
+        $agent['snapshot_support'] = !empty($agent['snapshot_support']) ? json_decode($agent['snapshot_support'], true) : null;
 
         // Include repos and plans
         $repos = $this->db->fetchAll(
@@ -379,7 +381,7 @@ class AdminApiController extends Controller
         );
         $plans = $this->db->fetchAll(
             "SELECT bp.id, bp.name, bp.directories, bp.excludes, bp.advanced_options, bp.enabled,
-                    bp.repository_id,
+                    bp.snapshot, bp.repository_id,
                     bp.prune_minutes, bp.prune_hours, bp.prune_days,
                     bp.prune_weeks, bp.prune_months, bp.prune_years,
                     s.frequency, s.times, s.day_of_week, s.day_of_month,
@@ -391,6 +393,7 @@ class AdminApiController extends Controller
         foreach ($plans as &$p) {
             $p['id'] = (int) $p['id'];
             $p['enabled'] = (bool) $p['enabled'];
+            $p['snapshot'] = (bool) ($p['snapshot'] ?? 0);
             $p['repository_id'] = $p['repository_id'] !== null ? (int) $p['repository_id'] : null;
             foreach (['prune_minutes', 'prune_hours', 'prune_days',
                       'prune_weeks', 'prune_months', 'prune_years'] as $k) {
@@ -834,7 +837,7 @@ class AdminApiController extends Controller
         // only noticed later, when archives start disappearing.
         $plans = $this->db->fetchAll("
             SELECT bp.id, bp.name, bp.directories, bp.excludes, bp.advanced_options,
-                   bp.enabled, bp.repository_id, r.name as repository_name,
+                   bp.enabled, bp.snapshot, bp.repository_id, r.name as repository_name,
                    bp.prune_minutes, bp.prune_hours, bp.prune_days,
                    bp.prune_weeks, bp.prune_months, bp.prune_years,
                    s.frequency, s.times, s.day_of_week, s.day_of_month,
@@ -877,6 +880,7 @@ class AdminApiController extends Controller
         foreach ($plans as &$p) {
             $p['id'] = (int) $p['id'];
             $p['enabled'] = (bool) $p['enabled'];
+            $p['snapshot'] = (bool) ($p['snapshot'] ?? 0);
             $p['repository_id'] = $p['repository_id'] !== null ? (int) $p['repository_id'] : null;
             // Signed: a negative keep count is borg's "no limit" (#386), so
             // these must not be coerced to unsigned or clamped at zero.
@@ -955,6 +959,7 @@ class AdminApiController extends Controller
             'directories' => $directories,
             'excludes' => $excludes ?: null,
             'advanced_options' => $advancedOptions,
+            'snapshot' => !empty($input['snapshot']) ? 1 : 0,
             'prune_minutes' => $pruneMinutes,
             'prune_hours' => $pruneHours,
             'prune_days' => $pruneDays,
@@ -1706,6 +1711,9 @@ class AdminApiController extends Controller
                 $this->json(['error' => 'Repository not found or does not belong to this client'], 404);
             }
             $planData['repository_id'] = (int) $input['repository_id'];
+        }
+        if (array_key_exists('snapshot', $input)) {
+            $planData['snapshot'] = !empty($input['snapshot']) ? 1 : 0;
         }
         foreach (['prune_minutes', 'prune_hours', 'prune_days', 'prune_weeks', 'prune_months', 'prune_years'] as $field) {
             if (isset($input[$field])) {

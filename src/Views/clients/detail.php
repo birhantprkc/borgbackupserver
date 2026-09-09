@@ -66,7 +66,9 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                             <i class="bi bi-box me-1"></i>Agent v<?= htmlspecialchars($agent['agent_version']) ?>
                         <?php endif; ?>
                     <?php endif; ?>
-                    </span><?php if ($agent['borg_version']): ?>
+                    </span><?php if (!empty($agent['snapshot_capable'])): $hdrSnap = json_decode($agent['snapshot_support'] ?? '{}', true); ?>
+                        <span title="Backups can run from filesystem snapshots on this client"><i class="bi bi-camera me-1"></i>Snapshots: <?= htmlspecialchars(implode(', ', array_map('strtoupper', $hdrSnap['methods'] ?? []))) ?></span>
+                    <?php endif; ?><?php if ($agent['borg_version']): ?>
                         <span>
                             <form method="POST" action="/clients/<?= $agent['id'] ?>/update-borg" class="d-inline">
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
@@ -2238,6 +2240,12 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                                         <input class="form-check-input edit-borg-opt" type="checkbox" id="editOptNoAcl<?= $plan['id'] ?>" <?= str_contains($editOpts, '--noacls') ? 'checked' : '' ?>>
                                         <label class="form-check-label" for="editOptNoAcl<?= $plan['id'] ?>">Skip ACLs</label>
                                     </div>
+                                    <?php $snapCapable = !empty($agent['snapshot_capable']); $snapReason = json_decode($agent['snapshot_support'] ?? '{}', true)['reason'] ?? 'the agent has not reported its filesystem yet'; ?>
+                                    <input type="hidden" name="snapshot_present" value="1">
+                                    <div class="form-check" title="<?= $snapCapable ? 'The agent takes a snapshot of each source volume, backs up from it, then removes it. Volumes it cannot snapshot are backed up live.' : 'Not available on this client: ' . htmlspecialchars($snapReason) ?>">
+                                        <input class="form-check-input" type="checkbox" name="snapshot" id="editOptSnapshot<?= $plan['id'] ?>" value="1" <?= !empty($plan['snapshot']) ? 'checked' : '' ?> <?= $snapCapable || !empty($plan['snapshot']) ? '' : 'disabled' ?>>
+                                        <label class="form-check-label" for="editOptSnapshot<?= $plan['id'] ?>">Back up from a snapshot <i class="bi bi-info-circle text-muted small"></i></label>
+                                    </div>
                                 </div>
                             </div>
                             <div class="mt-2">
@@ -2585,6 +2593,11 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                                 <div class="form-check">
                                     <input class="form-check-input borg-opt" type="checkbox" name="opt_no_acls" id="optNoAcls" value="1">
                                     <label class="form-check-label" for="optNoAcls">Skip ACLs</label>
+                                </div>
+                                <?php $snapCapable = !empty($agent['snapshot_capable']); $snapMethods = $snapCapable ? implode(', ', array_map('strtoupper', json_decode($agent['snapshot_support'] ?? '{}', true)['methods'] ?? [])) : ''; $snapReason = json_decode($agent['snapshot_support'] ?? '{}', true)['reason'] ?? 'the agent has not reported its filesystem yet'; ?>
+                                <div class="form-check" title="<?= $snapCapable ? 'The agent takes a snapshot of each source volume (' . htmlspecialchars($snapMethods) . '), backs up from it, then removes it. Volumes it cannot snapshot are backed up live.' : 'Not available on this client: ' . htmlspecialchars($snapReason) ?>">
+                                    <input class="form-check-input" type="checkbox" name="snapshot" id="optSnapshot" value="1" <?= $snapCapable ? '' : 'disabled' ?>>
+                                    <label class="form-check-label" for="optSnapshot">Back up from a snapshot <i class="bi bi-info-circle text-muted small"></i></label>
                                 </div>
                             </div>
                         </div>

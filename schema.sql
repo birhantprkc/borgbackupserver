@@ -112,6 +112,8 @@ CREATE TABLE agents (
     platform VARCHAR(20) DEFAULT NULL,
     architecture VARCHAR(20) DEFAULT NULL,
     agent_version VARCHAR(20) DEFAULT NULL,
+    snapshot_capable TINYINT(1) DEFAULT NULL,
+    snapshot_support JSON DEFAULT NULL,
     -- 0 when the agent manages its own updates (containers ship the agent in
     -- the image), so the server neither offers nor queues an update for it.
     auto_update_enabled TINYINT(1) NOT NULL DEFAULT 1,
@@ -230,6 +232,7 @@ CREATE TABLE backup_plans (
     directories TEXT NOT NULL,
     excludes TEXT DEFAULT NULL,
     advanced_options TEXT DEFAULT NULL,
+    snapshot TINYINT(1) NOT NULL DEFAULT 0,
     prune_minutes INT NOT NULL DEFAULT 0,
     prune_hours INT NOT NULL DEFAULT 0,
     prune_days INT NOT NULL DEFAULT 7,

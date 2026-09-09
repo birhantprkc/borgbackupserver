@@ -19,6 +19,7 @@ import tempfile
 import threading
 import time
 import urllib.error
+import shutil
 import ssl
 import urllib.request
 from configparser import ConfigParser
@@ -48,7 +49,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.94.1"
+AGENT_VERSION = "2.95.0"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 IS_MACOS = sys.platform == "darwin"
@@ -529,6 +530,11 @@ def get_system_info(config=None):
 
     # Platform and architecture info (for borg binary matching)
     info["platform"] = platform.system().lower()  # linux, darwin, freebsd, windows
+    # Whether this host can back up from filesystem snapshots, and how.
+    try:
+        info["snapshot_support"] = get_snapshot_support()
+    except Exception as e:
+        info["snapshot_support"] = {"capable": False, "methods": [], "volumes": [], "reason": "detection failed: {}".format(e)}
     info["mac_address"] = get_primary_mac()
     arch = platform.machine()
     if arch in ("aarch64", "arm64"):
@@ -3504,6 +3510,353 @@ def _allow_sleep(state):
             pass
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Filesystem snapshots for backups
+#
+# With a plan's "Back up from a snapshot" option on, the agent takes a
+# snapshot of every volume that holds one of the plan's directories, mounts
+# the snapshots under a private tree that mirrors the live layout, and runs
+# borg from inside that tree with the directories made relative. Borg stores
+# paths without the leading slash, so "home/alice" backed up from the tree is
+# stored exactly as a live backup of /home/alice would be: the catalog, the
+# file browser and restores need no special handling. Volumes that cannot be
+# snapshotted (no LVM free space, ext4 on a plain partition) are bind-mounted
+# into the tree read-only so the backup is still complete; the job log says
+# which volumes were live.
+#
+# Supported: LVM logical volumes (needs free space in the volume group),
+# btrfs subvolumes, ZFS datasets. Linux only.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_SNAPSHOT_PSEUDO_FS = frozenset([
+    "proc", "sysfs", "devtmpfs", "devpts", "tmpfs", "cgroup", "cgroup2", "pstore",
+    "securityfs", "debugfs", "tracefs", "configfs", "fusectl", "mqueue", "hugetlbfs",
+    "bpf", "autofs", "binfmt_misc", "efivarfs", "rpc_pipefs", "nsfs", "squashfs",
+    "ramfs", "overlay", "fuse.gvfsd-fuse", "fuse.portal", "fuse.lxcfs",
+])
+
+
+def _snapshot_tool(name):
+    for d in ("/usr/sbin", "/sbin", "/usr/bin", "/bin", "/usr/local/sbin", "/usr/local/bin"):
+        p = os.path.join(d, name)
+        if os.path.isfile(p) and os.access(p, os.X_OK):
+            return p
+    return None
+
+
+def _run_quiet(argv, timeout=60):
+    """Run a command; return (rc, stdout, stderr) as text."""
+    try:
+        p = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
+        return p.returncode, p.stdout.decode("utf-8", "replace"), p.stderr.decode("utf-8", "replace")
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return 127, "", str(e)
+
+
+def _read_mounts():
+    """Real filesystems from /proc/self/mountinfo: [{mount, source, fstype}],
+    longest mount point first so a path's owner is the first match."""
+    mounts = []
+    try:
+        with open("/proc/self/mountinfo") as f:
+            for line in f:
+                parts = line.split()
+                if "-" not in parts:
+                    continue
+                sep = parts.index("-")
+                mount = parts[4].replace("\\040", " ")
+                fstype = parts[sep + 1]
+                source = parts[sep + 2].replace("\\040", " ")
+                if fstype in _SNAPSHOT_PSEUDO_FS or fstype.startswith("fuse.") and fstype != "fuse.zfs":
+                    continue
+                mounts.append({"mount": mount, "source": source, "fstype": fstype})
+    except OSError:
+        return []
+    # One entry per mount point: the last one in mountinfo is the visible one.
+    seen = {}
+    for m in mounts:
+        seen[m["mount"]] = m
+    return sorted(seen.values(), key=lambda m: -len(m["mount"]))
+
+
+def _lvm_info(source):
+    """(vg, lv, lv_size_bytes, vg_free_bytes) for a device that is a logical
+    volume, else None."""
+    lvs = _snapshot_tool("lvs")
+    if not lvs or not source.startswith("/dev/"):
+        return None
+    rc, out, _ = _run_quiet([lvs, "--noheadings", "--nosuffix", "--units", "b",
+                             "-o", "vg_name,lv_name,lv_size,vg_free", source], timeout=30)
+    if rc != 0:
+        return None
+    fields = out.split()
+    if len(fields) != 4:
+        return None
+    try:
+        return fields[0], fields[1], int(float(fields[2])), int(float(fields[3]))
+    except ValueError:
+        return None
+
+
+def _snapshot_method(mount):
+    """How a mount could be snapshotted: ('lvm'|'btrfs'|'zfs', detail) or
+    (None, reason)."""
+    fstype = mount["fstype"]
+    if fstype == "btrfs":
+        return ("btrfs", None) if _snapshot_tool("btrfs") else (None, "btrfs tools not installed")
+    if fstype == "zfs":
+        return ("zfs", None) if _snapshot_tool("zfs") else (None, "zfs tools not installed")
+    info = _lvm_info(mount["source"])
+    if info:
+        vg, lv, lv_size, vg_free = info
+        if vg_free < 64 * 1024 * 1024:
+            return (None, "LVM volume group {} has no free space for a snapshot".format(vg))
+        return ("lvm", info)
+    return (None, "{} on {} is not a snapshot-capable volume".format(fstype, mount["source"]))
+
+
+def get_snapshot_support():
+    """What this host can snapshot, for the server's plan editor. Windows and
+    macOS report not capable; Linux lists each real volume with its method."""
+    if IS_WINDOWS or IS_MACOS or not hasattr(os, "geteuid"):
+        return {"capable": False, "methods": [], "volumes": [], "reason": "snapshots need Linux with LVM, btrfs or ZFS"}
+    volumes = []
+    methods = set()
+    for m in _read_mounts():
+        if m["mount"].startswith(("/run", "/dev", "/sys", "/proc", "/snap/")) or m["mount"] == "/boot/efi":
+            continue
+        method, detail = _snapshot_method(m)
+        entry = {"mount": m["mount"], "fstype": m["fstype"], "method": method}
+        if method == "lvm":
+            entry["vg_free"] = detail[3]
+        elif method is None:
+            entry["reason"] = detail
+        if method:
+            methods.add(method)
+        volumes.append(entry)
+    volumes.sort(key=lambda v: v["mount"])
+    reason = None
+    if not methods:
+        reasons = [v.get("reason") for v in volumes if v.get("reason")]
+        reason = reasons[0] if reasons else "no snapshot-capable volumes found"
+    if os.geteuid() != 0:
+        methods = set()
+        reason = "the agent must run as root to take snapshots"
+    return {"capable": bool(methods), "methods": sorted(methods), "volumes": volumes, "reason": reason}
+
+
+class SnapshotSession(object):
+    """Snapshots and mounts for one backup job. prepare() builds the tree and
+    returns the rewritten borg argv and the cwd to run it from; cleanup()
+    always follows, from a finally block."""
+
+    def __init__(self, config, job_id):
+        self.config = config
+        self.job_id = job_id
+        self.root = "/run/bbs-agent/snap-{}".format(job_id)
+        self.tree = os.path.join(self.root, "tree")
+        self.mounted = []      # mount points inside the tree, in mount order
+        self.snapshots = []    # (method, identifier) to remove
+        self.live = []         # mounts that were bind-mounted live
+        self.notes = []
+
+    def _log(self, message, level="info"):
+        self.notes.append(message)
+        logger.info("Job #{} snapshot: {}".format(self.job_id, message))
+        log_to_server(self.config, self.job_id, message, level)
+
+    def _sh(self, argv, what, timeout=120):
+        rc, out, err = _run_quiet(argv, timeout=timeout)
+        if rc != 0:
+            raise RuntimeError("{} failed: {}".format(what, (err or out).strip()[:300]))
+        return out
+
+    def prepare(self, command, directories):
+        """Snapshot the volumes behind `directories`, mount them under the
+        tree, and return (command, cwd) with the paths made relative."""
+        if not hasattr(os, "geteuid") or os.geteuid() != 0:
+            raise RuntimeError("snapshots need the agent to run as root")
+        dirs = [d for d in (directories or "").splitlines() if d.strip()]
+        dirs = [os.path.normpath(d.strip()) for d in dirs]
+        if not dirs:
+            raise RuntimeError("no directories to snapshot")
+        mounts = _read_mounts()
+        if not mounts:
+            raise RuntimeError("could not read the mount table")
+
+        def owner(path):
+            for m in mounts:
+                mp = m["mount"]
+                if path == mp or path.startswith(mp.rstrip("/") + "/"):
+                    return m
+            return None
+
+        # Volumes to bring into the tree: the one each directory lives on,
+        # plus any real mount below a directory, so the backup covers what a
+        # live run of the same directories would.
+        wanted = {}
+        for d in dirs:
+            if not os.path.isdir(d):
+                raise RuntimeError("directory does not exist: {}".format(d))
+            m = owner(d)
+            if m is None:
+                raise RuntimeError("no mount found for {}".format(d))
+            wanted[m["mount"]] = m
+            for sub in mounts:
+                if sub["mount"] != d and sub["mount"].startswith(d.rstrip("/") + "/"):
+                    wanted[sub["mount"]] = sub
+        order = sorted(wanted.values(), key=lambda m: len(m["mount"]))
+
+        os.makedirs(self.tree, exist_ok=True)
+        n = 0
+        for m in order:
+            n += 1
+            target = os.path.join(self.tree, m["mount"].lstrip("/")) if m["mount"] != "/" else self.tree
+            os.makedirs(target, exist_ok=True)
+            method, detail = _snapshot_method(m)
+            name = "bbs-snap-{}-{}".format(self.job_id, n)
+            if method == "lvm":
+                vg, lv, lv_size, vg_free = detail
+                size = max(512 * 1024 * 1024, lv_size // 10)
+                size = min(size, vg_free)
+                self._sh([_snapshot_tool("lvcreate"), "-s", "-n", name, "-L", "{}b".format(size),
+                          "{}/{}".format(vg, lv)], "lvcreate for {}".format(m["mount"]))
+                self.snapshots.append(("lvm", "{}/{}".format(vg, name)))
+                opts = "ro,nouuid" if m["fstype"] == "xfs" else "ro"
+                self._sh([_snapshot_tool("mount") or "mount", "-o", opts,
+                          "/dev/{}/{}".format(vg, name), target], "mount of LVM snapshot for {}".format(m["mount"]))
+                self.mounted.append(target)
+                self._log("LVM snapshot {} of {} ({} for copy-on-write), mounted read-only".format(
+                    name, m["mount"], _human_bytes(size)))
+            elif method == "btrfs":
+                snap = os.path.join(m["mount"], ".{}".format(name))
+                self._sh([_snapshot_tool("btrfs"), "subvolume", "snapshot", "-r", m["mount"], snap],
+                         "btrfs snapshot of {}".format(m["mount"]))
+                self.snapshots.append(("btrfs", snap))
+                self._bind(snap, target, m["mount"])
+                self._log("btrfs snapshot of {} taken, mounted read-only".format(m["mount"]))
+            elif method == "zfs":
+                snapname = "{}@{}".format(m["source"], name)
+                self._sh([_snapshot_tool("zfs"), "snapshot", snapname], "zfs snapshot of {}".format(m["mount"]))
+                self.snapshots.append(("zfs", snapname))
+                snapdir = os.path.join(m["mount"], ".zfs", "snapshot", name)
+                if not os.path.isdir(snapdir):
+                    raise RuntimeError("zfs snapshot directory {} is not visible; is snapdir=visible?".format(snapdir))
+                self._bind(snapdir, target, m["mount"])
+                self._log("ZFS snapshot {} taken, mounted read-only".format(snapname))
+            else:
+                self._bind(m["mount"], target, m["mount"])
+                self.live.append(m["mount"])
+                self._log("{} backed up live: {}".format(m["mount"], detail), "warning")
+
+        # Rewrite the borg argv: paths after "--" become relative to the tree.
+        # An older server sends no "--"; then everything after the archive
+        # operand is a path.
+        new_cmd = list(command)
+        try:
+            start = new_cmd.index("--") + 1
+        except ValueError:
+            start = next((i + 1 for i, t in enumerate(new_cmd) if "::" in t), len(new_cmd))
+        for i in range(start, len(new_cmd)):
+            rel = new_cmd[i].lstrip("/")
+            new_cmd[i] = rel if rel else "."
+        return new_cmd, self.tree
+
+    def _bind(self, source, target, label):
+        mount = _snapshot_tool("mount") or "mount"
+        self._sh([mount, "--bind", source, target], "bind mount of {}".format(label))
+        self.mounted.append(target)
+        # A bind mount inherits the source's read/write state; make it read-only.
+        rc, _, err = _run_quiet([mount, "-o", "remount,bind,ro", target])
+        if rc != 0:
+            logger.warning("Could not make {} read-only: {}".format(target, err.strip()[:200]))
+
+    def cleanup(self):
+        """Unmount and remove everything, in reverse. Never raises."""
+        umount = _snapshot_tool("umount") or "umount"
+        for target in reversed(self.mounted):
+            rc, _, err = _run_quiet([umount, target])
+            if rc != 0:
+                _run_quiet([umount, "-l", target])
+        for method, ident in reversed(self.snapshots):
+            if method == "lvm":
+                rc, _, err = _run_quiet([_snapshot_tool("lvremove"), "-f", ident])
+            elif method == "btrfs":
+                rc, _, err = _run_quiet([_snapshot_tool("btrfs"), "subvolume", "delete", ident])
+            else:
+                rc, _, err = _run_quiet([_snapshot_tool("zfs"), "destroy", ident])
+            if rc != 0:
+                self._log("could not remove snapshot {}: {}".format(ident, err.strip()[:200]), "warning")
+        if self.snapshots or self.mounted:
+            self._log("snapshots removed")
+        try:
+            if os.path.isdir(self.root):
+                shutil.rmtree(self.root, ignore_errors=True)
+        except Exception:
+            pass
+        self.mounted, self.snapshots = [], []
+
+
+def _human_bytes(n):
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024 or unit == "TB":
+            return "{:.0f} {}".format(n, unit) if unit == "B" else "{:.1f} {}".format(n, unit)
+        n /= 1024.0
+
+
+def cleanup_stale_snapshots():
+    """Remove anything a crashed job left behind: mounts under our snapshot
+    root, LVM snapshots named bbs-snap-*, btrfs and ZFS snapshots with the
+    same prefix. Runs once at agent start."""
+    if IS_WINDOWS or IS_MACOS or not hasattr(os, "geteuid") or os.geteuid() != 0:
+        return
+    base = "/run/bbs-agent"
+    umount = _snapshot_tool("umount") or "umount"
+    try:
+        stale = [d for d in os.listdir(base) if d.startswith("snap-")] if os.path.isdir(base) else []
+    except OSError:
+        stale = []
+    for d in stale:
+        root = os.path.join(base, d)
+        targets = []
+        for m in _read_mounts():
+            if m["mount"].startswith(root + "/"):
+                targets.append(m["mount"])
+        for t in sorted(targets, key=len, reverse=True):
+            _run_quiet([umount, "-l", t])
+        shutil.rmtree(root, ignore_errors=True)
+        logger.warning("Removed stale snapshot tree {}".format(root))
+    lvs, lvremove = _snapshot_tool("lvs"), _snapshot_tool("lvremove")
+    if lvs and lvremove:
+        rc, out, _ = _run_quiet([lvs, "--noheadings", "-o", "vg_name,lv_name"])
+        if rc == 0:
+            for line in out.splitlines():
+                f = line.split()
+                if len(f) == 2 and f[1].startswith("bbs-snap-"):
+                    _run_quiet([lvremove, "-f", "{}/{}".format(f[0], f[1])])
+                    logger.warning("Removed stale LVM snapshot {}/{}".format(f[0], f[1]))
+    zfs = _snapshot_tool("zfs")
+    if zfs:
+        rc, out, _ = _run_quiet([zfs, "list", "-H", "-t", "snapshot", "-o", "name"])
+        if rc == 0:
+            for name in out.split():
+                if "@bbs-snap-" in name:
+                    _run_quiet([zfs, "destroy", name])
+                    logger.warning("Removed stale ZFS snapshot {}".format(name))
+    btrfs = _snapshot_tool("btrfs")
+    if btrfs:
+        for m in _read_mounts():
+            if m["fstype"] != "btrfs":
+                continue
+            try:
+                for entry in os.listdir(m["mount"]):
+                    if entry.startswith(".bbs-snap-"):
+                        _run_quiet([btrfs, "subvolume", "delete", os.path.join(m["mount"], entry)])
+                        logger.warning("Removed stale btrfs snapshot {}".format(os.path.join(m["mount"], entry)))
+            except OSError:
+                pass
+
+
 # borg options that make it run a program: --content-from-command and
 # --paths-from-command turn the PATH arguments into a command line, and
 # --rsh names the program used to reach a remote repository. The server never
@@ -4017,7 +4370,7 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
             logger.info("SSH info not available, catalog streaming disabled")
 
     # For restore tasks, create and use the target directory
-    if cwd:
+    if cwd and task_type not in ("backup", "backup_dry_run"):
         os.makedirs(cwd, exist_ok=True)
 
     # Write temporary SSH key for remote SSH repos (key provided by server in task payload)
@@ -4043,6 +4396,23 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
                 "error_log": "Failed to write remote SSH key: {}".format(e),
             })
             return
+
+    # Snapshot-backed backup: snapshot the volumes, mount them under a private
+    # tree and run borg from there with relative paths (see SnapshotSession).
+    snapshot_session = None
+    if task_type in ("backup", "backup_dry_run") and task.get("snapshot"):
+        snapshot_session = SnapshotSession(config, job_id)
+        try:
+            command, cwd = snapshot_session.prepare(command, directories)
+        except Exception as e:
+            snapshot_session.cleanup()
+            logger.error("Job #{}: snapshot failed: {}".format(job_id, e))
+            report_status(config, {
+                "job_id": job_id, "result": "failed",
+                "error_log": "Snapshot failed, backup not run: {}".format(e),
+            })
+            return
+        logger.info("Executing {} job #{} from snapshot tree {}: {}".format(task_type, job_id, cwd, ' '.join(command)))
 
     try:
         # borg's stdout goes to a FILE, not a pipe.
@@ -4429,6 +4799,9 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
     finally:
         current_borg_proc = None
 
+        if snapshot_session is not None:
+            snapshot_session.cleanup()
+
         # Close the catalog SSH pipe
         catalog_ssh_error = ""
         if catalog_ssh:
@@ -4677,6 +5050,10 @@ def main():
         signal.signal(signal.SIGTERM, signal_handler)
 
     config = load_config()
+    try:
+        cleanup_stale_snapshots()
+    except Exception as e:
+        logger.warning("Stale snapshot sweep failed: {}".format(e))
 
     # Register with server
     if not register(config):
