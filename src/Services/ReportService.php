@@ -144,6 +144,56 @@ class ReportService
             $totalFailed += $failed;
             $totalBytes += (int) ($periodStats['total_bytes'] ?? 0);
 
+            // Data added after deduplication in the period: what the backups
+            // actually put on disk, which is the figure that matters for
+            // capacity. Per client so a scoped report can sum its own.
+            $periodDedup = (int) ($this->db->fetchOne("
+                SELECT COALESCE(SUM(a.deduplicated_size), 0) AS dedup
+                FROM backup_jobs bj
+                JOIN archives a ON a.backup_job_id = bj.id
+                WHERE bj.agent_id = ? AND bj.task_type = 'backup'
+                  AND bj.status = 'completed' AND bj.completed_at > ?
+            ", [$agent['id'], $sinceTime])['dedup'] ?? 0);
+
+            // Why the client needs attention, if it does. One reason, in order
+            // of how bad it is: the last backup failed, the client is offline,
+            // or an enabled schedule has gone past its run time without running.
+            $lastGood = $this->db->fetchOne("
+                SELECT MAX(completed_at) AS at FROM backup_jobs
+                WHERE agent_id = ? AND task_type = 'backup' AND status = 'completed'
+            ", [$agent['id']]);
+            $lastGoodAt = $lastGood['at'] ?? null;
+            $attention = null;
+            if ($overallStatus === 'failed' || $overallStatus === 'partial') {
+                $err = trim((string) ($lastJob['error_log'] ?? ''));
+                $attention = [
+                    'reason' => 'failed',
+                    'label' => $overallStatus === 'partial' ? 'Partial' : 'Failed',
+                    'detail' => $err !== '' ? mb_substr(preg_replace('/\s+/', ' ', $err), 0, 90) : 'Last backup did not complete',
+                ];
+            } elseif ($agent['status'] !== 'online') {
+                $attention = [
+                    'reason' => 'offline',
+                    'label' => 'Offline',
+                    'detail' => 'Client has stopped checking in',
+                ];
+            } else {
+                $overdue = $this->db->fetchOne("
+                    SELECT bp.name FROM schedules s
+                    JOIN backup_plans bp ON bp.id = s.backup_plan_id
+                    WHERE bp.agent_id = ? AND s.enabled = 1 AND bp.enabled = 1
+                      AND s.next_run IS NOT NULL AND s.next_run < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 HOUR)
+                    ORDER BY s.next_run LIMIT 1
+                ", [$agent['id']]);
+                if ($overdue) {
+                    $attention = [
+                        'reason' => 'overdue',
+                        'label' => 'Overdue',
+                        'detail' => 'Scheduled backup "' . $overdue['name'] . '" has not run',
+                    ];
+                }
+            }
+
             $agentData[] = [
                 'id' => $agent['id'],
                 'name' => $agent['name'],
@@ -168,6 +218,30 @@ class ReportService
                 ] : null,
                 'today_completed' => $completed,
                 'today_failed' => $failed,
+                'period_dedup_bytes' => $periodDedup,
+                'last_good_at' => $lastGoodAt,
+                'attention' => $attention,
+            ];
+        }
+
+        // Backup activity per day for the last seven days, per client so the
+        // renderer can sum it for whichever clients the reader may see. Days
+        // are UTC calendar days of the job's completion.
+        $activityRows = $this->db->fetchAll("
+            SELECT DATE(completed_at) AS day, agent_id,
+                   SUM(status = 'completed') AS completed, SUM(status = 'failed') AS failed
+            FROM backup_jobs
+            WHERE task_type = 'backup' AND status IN ('completed', 'failed')
+              AND completed_at >= ? AND completed_at < ?
+            GROUP BY DATE(completed_at), agent_id
+        ", [date('Y-m-d', strtotime($reportDate . ' -6 days')), date('Y-m-d', strtotime($reportDate . ' +1 day'))]);
+        $activity = [];
+        foreach ($activityRows as $ar) {
+            $activity[] = [
+                'day' => $ar['day'],
+                'agent_id' => (int) $ar['agent_id'],
+                'completed' => (int) $ar['completed'],
+                'failed' => (int) $ar['failed'],
             ];
         }
 
@@ -290,6 +364,7 @@ class ReportService
                 'total_bytes_backed_up' => $totalBytes,
             ],
             'agents' => $agentData,
+            'activity' => $activity,
             'errors' => $errors,
             'server' => [
                 'storage_path' => $storagePath,
@@ -306,10 +381,19 @@ class ReportService
         ];
 
         // Remote SSH storage
-        $remoteConfigs = $this->db->fetchAll("SELECT name, remote_host, remote_user, disk_total_bytes, disk_used_bytes, disk_free_bytes FROM remote_ssh_configs WHERE disk_total_bytes IS NOT NULL AND disk_total_bytes > 0 ORDER BY name");
+        $remoteConfigs = $this->db->fetchAll("
+            SELECT rsc.name, rsc.provider, rsc.remote_host, rsc.remote_user, rsc.disk_total_bytes, rsc.disk_used_bytes, rsc.disk_free_bytes,
+                   rsc.borgbase_repo_name, ba.name AS account_name
+            FROM remote_ssh_configs rsc
+            LEFT JOIN borgbase_accounts ba ON ba.id = rsc.borgbase_account_id
+            WHERE rsc.disk_total_bytes IS NOT NULL AND rsc.disk_total_bytes > 0
+            ORDER BY rsc.name");
         $remoteStorageData = [];
         foreach ($remoteConfigs as $rc) {
             $remoteStorageData[] = [
+                'provider' => $rc['provider'],
+                'repo_name' => $rc['borgbase_repo_name'],
+                'account_name' => $rc['account_name'],
                 'name' => $rc['name'],
                 'host' => $rc['remote_user'] . '@' . $rc['remote_host'],
                 'disk_total' => (int) $rc['disk_total_bytes'],
@@ -388,21 +472,7 @@ class ReportService
         $tz = new \DateTimeZone($userRow['timezone'] ?? 'America/New_York');
 
         $accessibleIds = $perms->getAccessibleAgentIds($userId);
-        $agents = array_filter($data['agents'] ?? [], fn($a) => in_array($a['id'], $accessibleIds));
-        $errors = array_filter($data['errors'] ?? [], fn($e) => !$e['agent_id'] || in_array($e['agent_id'], $accessibleIds));
-
-        // Recalculate summary for this user's scope
-        $completed = 0;
-        $failed = 0;
-        $bytesBackedUp = 0;
-        $online = 0;
-        $offline = 0;
-        foreach ($agents as $a) {
-            $completed += $a['today_completed'];
-            $failed += $a['today_failed'];
-            if ($a['status'] === 'online') $online++;
-            else $offline++;
-        }
+        $agents = array_values(array_filter($data['agents'] ?? [], fn($a) => in_array($a['id'], $accessibleIds)));
 
         $is24h = \BBS\Core\TimeHelper::is24h();
         $fmtTime = function (string $utc, string $format) use ($tz, $is24h): string {
@@ -413,211 +483,296 @@ class ReportService
             }
             return $dt->format($format);
         };
+        $ago = function (?string $utc): string {
+            if (!$utc) {
+                return 'never';
+            }
+            $secs = max(0, time() - strtotime($utc . ' UTC'));
+            if ($secs < 3600) {
+                return max(1, (int) floor($secs / 60)) . 'm ago';
+            }
+            if ($secs < 48 * 3600) {
+                return (int) floor($secs / 3600) . 'h ago';
+            }
+            return (int) floor($secs / 86400) . 'd ago';
+        };
+        $e = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+
+        // Links. The report is built by the scheduler, so there is no request
+        // to read the scheme from; https is what a server people email from
+        // runs, and a host that already carries a scheme is used as given.
+        $host = trim((string) ($data['server_host'] ?? ''));
+        $baseUrl = $host === '' ? '' : (preg_match('#^https?://#', $host) ? rtrim($host, '/') : 'https://' . rtrim($host, '/'));
+        $hostLabel = preg_replace('#^https?://#', '', $host) ?: 'Borg Backup Server';
+        $iconUrl = $baseUrl !== '' ? $baseUrl . '/branding/icon/96' : '';
 
         $reportDate = $data['report_date'] ?? date('Y-m-d');
-        $dateFormatted = date('M j, Y', strtotime($reportDate));
-        $serverHost = htmlspecialchars($data['server_host'] ?? 'BBS');
-        $generatedAt = !empty($data['generated_at']) ? $fmtTime($data['generated_at'], 'Y-m-d g:i A T') : '';
+        $dateFormatted = date('F j, Y', strtotime($reportDate));
+        $isWeekly = ($data['period'] ?? 'daily') === 'weekly';
+        $periodLabel = $isWeekly ? 'WEEKLY REPORT' : 'DAILY REPORT';
+        $periodSpan = $isWeekly ? 'Last 7 days' : 'Last 24 hours';
+        $generatedAt = !empty($data['generated_at']) ? $fmtTime($data['generated_at'], 'g:i A T') : '';
 
-        $periodLabel = ($data['period'] ?? 'daily') === 'weekly' ? 'Weekly' : 'Daily';
+        // ---- Figures for this reader's clients ----
+        $completed = 0;
+        $failed = 0;
+        $dedupBytes = 0;
+        $attention = [];
+        foreach ($agents as $a) {
+            $completed += (int) ($a['today_completed'] ?? 0);
+            $failed += (int) ($a['today_failed'] ?? 0);
+            $dedupBytes += (int) ($a['period_dedup_bytes'] ?? 0);
+            if (!empty($a['attention'])) {
+                $attention[] = $a;
+            }
+        }
+        $totalJobs = $completed + $failed;
+        $successRate = $totalJobs > 0 ? round($completed / $totalJobs * 100, 1) : null;
+        $successStr = $successRate === null ? '--' : (fmod($successRate, 1.0) == 0.0 ? (int) $successRate . '%' : $successRate . '%');
+        $successColor = $successRate === null ? '#6c757d' : ($successRate >= 99 ? '#1d7a4a' : ($successRate >= 90 ? '#b7791f' : '#c0392b'));
+        $totalAgents = count($agents);
+        $needCount = count($attention);
+        $okCount = $totalAgents - $needCount;
+        $order = ['failed' => 0, 'offline' => 1, 'overdue' => 2];
+        usort($attention, fn($x, $y) => ($order[$x['attention']['reason']] ?? 9) <=> ($order[$y['attention']['reason']] ?? 9));
+
+        // ---- Activity, last 7 days ending on the report date ----
+        $days = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $d = date('Y-m-d', strtotime($reportDate . " -{$i} days"));
+            $days[$d] = ['completed' => 0, 'failed' => 0];
+        }
+        foreach ($data['activity'] ?? [] as $row) {
+            if (!isset($days[$row['day']]) || !in_array((int) $row['agent_id'], $accessibleIds)) {
+                continue;
+            }
+            $days[$row['day']]['completed'] += (int) $row['completed'];
+            $days[$row['day']]['failed'] += (int) $row['failed'];
+        }
+        $maxDay = 1;
+        foreach ($days as $dv) {
+            $maxDay = max($maxDay, $dv['completed'] + $dv['failed']);
+        }
+
+        // ---- Styles used more than once ----
+        $font = "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;";
+        $muted = 'color:#6b7280;';
+        $rule = "<tr><td style=\"padding:0 24px;\"><div style=\"border-top:1px solid #e5e7eb;font-size:0;line-height:0;\">&nbsp;</div></td></tr>";
+        $h2 = "font-size:17px;font-weight:700;color:#111827;margin:0;";
+
+        $iconHtml = $iconUrl !== ''
+            ? "<img src=\"{$e($iconUrl)}\" width=\"32\" height=\"32\" alt=\"\" style=\"display:block;width:32px;height:32px;border-radius:7px;\">"
+            : '';
 
         $html = <<<HTML
-        <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:700px;margin:0 auto;color:#333;background:#fff;border-radius:8px;">
-            <div style="background:#1a1a2e;color:#fff;padding:20px 24px;border-radius:8px 8px 0 0;">
-                <h2 style="margin:0 0 4px 0;font-size:20px;">{$periodLabel} Backup Report</h2>
-                <div style="opacity:0.8;font-size:14px;">{$dateFormatted} &mdash; {$serverHost}</div>
-            </div>
-        HTML;
+<div style="{$font}background:#eef1f5;padding:24px 12px;margin:0;">
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:10px;border-collapse:separate;overflow:hidden;box-shadow:0 1px 3px rgba(16,24,40,0.12);">
+<tr><td style="background:#1b2a4a;padding:16px 24px;">
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%"><tr>
+    <td style="width:40px;vertical-align:middle;">{$iconHtml}</td>
+    <td style="vertical-align:middle;color:#ffffff;font-size:18px;font-weight:700;">Borg Backup Server</td>
+    <td style="vertical-align:middle;text-align:right;color:#c7d2e5;font-size:12px;font-weight:700;letter-spacing:1.5px;">{$periodLabel}</td>
+  </tr></table>
+</td></tr>
+<tr><td style="padding:24px 24px 8px;">
+  <div style="font-size:28px;font-weight:800;color:#111827;line-height:1.15;">Your backups, at a glance.</div>
+  <div style="font-size:15px;{$muted}margin-top:6px;">{$e($dateFormatted)} &nbsp;&middot;&nbsp; {$periodSpan}</div>
+  <div style="font-size:14px;margin-top:2px;"><a href="{$e($baseUrl ?: '#')}" style="color:#0b5ed7;text-decoration:none;font-weight:600;">{$e($hostLabel)}</a></div>
+</td></tr>
+HTML;
 
-        // Summary bar
-        $totalAgents = count($agents);
-        $summaryColor = $failed > 0 ? '#dc3545' : '#28a745';
-        $html .= <<<HTML
-            <div style="display:flex;background:#f8f9fa;padding:16px 24px;border-bottom:1px solid #dee2e6;gap:32px;flex-wrap:wrap;">
-                <div style="text-align:center;min-width:80px;">
-                    <div style="font-size:24px;font-weight:700;color:#0d6efd;">{$totalAgents}</div>
-                    <div style="font-size:12px;color:#6c757d;">Clients</div>
-                </div>
-                <div style="text-align:center;min-width:80px;">
-                    <div style="font-size:24px;font-weight:700;color:#28a745;">{$completed}</div>
-                    <div style="font-size:12px;color:#6c757d;">Completed</div>
-                </div>
-                <div style="text-align:center;min-width:80px;">
-                    <div style="font-size:24px;font-weight:700;color:{$summaryColor};">{$failed}</div>
-                    <div style="font-size:12px;color:#6c757d;">Failed</div>
-                </div>
-                <div style="text-align:center;min-width:80px;">
-                    <div style="font-size:24px;font-weight:700;color:#17a2b8;">{$online}</div>
-                    <div style="font-size:12px;color:#6c757d;">Online</div>
-                </div>
-            </div>
-        HTML;
-
-        // Client table
-        $html .= '<div style="padding:16px 24px;">';
-        $html .= '<h3 style="font-size:16px;margin:0 0 12px 0;color:#333;">Client Status</h3>';
-        $html .= '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
-        $html .= '<tr style="background:#f1f3f5;text-align:left;">'
-                . '<th style="padding:8px 10px;border-bottom:2px solid #dee2e6;">Client</th>'
-                . '<th style="padding:8px 10px;border-bottom:2px solid #dee2e6;">Status</th>'
-                . '<th style="padding:8px 10px;border-bottom:2px solid #dee2e6;">Last Backup</th>'
-                . '<th style="padding:8px 10px;border-bottom:2px solid #dee2e6;">Result</th>'
-                . '<th style="padding:8px 10px;border-bottom:2px solid #dee2e6;text-align:right;">Files</th>'
-                . '<th style="padding:8px 10px;border-bottom:2px solid #dee2e6;text-align:right;">Size</th>'
-                . '</tr>';
-
-        foreach ($agents as $agent) {
-            $name = htmlspecialchars($agent['name']);
-            $statusColor = $agent['status'] === 'online' ? '#28a745' : '#dc3545';
-            $statusLabel = ucfirst($agent['status']);
-            $statusDot = "<span style='display:inline-block;width:8px;height:8px;border-radius:50%;background:{$statusColor};margin-right:4px;'></span>";
-
-            $lastBackup = '--';
-            $result = '--';
-            $files = '--';
-            // Size is the on-disk repository footprint (matches the Clients page
-            // and `du`), shown whenever the client has stored data — even if the
-            // most recent backup failed (#292).
-            $size = $agent['repo_size'] > 0 ? self::formatBytes($agent['repo_size']) : '--';
-
-            if ($agent['last_backup']) {
-                $lb = $agent['last_backup'];
-                $lastBackup = $lb['completed_at'] ? $fmtTime($lb['completed_at'], 'M j, g:i A') : '--';
-                if ($lb['status'] === 'completed') {
-                    $result = "<span style='color:#28a745;font-weight:600;'>OK</span>";
-                } elseif ($lb['status'] === 'partial') {
-                    $result = "<span style='color:#e67e22;font-weight:600;'>PARTIAL</span>";
-                } else {
-                    $result = "<span style='color:#dc3545;font-weight:600;'>FAILED</span>";
-                }
-                $files = number_format($lb['files']);
-            }
-
-            $todayNote = '';
-            if ($agent['today_completed'] > 0 || $agent['today_failed'] > 0) {
-                $parts = [];
-                if ($agent['today_completed'] > 0) $parts[] = "{$agent['today_completed']} ok";
-                if ($agent['today_failed'] > 0) $parts[] = "<span style='color:#dc3545;'>{$agent['today_failed']} failed</span>";
-                $todayNote = ' <span style="font-size:11px;color:#6c757d;">(' . implode(', ', $parts) . ' today)</span>';
-            }
-
-            $html .= "<tr style='border-bottom:1px solid #eee;'>"
-                    . "<td style='padding:8px 10px;'>{$name}{$todayNote}</td>"
-                    . "<td style='padding:8px 10px;'>{$statusDot}{$statusLabel}</td>"
-                    . "<td style='padding:8px 10px;'>{$lastBackup}</td>"
-                    . "<td style='padding:8px 10px;'>{$result}</td>"
-                    . "<td style='padding:8px 10px;text-align:right;'>{$files}</td>"
-                    . "<td style='padding:8px 10px;text-align:right;'>{$size}</td>"
-                    . "</tr>";
+        // ---- Banner ----
+        if ($totalAgents === 0) {
+            $html .= "<tr><td style=\"padding:8px 24px 16px;\"><div style=\"background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;font-size:14px;{$muted}\">No clients are visible to this report.</div></td></tr>";
+        } elseif ($needCount > 0) {
+            $html .= "<tr><td style=\"padding:8px 24px 16px;\"><div style=\"background:#fff8e1;border:1px solid #f3dc8a;border-radius:8px;padding:12px 16px;font-size:14px;color:#374151;\">"
+                . "<span style=\"font-size:16px;\">&#9888;&#65039;</span> <strong style=\"color:#7c4a03;\">{$needCount} client" . ($needCount === 1 ? ' needs' : 's need') . " attention</strong>"
+                . " <span style=\"color:#d1d5db;\">&nbsp;|&nbsp;</span> {$okCount} of {$totalAgents} clients are within their backup policy.</div></td></tr>";
+        } else {
+            $html .= "<tr><td style=\"padding:8px 24px 16px;\"><div style=\"background:#ecfdf3;border:1px solid #abefc6;border-radius:8px;padding:12px 16px;font-size:14px;color:#374151;\">"
+                . "<span style=\"font-size:16px;color:#1d7a4a;\">&#10004;</span> <strong style=\"color:#1d7a4a;\">All clients are within their backup policy</strong>"
+                . " <span style=\"color:#d1d5db;\">&nbsp;|&nbsp;</span> {$totalAgents} client" . ($totalAgents === 1 ? '' : 's') . " backed up as scheduled.</div></td></tr>";
         }
 
-        $html .= '</table></div>';
+        // ---- Three stats ----
+        $dedupStr = $dedupBytes > 0 ? self::formatBytes($dedupBytes) : '0 B';
+        $stat = function (string $value, string $label, string $sub, string $color, bool $divider) use ($muted): string {
+            $border = $divider ? 'border-left:1px solid #e5e7eb;' : '';
+            return "<td width=\"33%\" style=\"padding:8px 12px;vertical-align:top;{$border}\">"
+                . "<div style=\"font-size:30px;font-weight:800;color:{$color};line-height:1.1;\">{$value}</div>"
+                . "<div style=\"font-size:14px;font-weight:700;color:#111827;margin-top:4px;\">{$label}</div>"
+                . "<div style=\"font-size:13px;{$muted}\">{$sub}</div></td>";
+        };
+        $html .= "<tr><td style=\"padding:8px 12px 20px;\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"><tr>"
+            . $stat($successStr, 'Job success rate', $totalJobs > 0 ? "{$completed} of {$totalJobs} jobs" : 'No jobs in this period', $successColor, false)
+            . $stat($e($dedupStr), 'Data added', 'After deduplication', '#0b5ed7', true)
+            . $stat("{$okCount} / {$totalAgents}", 'Clients up to date', $needCount > 0 ? "{$needCount} need" . ($needCount === 1 ? 's' : '') . ' attention' : 'None need attention', '#111827', true)
+            . "</tr></table></td></tr>";
 
-        // Errors section
-        if (!empty($errors)) {
-            $errorCount = count($errors);
-            $html .= '<div style="padding:0 24px 16px;">';
-            $html .= "<h3 style='font-size:16px;margin:0 0 12px 0;color:#dc3545;'>Errors ({$errorCount})</h3>";
-            $html .= '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
-            foreach (array_slice($errors, 0, 20) as $err) {
-                $time = $fmtTime($err['created_at'], 'g:i A');
-                $errAgent = htmlspecialchars($err['agent_name'] ?? 'System');
-                $msg = htmlspecialchars(substr($err['message'], 0, 200));
-                $html .= "<tr style='border-bottom:1px solid #f1f3f5;'>"
-                        . "<td style='padding:6px 8px;color:#6c757d;white-space:nowrap;'>{$time}</td>"
-                        . "<td style='padding:6px 8px;font-weight:600;'>{$errAgent}</td>"
-                        . "<td style='padding:6px 8px;'>{$msg}</td>"
-                        . "</tr>";
+        // ---- Backup activity chart ----
+        $html .= $rule;
+        $html .= "<tr><td style=\"padding:18px 24px 4px;\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"><tr>"
+            . "<td style=\"{$h2}\">Backup activity</td><td style=\"text-align:right;font-size:13px;{$muted}\">Last 7 days</td></tr></table></td></tr>";
+        $barMax = 110;
+        $bars = '';
+        $lastDay = array_key_last($days);
+        foreach ($days as $d => $dv) {
+            $total = $dv['completed'] + $dv['failed'];
+            $cH = (int) round($dv['completed'] / $maxDay * $barMax);
+            $fH = (int) round($dv['failed'] / $maxDay * $barMax);
+            if ($dv['failed'] > 0 && $fH < 3) {
+                $fH = 3;
             }
-            $html .= '</table>';
-            if ($errorCount > 20) {
-                $html .= "<div style='font-size:12px;color:#6c757d;margin-top:8px;'>... and " . ($errorCount - 20) . " more</div>";
+            if ($dv['completed'] > 0 && $cH < 3) {
+                $cH = 3;
             }
-            $html .= '</div>';
+            $spacer = max(0, $barMax - $cH - $fH);
+            $isLast = $d === $lastDay;
+            $countLabel = $total > 0 ? ($dv['failed'] > 0 ? "{$dv['completed']}/{$total}" : (string) $total) : '';
+            $cellBg = $isLast ? 'background:#eaf2fd;border-radius:6px;' : '';
+            $bars .= "<td style=\"padding:0 3px;vertical-align:bottom;\"><div style=\"{$cellBg}padding:6px 2px 4px;\">"
+                . "<div style=\"font-size:11px;font-weight:700;color:#111827;text-align:center;height:14px;line-height:14px;\">{$countLabel}</div>"
+                . "<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"border-collapse:collapse;\">"
+                . "<tr><td style=\"height:{$spacer}px;font-size:0;line-height:0;\"></td></tr>"
+                . ($fH > 0 ? "<tr><td style=\"height:{$fH}px;background:#e5484d;font-size:0;line-height:0;\"></td></tr>" : '')
+                . ($cH > 0 ? "<tr><td style=\"height:{$cH}px;background:#2aa889;font-size:0;line-height:0;\"></td></tr>" : '')
+                . ($total === 0 ? "<tr><td style=\"height:2px;background:#e5e7eb;font-size:0;line-height:0;\"></td></tr>" : '')
+                . "</table>"
+                . "<div style=\"font-size:11px;{$muted}text-align:center;margin-top:6px;\">" . date('M j', strtotime($d)) . "</div>"
+                . "</div></td>";
+        }
+        $html .= "<tr><td style=\"padding:8px 24px 0;\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"border-collapse:collapse;\"><tr>{$bars}</tr></table></td></tr>";
+        $html .= "<tr><td style=\"padding:10px 24px 18px;text-align:center;font-size:12px;{$muted}\">"
+            . "<span style=\"display:inline-block;width:9px;height:9px;border-radius:50%;background:#2aa889;\"></span>&nbsp; Completed &nbsp;&nbsp;&nbsp;"
+            . "<span style=\"display:inline-block;width:9px;height:9px;border-radius:50%;background:#e5484d;\"></span>&nbsp; Failed</td></tr>";
+
+        // ---- Needs attention ----
+        $html .= $rule;
+        if ($needCount > 0) {
+            $html .= "<tr><td style=\"padding:18px 24px 6px;\"><span style=\"{$h2}\">Needs attention</span>"
+                . " <span style=\"display:inline-block;background:#fde2e2;color:#b42318;font-size:12px;font-weight:700;padding:2px 10px;border-radius:12px;vertical-align:middle;margin-left:6px;\">{$needCount} client" . ($needCount === 1 ? '' : 's') . "</span></td></tr>";
+            $shown = array_slice($attention, 0, 10);
+            foreach ($shown as $i => $a) {
+                $at = $a['attention'];
+                $isLastRow = $i === count($shown) - 1;
+                [$badgeBg, $badgeFg, $glyph, $glyphBg] = match ($at['reason']) {
+                    'failed' => ['#fde2e2', '#b42318', '&#10005;', '#e5484d'],
+                    'offline' => ['#e5e7eb', '#374151', '&#8211;', '#6b7280'],
+                    default => ['#fff3cd', '#7c4a03', '&#9201;', '#f59e0b'],
+                };
+                $link = $baseUrl !== '' ? $baseUrl . '/clients/' . (int) $a['id'] : '#';
+                $html .= "<tr><td style=\"padding:0 24px;\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"" . ($isLastRow ? '' : 'border-bottom:1px solid #f3f4f6;') . "\"><tr>"
+                    . "<td style=\"width:34px;padding:12px 0;vertical-align:top;\"><div style=\"width:22px;height:22px;border-radius:50%;background:{$glyphBg};color:#ffffff;font-size:13px;font-weight:700;text-align:center;line-height:22px;\">{$glyph}</div></td>"
+                    . "<td style=\"padding:10px 0;vertical-align:top;\">"
+                    . "<div style=\"font-size:15px;font-weight:700;color:#111827;\">{$e($a['name'])} <span style=\"display:inline-block;background:{$badgeBg};color:{$badgeFg};font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:6px;\">{$e($at['label'])}</span></div>"
+                    . "<div style=\"font-size:13px;{$muted}margin-top:2px;\">{$e($at['detail'])} &nbsp;&middot;&nbsp; Last good backup {$e($ago($a['last_good_at'] ?? null))}</div></td>"
+                    . "<td style=\"text-align:right;vertical-align:middle;white-space:nowrap;padding-left:12px;\"><a href=\"{$e($link)}\" style=\"color:#0b5ed7;font-weight:700;font-size:14px;text-decoration:none;\">Review &rarr;</a></td>"
+                    . "</tr></table></td></tr>";
+            }
+            $omitted = $okCount;
+            $more = $needCount - count($shown);
+            $tail = $more > 0 ? "{$more} more need attention &nbsp;&middot;&nbsp; " : ($omitted > 0 ? "{$omitted} healthy client" . ($omitted === 1 ? '' : 's') . " omitted &nbsp;&middot;&nbsp; " : '');
+            $html .= "<tr><td style=\"padding:10px 24px 18px;font-size:13px;{$muted}\">{$tail}<a href=\"{$e($baseUrl !== '' ? $baseUrl . '/clients' : '#')}\" style=\"color:#0b5ed7;text-decoration:none;font-weight:600;\">View all clients &rarr;</a></td></tr>";
+        } elseif ($totalAgents > 0) {
+            $html .= "<tr><td style=\"padding:18px 24px;\"><span style=\"{$h2}\">Needs attention</span>"
+                . " <span style=\"display:inline-block;background:#ecfdf3;color:#1d7a4a;font-size:12px;font-weight:700;padding:2px 10px;border-radius:12px;vertical-align:middle;margin-left:6px;\">none</span>"
+                . "<div style=\"font-size:13px;{$muted}margin-top:6px;\">Every client's last backup completed and nothing is overdue. <a href=\"{$e($baseUrl !== '' ? $baseUrl . '/clients' : '#')}\" style=\"color:#0b5ed7;text-decoration:none;font-weight:600;\">View all clients &rarr;</a></div></td></tr>";
         }
 
-        // Server stats (admin only)
+        // ---- Storage overview (admin only: infrastructure detail) ----
         if ($isAdmin && !empty($data['server'])) {
             $srv = $data['server'];
-            $diskPct = $srv['disk_percent'];
-            $diskUsed = self::formatBytes($srv['disk_used']);
-            $diskTotal = self::formatBytes($srv['disk_total']);
-            $diskColor = $diskPct >= 90 ? '#dc3545' : ($diskPct >= 75 ? '#ffc107' : '#28a745');
-            $repoCount = $srv['repo_count'] ?? 0;
-            $archiveCount = $srv['archive_count'] ?? 0;
-            $archiveOriginal = self::formatBytes($srv['archive_original'] ?? 0);
-            // repo_total_size was added in v2.28.1; fall back to legacy archive_dedup
-            // for reports stored before the fix.
-            $onDiskBytes = (int) ($srv['repo_total_size'] ?? $srv['archive_dedup'] ?? 0);
-            $repoTotal = self::formatBytes($onDiskBytes);
-            $dedupSavings = ($srv['archive_original'] ?? 0) > 0
-                ? round((1 - $onDiskBytes / $srv['archive_original']) * 100, 1) : 0;
-            // Rounding can produce 100 even when the repo still holds bytes (#191).
-            if ($dedupSavings >= 100 && $onDiskBytes > 0) {
-                $dedupSavings = 99.9;
+            $pools = [];
+            foreach ($srv['storage_locations'] ?? [] as $loc) {
+                $pools[] = [
+                    'label' => $loc['label'],
+                    'unknown' => !empty($loc['capacity_unknown']),
+                    'used' => (int) ($loc['disk_used'] ?? 0),
+                    'total' => (int) ($loc['disk_total'] ?? 0),
+                    'pct' => (float) ($loc['disk_percent'] ?? 0),
+                ];
             }
+            foreach ($data['remote_storage'] ?? [] as $rs) {
+                $isBb = ($rs['provider'] ?? '') === 'borgbase';
+                $label = $isBb
+                    ? 'BorgBase &middot; ' . $e($rs['repo_name'] ?: preg_replace('/^BorgBase\s*-\s*/i', '', $rs['name']))
+                    : $e($rs['name']);
+                $pools[] = [
+                    'label' => $label,
+                    'raw_label' => true,
+                    'unknown' => false,
+                    'used' => (int) $rs['disk_used'],
+                    'total' => (int) $rs['disk_total'],
+                    'pct' => (float) $rs['disk_percent'],
+                ];
+            }
+            if ($pools) {
+                usort($pools, fn($x, $y) => $y['pct'] <=> $x['pct']);
+                $withBars = array_slice($pools, 0, 4);
+                $others = array_slice($pools, 4);
 
-            $html .= <<<HTML
-                <div style="padding:0 24px 16px;">
-                    <h3 style="font-size:16px;margin:0 0 12px 0;color:#333;">Server</h3>
-                    <table style="font-size:13px;border-collapse:collapse;">
-                        <tr><td style="padding:4px 16px 4px 0;color:#6c757d;vertical-align:top;">Storage</td>
-                            <td style="padding:4px 0;"><span style="color:{$diskColor};font-weight:600;">{$diskPct}%</span> used ({$diskUsed} / {$diskTotal})</td></tr>
-            HTML;
-
-            // Per-location breakdown when multiple storage locations are configured
-            $locations = $srv['storage_locations'] ?? [];
-            if (count($locations) > 1) {
-                foreach ($locations as $loc) {
-                    $locLabel = htmlspecialchars($loc['label']);
-                    if (!empty($loc['capacity_unknown'])) {
-                        $html .= "<tr><td style='padding:2px 16px 2px 16px;color:#adb5bd;font-size:12px;'>&nbsp;&nbsp;&bull; {$locLabel}</td>"
-                                . "<td style='padding:2px 0;font-size:12px;color:#6c757d;'>capacity unknown &mdash; set it on the Storage page</td></tr>";
+                $html .= $rule;
+                $html .= "<tr><td style=\"padding:18px 24px 6px;{$h2}\">Storage overview</td></tr>";
+                foreach ($withBars as $pl) {
+                    $label = !empty($pl['raw_label']) ? $pl['label'] : $e($pl['label']);
+                    if ($pl['unknown']) {
+                        $html .= "<tr><td style=\"padding:6px 24px;\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"><tr>"
+                            . "<td style=\"font-size:14px;font-weight:700;color:#111827;\">{$label}</td>"
+                            . "<td style=\"text-align:right;font-size:13px;{$muted}\">capacity unknown &middot; set it on the Storage page</td></tr></table></td></tr>";
                         continue;
                     }
-                    $locPct = $loc['disk_percent'];
-                    $locUsed = self::formatBytes($loc['disk_used']);
-                    $locTotal = self::formatBytes($loc['disk_total']);
-                    $locColor = $locPct >= 90 ? '#dc3545' : ($locPct >= 75 ? '#ffc107' : '#28a745');
-                    $html .= "<tr><td style='padding:2px 16px 2px 16px;color:#adb5bd;font-size:12px;'>&nbsp;&nbsp;&bull; {$locLabel}</td>"
-                            . "<td style='padding:2px 0;font-size:12px;color:#6c757d;'><span style='color:{$locColor};'>{$locPct}%</span> ({$locUsed} / {$locTotal})</td></tr>";
+                    $pct = $pl['pct'];
+                    $color = $pct >= 90 ? '#e5484d' : ($pct >= 75 ? '#f59e0b' : '#2aa889');
+                    $width = max(1, min(100, (int) round($pct)));
+                    $html .= "<tr><td style=\"padding:8px 24px 2px;\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"><tr>"
+                        . "<td style=\"font-size:14px;font-weight:700;color:#111827;\">{$label}</td>"
+                        . "<td style=\"text-align:right;font-size:13px;color:#374151;\">" . self::formatBytes($pl['used']) . " / " . self::formatBytes($pl['total']) . " &nbsp;&middot;&nbsp; <strong>{$pct}%</strong></td></tr></table>"
+                        . "<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"margin-top:6px;border-collapse:collapse;\"><tr>"
+                        . "<td width=\"{$width}%\" style=\"height:8px;background:{$color};border-radius:4px;font-size:0;line-height:0;\"></td>"
+                        . ($width < 100 ? "<td style=\"height:8px;background:#e5e7eb;border-radius:4px;font-size:0;line-height:0;\"></td>" : '')
+                        . "</tr></table>"
+                        . ($pct >= 90 ? "<div style=\"font-size:12px;color:#b42318;font-weight:600;margin-top:6px;\">&#9888; Above 90% capacity</div>" : '')
+                        . "</td></tr>";
                 }
-            }
+                if ($others) {
+                    $parts = [];
+                    foreach ($others as $pl) {
+                        $label = !empty($pl['raw_label']) ? $pl['label'] : $e($pl['label']);
+                        $parts[] = $label . ' ' . ($pl['unknown'] ? 'n/a' : $pl['pct'] . '%');
+                    }
+                    $html .= "<tr><td style=\"padding:10px 24px 4px;font-size:13px;{$muted}\">Other destinations: " . implode(' &nbsp;&middot;&nbsp; ', $parts) . "</td></tr>";
+                }
 
-            $html .= <<<HTML
-                        <tr><td style="padding:4px 16px 4px 0;color:#6c757d;">Repositories</td>
-                            <td style="padding:4px 0;">{$repoCount} ({$repoTotal} on disk)</td></tr>
-                        <tr><td style="padding:4px 16px 4px 0;color:#6c757d;">Archives</td>
-                            <td style="padding:4px 0;">{$archiveCount} ({$archiveOriginal} original, {$dedupSavings}% dedup savings)</td></tr>
-                    </table>
-                </div>
-            HTML;
+                $repoCount = (int) ($srv['repo_count'] ?? 0);
+                $archiveCount = (int) ($srv['archive_count'] ?? 0);
+                $onDiskBytes = (int) ($srv['repo_total_size'] ?? $srv['archive_dedup'] ?? 0);
+                $dedupSavings = ($srv['archive_original'] ?? 0) > 0
+                    ? round((1 - $onDiskBytes / $srv['archive_original']) * 100, 1) : 0;
+                if ($dedupSavings >= 100 && $onDiskBytes > 0) {
+                    $dedupSavings = 99.9;   // rounding can hit 100 while bytes remain (#191)
+                }
+                $html .= "<tr><td style=\"padding:14px 24px 18px;\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"border-top:1px solid #e5e7eb;\"><tr>"
+                    . "<td width=\"33%\" style=\"padding-top:12px;text-align:center;font-size:14px;{$muted}\"><strong style=\"color:#111827;font-size:16px;\">" . number_format($repoCount) . "</strong> repositories</td>"
+                    . "<td width=\"33%\" style=\"padding-top:12px;text-align:center;font-size:14px;{$muted}border-left:1px solid #e5e7eb;\"><strong style=\"color:#111827;font-size:16px;\">" . number_format($archiveCount) . "</strong> archives</td>"
+                    . "<td width=\"33%\" style=\"padding-top:12px;text-align:center;font-size:14px;{$muted}border-left:1px solid #e5e7eb;\"><strong style=\"color:#111827;font-size:16px;\">{$dedupSavings}%</strong> dedup savings</td>"
+                    . "</tr></table></td></tr>";
+            }
         }
 
-        // Remote storage section — admin-only infrastructure detail
-        if ($isAdmin && !empty($data['remote_storage'])) {
-            $html .= '<div style="padding:0 24px 16px;">';
-            $html .= '<h3 style="font-size:16px;margin:0 0 12px 0;color:#333;">Remote Storage</h3>';
-            $html .= '<table style="font-size:13px;border-collapse:collapse;">';
-            foreach ($data['remote_storage'] as $rs) {
-                $rsPct = $rs['disk_percent'];
-                $rsColor = $rsPct >= 90 ? '#dc3545' : ($rsPct >= 75 ? '#ffc107' : '#28a745');
-                $rsName = htmlspecialchars($rs['name']);
-                $rsUsed = self::formatBytes($rs['disk_used']);
-                $rsTotal = self::formatBytes($rs['disk_total']);
-                $html .= "<tr><td style='padding:4px 16px 4px 0;color:#6c757d;'>{$rsName}</td>"
-                        . "<td style='padding:4px 0;'><span style='color:{$rsColor};font-weight:600;'>{$rsPct}%</span> used ({$rsUsed} / {$rsTotal})</td></tr>";
-            }
-            $html .= '</table></div>';
-        }
-
-        // Footer
-        $html .= <<<HTML
-            <div style="padding:12px 24px;background:#f8f9fa;border-radius:0 0 8px 8px;border-top:1px solid #dee2e6;">
-                <div style="font-size:11px;color:#adb5bd;">Generated {$generatedAt} &mdash; Borg Backup Server</div>
-            </div>
-        </div>
-        HTML;
+        // ---- Button, app note, footer ----
+        $dashUrl = $baseUrl !== '' ? $baseUrl . '/dashboard' : '#';
+        $prefsUrl = $baseUrl !== '' ? $baseUrl . '/profile' : '#';
+        $html .= $rule;
+        $html .= "<tr><td style=\"padding:22px 24px 8px;text-align:center;\">"
+            . "<a href=\"{$e($dashUrl)}\" style=\"display:inline-block;background:#0b5ed7;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;padding:12px 26px;border-radius:8px;\">Open backup dashboard &rarr;</a></td></tr>";
+        $html .= "<tr><td style=\"padding:16px 24px 0;\"><div style=\"border-top:1px solid #e5e7eb;font-size:0;line-height:0;\">&nbsp;</div></td></tr>";
+        $html .= "<tr><td style=\"padding:12px 24px;text-align:center;font-size:13px;color:#374151;\">"
+            . "<span style=\"font-size:15px;\">&#128241;</span> <strong>New:</strong> <a href=\"https://www.borgbackupserver.com/bbs-manager/\" style=\"color:#0b5ed7;text-decoration:none;font-weight:600;\">BBS Manager for iOS</a> &mdash; manage backups from your phone. <a href=\"https://www.borgbackupserver.com/bbs-manager/\" style=\"color:#0b5ed7;text-decoration:none;\">&rarr;</a></td></tr>";
+        $html .= "<tr><td style=\"padding:12px 24px 18px;border-top:1px solid #e5e7eb;\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"><tr>"
+            . "<td style=\"font-size:12px;color:#9ca3af;\">Borg Backup Server" . ($generatedAt !== '' ? " &middot; Generated at {$e($generatedAt)}" : '') . "</td>"
+            . "<td style=\"text-align:right;font-size:12px;\"><a href=\"{$e($prefsUrl)}\" style=\"color:#0b5ed7;text-decoration:underline;\">Manage report preferences</a></td>"
+            . "</tr></table></td></tr>";
+        $html .= "</table></div>";
 
         return $html;
     }

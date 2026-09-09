@@ -578,6 +578,11 @@ class ProfileApiController extends Controller
 
         $data['agents'] = $agents;
         $data['errors'] = $errors;
+        // Per-day activity is stored per agent for exactly this reason.
+        $data['activity'] = array_values(array_filter(
+            $data['activity'] ?? [],
+            fn($r) => in_array((int) ($r['agent_id'] ?? 0), $accessible)
+        ));
         $data['summary'] = [
             'total_agents' => count($agents),
             'online' => $online,
