@@ -34,13 +34,18 @@ class AdminApiController extends Controller
             SELECT a.id, a.name, a.hostname, a.ip_address, a.os_info,
                    a.borg_version, a.agent_version, a.status, a.last_heartbeat,
                    a.created_at, u.username as owner,
-                   a.client_profile_id, cp.name AS client_profile_name
+                   a.client_profile_id, cp.name AS client_profile_name,
+                   a.snapshot_capable
             FROM agents a
             LEFT JOIN users u ON u.id = a.user_id
             LEFT JOIN client_profiles cp ON cp.id = a.client_profile_id
             WHERE {$agentWhere}
             ORDER BY a.name
         ", $agentParams);
+        foreach ($agents as &$a) {
+            $a['snapshot_capable'] = $a['snapshot_capable'] === null ? null : (bool) $a['snapshot_capable'];
+        }
+        unset($a);
 
         $this->json(['clients' => $agents]);
     }
@@ -904,7 +909,7 @@ class AdminApiController extends Controller
         $this->apiRequirePermission($ctx, \BBS\Services\PermissionService::MANAGE_PLANS, $id);
         $input = $this->getJsonInput();
 
-        $agent = $this->db->fetchOne("SELECT id FROM agents WHERE id = ?", [$id]);
+        $agent = $this->db->fetchOne("SELECT id, snapshot_capable, snapshot_support FROM agents WHERE id = ?", [$id]);
         if (!$agent) {
             $this->json(['error' => 'Client not found'], 404);
         }
@@ -930,6 +935,9 @@ class AdminApiController extends Controller
         }
         if (($fieldError = \BBS\Services\BorgCommandBuilder::validatePlanFields($advancedOptions, $directories)) !== null) {
             $this->json(['error' => $fieldError], 422);
+        }
+        if (!empty($input['snapshot']) && ($snapError = $this->snapshotUnavailableReason($agent)) !== null) {
+            $this->json(['error' => $snapError], 422);
         }
 
         // Verify repository belongs to this agent
@@ -1714,6 +1722,15 @@ class AdminApiController extends Controller
         }
         if (array_key_exists('snapshot', $input)) {
             $planData['snapshot'] = !empty($input['snapshot']) ? 1 : 0;
+            // Turning it on needs a host that can snapshot. A plan that
+            // already has it keeps it, as on the web, so the switch can
+            // still be turned off after the host changed.
+            if ($planData['snapshot'] && empty($plan['snapshot'])) {
+                $agent = $this->db->fetchOne("SELECT snapshot_capable, snapshot_support FROM agents WHERE id = ?", [$id]);
+                if (($snapError = $this->snapshotUnavailableReason($agent)) !== null) {
+                    $this->json(['error' => $snapError], 422);
+                }
+            }
         }
         foreach (['prune_minutes', 'prune_hours', 'prune_days', 'prune_weeks', 'prune_months', 'prune_years'] as $field) {
             if (isset($input[$field])) {
@@ -1787,6 +1804,24 @@ class AdminApiController extends Controller
         }
 
         $this->json(['status' => 'ok', 'message' => 'Plan updated']);
+    }
+
+    /**
+     * Why a plan on this client cannot back up from a snapshot, or null
+     * when it can. Uses the capability the agent reported with its system
+     * info (agent 2.95.0+).
+     */
+    private function snapshotUnavailableReason(?array $agent): ?string
+    {
+        if (!empty($agent['snapshot_capable'])) {
+            return null;
+        }
+        if ($agent === null || $agent['snapshot_capable'] === null) {
+            return 'snapshot is not available: the agent has not reported its filesystems yet (agent 2.95.0 or newer required)';
+        }
+        $support = json_decode($agent['snapshot_support'] ?? '', true);
+        $reason = $support['reason'] ?? 'no snapshot-capable volumes found';
+        return 'snapshot is not available on this client: ' . $reason;
     }
 
     public function deletePlan(int $id, int $planId): void
