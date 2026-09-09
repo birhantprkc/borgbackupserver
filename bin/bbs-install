@@ -412,7 +412,10 @@ info "Installing Composer dependencies..."
 # to a file, and fail loudly with the log on any error instead of hanging.
 export COMPOSER_ALLOW_SUPERUSER=1 COMPOSER_NO_INTERACTION=1
 COMPOSER_LOG="/tmp/bbs-composer-install.log"
-if ! composer install --no-dev --optimize-autoloader --no-interaction --no-progress 2>&1 | tee "$COMPOSER_LOG"; then
+# Run through php with PCRE JIT off: containers that refuse executable
+# memory make PHP warn "Allocation of JIT memory failed", which Composer
+# treats as fatal (#480). Process-local; php.ini is not touched.
+if ! php -d pcre.jit=0 "$(command -v composer)" install --no-dev --optimize-autoloader --no-interaction --no-progress 2>&1 | tee "$COMPOSER_LOG"; then
     fail "Composer failed to install PHP dependencies. Full output above and in $COMPOSER_LOG"
     echo "  Common causes: no outbound HTTPS to packagist.org/GitHub, or GitHub API rate-limiting."
     echo "  If rate-limited, create a token at https://github.com/settings/tokens and run:"

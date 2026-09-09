@@ -16,9 +16,25 @@ BBS_DIR="${1:-/var/www/bbs}"
 # 2. Install/update PHP dependencies
 echo "[2/9] Installing PHP dependencies..."
 if command -v composer &>/dev/null; then
-    # --no-interaction so an update never hangs on a Composer prompt (#351)
+    # --no-interaction so an update never hangs on a Composer prompt (#351).
+    # Composer is run through php with PCRE JIT off: in containers that
+    # refuse executable memory, PHP warns "Allocation of JIT memory failed"
+    # and Composer turns that warning into a fatal error (#480). The setting
+    # applies to this process only; php.ini is not touched.
     export COMPOSER_ALLOW_SUPERUSER=1 COMPOSER_NO_INTERACTION=1
-    composer install --no-dev --working-dir="$BBS_DIR" --no-interaction --no-progress
+    if ! php -d pcre.jit=0 "$(command -v composer)" install --no-dev --working-dir="$BBS_DIR" --no-interaction --no-progress; then
+        # Keep going: the migrations and permission fixes below matter more
+        # than a dependency refresh, and stopping here left installs
+        # half-updated (#480).
+        echo ""
+        echo "  ================================================================"
+        echo "  COMPOSER FAILED — see the errors above."
+        echo "  The code was updated and the rest of the update continues, but"
+        echo "  PHP dependencies may be out of date. Once the cause is fixed, run:"
+        echo "    sudo $BBS_DIR/bin/bbs-update"
+        echo "  ================================================================"
+        echo ""
+    fi
 else
     echo "  Warning: composer not found, skipping"
 fi
