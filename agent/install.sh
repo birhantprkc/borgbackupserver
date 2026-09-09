@@ -2,6 +2,8 @@
 #
 # Borg Backup Server Agent Installer
 # Usage: curl -s https://your-server/get-agent | sudo bash -s -- --server https://your-server --key API_KEY
+#        Behind a self-signed or private-CA certificate, add --cacert /path/to/ca.pem (or --insecure),
+#        and give curl the same flag (--cacert / -k) for the get-agent download itself.
 #
 set -e
 
@@ -9,6 +11,8 @@ INSTALL_DIR="/opt/bbs-agent"
 CONFIG_DIR="/etc/bbs-agent"
 SERVER_URL=""
 API_KEY=""
+CA_CERT=""
+CURL_INSECURE=""
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Colors and formatting
@@ -100,12 +104,42 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --server) SERVER_URL="$2"; shift 2 ;;
         --key)    API_KEY="$2";    shift 2 ;;
+        --cacert|--ca-cert) CA_CERT="$2"; shift 2 ;;
+        --insecure|-k) CURL_INSECURE="--insecure"; shift ;;
         *)        echo -e "${RED}Unknown option: $1${NC}"; exit 1 ;;
     esac
 done
 
+# TLS options for talking to the server: --cacert for a self-signed or
+# private-CA certificate (the secure choice), --insecure to skip verification
+# entirely. Both are opt-in; the default is normal certificate verification.
+# Without them an install behind a reverse proxy with a self-signed
+# certificate failed with no hint why (#476). The same settings are written
+# to the agent's config so the agent can reach the server afterwards.
+CURL_SSL_ARGS=()
+WGET_SSL_ARGS=()
+FETCH_SSL_ARGS=()
+if [ -n "$CA_CERT" ]; then
+    if [ ! -r "$CA_CERT" ]; then
+        echo -e "${RED}--cacert: cannot read $CA_CERT${NC}"
+        exit 1
+    fi
+    CA_CERT="$(cd "$(dirname "$CA_CERT")" && pwd)/$(basename "$CA_CERT")"
+    CURL_SSL_ARGS+=("--cacert" "$CA_CERT")
+    WGET_SSL_ARGS+=("--ca-certificate=$CA_CERT")
+    FETCH_SSL_ARGS+=("--ca-cert=$CA_CERT")
+fi
+if [ -n "$CURL_INSECURE" ]; then
+    CURL_SSL_ARGS+=("--insecure")
+    WGET_SSL_ARGS+=("--no-check-certificate")
+    FETCH_SSL_ARGS+=("--no-verify-peer" "--no-verify-hostname")
+    print_warning "Running with --insecure: certificate verification is disabled."
+    print_warning "This exposes the install and the agent to man-in-the-middle attacks."
+    print_warning "Prefer --cacert /path/to/ca.pem with your CA certificate."
+fi
+
 if [ -z "$SERVER_URL" ] || [ -z "$API_KEY" ]; then
-    echo -e "${RED}Usage: install.sh --server https://your-server --key API_KEY${NC}"
+    echo -e "${RED}Usage: install.sh --server https://your-server --key API_KEY [--cacert /path/to/ca.pem] [--insecure]${NC}"
     exit 1
 fi
 
@@ -512,11 +546,11 @@ install_agent() {
 
     # Download agent script from server
     if command -v curl &>/dev/null; then
-        curl -sf -o "$INSTALL_DIR/bbs-agent.py" "$SERVER_URL/api/agent/download?file=bbs-agent.py"
+        curl -sf "${CURL_SSL_ARGS[@]}" -o "$INSTALL_DIR/bbs-agent.py" "$SERVER_URL/api/agent/download?file=bbs-agent.py"
     elif command -v wget &>/dev/null; then
-        wget -q -O "$INSTALL_DIR/bbs-agent.py" "$SERVER_URL/api/agent/download?file=bbs-agent.py"
+        wget -q "${WGET_SSL_ARGS[@]}" -O "$INSTALL_DIR/bbs-agent.py" "$SERVER_URL/api/agent/download?file=bbs-agent.py"
     elif command -v fetch &>/dev/null; then
-        fetch -q -o "$INSTALL_DIR/bbs-agent.py" "$SERVER_URL/api/agent/download?file=bbs-agent.py"
+        fetch -q "${FETCH_SSL_ARGS[@]}" -o "$INSTALL_DIR/bbs-agent.py" "$SERVER_URL/api/agent/download?file=bbs-agent.py"
     else
         stop_spinner
         print_error "curl, wget, or fetch required"
@@ -527,21 +561,21 @@ install_agent() {
 
     # Download the startup wrapper (provides auto-recovery from bad updates)
     if command -v curl &>/dev/null; then
-        curl -sf -o "$INSTALL_DIR/bbs-agent-start.sh" "$SERVER_URL/api/agent/download?file=bbs-agent-start.sh" 2>/dev/null || true
+        curl -sf "${CURL_SSL_ARGS[@]}" -o "$INSTALL_DIR/bbs-agent-start.sh" "$SERVER_URL/api/agent/download?file=bbs-agent-start.sh" 2>/dev/null || true
     elif command -v wget &>/dev/null; then
-        wget -q -O "$INSTALL_DIR/bbs-agent-start.sh" "$SERVER_URL/api/agent/download?file=bbs-agent-start.sh" 2>/dev/null || true
+        wget -q "${WGET_SSL_ARGS[@]}" -O "$INSTALL_DIR/bbs-agent-start.sh" "$SERVER_URL/api/agent/download?file=bbs-agent-start.sh" 2>/dev/null || true
     elif command -v fetch &>/dev/null; then
-        fetch -q -o "$INSTALL_DIR/bbs-agent-start.sh" "$SERVER_URL/api/agent/download?file=bbs-agent-start.sh" 2>/dev/null || true
+        fetch -q "${FETCH_SSL_ARGS[@]}" -o "$INSTALL_DIR/bbs-agent-start.sh" "$SERVER_URL/api/agent/download?file=bbs-agent-start.sh" 2>/dev/null || true
     fi
     chmod +x "$INSTALL_DIR/bbs-agent-start.sh" 2>/dev/null || true
 
     # Download uninstaller
     if command -v curl &>/dev/null; then
-        curl -sf -o "$INSTALL_DIR/uninstall.sh" "$SERVER_URL/api/agent/download?file=uninstall.sh" 2>/dev/null || true
+        curl -sf "${CURL_SSL_ARGS[@]}" -o "$INSTALL_DIR/uninstall.sh" "$SERVER_URL/api/agent/download?file=uninstall.sh" 2>/dev/null || true
     elif command -v wget &>/dev/null; then
-        wget -q -O "$INSTALL_DIR/uninstall.sh" "$SERVER_URL/api/agent/download?file=uninstall.sh" 2>/dev/null || true
+        wget -q "${WGET_SSL_ARGS[@]}" -O "$INSTALL_DIR/uninstall.sh" "$SERVER_URL/api/agent/download?file=uninstall.sh" 2>/dev/null || true
     elif command -v fetch &>/dev/null; then
-        fetch -q -o "$INSTALL_DIR/uninstall.sh" "$SERVER_URL/api/agent/download?file=uninstall.sh" 2>/dev/null || true
+        fetch -q "${FETCH_SSL_ARGS[@]}" -o "$INSTALL_DIR/uninstall.sh" "$SERVER_URL/api/agent/download?file=uninstall.sh" 2>/dev/null || true
     fi
     chmod +x "$INSTALL_DIR/uninstall.sh" 2>/dev/null || true
 
@@ -553,6 +587,8 @@ install_agent() {
 [server]
 url = $SERVER_URL
 api_key = $API_KEY
+${CA_CERT:+ca_cert = $CA_CERT}
+${CURL_INSECURE:+insecure = true}
 
 [agent]
 poll_interval = 30
@@ -572,11 +608,11 @@ install_ssh_key() {
 
     local response
     if command -v curl &>/dev/null; then
-        response=$(curl -sf -H "Authorization: Bearer $API_KEY" "$SERVER_URL/api/agent/ssh-key" 2>/dev/null || echo "")
+        response=$(curl -sf "${CURL_SSL_ARGS[@]}" -H "Authorization: Bearer $API_KEY" "$SERVER_URL/api/agent/ssh-key" 2>/dev/null || echo "")
     elif command -v wget &>/dev/null; then
-        response=$(wget -q -O - --header="Authorization: Bearer $API_KEY" "$SERVER_URL/api/agent/ssh-key" 2>/dev/null || echo "")
+        response=$(wget -q "${WGET_SSL_ARGS[@]}" -O - --header="Authorization: Bearer $API_KEY" "$SERVER_URL/api/agent/ssh-key" 2>/dev/null || echo "")
     elif command -v fetch &>/dev/null; then
-        response=$(fetch -q -o - "$SERVER_URL/api/agent/ssh-key" 2>/dev/null || echo "")
+        response=$(fetch -q "${FETCH_SSL_ARGS[@]}" -o - "$SERVER_URL/api/agent/ssh-key" 2>/dev/null || echo "")
     fi
 
     stop_spinner
@@ -637,7 +673,7 @@ install_service() {
         start_spinner "Configuring launchd service..."
 
         # Download the compiled macOS wrapper binary (handles FDA permissions)
-        curl -sf -o "$INSTALL_DIR/bbs-mac-agent" \
+        curl -sf "${CURL_SSL_ARGS[@]}" -o "$INSTALL_DIR/bbs-mac-agent" \
             "$SERVER_URL/api/agent/download?file=bbs-mac-agent" 2>/dev/null || true
         chmod 755 "$INSTALL_DIR/bbs-mac-agent"
 

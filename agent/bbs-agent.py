@@ -19,6 +19,7 @@ import tempfile
 import threading
 import time
 import urllib.error
+import ssl
 import urllib.request
 from configparser import ConfigParser
 
@@ -47,7 +48,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.93.9"
+AGENT_VERSION = "2.94.1"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 IS_MACOS = sys.platform == "darwin"
@@ -359,7 +360,37 @@ def load_config():
         "api_key": config.get("server", "api_key"),
         "poll_interval": config.getint("agent", "poll_interval", fallback=30),
         "auto_update": auto_update,
+        # TLS towards the server (#476): a CA bundle for a self-signed or
+        # private-CA certificate, or no verification at all. Written by the
+        # installer from --cacert / --insecure; default is normal verification.
+        "ca_cert": config.get("server", "ca_cert", fallback="").strip() or None,
+        "insecure": config.getboolean("server", "insecure", fallback=False),
     }
+
+
+_SSL_CONTEXT = None
+
+
+def server_ssl_context(config):
+    """SSL context for requests to the BBS server, honouring the config's
+    ca_cert / insecure settings. Cached: the context is built once per run.
+    Downloads from GitHub (borg binaries) keep the default verification and
+    must not use this."""
+    global _SSL_CONTEXT
+    if _SSL_CONTEXT is not None:
+        return _SSL_CONTEXT
+    ctx = ssl.create_default_context()
+    if config.get("insecure"):
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        logger.warning("TLS verification towards the server is disabled (insecure = true in config)")
+    elif config.get("ca_cert"):
+        try:
+            ctx.load_verify_locations(cafile=config["ca_cert"])
+        except Exception as e:
+            logger.error("Could not load ca_cert {}: {} — using the system CA store".format(config["ca_cert"], e))
+    _SSL_CONTEXT = ctx
+    return ctx
 
 
 def api_request(config, endpoint, method="GET", data=None, timeout=60):
@@ -382,7 +413,7 @@ def api_request(config, endpoint, method="GET", data=None, timeout=60):
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
 
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout, context=server_ssl_context(config)) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         error_body = e.read().decode("utf-8", errors="replace")
@@ -1448,7 +1479,7 @@ def execute_update_agent(config, task):
         }
         req = urllib.request.Request(url, headers=headers, method="GET")
 
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with urllib.request.urlopen(req, timeout=60, context=server_ssl_context(config)) as resp:
             new_script = resp.read().decode("utf-8")
 
         # Validate the downloaded script
@@ -1512,7 +1543,7 @@ def execute_update_agent(config, task):
                 try:
                     wrapper_url = "{}/api/agent/download?file=bbs-agent-start.sh".format(config['server_url'])
                     wrapper_req = urllib.request.Request(wrapper_url, headers=headers, method="GET")
-                    with urllib.request.urlopen(wrapper_req, timeout=30) as wresp:
+                    with urllib.request.urlopen(wrapper_req, timeout=30, context=server_ssl_context(config)) as wresp:
                         wrapper_script = wresp.read()
                     wrapper_dir = os.path.dirname(script_path)
                     wrapper_path = os.path.join(wrapper_dir, "bbs-agent-start.sh")

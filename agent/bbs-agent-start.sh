@@ -42,6 +42,12 @@ download_agent() {
 
     SERVER=$(grep '^\s*url' "$CONFIG" | head -1 | cut -d= -f2- | tr -d ' ')
     KEY=$(grep '^\s*api_key' "$CONFIG" | head -1 | cut -d= -f2- | tr -d ' ')
+    # Same TLS settings the agent uses (#476): a CA bundle, or no verification.
+    CA_CERT=$(grep '^\s*ca_cert' "$CONFIG" | head -1 | cut -d= -f2- | sed 's/^ *//;s/ *$//')
+    INSECURE=$(grep '^\s*insecure' "$CONFIG" | head -1 | cut -d= -f2- | tr -d ' ' | tr 'A-Z' 'a-z')
+    CURL_TLS=(); WGET_TLS=()
+    if [ -n "$CA_CERT" ]; then CURL_TLS=(--cacert "$CA_CERT"); WGET_TLS=("--ca-certificate=$CA_CERT"); fi
+    case "$INSECURE" in true|yes|1|on) CURL_TLS=(--insecure); WGET_TLS=(--no-check-certificate) ;; esac
 
     if [ -z "$SERVER" ] || [ -z "$KEY" ]; then
         log "Cannot parse server URL or API key from config"
@@ -52,9 +58,9 @@ download_agent() {
     TMP="$AGENT_PY.recovery"
 
     if command -v curl &>/dev/null; then
-        curl -sf -H "Authorization: Bearer $KEY" "$URL" -o "$TMP" 2>/dev/null
+        curl -sf "${CURL_TLS[@]}" -H "Authorization: Bearer $KEY" "$URL" -o "$TMP" 2>/dev/null
     elif command -v wget &>/dev/null; then
-        wget -q --header="Authorization: Bearer $KEY" "$URL" -O "$TMP" 2>/dev/null
+        wget -q "${WGET_TLS[@]}" --header="Authorization: Bearer $KEY" "$URL" -O "$TMP" 2>/dev/null
     else
         log "Neither curl nor wget available"
         return 1
