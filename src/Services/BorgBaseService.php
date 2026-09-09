@@ -24,6 +24,35 @@ class BorgBaseService
     /** Regions BorgBase offers for new repositories. */
     public const REGIONS = ['eu' => 'Europe', 'us' => 'United States'];
 
+    /**
+     * The one repository format this server can use. BorgBase also hosts
+     * restic and borg2 repositories on the same account, and the API lists
+     * them alongside; the server's borg 1.x can open neither, so they are
+     * shown but never imported (#468).
+     */
+    public const USABLE_FORMAT = 'borg1';
+
+    public static function isUsableRepo(array $repo): bool
+    {
+        return strtolower((string) ($repo['format'] ?? self::USABLE_FORMAT)) === self::USABLE_FORMAT;
+    }
+
+    /** Why a listed repository can't be used, or null when it can. */
+    public static function unusableReason(array $repo): ?string
+    {
+        if (self::isUsableRepo($repo)) {
+            return null;
+        }
+        $format = strtolower((string) ($repo['format'] ?? ''));
+        if ($format === 'restic') {
+            return 'restic repository; BBS backs up with borg';
+        }
+        if ($format === 'borg2') {
+            return 'borg 2 repository; the server runs borg 1.x';
+        }
+        return ($format !== '' ? $format : 'unknown') . ' repository; not usable with borg 1.x';
+    }
+
     private Database $db;
 
     public function __construct()
@@ -391,6 +420,9 @@ class BorgBaseService
         }
         if (!$repo) {
             return ['success' => false, 'error' => 'That repository is not on this BorgBase account.'];
+        }
+        if (!self::isUsableRepo($repo)) {
+            return ['success' => false, 'error' => "\"{$repo['name']}\" is a " . self::unusableReason($repo) . '.'];
         }
         $existing = $this->db->fetchOne("SELECT id FROM remote_ssh_configs WHERE remote_user = ?", [$repoId]);
         if ($existing) {

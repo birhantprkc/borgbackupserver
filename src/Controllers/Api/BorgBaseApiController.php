@@ -379,12 +379,18 @@ class BorgBaseApiController extends Controller
             'id' => (string) $r['id'],
             'name' => $r['name'] ?? null,
             'region' => $r['region'] ?? null,
-            'repo_path' => $r['repoPath'] ?? null,
+            // A restic repo's path embeds its REST password; never pass that on.
+            'repo_path' => BorgBaseService::isUsableRepo($r) ? ($r['repoPath'] ?? null) : null,
             'quota_gb' => isset($r['quota']) ? round(((float) $r['quota']) / 1000, 3) : null,
             'quota_enabled' => (bool) ($r['quotaEnabled'] ?? false),
             'usage_bytes' => (int) round(((float) ($r['currentUsage'] ?? 0)) * 1000 * 1000),
             'last_modified' => $r['lastModified'] ?? null,
             'borg_version' => $r['borgVersion'] ?? null,
+            // BorgBase also lists restic and borg2 repositories; only borg1
+            // can be added to BBS. Grey the rest out and show the reason.
+            'format' => $r['format'] ?? null,
+            'usable' => BorgBaseService::isUsableRepo($r),
+            'unusable_reason' => BorgBaseService::unusableReason($r),
         ];
     }
 }

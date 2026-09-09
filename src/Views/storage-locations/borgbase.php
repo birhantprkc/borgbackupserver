@@ -183,27 +183,33 @@ $csrf = $this->csrfToken();
         <table class="table table-sm align-middle mb-0">
             <tbody>
             <?php foreach ($unconfigured as $r): ?>
-                <tr>
+                <?php $unusable = BorgBaseService::unusableReason($r); ?>
+                <tr<?= $unusable ? ' class="text-muted"' : '' ?>>
                     <td>
                         <div class="fw-semibold"><?= htmlspecialchars($r['name']) ?></div>
                         <code class="small text-muted"><?= htmlspecialchars($r['id']) ?></code>
                         <?php if (!empty($r['region'])): ?><span class="badge bg-light text-dark border ms-1"><?= htmlspecialchars(strtoupper($r['region'])) ?></span><?php endif; ?>
+                        <?php if ($unusable): ?><span class="badge bg-secondary ms-1"><?= htmlspecialchars(strtolower((string) ($r['format'] ?? ''))) ?></span><?php endif; ?>
                     </td>
                     <td class="small text-muted"><?= $fmt((int) round(((float) ($r['currentUsage'] ?? 0)) * 1000 * 1000)) ?> used</td>
                     <td class="small text-muted d-none d-md-table-cell"><?= !empty($r['lastModified']) ? 'modified ' . \BBS\Core\TimeHelper::ago(date('Y-m-d H:i:s', strtotime($r['lastModified']))) : 'never used' ?></td>
                     <td class="text-end">
+                        <?php if ($unusable): ?>
+                        <span class="small text-muted"><i class="bi bi-slash-circle me-1"></i><?= htmlspecialchars(ucfirst($unusable)) ?></span>
+                        <?php else: ?>
                         <form method="POST" action="/borgbase-accounts/<?= $account['id'] ?>/repos/import" class="d-inline">
                             <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
                             <input type="hidden" name="repo_id" value="<?= htmlspecialchars($r['id']) ?>">
                             <button class="btn btn-sm btn-outline-primary" <?= $hasKey ? '' : 'disabled title="Needs a Full Access token"' ?>><i class="bi bi-plus-circle me-1"></i> Add to BBS</button>
                         </form>
+                        <?php endif; ?>
                     </td>
                 </tr>
             <?php endforeach; ?>
             </tbody>
         </table>
     </div>
-    <div class="card-footer small text-muted">Adding grants the BBS key access to the repository and creates a storage location. Then import the repository from the client's Repos tab, which asks for its passphrase.</div>
+    <div class="card-footer small text-muted">Adding grants the BBS key access to the repository and creates a storage location. Then import the repository from the client's Repos tab, which asks for its passphrase. Restic and borg 2 repositories on the account are listed for completeness; BBS backs up with borg 1.x and can't use them.</div>
 </div>
 <?php endif; ?>
 
