@@ -2829,6 +2829,8 @@ def execute_restore_pg(config, task):
     command = task.get("command", [])
     if command and command[0] == "borg" and BORG_PATH:
         command[0] = BORG_PATH
+    if _refuse_unsafe_command(config, job_id, command):
+        return
     env_vars = task.get("env", {})
     cwd = task.get("cwd")
     databases = task.get("databases", [])
@@ -3045,6 +3047,8 @@ def execute_restore_mysql(config, task):
     command = task.get("command", [])
     if command and command[0] == "borg" and BORG_PATH:
         command[0] = BORG_PATH
+    if _refuse_unsafe_command(config, job_id, command):
+        return
     env_vars = task.get("env", {})
     cwd = task.get("cwd")
     databases = task.get("databases", [])
@@ -3282,6 +3286,8 @@ def execute_restore_mongo(config, task):
     command = task.get("command", [])
     if command and command[0] == "borg" and BORG_PATH:
         command[0] = BORG_PATH
+    if _refuse_unsafe_command(config, job_id, command):
+        return
     env_vars = task.get("env", {})
     cwd = task.get("cwd")
     databases = task.get("databases", [])
@@ -3498,6 +3504,42 @@ def _allow_sleep(state):
             pass
 
 
+# borg options that make it run a program: --content-from-command and
+# --paths-from-command turn the PATH arguments into a command line, and
+# --rsh names the program used to reach a remote repository. The server never
+# sends these for a plan (it allowlists advanced options and puts "--" before
+# the paths), so their presence means a tampered payload or an outdated
+# server. Refused here regardless, because this process usually runs as root
+# (GHSA-w6m3-j4cx-8m67).
+_FORBIDDEN_BORG_OPTIONS = ("--content-from-command", "--paths-from-command",
+                           "--paths-from-stdin", "--rsh")
+
+
+def _unsafe_borg_command(command):
+    """Return why a task's borg argv must not run, or None if it may."""
+    if not command:
+        return None
+    for tok in command[1:]:
+        if not isinstance(tok, str):
+            return "argv contains a non-string argument"
+        if tok == "--":
+            break  # everything after is a path by definition
+        name = tok.split("=", 1)[0]
+        if name in _FORBIDDEN_BORG_OPTIONS:
+            return "refusing to run borg with {}: it would execute a command on this host".format(name)
+    return None
+
+
+def _refuse_unsafe_command(config, job_id, command):
+    """Report and return True when the command must not run."""
+    reason = _unsafe_borg_command(command)
+    if reason is None:
+        return False
+    logger.error("Job #{}: {}".format(job_id, reason))
+    report_status(config, {"job_id": job_id, "result": "failed", "error_log": reason})
+    return True
+
+
 def execute_task(config, task):
     """Execute a borg task and report progress/status."""
     job_id = task.get("job_id")
@@ -3513,6 +3555,8 @@ def execute_task(config, task):
     # it may not be in PATH on systems using SCL or non-standard installs)
     if command and command[0] == "borg" and BORG_PATH:
         command[0] = BORG_PATH
+    if _refuse_unsafe_command(config, job_id, command):
+        return
 
     logger.info("Executing {} job #{}: {}".format(task_type, job_id, ' '.join(command)))
 

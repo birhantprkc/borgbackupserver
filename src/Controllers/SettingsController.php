@@ -321,6 +321,10 @@ class SettingsController extends Controller
             $this->flash('danger', 'Template name and directories are required.');
             $this->redirect('/settings?tab=templates');
         }
+        if (($fieldError = \BBS\Services\BorgCommandBuilder::validatePlanFields($advancedOptions, $directories)) !== null) {
+            $this->flash('danger', $fieldError);
+            $this->redirect('/settings?tab=templates');
+        }
 
         $this->db->insert('backup_templates', [
             'name' => $name,
@@ -347,6 +351,10 @@ class SettingsController extends Controller
 
         if (empty($name) || empty($directories)) {
             $this->flash('danger', 'Template name and directories are required.');
+            $this->redirect('/settings?tab=templates');
+        }
+        if (($fieldError = \BBS\Services\BorgCommandBuilder::validatePlanFields($advancedOptions, $directories)) !== null) {
+            $this->flash('danger', $fieldError);
             $this->redirect('/settings?tab=templates');
         }
 

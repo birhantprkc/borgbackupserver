@@ -924,6 +924,9 @@ class AdminApiController extends Controller
         if (empty($name) || empty($directories) || empty($repositoryId)) {
             $this->json(['error' => 'name, repository_id, and directories are required'], 400);
         }
+        if (($fieldError = \BBS\Services\BorgCommandBuilder::validatePlanFields($advancedOptions, $directories)) !== null) {
+            $this->json(['error' => $fieldError], 422);
+        }
 
         // Verify repository belongs to this agent
         $repo = $this->db->fetchOne(
@@ -1685,6 +1688,16 @@ class AdminApiController extends Controller
         foreach (['name', 'directories', 'excludes', 'advanced_options'] as $field) {
             if (isset($input[$field])) {
                 $planData[$field] = trim($input[$field]) ?: null;
+            }
+        }
+        if (isset($planData['advanced_options']) || isset($planData['directories'])) {
+            $current = $this->db->fetchOne("SELECT advanced_options, directories FROM backup_plans WHERE id = ?", [$planId]);
+            $fieldError = \BBS\Services\BorgCommandBuilder::validatePlanFields(
+                array_key_exists('advanced_options', $planData) ? $planData['advanced_options'] : ($current['advanced_options'] ?? null),
+                array_key_exists('directories', $planData) ? $planData['directories'] : ($current['directories'] ?? null)
+            );
+            if ($fieldError !== null) {
+                $this->json(['error' => $fieldError], 422);
             }
         }
         if (isset($input['repository_id'])) {

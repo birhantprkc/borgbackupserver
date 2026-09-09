@@ -2263,7 +2263,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                                 <input type="text" class="form-control form-control-sm font-monospace edit-adv-field" name="advanced_options"
                                        value="<?= htmlspecialchars($customOpts) ?>"
                                        placeholder="e.g. --pattern +home/*/docs/** --pattern -home/**">
-                                <div class="form-text">Checkboxes above add/remove flags here. You can also type custom borg options.</div>
+                                <div class="form-text">Checkboxes above add/remove flags here. You can also type other <code>borg create</code> options such as <code>--pattern</code>, <code>--exclude-if-present</code> or <code>--chunker-params</code>. Options that make borg run a program are not accepted.</div>
                             </div>
                         </div>
                     </div>
@@ -2601,7 +2601,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                             <label class="form-label small text-muted">Advanced Borg Options</label>
                             <input type="text" class="form-control form-control-sm font-monospace" name="advanced_options" id="advancedOptionsField"
                                    placeholder="e.g. --pattern +home/*/docs/** --pattern -home/**">
-                            <div class="form-text">Checkboxes above add/remove flags here. You can also type custom borg options.</div>
+                            <div class="form-text">Checkboxes above add/remove flags here. You can also type other <code>borg create</code> options such as <code>--pattern</code>, <code>--exclude-if-present</code> or <code>--chunker-params</code>. Options that make borg run a program are not accepted.</div>
                         </div>
                     </div>
                 </div>

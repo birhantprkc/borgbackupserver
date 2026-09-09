@@ -292,6 +292,18 @@ class QueueManager
                     [$plan['directories'], $job['id']]
                 );
 
+                // An option that the allowlist now refuses is dropped by the
+                // builder; say so in the log so the plan's owner can see why
+                // it isn't in effect rather than wondering silently.
+                $optCheck = BorgCommandBuilder::validateAdvancedOptions($plan['advanced_options'] ?? '');
+                if (!$optCheck['ok']) {
+                    $this->db->insert('server_log', [
+                        'agent_id' => $job['agent_id'],
+                        'backup_job_id' => $job['id'],
+                        'level' => 'warning',
+                        'message' => "Plan \"{$job['plan_name']}\": {$optCheck['error']} The option was not passed to borg.",
+                    ]);
+                }
                 $cmd = BorgCommandBuilder::buildCreateCommand($plan, $repo, $archiveName);
                 if ($isDryRun) {
                     $cmd = BorgCommandBuilder::makeDryRun($cmd);
@@ -538,6 +550,18 @@ class QueueManager
                     [$plan['directories'], $job['id']]
                 );
 
+                // An option that the allowlist now refuses is dropped by the
+                // builder; say so in the log so the plan's owner can see why
+                // it isn't in effect rather than wondering silently.
+                $optCheck = BorgCommandBuilder::validateAdvancedOptions($plan['advanced_options'] ?? '');
+                if (!$optCheck['ok']) {
+                    $this->db->insert('server_log', [
+                        'agent_id' => $job['agent_id'],
+                        'backup_job_id' => $job['id'],
+                        'level' => 'warning',
+                        'message' => "Plan \"{$job['plan_name']}\": {$optCheck['error']} The option was not passed to borg.",
+                    ]);
+                }
                 $cmd = BorgCommandBuilder::buildCreateCommand($plan, $repo, $archiveName);
                 if ($isDryRun) {
                     $cmd = BorgCommandBuilder::makeDryRun($cmd);

@@ -35,6 +35,10 @@ class BackupPlanController extends Controller
             $this->flash('danger', 'Name, repository, and directories are required.');
             $this->redirect("/clients/{$agentId}?tab=schedules");
         }
+        if (($fieldError = \BBS\Services\BorgCommandBuilder::validatePlanFields($advancedOptions, $directories)) !== null) {
+            $this->flash('danger', $fieldError);
+            $this->redirect("/clients/{$agentId}?tab=schedules");
+        }
 
         // Verify agent access and manage_plans permission
         $agent = $this->db->fetchOne("SELECT * FROM agents WHERE id = ?", [$agentId]);
@@ -118,6 +122,16 @@ class BackupPlanController extends Controller
         if (isset($_POST['directories'])) $data['directories'] = trim($_POST['directories']);
         if (isset($_POST['excludes'])) $data['excludes'] = trim($_POST['excludes']) ?: null;
         if (isset($_POST['advanced_options'])) $data['advanced_options'] = trim($_POST['advanced_options']) ?: null;
+        if (isset($_POST['advanced_options']) || isset($_POST['directories'])) {
+            $fieldError = \BBS\Services\BorgCommandBuilder::validatePlanFields(
+                $data['advanced_options'] ?? $plan['advanced_options'],
+                $data['directories'] ?? $plan['directories']
+            );
+            if ($fieldError !== null) {
+                $this->flash('danger', $fieldError);
+                $this->redirect("/clients/{$plan['agent_id']}?tab=schedules");
+            }
+        }
         // The repository must belong to THIS plan's agent. requirePermission()
         // above gates the plan, but that is object-level only — without this
         // property-level check a user with manage_plans on their own client

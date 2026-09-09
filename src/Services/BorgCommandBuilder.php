@@ -5,6 +5,129 @@ namespace BBS\Services;
 class BorgCommandBuilder
 {
     /**
+     * `borg create` options a plan's advanced options may contain, and
+     * whether each takes a value. Anything not listed is refused at save time
+     * and dropped at build time. An allowlist rather than a denylist: borg has
+     * options that turn the positional PATH arguments into a command to run
+     * (--content-from-command, --paths-from-command) or name a program to
+     * execute (--rsh), and the plan's paths are user-controlled, so a user
+     * with only Manage Plans could otherwise run commands as the agent's user
+     * (root on a default Linux install). GHSA-w6m3-j4cx-8m67.
+     */
+    public const CREATE_OPTIONS = [
+        // what to store
+        '--exclude' => true, '-e' => true, '--exclude-from' => true,
+        '--pattern' => true, '--patterns-from' => true,
+        '--exclude-caches' => false, '--exclude-if-present' => true,
+        '--keep-exclude-tags' => false, '--keep-tag-files' => false, '--exclude-nodump' => false,
+        '--one-file-system' => false, '-x' => false,
+        '--read-special' => false, '--ignore-inode' => false, '--files-cache' => true,
+        // metadata
+        '--numeric-ids' => false, '--numeric-owner' => false,
+        '--noatime' => false, '--atime' => false, '--noctime' => false, '--nobirthtime' => false,
+        '--noflags' => false, '--nobsdflags' => false, '--noacls' => false, '--noxattrs' => false,
+        '--sparse' => false,
+        // archive
+        '--compression' => true, '-C' => true, '--chunker-params' => true,
+        '--comment' => true, '--timestamp' => true, '--checkpoint-interval' => true,
+        // transfer and locking
+        '--upload-ratelimit' => true, '--upload-buffer' => true,
+        '--remote-ratelimit' => true, '--remote-buffer' => true,
+        '--lock-wait' => true, '--bypass-lock' => false,
+        // output
+        '--stats' => false, '-s' => false, '--dry-run' => false, '-n' => false,
+        '--filter' => true, '--iec' => false, '--show-rc' => false,
+        '--info' => false, '--debug' => false, '--warning' => false, '--error' => false, '--critical' => false,
+        '--umask' => true, '--consider-part-files' => false,
+    ];
+
+    /**
+     * Check a plan's advanced options against CREATE_OPTIONS.
+     *
+     * @return array{ok: bool, error: ?string, tokens: string[]} tokens are the
+     *         accepted options, value-taking ones joined as --opt=value so a
+     *         value that starts with "-" (a pattern, say) cannot be read as
+     *         another option.
+     */
+    public static function validateAdvancedOptions(?string $raw): array
+    {
+        $tokens = [];
+        $raw = trim((string) $raw);
+        if ($raw === '') {
+            return ['ok' => true, 'error' => null, 'tokens' => []];
+        }
+        $parts = preg_split('/\s+/', $raw);
+        for ($i = 0; $i < count($parts); $i++) {
+            $tok = $parts[$i];
+            if ($tok === '') {
+                continue;
+            }
+            if ($tok === '--' || $tok[0] !== '-') {
+                return ['ok' => false, 'error' => "\"{$tok}\" is not a borg option. Advanced options may only contain options; paths go in Directories.", 'tokens' => $tokens];
+            }
+            $name = $tok;
+            $value = null;
+            if (str_starts_with($tok, '--') && ($eq = strpos($tok, '=')) !== false) {
+                $name = substr($tok, 0, $eq);
+                $value = substr($tok, $eq + 1);
+            }
+            if (!array_key_exists($name, self::CREATE_OPTIONS)) {
+                return ['ok' => false, 'error' => "Option \"{$name}\" is not allowed in advanced options.", 'tokens' => $tokens];
+            }
+            if (self::CREATE_OPTIONS[$name]) {
+                if ($value === null) {
+                    if (!isset($parts[$i + 1]) || $parts[$i + 1] === '') {
+                        return ['ok' => false, 'error' => "Option \"{$name}\" needs a value.", 'tokens' => $tokens];
+                    }
+                    $value = $parts[++$i];
+                }
+                // Short options take their value as the next argument.
+                if (str_starts_with($name, '--')) {
+                    $tokens[] = $name . '=' . $value;
+                } else {
+                    $tokens[] = $name;
+                    $tokens[] = $value;
+                }
+            } else {
+                if ($value !== null) {
+                    return ['ok' => false, 'error' => "Option \"{$name}\" does not take a value.", 'tokens' => $tokens];
+                }
+                $tokens[] = $name;
+            }
+        }
+        return ['ok' => true, 'error' => null, 'tokens' => $tokens];
+    }
+
+    /**
+     * Directories are positional arguments and are placed after "--", so a
+     * leading "-" could not become an option anyway; it is still refused,
+     * since no real path starts that way and it is the shape of an attempt.
+     */
+    public static function validateDirectories(?string $raw): ?string
+    {
+        foreach (preg_split('/[\n\r]+/', trim((string) $raw)) as $dir) {
+            $dir = trim($dir);
+            if ($dir !== '' && $dir[0] === '-') {
+                return "Directory \"{$dir}\" is not valid: paths cannot start with \"-\".";
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Validate the user-editable plan fields together. Returns an error
+     * message, or null when the fields are acceptable.
+     */
+    public static function validatePlanFields(?string $advancedOptions, ?string $directories): ?string
+    {
+        $opts = self::validateAdvancedOptions($advancedOptions);
+        if (!$opts['ok']) {
+            return $opts['error'];
+        }
+        return self::validateDirectories($directories);
+    }
+
+    /**
      * Build the borg create command arguments for a backup plan.
      */
     public static function buildCreateCommand(array $plan, array $repo, string $archiveName): array
@@ -23,45 +146,36 @@ class BorgCommandBuilder
         // second, which turns any brief contention into a hard failure (#194).
         $cmd[] = '--lock-wait=600';
 
-        // Advanced options from the plan
-        // Borg flags like --pattern take a value that may start with + or -
-        // which confuses argparse. We join these as --flag=value to avoid ambiguity.
+        // Advanced options from the plan: only the allowlisted ones, with
+        // values joined as --flag=value. Plans are validated when saved; this
+        // also drops anything that predates the allowlist or bypassed it.
         if (!empty($plan['advanced_options'])) {
-            $tokens = preg_split('/\s+/', trim($plan['advanced_options']));
-            $flagsWithValues = ['--pattern', '--compression', '--exclude', '--exclude-from',
-                '--patterns-from', '--comment', '--chunker-params', '--remote-path'];
-            for ($i = 0; $i < count($tokens); $i++) {
-                $token = $tokens[$i];
-                if (empty($token)) continue;
-                if (in_array($token, $flagsWithValues) && isset($tokens[$i + 1])) {
-                    $cmd[] = $token . '=' . $tokens[$i + 1];
-                    $i++;
-                } else {
-                    $cmd[] = $token;
-                }
+            foreach (self::validateAdvancedOptions($plan['advanced_options'])['tokens'] as $token) {
+                $cmd[] = $token;
             }
         }
 
-        // Exclude patterns
+        // Exclude patterns, joined so a pattern starting with "-" is a value.
         if (!empty($plan['excludes'])) {
             $excludes = preg_split('/[\n\r]+/', trim($plan['excludes']));
             foreach ($excludes as $pattern) {
                 $pattern = trim($pattern);
                 if (!empty($pattern)) {
-                    $cmd[] = '--exclude';
-                    $cmd[] = $pattern;
+                    $cmd[] = '--exclude=' . $pattern;
                 }
             }
         }
 
-        // Repository::archive
+        // Repository::archive, then "--": everything after it is a path, so a
+        // directory entry can never be read as an option.
         $cmd[] = $repo['path'] . '::' . $archiveName;
+        $cmd[] = '--';
 
         // Directories to back up (one per line)
         $dirs = preg_split('/[\n\r]+/', trim($plan['directories']));
         foreach ($dirs as $dir) {
             $dir = trim($dir);
-            if (!empty($dir)) {
+            if ($dir !== '' && $dir[0] !== '-') {
                 $cmd[] = $dir;
             }
         }
@@ -155,6 +269,8 @@ class BorgCommandBuilder
         }
 
         $cmd[] = $repo['path'] . '::' . $archiveName;
+        // Restore paths are chosen by the user; after "--" they are only paths.
+        $cmd[] = '--';
 
         foreach ($paths as $path) {
             // Borg extract expects paths without leading slash

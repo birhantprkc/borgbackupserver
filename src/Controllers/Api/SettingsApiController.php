@@ -599,12 +599,16 @@ class SettingsApiController extends Controller
             $this->json(['error' => 'name and directories are required'], 422);
         }
 
+        $advancedOptions = trim((string) ($input['advanced_options'] ?? '')) ?: null;
+        if (($fieldError = \BBS\Services\BorgCommandBuilder::validatePlanFields($advancedOptions, $directories)) !== null) {
+            $this->json(['error' => $fieldError], 422);
+        }
         $id = $this->db->insert('backup_templates', [
             'name' => $name,
             'description' => trim((string) ($input['description'] ?? '')) ?: null,
             'directories' => $directories,
             'excludes' => trim((string) ($input['excludes'] ?? '')) ?: null,
-            'advanced_options' => trim((string) ($input['advanced_options'] ?? '')) ?: null,
+            'advanced_options' => $advancedOptions,
         ]);
 
         $this->json(['template' => $this->templatePayload(
@@ -639,6 +643,16 @@ class SettingsApiController extends Controller
         foreach (['description', 'excludes', 'advanced_options'] as $field) {
             if (array_key_exists($field, $input)) {
                 $data[$field] = trim((string) $input[$field]) ?: null;
+            }
+        }
+        if (array_key_exists('advanced_options', $data) || array_key_exists('directories', $data)) {
+            $current = $this->db->fetchOne("SELECT advanced_options, directories FROM backup_templates WHERE id = ?", [$id]);
+            $fieldError = \BBS\Services\BorgCommandBuilder::validatePlanFields(
+                array_key_exists('advanced_options', $data) ? $data['advanced_options'] : ($current['advanced_options'] ?? null),
+                array_key_exists('directories', $data) ? $data['directories'] : ($current['directories'] ?? null)
+            );
+            if ($fieldError !== null) {
+                $this->json(['error' => $fieldError], 422);
             }
         }
 

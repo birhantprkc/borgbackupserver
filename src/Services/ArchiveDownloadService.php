@@ -118,8 +118,9 @@ class ArchiveDownloadService
         });
 
         try {
-            // Build borg extract args: repo::archive + selected paths
-            $borgArgs = [$localPath . '::' . $archive['archive_name']];
+            // Build borg extract args: repo::archive, then "--" so the selected
+            // paths can only ever be paths, never options.
+            $borgArgs = [$localPath . '::' . $archive['archive_name'], '--'];
             foreach ($selectedFiles as $path) {
                 $path = ltrim($path, '/');
                 if ($path !== '') {
