@@ -823,9 +823,36 @@ if [ -d "$SSHD_CONF_DIR" ] && { [ ! -f "$SSHD_LEGACY" ] || [ "$(cat "$SSHD_LEGAC
     echo "  Enabled legacy SSH compatibility"
 fi
 
+# OpenSSH 9.8+ penalises a source address for connections that close
+# before authenticating and for sessions that outlive LoginGraceTime, and
+# refuses that address for up to ten minutes. A backup job opens two
+# sessions from one address (borg and the catalog pipe), and a client's
+# address is shared with everything else on that host, so agents were
+# getting "Connection closed by remote host" on a healthy server and
+# succeeding on retry (#470). This sshd serves only key-authenticated
+# agents, so the penalty buys nothing here. Written only where sshd knows
+# the directive: an older sshd would refuse to start on an unknown one.
+SSHD_AGENTS="/etc/ssh/sshd_config.d/bbs-agents.conf"
+SSHD_AGENTS_CONTENT="# Added by BBS: this sshd serves only backup agents (#470)
+LogLevel INFO"
+if /usr/sbin/sshd -T 2>/dev/null | grep -qi '^persourcepenalties'; then
+    SSHD_AGENTS_CONTENT="$SSHD_AGENTS_CONTENT
+PerSourcePenalties no"
+fi
+if [ -d "$SSHD_CONF_DIR" ] && [ "$(cat "$SSHD_AGENTS" 2>/dev/null)" != "$SSHD_AGENTS_CONTENT" ]; then
+    printf '%s\n' "$SSHD_AGENTS_CONTENT" > "$SSHD_AGENTS"
+    chmod 644 "$SSHD_AGENTS"
+fi
+
 # --- Start SSH server (after users are recreated and config is ready) ---
+# sshd has no syslog to write to in the container, so it logs to a file,
+# and that file is forwarded to the container's output so `docker logs`
+# shows every connection, authentication and disconnect (#470).
 echo "Starting SSH server..."
-/usr/sbin/sshd
+SSHD_LOG="/var/log/sshd.log"
+: > "$SSHD_LOG" && chmod 640 "$SSHD_LOG"
+/usr/sbin/sshd -E "$SSHD_LOG"
+tail -n 0 -F "$SSHD_LOG" 2>/dev/null | sed -u 's/^/[sshd] /' &
 
 # --- Cron ---
 echo "Setting up scheduler cron..."
