@@ -49,7 +49,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.95.2"
+AGENT_VERSION = "2.96.0"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 IS_MACOS = sys.platform == "darwin"
@@ -2413,6 +2413,24 @@ def test_plugin_interworx(config):
     return "InterWorx backup tool found at {}. Output directory {} is ready.".format(backup_pex, output_dir)
 
 
+def _apply_priority(task, command):
+    """Prefix borg with nice/ionice for a plan's priority (#403): low is
+    nice 10 with the best-effort I/O class at its lowest level, idle is
+    nice 19 with the idle I/O class. Windows has neither; macOS has nice
+    only."""
+    priority = (task or {}).get("priority") or "normal"
+    if priority not in ("low", "idle") or IS_WINDOWS or not command:
+        return command
+    prefix = []
+    nice = shutil.which("nice")
+    if nice:
+        prefix += [nice, "-n", "19" if priority == "idle" else "10"]
+    ionice = None if IS_MACOS else shutil.which("ionice")
+    if ionice:
+        prefix += [ionice, "-c", "3"] if priority == "idle" else [ionice, "-c", "2", "-n", "7"]
+    return prefix + list(command)
+
+
 def _popen_new_group_kwargs():
     """Return Popen kwargs that put the child into its own process group/session.
 
@@ -4446,6 +4464,7 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
             "cwd": cwd,
         }
         popen_kwargs.update(_popen_new_group_kwargs())
+        command = _apply_priority(task, command)
         proc = subprocess.Popen(command, **popen_kwargs)
         global current_borg_proc
         current_borg_proc = proc

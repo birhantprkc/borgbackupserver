@@ -233,6 +233,7 @@ CREATE TABLE backup_plans (
     excludes TEXT DEFAULT NULL,
     advanced_options TEXT DEFAULT NULL,
     snapshot TINYINT(1) NOT NULL DEFAULT 0,
+    priority VARCHAR(10) NOT NULL DEFAULT 'normal',
     prune_minutes INT NOT NULL DEFAULT 0,
     prune_hours INT NOT NULL DEFAULT 0,
     prune_days INT NOT NULL DEFAULT 7,

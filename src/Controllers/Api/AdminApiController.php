@@ -14,6 +14,8 @@ class AdminApiController extends Controller
 {
     /** Schedule frequencies the web plan form offers; create and update both check against this. */
     private const VALID_FREQUENCIES = ['10min', '15min', '30min', 'hourly', 'daily', 'weekly', 'monthly', 'manual'];
+    /** Plan CPU/IO priority for borg on the client (#403). */
+    private const VALID_PRIORITIES = ['normal', 'low', 'idle'];
 
     private function getJsonInput(): array
     {
@@ -386,7 +388,7 @@ class AdminApiController extends Controller
         );
         $plans = $this->db->fetchAll(
             "SELECT bp.id, bp.name, bp.directories, bp.excludes, bp.advanced_options, bp.enabled,
-                    bp.snapshot, bp.repository_id,
+                    bp.snapshot, bp.priority, bp.repository_id,
                     bp.prune_minutes, bp.prune_hours, bp.prune_days,
                     bp.prune_weeks, bp.prune_months, bp.prune_years,
                     s.frequency, s.times, s.day_of_week, s.day_of_month,
@@ -399,6 +401,7 @@ class AdminApiController extends Controller
             $p['id'] = (int) $p['id'];
             $p['enabled'] = (bool) $p['enabled'];
             $p['snapshot'] = (bool) ($p['snapshot'] ?? 0);
+            $p['priority'] = $p['priority'] ?? 'normal';
             $p['repository_id'] = $p['repository_id'] !== null ? (int) $p['repository_id'] : null;
             foreach (['prune_minutes', 'prune_hours', 'prune_days',
                       'prune_weeks', 'prune_months', 'prune_years'] as $k) {
@@ -842,7 +845,7 @@ class AdminApiController extends Controller
         // only noticed later, when archives start disappearing.
         $plans = $this->db->fetchAll("
             SELECT bp.id, bp.name, bp.directories, bp.excludes, bp.advanced_options,
-                   bp.enabled, bp.snapshot, bp.repository_id, r.name as repository_name,
+                   bp.enabled, bp.snapshot, bp.priority, bp.repository_id, r.name as repository_name,
                    bp.prune_minutes, bp.prune_hours, bp.prune_days,
                    bp.prune_weeks, bp.prune_months, bp.prune_years,
                    s.frequency, s.times, s.day_of_week, s.day_of_month,
@@ -886,6 +889,7 @@ class AdminApiController extends Controller
             $p['id'] = (int) $p['id'];
             $p['enabled'] = (bool) $p['enabled'];
             $p['snapshot'] = (bool) ($p['snapshot'] ?? 0);
+            $p['priority'] = $p['priority'] ?? 'normal';
             $p['repository_id'] = $p['repository_id'] !== null ? (int) $p['repository_id'] : null;
             // Signed: a negative keep count is borg's "no limit" (#386), so
             // these must not be coerced to unsigned or clamped at zero.
@@ -939,6 +943,10 @@ class AdminApiController extends Controller
         if (!empty($input['snapshot']) && ($snapError = $this->snapshotUnavailableReason($agent)) !== null) {
             $this->json(['error' => $snapError], 422);
         }
+        $priority = $input['priority'] ?? 'normal';
+        if (!in_array($priority, self::VALID_PRIORITIES, true)) {
+            $this->json(['error' => 'priority must be one of: ' . implode(', ', self::VALID_PRIORITIES)], 422);
+        }
 
         // Verify repository belongs to this agent
         $repo = $this->db->fetchOne(
@@ -968,6 +976,7 @@ class AdminApiController extends Controller
             'excludes' => $excludes ?: null,
             'advanced_options' => $advancedOptions,
             'snapshot' => !empty($input['snapshot']) ? 1 : 0,
+            'priority' => $priority,
             'prune_minutes' => $pruneMinutes,
             'prune_hours' => $pruneHours,
             'prune_days' => $pruneDays,
@@ -1719,6 +1728,12 @@ class AdminApiController extends Controller
                 $this->json(['error' => 'Repository not found or does not belong to this client'], 404);
             }
             $planData['repository_id'] = (int) $input['repository_id'];
+        }
+        if (isset($input['priority'])) {
+            if (!in_array($input['priority'], self::VALID_PRIORITIES, true)) {
+                $this->json(['error' => 'priority must be one of: ' . implode(', ', self::VALID_PRIORITIES)], 422);
+            }
+            $planData['priority'] = $input['priority'];
         }
         if (array_key_exists('snapshot', $input)) {
             $planData['snapshot'] = !empty($input['snapshot']) ? 1 : 0;
