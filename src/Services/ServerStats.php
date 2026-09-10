@@ -63,9 +63,17 @@ class ServerStats
     }
 
     /**
-     * Get memory usage.
+     * Get memory usage, or null when it cannot be measured at all.
+     *
+     * null rather than zeros, for the same reason getNetworkThroughput()
+     * returns null: no machine has 0 bytes of RAM, so zeros could only ever
+     * mean a failed read — but they render as a perfectly plausible empty
+     * gauge and nothing is logged. A hardened apache2.service with
+     * ProcSubset=pid hid /proc/meminfo from the service and produced exactly
+     * that, while CPU kept working through the sys_getloadavg() fallback, so
+     * the card looked merely idle (#485).
      */
-    public static function getMemory(): array
+    public static function getMemory(): ?array
     {
         if (PHP_OS_FAMILY === 'Darwin') {
             return self::getMemoryMac();
@@ -73,11 +81,22 @@ class ServerStats
         return self::getMemoryLinux();
     }
 
-    private static function getMemoryLinux(): array
+    private static function getMemoryLinux(): ?array
     {
         $meminfo = @file_get_contents('/proc/meminfo');
         if ($meminfo === false) {
-            return ['total' => 0, 'used' => 0, 'free' => 0, 'percent' => 0];
+            // Logged rather than silently swallowed: this is the only trace an
+            // operator gets that the gauge is broken rather than the machine
+            // idle. Once per worker, not once per request — Cache::remember()
+            // treats a null result as a miss, so this path runs on every poll
+            // and would otherwise flood the error log.
+            static $warned = false;
+            if (!$warned) {
+                $warned = true;
+                error_log('ServerStats: /proc/meminfo is unreadable — memory metrics unavailable. '
+                    . 'On a hardened apache2.service this is ProcSubset=pid hiding /proc.');
+            }
+            return null;
         }
 
         $values = [];
@@ -87,7 +106,12 @@ class ServerStats
             }
         }
 
+        // A /proc/meminfo that parsed but carries no MemTotal is not a machine
+        // with no RAM either — same reasoning, same null.
         $total = $values['MemTotal'] ?? 0;
+        if ($total <= 0) {
+            return null;
+        }
         $available = $values['MemAvailable'] ?? ($values['MemFree'] ?? 0);
         $used = $total - $available;
 
@@ -95,7 +119,7 @@ class ServerStats
             'total' => $total,
             'used' => $used,
             'free' => $available,
-            'percent' => $total > 0 ? round(($used / $total) * 100, 1) : 0,
+            'percent' => round(($used / $total) * 100, 1),
         ];
     }
 

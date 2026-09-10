@@ -555,9 +555,13 @@ $dfFix = function (string $s): string {
                 <div class="card-body">
                     <?php
                         $cpuPct = (float) ($cpuLoad['percent'] ?? 0);
-                        $memPct = (float) ($memory['percent'] ?? 0);
-                        $memUsed = (int) ($memory['used'] ?? 0);
-                        $memTotal = (int) ($memory['total'] ?? 0);
+                        // getMemory() returns null, not zeros, when /proc/meminfo
+                        // cannot be read — the gauge must say so rather than
+                        // draw a plausible empty bar (#485).
+                        $memOk    = is_array($memory);
+                        $memPct   = $memOk ? (float) $memory['percent'] : 0.0;
+                        $memUsed  = $memOk ? (int) $memory['used'] : 0;
+                        $memTotal = $memOk ? (int) $memory['total'] : 0;
                         $cpuColor = $cpuPct > 80 ? '#ef4444' : ($cpuPct > 50 ? '#f59e0b' : '#22c55e');
                         $cpuStatus = $cpuPct > 80 ? 'High Usage' : ($cpuPct > 50 ? 'Moderate' : 'Healthy');
                         $memColor = $memPct > 85 ? '#ef4444' : ($memPct > 60 ? '#f59e0b' : '#0dcaf0');
@@ -606,7 +610,8 @@ $dfFix = function (string $s): string {
 
                         $arcLen    = 251.33;                              // π × radius 80, semicircle
                         $cpuOffset = $arcLen * (1 - $cpuPct / 100);
-                        $memPair   = ServerStats::formatBytesPair($memUsed, $memTotal);
+                        $memPair   = $memOk ? ServerStats::formatBytesPair($memUsed, $memTotal)
+                                            : 'unavailable';
 
                         // Network meter initial labels. First page load after a
                         // cold cache has no rate yet ("—"); the 15s poll fills it.
@@ -638,7 +643,9 @@ $dfFix = function (string $s): string {
                                 <div class="cpu-pct"><span id="cpu-pct-num"><?= round($cpuPct, 1) ?></span><span class="pct-suffix">%</span></div>
                                 <div class="cpu-status" id="cpu-status" style="color: <?= $cpuColor ?>"><?= $cpuStatus ?></div>
                             </div>
-                            <div class="cpu-mem-row" title="Memory: <?= round($memPct, 1) ?>% used">
+                            <div class="cpu-mem-row" title="<?= $memOk
+                                    ? 'Memory: ' . round($memPct, 1) . '% used'
+                                    : 'Memory unavailable — /proc/meminfo could not be read' ?>">
                                 <div class="cm-bar">
                                     <div id="mem-bar-fill" class="cm-bar-fill" style="width: <?= $memPct ?>%; background-color: <?= $memColor ?>;"></div>
                                     <span class="cm-bar-label"><span id="mem-pct"><?= round($memPct, 1) ?></span>%</span>
@@ -1270,7 +1277,13 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (cpuStatus) { cpuStatus.textContent = status; cpuStatus.style.color = color; }
                 }
 
-                if (d.memory && memFill) {
+                if (d.memory === null && memSizeEl) {
+                    // Explicit null: the server could not read /proc/meminfo.
+                    // Leaving the last value on screen would pass for a live one.
+                    memSizeEl.textContent = 'unavailable';
+                    if (memFill) memFill.style.width = '0%';
+                    if (memPctEl) memPctEl.textContent = '0';
+                } else if (d.memory && memFill) {
                     const p = Number(d.memory.percent) || 0;
                     memFill.style.width = p + '%';
                     memFill.style.backgroundColor = memPalette(p);

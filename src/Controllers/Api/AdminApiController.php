@@ -2624,10 +2624,14 @@ class AdminApiController extends Controller
                 'load_1min' => (float) ($cpu['1min'] ?? 0),
                 'cores' => (int) ($cpu['cores'] ?? 1),
             ],
+            // null rather than 0 when memory cannot be read at all, same rule
+            // as network below: no machine has 0 bytes of RAM, so zeros could
+            // only ever mean a failed read — and they render as a believable
+            // empty gauge (#485).
             'memory' => [
-                'percent' => (float) ($mem['percent'] ?? 0),
-                'used_bytes' => (int) ($mem['used'] ?? 0),
-                'total_bytes' => (int) ($mem['total'] ?? 0),
+                'percent' => $mem ? (float) $mem['percent'] : null,
+                'used_bytes' => $mem ? (int) $mem['used'] : null,
+                'total_bytes' => $mem ? (int) $mem['total'] : null,
             ],
             // null rather than 0 when throughput cannot be read at all, so
             // "idle" and "unavailable" stay distinguishable.
