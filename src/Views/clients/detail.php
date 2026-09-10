@@ -1,5 +1,9 @@
 <?php
 $tab = $_GET['tab'] ?? 'status';
+// The tab shown as "Plans" is ?tab=schedules; accept ?tab=plans too, and
+// fall back to Status for anything unknown rather than an empty pane.
+if ($tab === 'plans') $tab = 'schedules';
+if (!in_array($tab, ['status', 'plugins', 'repos', 'schedules', 'restore', 'install', 'delete'], true)) $tab = 'status';
 
 // The agent version bundled with this server, and whether THIS agent is behind
 // it. Only a strictly older agent is offered an update: a newer one (a
