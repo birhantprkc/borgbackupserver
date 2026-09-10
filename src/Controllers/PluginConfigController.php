@@ -35,8 +35,11 @@ class PluginConfigController extends Controller
         $row = $this->db->fetchOne("SELECT slug FROM plugins WHERE id = ?", [$pluginId]);
         if (!$row || ($row['slug'] ?? '') !== 's3_sync') return $config;
 
+        // Hosted tenants copy to the platform's bucket only: no custom S3
+        // credentials, and no SSH or local destinations either.
+        $config['target_type'] = 's3';
         $config['credential_source'] = 'global';
-        foreach (['endpoint', 'region', 'bucket', 'access_key', 'secret_key'] as $field) {
+        foreach (['endpoint', 'region', 'bucket', 'access_key', 'secret_key', 'remote_ssh_config_id', 'storage_location_id'] as $field) {
             unset($config[$field]);
         }
         return $config;
