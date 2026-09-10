@@ -881,7 +881,7 @@ $dfFix = function (string $s): string {
                         ['restore', 'Restore',       'bi-box-arrow-up'],
                         ['prune',   'Prune',         'bi-scissors'],
                         ['compact', 'Compact',       'bi-archive'],
-                        ['s3',      'S3 Sync',       'bi-cloud-upload'],
+                        ['s3',      'Offsite Sync',  'bi-cloud-upload'],
                         ['other',   'Other / Maint', 'bi-tools'],
                     ];
                     foreach ($filterCats as [$key, $label, $icon]): ?>
@@ -1137,7 +1137,7 @@ document.addEventListener('DOMContentLoaded', function () {
             datasets: [
                 { label: 'Backups', data: chartData.map(d => d.backups), backgroundColor: 'rgba(54, 162, 235, 0.7)', borderRadius: 2 },
                 { label: 'Restores', data: chartData.map(d => d.restores), backgroundColor: 'rgba(255, 159, 64, 0.7)', borderRadius: 2 },
-                { label: 'S3 Sync', data: chartData.map(d => d.s3_sync), backgroundColor: 'rgba(75, 192, 192, 0.7)', borderRadius: 2 },
+                { label: 'Offsite Sync', data: chartData.map(d => d.s3_sync), backgroundColor: 'rgba(75, 192, 192, 0.7)', borderRadius: 2 },
                 { label: 'Errors', data: chartData.map(d => d.errors), backgroundColor: 'rgba(220, 53, 69, 0.8)', borderRadius: 2 },
             ]
         },

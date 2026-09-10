@@ -874,6 +874,119 @@ case "$ACTION" in
         exit $?
         ;;
 
+    rclone-transfer)
+        # Sync a repository to or from an offsite destination as the repo-owning
+        # user (#413). The destination is any rclone backend: S3, SFTP, or a
+        # path on a registered storage location. Its settings, including
+        # credentials and SSH keys, arrive in a 0600 file of KEY=base64(value)
+        # lines rather than on the command line, so nothing secret shows in
+        # ps. The file is removed here whatever happens.
+        #
+        # Usage: bbs-ssh-helper rclone-transfer <username> <push|pull> <local_path> <remote> <envfile> [rclone flags...]
+        #   push: local_path -> remote     pull: remote -> local_path
+        # <remote> is "DEST:path" for a configured backend, or an absolute
+        # path under a registered storage location for a local copy.
+        USERNAME="${2:-}"
+        DIRECTION="${3:-}"
+        LOCAL_PATH="${4:-}"
+        REMOTE="${5:-}"
+        ENVFILE="${6:-}"
+        shift 6 2>/dev/null || true
+        EXTRA_ARGS=("$@")
+
+        cleanup_envfile() { [ -n "$ENVFILE" ] && rm -f "$ENVFILE"; }
+        trap cleanup_envfile EXIT
+
+        if [ -z "$USERNAME" ] || [ -z "$LOCAL_PATH" ] || [ -z "$REMOTE" ] || [ -z "$ENVFILE" ]; then
+            echo "Usage: bbs-ssh-helper rclone-transfer <username> <push|pull> <local_path> <remote> <envfile> [rclone flags...]"
+            exit 1
+        fi
+        if [[ ! "$USERNAME" =~ ^bbs-[a-z0-9_-]+$ ]]; then
+            echo "Error: username must match bbs-[a-z0-9_-]+"
+            exit 1
+        fi
+        if [ "$DIRECTION" != "push" ] && [ "$DIRECTION" != "pull" ]; then
+            echo "Error: direction must be push or pull"
+            exit 1
+        fi
+        if ! is_allowed_path "$LOCAL_PATH"; then
+            echo "Error: local path must be under /var/bbs/ or a registered storage location"
+            exit 1
+        fi
+        if [ ! -f "$ENVFILE" ]; then
+            echo "Error: destination settings file not found"
+            exit 1
+        fi
+
+        # Destination settings: only rclone's DEST backend variables are
+        # accepted, so the file cannot redirect rclone anywhere else.
+        DEST_ENV=()
+        while IFS='=' read -r K V; do
+            [[ "$K" =~ ^RCLONE_CONFIG_DEST_[A-Z0-9_]+$ ]] || continue
+            DEST_ENV+=("$K=$(printf '%s' "$V" | base64 -d 2>/dev/null)")
+        done < "$ENVFILE"
+        cleanup_envfile
+        ENVFILE=""
+
+        # A local copy: the destination is a bare path. It has to be on a
+        # registered storage location too, and the repo user needs to own
+        # the leaf so rclone can write it.
+        if [[ "$REMOTE" != DEST:* ]]; then
+            if ! is_allowed_path "$REMOTE"; then
+                echo "Error: destination path must be under /var/bbs/ or a registered storage location"
+                exit 1
+            fi
+            if [ "$DIRECTION" = "push" ]; then
+                # Intermediate folders (bbs-sync/<client>) are created
+                # root-owned and world-readable, so www-data can list them
+                # when looking for orphaned copies; the leaf belongs to the
+                # repo user so rclone can write it and www-data can add the
+                # manifest through the group.
+                mkdir -p "$REMOTE"
+                chown "$USERNAME":www-data "$REMOTE"
+                chmod 770 "$REMOTE"
+            fi
+        fi
+
+        if [ "$DIRECTION" = "pull" ]; then
+            PARENT_DIR=$(dirname "$LOCAL_PATH")
+            mkdir -p "$PARENT_DIR"
+            if [[ "$PARENT_DIR" =~ ^/var/bbs/home/[0-9]+$ ]] && [ "$(stat -c '%U' "$PARENT_DIR")" = "root" ]; then
+                chown "$USERNAME":www-data "$PARENT_DIR"
+                chmod 750 "$PARENT_DIR"
+            fi
+            mkdir -p "$LOCAL_PATH"
+            chown "$USERNAME":www-data "$LOCAL_PATH"
+            chmod 770 "$LOCAL_PATH"
+        fi
+
+        CACHE_DIR="/var/bbs/cache/$USERNAME/rclone"
+        mkdir -p "$CACHE_DIR"
+        chown -R "$USERNAME":"$USERNAME" "/var/bbs/cache/$USERNAME"
+
+        if [ "$DIRECTION" = "push" ]; then SRC="$LOCAL_PATH"; DST="$REMOTE"; else SRC="$REMOTE"; DST="$LOCAL_PATH"; fi
+
+        # Timeouts: see rclone-sync (#438).
+        sudo -u "$USERNAME" env \
+            "HOME=/var/bbs/cache/$USERNAME" \
+            "XDG_CACHE_HOME=$CACHE_DIR" \
+            "XDG_CONFIG_HOME=/var/bbs/cache/$USERNAME" \
+            "RCLONE_CONFIG=/dev/null" \
+            "${DEST_ENV[@]}" \
+            rclone sync "$SRC" "$DST" \
+            --transfers 4 --checkers 8 \
+            -v --stats-one-line --stats 5s \
+            --contimeout 30s --timeout 5m --retries 2 --low-level-retries 5 \
+            "${EXTRA_ARGS[@]}" 2>&1
+        EXIT_CODE=$?
+
+        if [ "$DIRECTION" = "pull" ]; then
+            chown -R "$USERNAME":www-data "$LOCAL_PATH"
+            chmod 770 "$LOCAL_PATH"
+        fi
+        exit $EXIT_CODE
+        ;;
+
     rclone-restore)
         # Run rclone sync FROM S3 TO local (restore)
         # Usage: bbs-ssh-helper rclone-restore <username> <remote> <local_path> <endpoint> <region> <access_key> <secret_key> [--bwlimit LIMIT]

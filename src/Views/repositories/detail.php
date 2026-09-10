@@ -103,23 +103,25 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
         <?php if (($repo['storage_type'] ?? 'local') !== 'remote_ssh' && (!empty($s3SyncConfigs) || !empty($s3PluginConfigs))): ?>
         <div class="card border-0 shadow-sm mb-4">
             <div class="card-header fw-semibold">
-                <i class="bi bi-cloud <?= !empty($s3SyncConfigs) ? 'text-info' : 'text-muted' ?> me-1"></i> S3 Offsite Mirror
+                <i class="bi bi-cloud <?= !empty($s3SyncConfigs) ? 'text-info' : 'text-muted' ?> me-1"></i> Offsite Copies
             </div>
             <div class="card-body">
                 <?php if (!empty($s3SyncConfigs)): ?>
                 <!-- Destination list — a repo can replicate to several S3 destinations -->
                 <?php foreach ($s3SyncConfigs as $dest): ?>
                 <div class="d-flex align-items-start gap-3 p-3 bg-body-secondary rounded mb-2">
+                    <?php $destIcon = ['sftp' => 'bi-hdd-network', 'local' => 'bi-device-hdd'][$dest['type'] ?? 's3'] ?? 'bi-cloud-check'; ?>
                     <div class="text-info" style="font-size: 1.5rem;">
-                        <i class="bi bi-cloud-check"></i>
+                        <i class="bi <?= $destIcon ?>"></i>
                     </div>
                     <div class="flex-grow-1">
                         <h6 class="mb-1"><?= htmlspecialchars($dest['config_name']) ?></h6>
                         <p class="text-muted small mb-0">
+                            <?= htmlspecialchars($dest['label'] ?? '') ?><br>
                             Last sync: <strong><?= $dest['last_s3_sync'] ? \BBS\Core\TimeHelper::ago($dest['last_s3_sync']) : 'Never' ?></strong>
                         </p>
                     </div>
-                    <form method="POST" action="/clients/<?= $agentId ?>/repo/<?= $repo['id'] ?>/s3-config/delete" class="d-inline" data-confirm="Stop syncing to &quot;<?= htmlspecialchars($dest['config_name'], ENT_QUOTES) ?>&quot;?&#10;&#10;The repository will no longer sync to this destination after backups. Data already in S3 will remain.">
+                    <form method="POST" action="/clients/<?= $agentId ?>/repo/<?= $repo['id'] ?>/s3-config/delete" class="d-inline" data-confirm="Stop syncing to &quot;<?= htmlspecialchars($dest['config_name'], ENT_QUOTES) ?>&quot;?&#10;&#10;The repository will no longer sync to this destination after backups. The copy already there stays.">
                         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                         <input type="hidden" name="plugin_config_id" value="<?= $dest['plugin_config_id'] ?>">
                         <button type="submit" class="btn btn-sm btn-outline-secondary">
@@ -133,9 +135,9 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
                 <?php if (empty($s3PluginConfigs) && !empty($s3SyncConfigs)): ?>
                 <div class="form-text mt-2">
                     <i class="bi bi-info-circle me-1"></i>
-                    To replicate to another S3 destination, create another <em>S3 Offsite Sync</em>
+                    To copy to another place, create another <em>Offsite Sync</em>
                     configuration on the <a href="/clients/<?= $agentId ?>?tab=plugins">client's Plugins tab</a>
-                    (e.g. with a second provider's credentials), then attach it here.
+                    (an S3 bucket, an SSH host, or a second disk), then attach it here.
                 </div>
                 <?php endif; ?>
 
@@ -144,11 +146,11 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
                 <form method="POST" action="/clients/<?= $agentId ?>/repo/<?= $repo['id'] ?>/s3-config" class="<?= !empty($s3SyncConfigs) ? 'mt-3' : '' ?>">
                     <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                     <?php if (empty($s3SyncConfigs)): ?>
-                    <p class="text-muted small mb-3">Enable S3 sync to automatically replicate this repository to S3 storage after each backup prune. You can add more than one destination.</p>
+                    <p class="text-muted small mb-3">Copy this repository to another place after each backup: an S3 bucket, an SSH host, or a second disk. You can add more than one destination.</p>
                     <?php endif; ?>
                     <div class="row g-2 align-items-end">
                         <div class="col-auto">
-                            <label class="form-label small"><?= !empty($s3SyncConfigs) ? 'Add another destination' : 'S3 Configuration' ?></label>
+                            <label class="form-label small"><?= !empty($s3SyncConfigs) ? 'Add another destination' : 'Destination' ?></label>
                             <select name="plugin_config_id" class="form-select form-select-sm" required>
                                 <?php foreach ($s3PluginConfigs as $cfg): ?>
                                 <option value="<?= $cfg['id'] ?>"><?= htmlspecialchars($cfg['name']) ?></option>
@@ -157,7 +159,7 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
                         </div>
                         <div class="col-auto">
                             <button type="submit" class="btn btn-sm btn-info">
-                                <i class="bi bi-cloud-plus me-1"></i><?= !empty($s3SyncConfigs) ? 'Add Destination' : 'Enable S3 Sync' ?>
+                                <i class="bi bi-cloud-plus me-1"></i><?= !empty($s3SyncConfigs) ? 'Add Destination' : 'Enable Offsite Sync' ?>
                             </button>
                         </div>
                     </div>
@@ -171,8 +173,8 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
                         <i class="bi bi-cloud-download"></i>
                     </div>
                     <div class="flex-grow-1">
-                        <h6 class="mb-1">Restore from S3</h6>
-                        <p class="text-muted small mb-2">Download repository data from S3 back to the server. Use this to recover from local data loss or sync issues.</p>
+                        <h6 class="mb-1">Restore from the offsite copy</h6>
+                        <p class="text-muted small mb-2">Bring the repository back from its copy. Use this to recover from local data loss or sync issues.</p>
                         <?php if (count($s3SyncConfigs) > 1): ?>
                         <div class="mb-2" style="max-width: 280px;">
                             <label class="form-label small mb-1">Restore from destination</label>
@@ -184,7 +186,7 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
                         </div>
                         <?php endif; ?>
                         <div class="d-flex gap-2 flex-wrap align-items-end">
-                            <form method="POST" action="/clients/<?= $agentId ?>/repo/<?= $repo['id'] ?>/s3-restore" class="d-inline" data-confirm="Restore (replace) from S3?&#10;&#10;This will download the repository data from S3 and OVERWRITE local files.">
+                            <form method="POST" action="/clients/<?= $agentId ?>/repo/<?= $repo['id'] ?>/s3-restore" class="d-inline" data-confirm="Restore (replace) from the offsite copy?&#10;&#10;This will copy the repository data back and OVERWRITE local files.">
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                 <input type="hidden" name="mode" value="replace">
                                 <input type="hidden" name="plugin_config_id" class="s3-restore-source" value="<?= $s3SyncConfigs[0]['plugin_config_id'] ?>">
@@ -192,7 +194,7 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
                                     <i class="bi bi-arrow-repeat me-1"></i>Restore (replace)
                                 </button>
                             </form>
-                            <form method="POST" action="/clients/<?= $agentId ?>/repo/<?= $repo['id'] ?>/s3-restore" class="d-inline" data-confirm="Restore (copy) from S3?&#10;&#10;This will create a NEW repository and download data from S3.">
+                            <form method="POST" action="/clients/<?= $agentId ?>/repo/<?= $repo['id'] ?>/s3-restore" class="d-inline" data-confirm="Restore (copy) from the offsite copy?&#10;&#10;This will create a NEW repository and copy the data into it.">
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                 <input type="hidden" name="mode" value="copy">
                                 <input type="hidden" name="plugin_config_id" class="s3-restore-source" value="<?= $s3SyncConfigs[0]['plugin_config_id'] ?>">
@@ -686,7 +688,7 @@ foreach (array_reverse(array_slice($archives, 0, 365)) as $ar) {
                 <div class="form-check mb-2">
                     <input class="form-check-input" type="checkbox" name="delete_from_s3" id="deleteFromS3" value="1">
                     <label class="form-check-label small" for="deleteFromS3">
-                        <i class="bi bi-cloud text-info me-1"></i>Also delete from S3 offsite storage<?= count($s3SyncConfigs) > 1 ? ' (all ' . count($s3SyncConfigs) . ' destinations)' : '' ?>
+                        <i class="bi bi-cloud text-info me-1"></i>Also delete the offsite copy<?= count($s3SyncConfigs) > 1 ? ' (all ' . count($s3SyncConfigs) . ' destinations)' : '' ?>
                     </label>
                 </div>
                 <?php endif; ?>
@@ -699,7 +701,7 @@ foreach (array_reverse(array_slice($archives, 0, 365)) as $ar) {
                 var deleteS3 = document.getElementById('deleteFromS3');
                 var msg = 'PERMANENTLY delete repository "<?= htmlspecialchars($repo['name'], ENT_QUOTES) ?>", all its archives, and the data on disk?';
                 if (deleteS3 && deleteS3.checked) {
-                    msg += '\n\nThis will ALSO delete the offsite copy from S3!';
+                    msg += '\n\nThis will ALSO delete the offsite copy!';
                 }
                 msg += '\n\nThis action is NOT reversible.';
                 if (!confirm(msg)) {

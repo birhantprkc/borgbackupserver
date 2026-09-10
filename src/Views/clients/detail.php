@@ -516,7 +516,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
             return '<span title="Script Hook" class="d-inline-flex align-items-center justify-content-center rounded" style="width:22px;height:22px;background:rgba(13,110,253,0.12);"><i class="bi bi-code-slash text-primary" style="font-size:0.8rem;"></i></span>';
         }
         if ($slug === 's3_sync') {
-            return '<span title="S3 Offsite Sync" class="d-inline-flex align-items-center justify-content-center rounded" style="width:22px;height:22px;background:#ff6b6b;"><i class="bi bi-cloud-arrow-up text-white" style="font-size:0.75rem;"></i></span>';
+            return '<span title="Offsite Sync" class="d-inline-flex align-items-center justify-content-center rounded" style="width:22px;height:22px;background:#ff6b6b;"><i class="bi bi-cloud-arrow-up text-white" style="font-size:0.75rem;"></i></span>';
         }
         return '<i class="bi bi-puzzle text-secondary" title="' . htmlspecialchars($slug) . '"></i>';
     };
@@ -1191,7 +1191,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                     </div>
                 </div>
                 <div class="repo-status-bar">
-                    <?= $sizeLabel ?> &middot; <?= $repo['archive_count'] ?> archives<?php if (isset($s3SyncByRepo[$repo['id']])): ?> &middot; <i class="bi bi-cloud text-info" title="Replicated to S3<?= !empty($s3SyncByRepo[$repo['id']]['last_sync']) ? ' (last: ' . \BBS\Core\TimeHelper::ago($s3SyncByRepo[$repo['id']]['last_sync']) . ')' : '' ?>"></i> S3 Sync<?= ($s3SyncByRepo[$repo['id']]['destinations'] ?? 1) > 1 ? ' &times;' . $s3SyncByRepo[$repo['id']]['destinations'] : '' ?><?php endif; ?>
+                    <?= $sizeLabel ?> &middot; <?= $repo['archive_count'] ?> archives<?php if (isset($s3SyncByRepo[$repo['id']])): ?> &middot; <i class="bi bi-cloud text-info" title="Copied offsite<?= !empty($s3SyncByRepo[$repo['id']]['last_sync']) ? ' (last: ' . \BBS\Core\TimeHelper::ago($s3SyncByRepo[$repo['id']]['last_sync']) . ')' : '' ?>"></i> Offsite<?= ($s3SyncByRepo[$repo['id']]['destinations'] ?? 1) > 1 ? ' &times;' . $s3SyncByRepo[$repo['id']]['destinations'] : '' ?><?php endif; ?>
                 </div>
             </div>
         </div>
@@ -1248,9 +1248,9 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                         <div class="form-check mt-3 p-3 bg-body-secondary rounded">
                             <input class="form-check-input" type="checkbox" name="delete_from_s3" id="deleteFromS3_<?= $repo['id'] ?>" value="1">
                             <label class="form-check-label" for="deleteFromS3_<?= $repo['id'] ?>">
-                                <i class="bi bi-cloud text-info me-1"></i>Also delete from S3 offsite storage<?= ($s3SyncByRepo[$repo['id']]['destinations'] ?? 1) > 1 ? ' (all ' . $s3SyncByRepo[$repo['id']]['destinations'] . ' destinations)' : '' ?>
+                                <i class="bi bi-cloud text-info me-1"></i>Also delete the offsite copy<?= ($s3SyncByRepo[$repo['id']]['destinations'] ?? 1) > 1 ? ' (all ' . $s3SyncByRepo[$repo['id']]['destinations'] . ' destinations)' : '' ?>
                             </label>
-                            <div class="form-text">If unchecked, the S3 copy will remain and can be restored later.</div>
+                            <div class="form-text">If unchecked, the offsite copy stays and can be restored later.</div>
                         </div>
                         <?php endif; ?>
                     </div>
@@ -1646,7 +1646,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
         </div>
         <div class="card-body">
             <p class="text-muted small mb-3">
-                These repositories exist in your S3 offsite storage but are not currently on this server.
+                These repositories have an offsite copy but are not on this server.
                 You can restore them to recover data or re-enable backups.
             </p>
             <div class="row g-3">
@@ -1661,11 +1661,11 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                                 <div class="flex-grow-1 min-width-0">
                                     <h6 class="mb-1 fw-bold"><?= htmlspecialchars($orphanName) ?></h6>
                                     <div class="small text-muted">
-                                        <i class="bi bi-cloud me-1"></i>S3 Only
+                                        <i class="bi bi-cloud me-1"></i>Offsite copy only
                                     </div>
                                 </div>
                             </div>
-                            <form method="POST" action="/clients/<?= $agent['id'] ?>/restore-orphan" class="mt-2" data-confirm="Restore repository &quot;<?= htmlspecialchars($orphanName) ?>&quot; from S3?&#10;&#10;This will create the repository and download data from S3.">
+                            <form method="POST" action="/clients/<?= $agent['id'] ?>/restore-orphan" class="mt-2" data-confirm="Restore repository &quot;<?= htmlspecialchars($orphanName) ?>&quot; from its offsite copy?&#10;&#10;This will create the repository and copy the data back.">
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                 <input type="hidden" name="repo_name" value="<?= htmlspecialchars($orphanName) ?>">
                                 <input type="hidden" name="plugin_config_id" value="<?= $orphanConfigId ?>">
@@ -3117,6 +3117,10 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                 if (!empty($cfgData['host'])) $summaryParts[] = $cfgData['host'] . (!empty($cfgData['port']) && $cfgData['port'] != $defaultPort ? ':' . $cfgData['port'] : '');
                 if (!empty($cfgData['user'])) $summaryParts[] = 'user: ' . $cfgData['user'];
                 if (!empty($cfgData['databases'])) $summaryParts[] = 'db: ' . $cfgData['databases'];
+                if ($plugin['slug'] === 's3_sync') {
+                    $offsiteDescribe = $offsiteDescribe ?? new \BBS\Services\S3SyncService();
+                    $summaryParts[] = $offsiteDescribe->describeDestination($cfgData)['label'];
+                }
             ?>
             <div class="border rounded p-3 mb-2" style="cursor:pointer;" onclick="var el=document.getElementById('editConfig<?= $cfg['id'] ?>');if(!el.classList.contains('show')){new bootstrap.Collapse(el).show();}">
                 <div class="d-flex justify-content-between align-items-center">
@@ -3137,7 +3141,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                     </div>
                 </div>
                 <div id="test-result-<?= $cfg['id'] ?>" class="mt-1"></div>
-                <?php if ($plugin['slug'] === 's3_sync' && ($cfgData['credential_source'] ?? 'global') === 'global' && empty($globalS3Configured)): ?>
+                <?php if ($plugin['slug'] === 's3_sync' && ($cfgData['target_type'] ?? 's3') === 's3' && ($cfgData['credential_source'] ?? 'global') === 'global' && empty($globalS3Configured)): ?>
                 <div class="alert alert-warning small mb-0 mt-2"><i class="bi bi-exclamation-triangle me-1"></i> Global S3 settings are not configured. <a href="/settings#s3">Configure in Settings</a></div>
                 <?php endif; ?>
 
@@ -3173,11 +3177,45 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                                 <div class="col"><label class="form-label small fw-semibold mb-1">Extra Options</label><input type="text" class="form-control form-control-sm" name="plugin_config[extra_options]" value="<?= htmlspecialchars($ev['extra_options'] ?? '') ?>"></div>
                             </div>
                         <?php elseif ($plugin['slug'] === 's3_sync'): ?>
-                            <?php $ev = $cfgData; $credSrc = $ev['credential_source'] ?? 'global'; ?>
+                            <?php $ev = $cfgData; $credSrc = $ev['credential_source'] ?? 'global'; $tgt = $ev['target_type'] ?? 's3'; ?>
                             <?php if (\BBS\Core\Config::isHosted()): ?>
+                            <input type="hidden" name="plugin_config[target_type]" value="s3">
                             <input type="hidden" name="plugin_config[credential_source]" value="global">
                             <div class="alert alert-info py-2 small mb-2"><i class="bi bi-info-circle me-1"></i>S3 destination is managed by the platform.</div>
                             <?php else: ?>
+                            <div class="mb-2">
+                                <label class="form-label small fw-semibold mb-1">Destination</label>
+                                <select class="form-select form-select-sm sync-target-select" name="plugin_config[target_type]" id="editTarget<?= $cfg['id'] ?>" title="Where the copy goes. An S3-compatible bucket, a host over SSH (SFTP; rsync.net, a Hetzner Storage Box, any Linux box), or a second disk registered as a storage location.">
+                                    <?php foreach (['s3' => 'S3-compatible storage', 'sftp' => 'SSH host (SFTP)', 'local' => 'Local disk (a storage location)'] as $tv => $tl): ?>
+                                    <option value="<?= $tv ?>" <?= ($tgt) === $tv ? 'selected' : '' ?>><?= $tl ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="sync-block sync-block-sftp mb-2">
+                                <label class="form-label small fw-semibold mb-1">SSH host</label>
+                                <?php $sshChoices = $pluginManager->offsiteTargetChoices()['remote_ssh']; ?>
+                                <?php if ($sshChoices): ?>
+                                <select class="form-select form-select-sm" name="plugin_config[remote_ssh_config_id]">
+                                    <?php foreach ($sshChoices as $sid => $slabel): ?>
+                                    <option value="<?= $sid ?>" <?= (string) ($ev['remote_ssh_config_id'] ?? '') === (string) $sid ? 'selected' : '' ?>><?= htmlspecialchars($slabel) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <div class="form-text small">The copy goes to <code>bbs-sync/&lt;client&gt;/&lt;repo&gt;</code> under the host's base path. BorgBase is borg-only and not listed.</div>
+                                <?php else: ?>
+                                <div class="form-text small">No SSH host yet. Add one under <a href="/storage-locations">Storage &rarr; Remote SSH</a>; any host with SFTP works, borg is not required there.</div>
+                                <?php endif; ?>
+                            </div>
+                            <div class="sync-block sync-block-local mb-2">
+                                <label class="form-label small fw-semibold mb-1">Storage location</label>
+                                <?php $locChoices = $pluginManager->offsiteTargetChoices()['storage_locations']; ?>
+                                <select class="form-select form-select-sm" name="plugin_config[storage_location_id]">
+                                    <?php foreach ($locChoices as $lid => $llabel): ?>
+                                    <option value="<?= $lid ?>" <?= (string) ($ev['storage_location_id'] ?? '') === (string) $lid ? 'selected' : '' ?>><?= htmlspecialchars($llabel) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <div class="form-text small">The copy goes to <code>bbs-sync/&lt;client&gt;/&lt;repo&gt;</code> on that location. Pick a different disk from the one the repository lives on.</div>
+                            </div>
+                            <div class="sync-block sync-block-s3">
                             <div class="mb-2">
                                 <div class="form-check form-check-inline"><input class="form-check-input s3-cred-radio" type="radio" name="plugin_config[credential_source]" value="global" id="editS3Global<?= $cfg['id'] ?>" <?= $credSrc === 'global' ? 'checked' : '' ?> data-target="editS3Custom<?= $cfg['id'] ?>"><label class="form-check-label small" for="editS3Global<?= $cfg['id'] ?>">Use Global S3 Settings</label></div>
                                 <div class="form-check form-check-inline"><input class="form-check-input s3-cred-radio" type="radio" name="plugin_config[credential_source]" value="custom" id="editS3CustomRadio<?= $cfg['id'] ?>" <?= $credSrc === 'custom' ? 'checked' : '' ?> data-target="editS3Custom<?= $cfg['id'] ?>"><label class="form-check-label small" for="editS3CustomRadio<?= $cfg['id'] ?>">Custom Credentials</label></div>
@@ -3193,9 +3231,10 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                                     <div class="col-6"><label class="form-label small fw-semibold mb-1">Secret Key</label><input type="text" class="form-control form-control-sm" name="plugin_config[secret_key]" placeholder="(unchanged if empty)"></div>
                                 </div>
                             </div>
+                            </div>
                             <?php endif; ?>
                             <div class="row g-2 mb-2">
-                                <div class="col-6"><label class="form-label small fw-semibold mb-1">Path Prefix</label><input type="text" class="form-control form-control-sm" name="plugin_config[path_prefix]" value="<?= htmlspecialchars($ev['path_prefix'] ?? '') ?>"><div class="form-text small">Optional subfolder in bucket</div></div>
+                                <div class="col-6"><label class="form-label small fw-semibold mb-1">Path Prefix</label><input type="text" class="form-control form-control-sm" name="plugin_config[path_prefix]" value="<?= htmlspecialchars($ev['path_prefix'] ?? '') ?>"><div class="form-text small">Optional subfolder on the destination. Default: none for S3, <code>bbs-sync</code> for SSH and local.</div></div>
                                 <div class="col-6"><label class="form-label small fw-semibold mb-1">Bandwidth Limit</label><input type="text" class="form-control form-control-sm" name="plugin_config[bandwidth_limit]" value="<?= htmlspecialchars($ev['bandwidth_limit'] ?? '') ?>"><div class="form-text small">e.g. 50M</div></div>
                             </div>
                         <?php elseif ($plugin['slug'] === 'shell_hook'): ?>
@@ -3319,9 +3358,43 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                                     </div>
                                 <?php elseif ($plugin['slug'] === 's3_sync'): ?>
                                     <?php if (\BBS\Core\Config::isHosted()): ?>
+                                    <input type="hidden" name="plugin_config[target_type]" value="s3">
                                     <input type="hidden" name="plugin_config[credential_source]" value="global">
                                     <div class="alert alert-info py-2 small mb-2"><i class="bi bi-info-circle me-1"></i>S3 destination is managed by the platform.</div>
                                     <?php else: ?>
+                                    <div class="mb-2">
+                                <label class="form-label small fw-semibold mb-1">Destination</label>
+                                <select class="form-select form-select-sm sync-target-select" name="plugin_config[target_type]" id="newTarget<?= $plugin['id'] ?>" title="Where the copy goes. An S3-compatible bucket, a host over SSH (SFTP; rsync.net, a Hetzner Storage Box, any Linux box), or a second disk registered as a storage location.">
+                                    <?php foreach (['s3' => 'S3-compatible storage', 'sftp' => 'SSH host (SFTP)', 'local' => 'Local disk (a storage location)'] as $tv => $tl): ?>
+                                    <option value="<?= $tv ?>" <?= ('s3') === $tv ? 'selected' : '' ?>><?= $tl ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                                    <div class="sync-block sync-block-sftp mb-2">
+                                <label class="form-label small fw-semibold mb-1">SSH host</label>
+                                <?php $sshChoices = $pluginManager->offsiteTargetChoices()['remote_ssh']; ?>
+                                <?php if ($sshChoices): ?>
+                                <select class="form-select form-select-sm" name="plugin_config[remote_ssh_config_id]">
+                                    <?php foreach ($sshChoices as $sid => $slabel): ?>
+                                    <option value="<?= $sid ?>" <?= (string) ('') === (string) $sid ? 'selected' : '' ?>><?= htmlspecialchars($slabel) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <div class="form-text small">The copy goes to <code>bbs-sync/&lt;client&gt;/&lt;repo&gt;</code> under the host's base path. BorgBase is borg-only and not listed.</div>
+                                <?php else: ?>
+                                <div class="form-text small">No SSH host yet. Add one under <a href="/storage-locations">Storage &rarr; Remote SSH</a>; any host with SFTP works, borg is not required there.</div>
+                                <?php endif; ?>
+                            </div>
+                            <div class="sync-block sync-block-local mb-2">
+                                <label class="form-label small fw-semibold mb-1">Storage location</label>
+                                <?php $locChoices = $pluginManager->offsiteTargetChoices()['storage_locations']; ?>
+                                <select class="form-select form-select-sm" name="plugin_config[storage_location_id]">
+                                    <?php foreach ($locChoices as $lid => $llabel): ?>
+                                    <option value="<?= $lid ?>" <?= (string) ('') === (string) $lid ? 'selected' : '' ?>><?= htmlspecialchars($llabel) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <div class="form-text small">The copy goes to <code>bbs-sync/&lt;client&gt;/&lt;repo&gt;</code> on that location. Pick a different disk from the one the repository lives on.</div>
+                            </div>
+                                    <div class="sync-block sync-block-s3">
                                     <div class="mb-2">
                                         <div class="form-check form-check-inline"><input class="form-check-input s3-cred-radio" type="radio" name="plugin_config[credential_source]" value="global" id="newS3Global<?= $plugin['id'] ?>" checked data-target="newS3Custom<?= $plugin['id'] ?>"><label class="form-check-label small" for="newS3Global<?= $plugin['id'] ?>">Use Global S3 Settings</label></div>
                                         <div class="form-check form-check-inline"><input class="form-check-input s3-cred-radio" type="radio" name="plugin_config[credential_source]" value="custom" id="newS3CustomRadio<?= $plugin['id'] ?>" data-target="newS3Custom<?= $plugin['id'] ?>"><label class="form-check-label small" for="newS3CustomRadio<?= $plugin['id'] ?>">Custom Credentials</label></div>
@@ -3337,9 +3410,10 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                                             <div class="col-6"><label class="form-label small fw-semibold mb-1">Secret Key</label><input type="text" class="form-control form-control-sm" name="plugin_config[secret_key]"></div>
                                         </div>
                                     </div>
+                                    </div>
                                     <?php endif; ?>
                                     <div class="row g-2 mb-2">
-                                        <div class="col-6"><label class="form-label small fw-semibold mb-1">Path Prefix</label><input type="text" class="form-control form-control-sm" name="plugin_config[path_prefix]"><div class="form-text small">Optional subfolder in bucket</div></div>
+                                        <div class="col-6"><label class="form-label small fw-semibold mb-1">Path Prefix</label><input type="text" class="form-control form-control-sm" name="plugin_config[path_prefix]"><div class="form-text small">Optional subfolder on the destination. Default: none for S3, <code>bbs-sync</code> for SSH and local.</div></div>
                                         <div class="col-6"><label class="form-label small fw-semibold mb-1">Bandwidth Limit</label><input type="text" class="form-control form-control-sm" name="plugin_config[bandwidth_limit]"><div class="form-text small">e.g. 50M</div></div>
                                     </div>
                                 <?php elseif ($plugin['slug'] === 'shell_hook'): ?>
@@ -3499,6 +3573,35 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
         }, 2000);
         setTimeout(() => { clearInterval(poll); if (resultDiv.querySelector('.spinner-border')) resultDiv.innerHTML = '<div class="alert alert-warning small mb-0 mt-1"><i class="bi bi-clock me-1"></i> Test timed out. Client may be offline.</div>'; }, 60000);
     }
+
+    // Offsite Sync destination type: show the block for the chosen type,
+    // and require a name unless it is the global-S3 case, which names
+    // itself (#413).
+    function syncTargetChanged(sel) {
+        const form = sel.closest('form');
+        if (!form) return;
+        const t = sel.value;
+        form.querySelectorAll('.sync-block').forEach(b => {
+            b.style.display = b.classList.contains('sync-block-' + t) ? '' : 'none';
+        });
+        const nameWrap = form.querySelector('.s3-name-wrap');
+        const nameInput = form.querySelector('.s3-name-input');
+        const custom = form.querySelector('.s3-cred-radio[value="custom"]');
+        if (nameWrap && nameInput) {
+            const needsName = t !== 's3' || (custom && custom.checked);
+            nameWrap.style.display = needsName ? '' : 'none';
+            nameInput.required = needsName;
+            if (needsName && nameInput.value === 'Global Settings') nameInput.value = '';
+            if (!needsName) nameInput.value = 'Global Settings';
+        }
+    }
+    document.querySelectorAll('.sync-target-select').forEach(sel => {
+        syncTargetChanged(sel);
+        sel.addEventListener('change', () => syncTargetChanged(sel));
+    });
+    document.addEventListener('shown.bs.collapse', e => {
+        e.target.querySelectorAll && e.target.querySelectorAll('.sync-target-select').forEach(syncTargetChanged);
+    });
 
     // S3 credential radio toggle
     document.querySelectorAll('.s3-cred-radio').forEach(radio => {

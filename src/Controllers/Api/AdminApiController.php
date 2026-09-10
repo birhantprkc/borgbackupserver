@@ -583,7 +583,8 @@ class AdminApiController extends Controller
                     COALESCE(r.borg_version_last, a.borg_version) AS borg_version_last,
                     sl.label AS storage_location_name,
                     s3c.plugin_config_id AS s3_config_id,
-                    s3c.name AS s3_config_name
+                    s3c.name AS s3_config_name,
+                    COALESCE(s3c.target_type, 's3') AS s3_config_type
              FROM repositories r
              JOIN agents a ON a.id = r.agent_id
              LEFT JOIN storage_locations sl ON sl.id = r.storage_location_id
@@ -592,7 +593,8 @@ class AdminApiController extends Controller
                  FROM repository_s3_configs GROUP BY repository_id
              ) rsc ON rsc.repository_id = r.id
              LEFT JOIN (
-                 SELECT rsc2.repository_id, rsc2.plugin_config_id, pc.name
+                 SELECT rsc2.repository_id, rsc2.plugin_config_id, pc.name,
+                        JSON_UNQUOTE(JSON_EXTRACT(pc.config, '$.target_type')) AS target_type
                  FROM repository_s3_configs rsc2
                  JOIN plugin_configs pc ON pc.id = rsc2.plugin_config_id
                  WHERE rsc2.id = (
@@ -3302,7 +3304,7 @@ class AdminApiController extends Controller
             $this->json(['error' => 'plugin_config_id is required'], 400);
         }
         if (($repo['storage_type'] ?? 'local') !== 'local') {
-            $this->json(['error' => 'Only local repositories can be mirrored to S3'], 400);
+            $this->json(['error' => 'Only local repositories can be copied offsite'], 400);
         }
 
         $pluginConfig = $this->db->fetchOne(
@@ -3445,7 +3447,8 @@ class AdminApiController extends Controller
                     COALESCE(rsc.enabled, 0) AS s3_sync_enabled,
                     rsc.last_sync_at AS s3_last_sync_at,
                     s3c.plugin_config_id AS s3_config_id,
-                    s3c.name AS s3_config_name
+                    s3c.name AS s3_config_name,
+                    COALESCE(s3c.target_type, 's3') AS s3_config_type
              FROM repositories r
              LEFT JOIN agents a ON a.id = r.agent_id
              LEFT JOIN (
@@ -3453,7 +3456,8 @@ class AdminApiController extends Controller
                  FROM repository_s3_configs GROUP BY repository_id
              ) rsc ON rsc.repository_id = r.id
              LEFT JOIN (
-                 SELECT rsc2.repository_id, rsc2.plugin_config_id, pc.name
+                 SELECT rsc2.repository_id, rsc2.plugin_config_id, pc.name,
+                        JSON_UNQUOTE(JSON_EXTRACT(pc.config, '$.target_type')) AS target_type
                  FROM repository_s3_configs rsc2
                  JOIN plugin_configs pc ON pc.id = rsc2.plugin_config_id
                  WHERE rsc2.id = (
@@ -5215,7 +5219,7 @@ class AdminApiController extends Controller
         if ($config['slug'] === 's3_sync') {
             $configData = json_decode($config['config'] ?? '{}', true) ?: [];
             $s3 = new \BBS\Services\S3SyncService();
-            $result = $s3->testConnection($s3->resolveCredentials($configData));
+            $result = $s3->testConnection($s3->resolveDestination($configData));
             if (empty($result['success'])) {
                 $this->json(['status' => 'failed', 'error' => $result['error'] ?? 'Connection failed'], 502);
             }

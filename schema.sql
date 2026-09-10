@@ -514,7 +514,7 @@ INSERT INTO plugins (slug, name, description, plugin_type) VALUES
 ('mongo_dump', 'MongoDB Backup/Restore', 'Dumps MongoDB databases using mongodump before backup. Supports per-database dumps with optional gzip compression and automatic cleanup. Restore via mongorestore.', 'pre_backup'),
 ('interworx', 'InterWorx Backup', 'Runs InterWorx control panel backups before each borg archive. Supports full, partial (web/mail/db), and structure-only backup modes for all domains.', 'pre_backup'),
 ('shell_hook', 'Shell Script Hook', 'Runs custom shell scripts on the client before and/or after backup. Useful for application quiescing, cache clearing, notifications, or custom integrations.', 'pre_backup'),
-('s3_sync', 'S3 Offsite Sync', 'Automatic sync of repositories to any S3-compatible storage after backup and prune operations. Stores a manifest for fast restore without long borg operations.', 'post_backup');
+('s3_sync', 'Offsite Sync', 'Copies each repository to another storage after backup and prune: an S3-compatible bucket, a host over SSH (SFTP), or a second local disk. Keeps a manifest beside the copy for fast restore.', 'post_backup');
 
 -- --------------------------------------------------------
 -- API Tokens (admin API authentication)

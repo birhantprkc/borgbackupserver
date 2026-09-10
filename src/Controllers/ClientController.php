@@ -510,8 +510,8 @@ class ClientController extends Controller
 
             foreach ($agentS3Configs as $s3PluginConfig) {
                 $config = json_decode($s3PluginConfig['config'] ?? '{}', true) ?: [];
-                $creds = $s3Service->resolveCredentials($config);
-                if (empty($creds['bucket'])) {
+                $creds = $s3Service->resolveDestination($config);
+                if ($creds['error']) {
                     continue;
                 }
                 $remoteResult = $s3Service->listRemoteRepos($agent['name'], $creds);

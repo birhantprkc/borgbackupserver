@@ -94,7 +94,7 @@ class PluginConfigController extends Controller
 
         // Warn if S3 config uses global credentials but globals are empty
         $plugin = $this->db->fetchOne("SELECT slug FROM plugins WHERE id = ?", [$pluginId]);
-        if ($plugin && $plugin['slug'] === 's3_sync' && ($config['credential_source'] ?? 'global') === 'global') {
+        if ($plugin && $plugin['slug'] === 's3_sync' && ($config['target_type'] ?? 's3') === 's3' && ($config['credential_source'] ?? 'global') === 'global') {
             $bucket = $this->db->fetchOne("SELECT `value` FROM settings WHERE `key` = 's3_bucket'");
             if (empty($bucket['value'])) {
                 $this->flash('warning', "S3 config saved, but Global S3 Settings are not configured yet. Go to <a href='/settings#s3'>Settings &rarr; S3</a> to set them up.");
@@ -244,11 +244,10 @@ class PluginConfigController extends Controller
             $configData = json_decode($pluginSlug['config'] ?? '{}', true) ?: [];
 
             $s3Service = new S3SyncService();
-            $creds = $s3Service->resolveCredentials($configData);
-            $result = $s3Service->testConnection($creds);
+            $result = $s3Service->testConnection($s3Service->resolveDestination($configData));
 
             if ($result['success']) {
-                $this->json(['status' => 'completed', 'message' => "S3 connection successful. Bucket: {$creds['bucket']}"]);
+                $this->json(['status' => 'completed', 'message' => 'Connected to ' . ($result['label'] ?: 'the destination')]);
             } else {
                 $this->json(['status' => 'failed', 'error' => $result['error']]);
             }

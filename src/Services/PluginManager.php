@@ -361,6 +361,30 @@ class PluginManager
     }
 
     /**
+     * The hosts and disks an Offsite Sync config can copy to, as
+     * id => label, for the schema and the forms (#413).
+     */
+    public function offsiteTargetChoices(): array
+    {
+        static $choices = null;
+        if ($choices !== null) {
+            return $choices;
+        }
+        $remote = [];
+        foreach ($this->db->fetchAll("SELECT id, name, provider, remote_host, remote_user FROM remote_ssh_configs ORDER BY name") as $r) {
+            if (($r['provider'] ?? '') === 'borgbase' || str_contains((string) $r['remote_host'], '.repo.borgbase.com')) {
+                continue;
+            }
+            $remote[(string) $r['id']] = $r['name'] . ' (' . $r['remote_user'] . '@' . $r['remote_host'] . ')';
+        }
+        $locations = [];
+        foreach ($this->db->fetchAll("SELECT id, label, path FROM storage_locations ORDER BY is_default DESC, label") as $l) {
+            $locations[(string) $l['id']] = $l['label'] . ' (' . $l['path'] . ')';
+        }
+        return $choices = ['remote_ssh' => $remote, 'storage_locations' => $locations];
+    }
+
+    /**
      * Get config schema for a plugin.
      */
     public function getPluginSchema(string $slug): array
@@ -623,11 +647,34 @@ class PluginManager
                 ],
             ],
             's3_sync' => [
+                // Where the copy goes (#413). S3 is the default so configs
+                // from before destination types existed keep working.
+                'target_type' => [
+                    'type' => 'select',
+                    'label' => 'Destination',
+                    'options' => ['s3' => 'S3-compatible storage', 'sftp' => 'SSH host (SFTP)', 'local' => 'Local disk (a storage location)'],
+                    'default' => 's3',
+                ],
+                'remote_ssh_config_id' => [
+                    'type' => 'select',
+                    'label' => 'SSH host',
+                    'options' => $this->offsiteTargetChoices()['remote_ssh'],
+                    'help' => 'A Remote SSH storage from the Storage page. The copy goes to bbs-sync/<client>/<repo> under its base path. BorgBase hosts are borg-only and are not listed.',
+                    'show_when' => ['target_type' => 'sftp'],
+                ],
+                'storage_location_id' => [
+                    'type' => 'select',
+                    'label' => 'Storage location',
+                    'options' => $this->offsiteTargetChoices()['storage_locations'],
+                    'help' => 'The copy goes to bbs-sync/<client>/<repo> on that location. Pick a different disk from the one the repository lives on.',
+                    'show_when' => ['target_type' => 'local'],
+                ],
                 'credential_source' => [
                     'type' => 'select',
                     'label' => 'S3 Credentials',
                     'options' => ['global' => 'Use Global S3 Settings', 'custom' => 'Custom Credentials'],
                     'default' => 'global',
+                    'show_when' => ['target_type' => 's3'],
                 ],
                 'endpoint' => [
                     'type' => 'text',

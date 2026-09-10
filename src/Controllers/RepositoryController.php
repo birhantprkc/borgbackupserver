@@ -413,7 +413,7 @@ class RepositoryController extends Controller
                 $s3Deleted = true;
                 foreach ($linkedConfigs as $pluginConfig) {
                     $config = json_decode($pluginConfig['config'], true) ?: [];
-                    $creds = $s3Service->resolveCredentials($config);
+                    $creds = $s3Service->resolveDestination($config);
 
                     $result = $s3Service->deleteFromS3($repo, $agent, $creds);
                     if (!$result['success']) $s3Deleted = false;
@@ -422,8 +422,8 @@ class RepositoryController extends Controller
                         'agent_id' => $agentId,
                         'level' => $result['success'] ? 'info' : 'warning',
                         'message' => $result['success']
-                            ? "S3 data deleted for repository \"{$repo['name']}\" at destination \"{$pluginConfig['name']}\""
-                            : "Failed to delete S3 data for repository \"{$repo['name']}\" at destination \"{$pluginConfig['name']}\": " . ($result['output'] ?? 'Unknown error'),
+                            ? "Offsite copy deleted for repository \"{$repo['name']}\" at destination \"{$pluginConfig['name']}\""
+                            : "Failed to delete the offsite copy of repository \"{$repo['name']}\" at destination \"{$pluginConfig['name']}\": " . ($result['output'] ?? 'Unknown error'),
                     ]);
                 }
             }
@@ -447,9 +447,9 @@ class RepositoryController extends Controller
         }
         if ($deleteFromS3) {
             if ($s3Deleted) {
-                $msg .= " S3 offsite copy removed.";
+                $msg .= " Offsite copies removed.";
             } else {
-                $msg .= " Warning: S3 data could not be removed — clean up manually.";
+                $msg .= " Warning: an offsite copy could not be removed — clean up manually.";
             }
         }
 
@@ -1180,13 +1180,20 @@ class RepositoryController extends Controller
         $s3PluginConfigs = [];
         if (($repo['storage_type'] ?? 'local') === 'local') {
             $s3SyncConfigs = $this->db->fetchAll("
-                SELECT rsc.plugin_config_id, pc.name as config_name,
+                SELECT rsc.plugin_config_id, pc.name as config_name, pc.config,
                        rsc.last_sync_at as last_s3_sync, rsc.enabled
                 FROM repository_s3_configs rsc
                 JOIN plugin_configs pc ON pc.id = rsc.plugin_config_id
                 WHERE rsc.repository_id = ?
                 ORDER BY pc.name
             ", [$id]);
+            // Type and label of each destination, for the card (#413)
+            $describe = new S3SyncService();
+            foreach ($s3SyncConfigs as &$dest) {
+                $dest += $describe->describeDestination(json_decode($dest['config'] ?? '{}', true) ?: []);
+                unset($dest['config']);
+            }
+            unset($dest);
 
             // S3 plugin configs for this agent not yet linked to this repo
             // (candidates for "Add destination")
@@ -1293,7 +1300,7 @@ class RepositoryController extends Controller
             $this->redirect("/clients/{$agentId}/repo/{$id}");
         }
 
-        $this->flash('success', "S3 restore ({$result['mode']}) job queued for repository \"{$result['repository_name']}\".");
+        $this->flash('success', "Restore ({$result['mode']}) from the offsite copy queued for repository \"{$result['repository_name']}\".");
         $this->redirect("/clients/{$agentId}/repo/{$result['repository_id']}");
     }
 
@@ -1423,7 +1430,7 @@ class RepositoryController extends Controller
 
         $pluginConfigId = (int) ($_POST['plugin_config_id'] ?? 0);
         if ($pluginConfigId === 0) {
-            $this->flash('danger', 'Please select an S3 configuration.');
+            $this->flash('danger', 'Please select a destination.');
             $this->redirect("/clients/{$agentId}/repo/{$id}");
         }
 
@@ -1464,7 +1471,7 @@ class RepositoryController extends Controller
             'message' => "S3 sync enabled for repository \"{$repo['name']}\" to destination \"{$pluginConfig['name']}\"",
         ]);
 
-        $this->flash('success', "S3 destination \"{$pluginConfig['name']}\" added for repository \"{$repo['name']}\".");
+        $this->flash('success', "Offsite destination \"{$pluginConfig['name']}\" added for repository \"{$repo['name']}\".");
         $this->redirect("/clients/{$agentId}/repo/{$id}");
     }
 
@@ -1506,7 +1513,7 @@ class RepositoryController extends Controller
             'message' => "S3 sync{$destLabel} disabled for repository \"{$repo['name']}\" (data remains in S3)",
         ]);
 
-        $this->flash('success', "S3 sync{$destLabel} disabled for repository \"{$repo['name']}\". Data remains in S3.");
+        $this->flash('success', "Offsite sync{$destLabel} disabled for repository \"{$repo['name']}\". The copy is left in place.");
         $this->redirect("/clients/{$agentId}/repo/{$id}");
     }
 

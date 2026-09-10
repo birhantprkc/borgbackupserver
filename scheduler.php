@@ -667,7 +667,7 @@ foreach ($serverJobs as $sj) {
                 'agent_id' => $sj['agent_id'],
                 'backup_job_id' => $sj['id'],
                 'level' => 'info',
-                'message' => 'S3 sync skipped — remote SSH repos are already offsite',
+                'message' => 'Offsite sync skipped — remote SSH repos are already offsite',
             ]);
             echo date('Y-m-d H:i:s') . " S3 sync job #{$sj['id']} skipped (remote SSH repo)\n";
             continue;
@@ -684,7 +684,9 @@ foreach ($serverJobs as $sj) {
         }
 
         $s3Service = new \BBS\Services\S3SyncService();
-        $creds = $s3Service->resolveCredentials($config);
+        // The destination: an S3 bucket, an SSH host, or a local disk (#413).
+        $creds = $s3Service->resolveDestination($config);
+        $destName = $namedConfig['name'] ?? 'offsite';
 
         $s3Repo = $db->fetchOne("SELECT * FROM repositories WHERE id = ?", [$sj['repository_id']]);
         $s3Agent = $db->fetchOne("SELECT * FROM agents WHERE id = ?", [$sj['agent_id']]);
@@ -709,8 +711,8 @@ foreach ($serverJobs as $sj) {
         ], 'id = ?', [$sj['id']]);
 
         $logMessage = $s3Result === 'completed'
-            ? 'S3 sync completed' . (!empty($s3Output) ? ": {$s3Output}" : '')
-            : 'S3 sync failed: ' . $s3Error;
+            ? "Offsite sync to \"{$destName}\" completed" . (!empty($s3Output) ? ": {$s3Output}" : '')
+            : "Offsite sync to \"{$destName}\" failed: " . $s3Error;
         $db->insert('server_log', [
             'agent_id' => $sj['agent_id'],
             'backup_job_id' => $sj['id'],
@@ -742,7 +744,7 @@ foreach ($serverJobs as $sj) {
                 's3_sync_failed',
                 $sj['agent_id'],
                 $sj['repository_id'] ? (int)$sj['repository_id'] : null,
-                "S3 sync failed for repository \"{$repoName}\" on client \"{$agentName}\" — " . ($s3Error ?? 'unknown error'),
+                "Offsite sync to \"{$destName}\" failed for repository \"{$repoName}\" on client \"{$agentName}\" — " . ($s3Error ?? 'unknown error'),
                 'critical'
             );
         } elseif ($s3Result === 'completed') {
@@ -752,7 +754,7 @@ foreach ($serverJobs as $sj) {
                 's3_sync_done',
                 $sj['agent_id'],
                 $sj['repository_id'] ? (int)$sj['repository_id'] : null,
-                "S3 sync completed for repository \"{$repoName}\" on client \"{$agentName}\"" . (!empty($s3Output) ? " — {$s3Output}" : ''),
+                "Offsite sync to \"{$destName}\" completed for repository \"{$repoName}\" on client \"{$agentName}\"" . (!empty($s3Output) ? " — {$s3Output}" : ''),
                 'info'
             );
         }
@@ -781,7 +783,7 @@ foreach ($serverJobs as $sj) {
                             'agent_id' => $sj['agent_id'],
                             'backup_job_id' => $sj['id'],
                             'level' => 'info',
-                            'message' => "Manifest uploaded: {$manifestGenResult['archives']} archives. File catalog omitted ({$rows} rows exceeds the {$cap} manifest limit) — a restore from S3 will rebuild it via catalog sync.",
+                            'message' => "Manifest uploaded: {$manifestGenResult['archives']} archives. File catalog omitted ({$rows} rows exceeds the {$cap} manifest limit) — a restore from the copy will rebuild it via catalog sync.",
                         ]);
                     } else {
                         echo date('Y-m-d H:i:s') . "   Manifest uploaded ({$manifestGenResult['archives']} archives, {$manifestGenResult['files']} files)\n";
@@ -830,12 +832,13 @@ foreach ($serverJobs as $sj) {
         }
 
         $s3Service = new \BBS\Services\S3SyncService();
-        $creds = $s3Service->resolveCredentials($config);
+        $creds = $s3Service->resolveDestination($config);
+        $destName = $namedConfig['name'] ?? 'offsite';
 
         $s3Repo = $db->fetchOne("SELECT * FROM repositories WHERE id = ?", [$sj['repository_id']]);
         $s3Agent = $db->fetchOne("SELECT * FROM agents WHERE id = ?", [$sj['agent_id']]);
 
-        // For "copy" mode, source_repository_id tells us where to pull S3 data from
+        // For "copy" mode, source_repository_id tells us where to pull the copy from
         $sourceRepo = null;
         if (!empty($sj['source_repository_id'])) {
             $sourceRepo = $db->fetchOne("SELECT * FROM repositories WHERE id = ?", [$sj['source_repository_id']]);
@@ -861,8 +864,8 @@ foreach ($serverJobs as $sj) {
         ], 'id = ?', [$sj['id']]);
 
         $logMessage = $s3Result === 'completed'
-            ? 'S3 restore completed' . (!empty($s3Output) ? ": {$s3Output}" : '')
-            : 'S3 restore failed: ' . $s3Error;
+            ? "Restore from \"{$destName}\" completed" . (!empty($s3Output) ? ": {$s3Output}" : '')
+            : "Restore from \"{$destName}\" failed: " . $s3Error;
         $db->insert('server_log', [
             'agent_id' => $sj['agent_id'],
             'backup_job_id' => $sj['id'],
@@ -944,7 +947,7 @@ foreach ($serverJobs as $sj) {
                 $db->insert('server_log', [
                     'agent_id' => $sj['agent_id'],
                     'level' => 'info',
-                    'message' => "No manifest in S3, catalog_sync queued for repository after S3 restore",
+                    'message' => "No manifest in the offsite copy, catalog_sync queued for repository after restore",
                 ]);
                 echo date('Y-m-d H:i:s') . " Queued catalog_sync for repo #{$sj['repository_id']} after S3 restore\n";
             }
@@ -2522,7 +2525,7 @@ foreach ($serverJobs as $sj) {
                 'agent_id' => $sj['agent_id'],
                 'backup_job_id' => $s3JobId,
                 'level' => 'info',
-                'message' => "S3 sync to \"{$repoS3Config['config_name']}\" queued (job #{$s3JobId}) after prune job #{$sj['id']}",
+                'message' => "Offsite sync to \"{$repoS3Config['config_name']}\" queued (job #{$s3JobId}) after prune job #{$sj['id']}",
             ]);
 
             // Update last_sync_at will happen when the job completes
