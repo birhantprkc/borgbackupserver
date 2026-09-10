@@ -4,7 +4,10 @@ Borg Backup Server Agent
 Polls the BBS server for tasks, executes borg commands, reports progress/status.
 """
 
+import base64
+import binascii
 import datetime
+import hashlib
 import json
 import logging
 import os
@@ -49,7 +52,16 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.96.0"
+AGENT_VERSION = "2.96.1"
+
+# Ed25519 public keys, hex, that may sign an update to this script and to
+# the start wrapper. Kept in step with agent/signing-key.pub. An update the
+# server offers is installed only if its last line carries a signature by
+# one of these keys, so a server that has been tampered with cannot push
+# code to its clients. See bin/bbs-sign-agent and _verify_signed_script().
+AGENT_SIGNING_KEYS = [
+    "837be6c01018aa97ea57b244c53b241f9e55089a77c2dfb66cf23d5e5e564186",
+]
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 IS_MACOS = sys.platform == "darwin"
@@ -356,11 +368,20 @@ def load_config():
     if env_auto is not None:
         auto_update = env_auto.strip().lower() in ("1", "true", "yes", "on")
 
+    # Signed updates are required unless this client opts out in its own
+    # config (a fork running its own build). The setting lives here, on the
+    # client, so the server cannot turn it off.
+    require_signed = config.getboolean("agent", "require_signed_updates", fallback=True)
+    env_signed = os.environ.get("BBS_REQUIRE_SIGNED_UPDATES")
+    if env_signed is not None:
+        require_signed = env_signed.strip().lower() in ("1", "true", "yes", "on")
+
     return {
         "server_url": config.get("server", "url").rstrip("/"),
         "api_key": config.get("server", "api_key"),
         "poll_interval": config.getint("agent", "poll_interval", fallback=30),
         "auto_update": auto_update,
+        "require_signed_updates": require_signed,
         # TLS towards the server (#476): a CA bundle for a self-signed or
         # private-CA certificate, or no verification at all. Written by the
         # installer from --cacert / --insecure; default is normal verification.
@@ -1461,6 +1482,128 @@ def _install_borg_package_manager():
         return "failed", "", str(e)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Update signatures. Ed25519 (RFC 8032) in plain Python: the agent runs on
+# Python 3.4 to 3.14 with no libraries beyond the standard one, and
+# verifying a 250 KB script once per update takes about a second. The
+# arithmetic is the reference affine construction, slow and obvious on
+# purpose. Same code as bin/bbs-sign-agent, which also signs.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_ED_Q = 2 ** 255 - 19
+_ED_L = 2 ** 252 + 27742317777372353535851937790883648493
+
+
+def _ed_inv(x):
+    return pow(x, _ED_Q - 2, _ED_Q)
+
+
+_ED_D = (-121665 * _ed_inv(121666)) % _ED_Q
+_ED_I = pow(2, (_ED_Q - 1) // 4, _ED_Q)
+
+
+def _ed_xrecover(y):
+    xx = (y * y - 1) * _ed_inv(_ED_D * y * y + 1)
+    x = pow(xx, (_ED_Q + 3) // 8, _ED_Q)
+    if (x * x - xx) % _ED_Q != 0:
+        x = (x * _ED_I) % _ED_Q
+    if x % 2 != 0:
+        x = _ED_Q - x
+    return x
+
+
+_ED_BY = (4 * _ed_inv(5)) % _ED_Q
+_ED_B = (_ed_xrecover(_ED_BY), _ED_BY)
+
+
+def _ed_add(P, Q):
+    x1, y1 = P
+    x2, y2 = Q
+    x3 = (x1 * y2 + x2 * y1) * _ed_inv(1 + _ED_D * x1 * x2 * y1 * y2)
+    y3 = (y1 * y2 + x1 * x2) * _ed_inv(1 - _ED_D * x1 * x2 * y1 * y2)
+    return (x3 % _ED_Q, y3 % _ED_Q)
+
+
+def _ed_mult(P, e):
+    if e == 0:
+        return (0, 1)
+    Q = _ed_mult(P, e // 2)
+    Q = _ed_add(Q, Q)
+    if e & 1:
+        Q = _ed_add(Q, P)
+    return Q
+
+
+def _ed_decodeint(s):
+    b = bytearray(s)
+    return sum(b[i] << (8 * i) for i in range(32))
+
+
+def _ed_decodepoint(s):
+    b = bytearray(s)
+    y = sum((b[i] if i < 31 else (b[31] & 0x7f)) << (8 * i) for i in range(32))
+    x = _ed_xrecover(y)
+    if x & 1 != (b[31] >> 7):
+        x = _ED_Q - x
+    if (-x * x + y * y - 1 - _ED_D * x * x * y * y) % _ED_Q != 0:
+        raise ValueError("point is not on the curve")
+    return (x, y)
+
+
+def _ed_hint(m):
+    h = hashlib.sha512(m).digest()
+    return _ed_decodeint(h[:32]) + (_ed_decodeint(h[32:]) << 256)
+
+
+def _ed_verify(signature, message, pk):
+    if len(signature) != 64 or len(pk) != 32:
+        return False
+    try:
+        R = _ed_decodepoint(signature[:32])
+        A = _ed_decodepoint(pk)
+    except ValueError:
+        return False
+    S = _ed_decodeint(signature[32:])
+    if S >= _ED_L:
+        return False
+    k = _ed_hint(signature[:32] + pk + message) % _ED_L
+    return _ed_mult(_ED_B, S) == _ed_add(R, _ed_mult(A, k))
+
+
+_SIGNATURE_MARKER = b"# bbs-signature: v1 "
+
+
+def _verify_signed_script(data):
+    """Is `data` (bytes of a downloaded script) signed by a trusted key?
+    The signature is the last line, "# bbs-signature: v1 <base64>", and
+    covers every byte before it. Returns (ok, reason)."""
+    idx = data.rfind(b"\n" + _SIGNATURE_MARKER)
+    if idx < 0:
+        return False, "the file carries no signature"
+    message = data[:idx + 1]
+    line = data[idx + 1:].strip()
+    try:
+        sig = base64.b64decode(line[len(_SIGNATURE_MARKER):])
+    except (binascii.Error, ValueError, TypeError):
+        return False, "the signature line is malformed"
+    for hexkey in AGENT_SIGNING_KEYS:
+        try:
+            pk = binascii.unhexlify(hexkey)
+        except (binascii.Error, TypeError, ValueError):
+            continue
+        if _ed_verify(sig, message, pk):
+            return True, "signed by a trusted key"
+    return False, "the signature does not match a trusted key"
+
+
+def _version_tuple(v):
+    parts = []
+    for p in str(v).split("."):
+        digits = "".join(ch for ch in p if ch.isdigit())
+        parts.append(int(digits) if digits else 0)
+    return tuple(parts)
+
+
 def execute_update_agent(config, task):
     """Download and replace the agent script from the server, then restart."""
     job_id = task.get("job_id")
@@ -1495,11 +1638,29 @@ def execute_update_agent(config, task):
         req = urllib.request.Request(url, headers=headers, method="GET")
 
         with server_urlopen(config, req, 60) as resp:
-            new_script = resp.read().decode("utf-8")
+            new_script_bytes = resp.read()
+        new_script = new_script_bytes.decode("utf-8")
 
-        # Validate the downloaded script
-        if "AGENT_VERSION" not in new_script or len(new_script) < 1000:
+        # The version the server offers, from the script's header.
+        offered = None
+        for line in new_script.split("\n")[:500]:
+            m = re.match(r'^AGENT_VERSION\s*=\s*["\']([^"\']+)["\']', line)
+            if m:
+                offered = m.group(1)
+                break
+
+        # A tampered server must not be able to push code to its clients:
+        # the update has to carry a signature by a trusted key, and may not
+        # be older than what runs now (a replay of a signed but buggy
+        # version). Both checks come before anything is written.
+        sig_ok, sig_why = _verify_signed_script(new_script_bytes)
+        if config.get("require_signed_updates", True) and not sig_ok:
+            error_output = "Update refused: {}. The server's agent script is not signed by the project key; the agent was not changed.".format(sig_why)
+        elif offered and _version_tuple(offered) < _version_tuple(AGENT_VERSION):
+            error_output = "Update refused: the server offers agent {} but this agent runs {}; downgrades are not installed.".format(offered, AGENT_VERSION)
+        elif "AGENT_VERSION" not in new_script or len(new_script) < 1000:
             error_output = "Downloaded script failed validation"
+        if error_output:
             logger.error(error_output)
         else:
             # Syntax-check the new script BEFORE replacing — a SyntaxError
@@ -1539,14 +1700,7 @@ def execute_update_agent(config, task):
                 os.chmod(tmp_path, os.stat(script_path).st_mode)
             os.replace(tmp_path, script_path)
 
-            # Extract new version from downloaded script
-            new_version = "unknown"
-            # The constant sits below the imports; scan the whole header.
-            for line in new_script.split("\n")[:500]:
-                m = __import__("re").match(r'^AGENT_VERSION\s*=\s*["\']([^"\']+)["\']', line)
-                if m:
-                    new_version = m.group(1)
-                    break
+            new_version = offered or "unknown"
 
             result = "completed"
             update_output = "Agent updated to v{}".format(new_version)
@@ -1561,6 +1715,9 @@ def execute_update_agent(config, task):
                     wrapper_req = urllib.request.Request(wrapper_url, headers=headers, method="GET")
                     with server_urlopen(config, wrapper_req, 30) as wresp:
                         wrapper_script = wresp.read()
+                    w_ok, w_why = _verify_signed_script(wrapper_script)
+                    if config.get("require_signed_updates", True) and not w_ok:
+                        raise RuntimeError("start wrapper refused: {}".format(w_why))
                     wrapper_dir = os.path.dirname(script_path)
                     wrapper_path = os.path.join(wrapper_dir, "bbs-agent-start.sh")
                     with open(wrapper_path, "wb") as wf:
@@ -5190,3 +5347,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+# bbs-signature: v1 89sp38JKvUek6S231qW+cCPjH5QA+YLQAQ74i40F4L08ePyUgwdpS+QibwLbsYwGrrrtjjoRq1KuLymEtsk7BA==

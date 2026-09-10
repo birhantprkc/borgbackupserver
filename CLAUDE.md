@@ -102,3 +102,7 @@ If you need a new privileged operation, ADD IT TO `bin/bbs-ssh-helper` first.
   - Why: unpinned, every image rebuild silently pulled the latest `stable`. The v2.60.9 rebuild pulled ClickHouse `26.6.1.1193`, which raised its CPU-instruction baseline → `Illegal instruction (core dumped)` on hosts that ran 26.5 fine → ClickHouse never bound port 8123 → catalog import / file-level restore failed and **every backup job errored** (`ClickHouse TSV upload failed: Failed to connect to localhost port 8123`). Root cause was version drift, not app code. Fixed in v2.60.10 by pinning to `26.5.2.39` (#327).
   - To change the version: edit the `CLICKHOUSE_VERSION` ARG only, and **test the new version on an older/baseline CPU** before shipping.
   - Inspect what an image actually shipped: `docker run --rm --entrypoint dpkg-query marcpope/borgbackupserver:<tag> -W clickhouse-server`.
+
+## Agent Signing
+- `agent/bbs-agent.py` and `agent/bbs-agent-start.sh` end with a `# bbs-signature: v1 …` line. Agents refuse an update whose signature does not verify against `agent/signing-key.pub`, so **every commit that touches those files must be re-signed**: `python3 bin/bbs-sign-agent sign`. The pre-commit hook in `.githooks/` does it when `core.hooksPath` is set to `.githooks`; the GitHub Action `verify-agent-signature.yml` fails a push that is not signed.
+- The private key is `~/.bbs/agent-signing.key` on the maintainer's machine (or `$BBS_AGENT_SIGNING_KEY`). It is never committed.

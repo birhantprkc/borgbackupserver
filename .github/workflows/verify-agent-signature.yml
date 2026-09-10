@@ -1,0 +1,18 @@
+name: Verify agent signature
+
+# Every push must carry agent scripts signed by a key in
+# agent/signing-key.pub, or agents in the field will refuse the update.
+# Verification needs only the public key.
+on:
+  push:
+    paths: ['agent/bbs-agent.py', 'agent/bbs-agent-start.sh', 'agent/signing-key.pub', 'bin/bbs-sign-agent']
+  pull_request:
+    paths: ['agent/bbs-agent.py', 'agent/bbs-agent-start.sh', 'agent/signing-key.pub', 'bin/bbs-sign-agent']
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 bin/bbs-sign-agent selftest
+      - run: python3 bin/bbs-sign-agent verify

@@ -114,3 +114,4 @@ fi
 
 # Hand off to the real agent
 exec "$PYTHON" "$AGENT_PY" "$@"
+# bbs-signature: v1 Dhx3hlB4m0RzseIrhh/8LoqBcz0WHlFHzdiwNXlbjqd23bm+IUvXZ++ZRz353zxt6lUklyPJgTQhYQUfeOWKDQ==

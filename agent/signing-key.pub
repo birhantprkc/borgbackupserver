@@ -1,0 +1,6 @@
+# Ed25519 public keys the agent trusts for its own updates, one per line,
+# hex. The private key lives on the maintainer's machine only. See
+# bin/bbs-sign-agent. Add a new key here (and in AGENT_SIGNING_KEYS) before
+# retiring an old one, so agents already in the field can verify the update
+# that carries the new key.
+837be6c01018aa97ea57b244c53b241f9e55089a77c2dfb66cf23d5e5e564186
