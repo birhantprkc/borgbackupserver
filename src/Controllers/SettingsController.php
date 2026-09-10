@@ -159,6 +159,37 @@ class SettingsController extends Controller
         $this->redirect('/settings?tab=ssl');
     }
 
+    /**
+     * The certificate on this server is not the one clients see: TLS is
+     * terminated on a proxy in front, and the local certificate only covers
+     * the proxy-to-Apache hop, or nothing at all. With this on, the daily
+     * expiry check is skipped and any warning it raised is cleared.
+     */
+    public function sslExternal(): void
+    {
+        $this->requireAdmin();
+        $this->verifyCsrf();
+
+        $external = !empty($_POST['certificate_external']) ? '1' : '0';
+        $this->db->query(
+            "INSERT INTO settings (`key`, `value`) VALUES ('certificate_external', ?)
+             ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)",
+            [$external]
+        );
+        if ($external === '1') {
+            $notifications = new \BBS\Services\NotificationService();
+            foreach ([0, 1, 2, 3, 7, 14, 29] as $threshold) {
+                $notifications->resolve('certificate_expiring', null, $threshold);
+            }
+        }
+        // Check again on the next scheduler pass rather than tomorrow.
+        $this->db->query("DELETE FROM settings WHERE `key` = 'certificate_checked_on'");
+        $this->flash('success', $external === '1'
+            ? 'Expiry warnings for this server\'s certificate are off.'
+            : 'Expiry warnings for this server\'s certificate are on.');
+        $this->redirect('/settings?tab=ssl');
+    }
+
     public function dockerSetup(): void
     {
         $this->requireAdmin();

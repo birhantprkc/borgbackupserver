@@ -206,6 +206,7 @@ class App
         $this->router->map('POST', '/storage-locations', 'StorageLocationController@store');
         $this->router->map('POST', '/settings/ssl/renew', 'SettingsController@sslRenew');
         $this->router->map('POST', '/settings/ssl/email', 'SettingsController@sslEmail');
+        $this->router->map('POST', '/settings/ssl/external', 'SettingsController@sslExternal');
         $this->router->map('POST', '/storage-locations/[i:id]/update', 'StorageLocationController@update');
         $this->router->map('POST', '/storage-locations/[i:id]/delete', 'StorageLocationController@destroy');
         $this->router->map('POST', '/storage-locations/s3', 'StorageLocationController@saveS3');
@@ -377,6 +378,7 @@ class App
         $this->router->map('GET',  '/api/v1/ssl', 'Api\\SslApiController@show');
         $this->router->map('POST', '/api/v1/ssl/renew', 'Api\\SslApiController@renew');
         $this->router->map('PUT',  '/api/v1/ssl/email', 'Api\\SslApiController@setEmail');
+        $this->router->map('PUT',  '/api/v1/ssl/external', 'Api\\SslApiController@setExternal');
         $this->router->map('POST', '/api/v1/clients/[i:id]/rotate-key', 'Api\\AdminApiController@rotateClientKey');
         $this->router->map('POST', '/api/v1/repositories/[i:repoId]/passphrase', 'Api\\AdminApiController@changeRepositoryPassphrase');
         $this->router->map('GET', '/api/v1/storage', 'Api\\AdminApiController@listStorageLocations');

@@ -41,8 +41,41 @@ class SslApiController extends Controller
         $status['email'] = $this->db->fetchOne(
             "SELECT `value` FROM settings WHERE `key` = 'ssl_contact_email'"
         )['value'] ?? '';
+        // TLS terminated elsewhere: the local certificate is not the one
+        // clients see, and the server does not warn about it expiring.
+        $status['external'] = ($this->db->fetchOne(
+            "SELECT `value` FROM settings WHERE `key` = 'certificate_external'"
+        )['value'] ?? '0') === '1';
 
         $this->json($status);
+    }
+
+    /**
+     * PUT /api/v1/ssl/external — {"external": true}
+     *
+     * Marks this server's certificate as not the one clients see, which
+     * turns the daily expiry check off and clears any warning it raised.
+     */
+    public function setExternal(): void
+    {
+        $this->requireApiToken();
+        $input = $this->getJsonInput();
+        if (!array_key_exists('external', $input) || !is_bool($input['external'])) {
+            $this->json(['error' => 'external must be true or false'], 422);
+        }
+        $this->db->query(
+            "INSERT INTO settings (`key`, `value`) VALUES ('certificate_external', ?)
+             ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)",
+            [$input['external'] ? '1' : '0']
+        );
+        if ($input['external']) {
+            $notifications = new \BBS\Services\NotificationService();
+            foreach ([0, 1, 2, 3, 7, 14, 29] as $threshold) {
+                $notifications->resolve('certificate_expiring', null, $threshold);
+            }
+        }
+        $this->db->query("DELETE FROM settings WHERE `key` = 'certificate_checked_on'");
+        $this->json(['status' => 'ok', 'external' => (bool) $input['external']]);
     }
 
     /**

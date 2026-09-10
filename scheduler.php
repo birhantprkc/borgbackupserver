@@ -2659,8 +2659,13 @@ if ($certCheckedOn !== date('Y-m-d')) {
         $certStatus = $certSvc->status();
 
         // An install behind a proxy that terminates TLS elsewhere has no
-        // certificate and must stay silent.
-        if (!empty($certStatus['installed']) && $certStatus['days_remaining'] !== null) {
+        // certificate and must stay silent. One that keeps a certificate for
+        // the proxy-to-Apache hop says so with certificate_external, and is
+        // left alone too: the certificate clients see is not this one.
+        $certExternal = ($db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'certificate_external'")['value'] ?? '0') === '1';
+        if ($certExternal) {
+            echo date('Y-m-d H:i:s') . " Certificate check skipped: TLS is terminated elsewhere\n";
+        } elseif (!empty($certStatus['installed']) && $certStatus['days_remaining'] !== null) {
             $notificationService = $notificationService ?? new NotificationService();
             $days = (int) $certStatus['days_remaining'];
             $reason = $certSvc->stalledReason($certStatus);

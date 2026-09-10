@@ -2400,6 +2400,16 @@ document.getElementById('appIconFileInput').addEventListener('change', function(
 <div>
     <h5 class="settings-group">Status</h5>
 
+    <?php if ($c && !empty($c['installed']) && (($settings['certificate_external'] ?? '0') === '1')): ?>
+    <div class="alert alert-secondary d-flex align-items-start">
+        <i class="bi bi-info-circle me-2 fs-5"></i>
+        <div>
+            <strong>Expiry warnings are off for this certificate.</strong>
+            <div class="small mt-1">TLS is terminated elsewhere, so the certificate clients see is not this one. Its details are below for reference; nothing here will warn when it expires.</div>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <?php if (!$c || empty($c['installed'])): ?>
     <div class="alert alert-secondary d-flex align-items-start">
         <i class="bi bi-info-circle me-2 fs-5"></i>
@@ -2485,6 +2495,23 @@ document.getElementById('appIconFileInput').addEventListener('change', function(
     <?php endif; ?>
 
     <h5 class="settings-group mt-4">Expiry warnings</h5>
+    <form method="POST" action="/settings/ssl/external">
+        <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
+        <div class="settings-row">
+            <div>
+                <div class="settings-row-label">This certificate is not the one clients see</div>
+                <p class="settings-row-help">Turn on when a reverse proxy or load balancer in front of this server holds the public certificate and the one here only covers the hop from the proxy, or is unused. BBS then stops warning about this server's certificate expiring. Keep it off when browsers and agents connect to this server directly.</p>
+            </div>
+            <div class="settings-row-control">
+                <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" role="switch" name="certificate_external" value="1"
+                           id="certificateExternal" onchange="this.form.submit()" <?= (($settings['certificate_external'] ?? '0') === '1') ? 'checked' : '' ?>>
+                    <label class="form-check-label" for="certificateExternal"><?= (($settings['certificate_external'] ?? '0') === '1') ? 'On' : 'Off' ?></label>
+                </div>
+            </div>
+            <div class="settings-row-default">Default: Off</div>
+        </div>
+    </form>
     <form method="POST" action="/settings/ssl/email">
         <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
         <div class="settings-row">
