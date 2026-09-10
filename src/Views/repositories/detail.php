@@ -511,6 +511,36 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
     </div>
 </div>
 
+<?php
+// Size over time (#406): one point per archive, oldest first. The line is
+// what each backup saw (original size); the bars are what each backup added
+// to the repository after deduplication, which is where a wrong include or
+// an un-deduplicable source (nightly tarballs) shows up as a spike. Capped
+// at the latest 365 archives so a long-lived hourly plan still draws.
+$sizeSeries = [];
+foreach (array_reverse(array_slice($archives, 0, 365)) as $ar) {
+    $sizeSeries[] = [
+        'label' => \BBS\Core\TimeHelper::format($ar['created_at'], 'M j'),
+        'full'  => \BBS\Core\TimeHelper::format($ar['created_at'], 'M j, Y g:i A'),
+        'name'  => $ar['archive_name'],
+        'plan'  => $ar['plan_name'] ?? '',
+        'original' => (int) $ar['original_size'],
+        'added' => (int) $ar['deduplicated_size'],
+    ];
+}
+?>
+<?php if (count($sizeSeries) >= 2): ?>
+<div class="card border-0 shadow-sm mt-4" id="size-chart-section">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-graph-up me-1"></i> Size over time</span>
+        <span class="text-muted small fw-normal">Line: what each backup saw. Bars: what it added to the repository after deduplication.</span>
+    </div>
+    <div class="card-body" style="height: 240px;">
+        <canvas id="sizeChart"></canvas>
+    </div>
+</div>
+<?php endif; ?>
+
 <!-- Archives -->
 <div class="card border-0 shadow-sm mt-4" id="archives-section">
     <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
@@ -809,3 +839,51 @@ if (renameToggle && renameForm) {
     });
 })();
 </script>
+
+<?php if (count($sizeSeries) >= 2): ?>
+<script src="/assets/chartjs/chart.umd.min.js"></script>
+<script>
+(function () {
+    const el = document.getElementById('sizeChart');
+    if (!el || !window.Chart) return;
+    const pts = <?= json_encode($sizeSeries) ?>;
+    const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+    const tc = isDark ? '#8b929a' : '#6c757d';
+    const gc = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
+    const fmtB = b => { b = Number(b); const s = '\u00A0'; if (b >= 1099511627776) return (b/1099511627776).toFixed(2)+s+'TB'; if (b >= 1073741824) return (b/1073741824).toFixed(2)+s+'GB'; if (b >= 1048576) return (b/1048576).toFixed(1)+s+'MB'; if (b >= 1024) return (b/1024).toFixed(0)+s+'KB'; return b+s+'B'; };
+    // Label every Nth point so the axis stays readable on long runs.
+    const step = Math.max(1, Math.ceil(pts.length / 12));
+    new Chart(el.getContext('2d'), {
+        data: {
+            labels: pts.map(p => p.label),
+            datasets: [
+                { type: 'line', label: 'Archive size', yAxisID: 'y', data: pts.map(p => p.original),
+                  borderColor: 'rgba(54, 162, 235, 0.9)', backgroundColor: 'rgba(54, 162, 235, 0.15)', fill: true, tension: 0.2,
+                  pointRadius: pts.length > 120 ? 0 : 2, borderWidth: 1.5, order: 2 },
+                { type: 'bar', label: 'Added after dedup', yAxisID: 'y2', data: pts.map(p => p.added),
+                  backgroundColor: 'rgba(75, 192, 192, 0.7)', borderRadius: 2, order: 1 },
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 }, padding: 10, color: tc } },
+                tooltip: {
+                    callbacks: {
+                        title: items => { const p = pts[items[0].dataIndex]; return p.full + (p.plan ? ' \u00B7 ' + p.plan : ''); },
+                        label: item => ' ' + item.dataset.label + ': ' + fmtB(item.raw),
+                        afterBody: items => [pts[items[0].dataIndex].name],
+                    }
+                }
+            },
+            scales: {
+                x: { ticks: { color: tc, font: { size: 9 }, maxRotation: 0, autoSkip: false, callback: function (v, i) { return i % step === 0 ? this.getLabelForValue(v) : ''; } }, grid: { display: false } },
+                y: { position: 'left', beginAtZero: true, ticks: { color: tc, font: { size: 10 }, callback: v => fmtB(v) }, grid: { color: gc }, title: { display: true, text: 'Archive size', color: tc, font: { size: 10 } } },
+                y2: { position: 'right', beginAtZero: true, ticks: { color: tc, font: { size: 10 }, callback: v => fmtB(v) }, grid: { drawOnChartArea: false }, title: { display: true, text: 'Added', color: tc, font: { size: 10 } } },
+            }
+        }
+    });
+})();
+</script>
+<?php endif; ?>
