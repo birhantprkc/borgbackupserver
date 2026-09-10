@@ -696,7 +696,7 @@ foreach ($serverJobs as $sj) {
             $s3Error = 'Repository or agent not found';
         } else {
             $runAsUser = $sj['ssh_unix_user'] ?? null;
-            $syncResult = $s3Service->syncRepository($s3Repo, $s3Agent, $creds, $runAsUser);
+            $syncResult = $s3Service->syncRepository($s3Repo, $s3Agent, $creds, $runAsUser, (int) $sj['id']);
             $s3Result = $syncResult['success'] ? 'completed' : 'failed';
             $s3Output = $syncResult['output'] ?? '';
             $s3Error = $syncResult['success'] ? null : $s3Output;
@@ -849,7 +849,7 @@ foreach ($serverJobs as $sj) {
             $s3Error = 'Repository or agent not found';
         } else {
             $runAsUser = $sj['ssh_unix_user'] ?? null;
-            $restoreResult = $s3Service->restoreRepository($s3Repo, $s3Agent, $creds, $runAsUser, $sourceRepo);
+            $restoreResult = $s3Service->restoreRepository($s3Repo, $s3Agent, $creds, $runAsUser, $sourceRepo, (int) $sj['id']);
             $s3Result = $restoreResult['success'] ? 'completed' : 'failed';
             $s3Output = $restoreResult['output'] ?? '';
             $s3Error = $restoreResult['success'] ? null : $s3Output;

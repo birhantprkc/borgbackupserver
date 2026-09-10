@@ -21,6 +21,13 @@ class S3SyncService
      */
     public const MANIFEST_MAX_CATALOG_ROWS = 250000;
 
+    /**
+     * What makes rclone report as it goes. bin/bbs-ssh-helper already passes
+     * these on the helper path; the direct path was silent, so a run as the
+     * web user had nothing to show.
+     */
+    private const STATS_FLAGS = ['-v', '--stats-one-line', '--stats', '5s'];
+
     private Database $db;
 
     public function __construct()
@@ -331,11 +338,76 @@ class S3SyncService
     }
 
     /**
+     * Drain a running process, handing each complete output line to $onLine.
+     *
+     * The blocking stream_get_contents() this replaces held every line until
+     * rclone exited, so the periodic stats lines it already emits — transferred
+     * / total, percent, speed, ETA — were read and thrown away, and a sync of
+     * several hours showed no progress at all.
+     *
+     * stdout and stderr are drained in the same pass: rclone logs to stderr
+     * when run directly, while the SSH helper folds both into its stdout with
+     * 2>&1. A partial line is kept until its newline arrives, so a stats line
+     * split across two reads is never handed over truncated.
+     *
+     * @return array{stdout:string,stderr:string,timedOut:bool}
+     */
+    private function pump($proc, array $pipes, ?callable $onLine, ?int $timeoutSeconds): array
+    {
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
+        $out = ['', ''];
+        $tail = ['', ''];
+        $timedOut = false;
+        $deadline = $timeoutSeconds === null ? null : time() + $timeoutSeconds;
+
+        while (true) {
+            // Status first, read second: a process that exits between the two
+            // has already closed its pipes, so the read that follows still
+            // returns everything it wrote.
+            $running = (bool) proc_get_status($proc)['running'];
+
+            foreach ([0, 1] as $i) {
+                $chunk = stream_get_contents($pipes[$i + 1]);
+                if ($chunk === false || $chunk === '') {
+                    continue;
+                }
+                $out[$i] .= $chunk;
+                if ($onLine === null) {
+                    continue;
+                }
+                $tail[$i] .= $chunk;
+                while (($nl = strpos($tail[$i], "\n")) !== false) {
+                    $line = rtrim(substr($tail[$i], 0, $nl), "\r");
+                    $tail[$i] = substr($tail[$i], $nl + 1);
+                    if ($line !== '') {
+                        $onLine($line);
+                    }
+                }
+            }
+
+            if (!$running) {
+                break;
+            }
+            if ($deadline !== null && time() >= $deadline) {
+                $timedOut = true;
+                proc_terminate($proc, 9);
+                break;
+            }
+            // rclone reports every 5s; polling five times a second is enough to
+            // stay responsive without spinning.
+            usleep(200000);
+        }
+
+        return ['stdout' => $out[0], 'stderr' => $out[1], 'timedOut' => $timedOut];
+    }
+
+    /**
      * Run rclone as the web user with the destination in its environment.
      * A timeout kills a run that hangs on a dead endpoint; null waits.
      * Returns ['stdout', 'stderr', 'exitCode', 'timedOut'].
      */
-    private function runDirect(array $dest, array $args, ?int $timeoutSeconds = null): array
+    private function runDirect(array $dest, array $args, ?int $timeoutSeconds = null, ?callable $onLine = null): array
     {
         $env = [
             'RCLONE_CONFIG' => '/dev/null',
@@ -348,38 +420,16 @@ class S3SyncService
             return ['stdout' => '', 'stderr' => 'Failed to start rclone process', 'exitCode' => -1, 'timedOut' => false];
         }
         fclose($pipes[0]);
-        if ($timeoutSeconds === null) {
-            $stdout = stream_get_contents($pipes[1]);
-            $stderr = stream_get_contents($pipes[2]);
-            fclose($pipes[1]);
-            fclose($pipes[2]);
-            return ['stdout' => $stdout, 'stderr' => $stderr, 'exitCode' => proc_close($proc), 'timedOut' => false];
-        }
-        stream_set_blocking($pipes[1], false);
-        stream_set_blocking($pipes[2], false);
-        $stdout = $stderr = '';
-        $timedOut = false;
-        $deadline = time() + $timeoutSeconds;
-        while (true) {
-            $status = proc_get_status($proc);
-            if (!$status['running']) {
-                $stdout .= stream_get_contents($pipes[1]);
-                $stderr .= stream_get_contents($pipes[2]);
-                break;
-            }
-            if (time() >= $deadline) {
-                $timedOut = true;
-                proc_terminate($proc, 9);
-                break;
-            }
-            $stdout .= fread($pipes[1], 8192);
-            $stderr .= fread($pipes[2], 8192);
-            usleep(50000);
-        }
+        $r = $this->pump($proc, $pipes, $onLine, $timeoutSeconds);
         fclose($pipes[1]);
         fclose($pipes[2]);
         $exitCode = proc_close($proc);
-        return ['stdout' => $stdout, 'stderr' => $stderr, 'exitCode' => $timedOut ? -1 : $exitCode, 'timedOut' => $timedOut];
+        return [
+            'stdout' => $r['stdout'],
+            'stderr' => $r['stderr'],
+            'exitCode' => $r['timedOut'] ? -1 : $exitCode,
+            'timedOut' => $r['timedOut'],
+        ];
     }
 
     /**
@@ -389,7 +439,7 @@ class S3SyncService
      * credentials and SSH keys do not show in ps. The helper removes the
      * file; this removes it too in case the helper never ran.
      */
-    private function runViaHelper(array $dest, string $runAsUser, string $direction, string $localPath, string $remote): array
+    private function runViaHelper(array $dest, string $runAsUser, string $direction, string $localPath, string $remote, ?callable $onLine = null): array
     {
         $envFile = tempnam(sys_get_temp_dir(), 'bbs-dest-');
         if ($envFile === false) {
@@ -412,14 +462,99 @@ class S3SyncService
                 return ['stdout' => '', 'stderr' => 'Failed to start rclone process', 'exitCode' => -1, 'timedOut' => false];
             }
             fclose($pipes[0]);
-            $stdout = stream_get_contents($pipes[1]);
+            $r = $this->pump($proc, $pipes, $onLine, null);
             fclose($pipes[1]);
-            $stderr = stream_get_contents($pipes[2]);
             fclose($pipes[2]);
-            return ['stdout' => $stdout, 'stderr' => $stderr, 'exitCode' => proc_close($proc), 'timedOut' => false];
+            return [
+                'stdout' => $r['stdout'],
+                'stderr' => $r['stderr'],
+                'exitCode' => proc_close($proc),
+                'timedOut' => false,
+            ];
         } finally {
             @unlink($envFile);
         }
+    }
+
+    /**
+     * A line handler that turns rclone's periodic stats into job progress.
+     *
+     * rclone already prints, every 5s under --stats-one-line:
+     *   Transferred: 521.469 MiB / 1.196 GiB, 43%, 9.185 MiB/s, ETA 1m15s
+     * which carries everything the queue needs. The columns it fills —
+     * bytes_processed, bytes_total, status_message, last_progress_at — are
+     * the ones /api/v1/queue already returns for every task type, so the
+     * queue page and the API draw the bar with no further change.
+     *
+     * Writing last_progress_at is safe here: the stalled-job sweep that reads
+     * it skips server-side task types, s3_sync among them.
+     *
+     * The total and the ETA are rough while rclone is still walking the tree,
+     * and settle once the listing is done. That is rclone's behaviour, not a
+     * rounding choice made here.
+     */
+    private function progressReporter(int $jobId): callable
+    {
+        $lastWrite = 0.0;
+        return function (string $line) use ($jobId, &$lastWrite): void {
+            // The "Transferred:" label is optional: rclone dropped it from the
+            // one-line format (1.75 prints "  178.168 MiB / 178.168 MiB, 100%,
+            // 0 B/s, ETA -"), older builds still print it. Requiring it matched
+            // nothing at all on a current rclone, and said nothing about why.
+            // The size units are what makes this a stats line and not a file
+            // name — the sibling "Transferred: 12 / 12, 100%" counter carries
+            // no unit and is correctly ignored.
+            if (!preg_match(
+                '~(?:Transferred:)?\s*([\d.]+)\s*([KMGTP]?i?B)\s*/\s*([\d.]+)\s*([KMGTP]?i?B),\s*(\d+)\s*%~',
+                $line, $m
+            )) {
+                return;
+            }
+            // rclone speaks every 5s; this only guards against a build that
+            // was configured to speak far more often. The last line is never
+            // dropped, whatever its timing: a finished sync left showing 93%
+            // reads as a partial failure, and rclone's closing line often
+            // follows the previous one by less than the guard.
+            $now = microtime(true);
+            if ((int) $m[5] < 100 && $now - $lastWrite < 2.0) {
+                return;
+            }
+            $lastWrite = $now;
+
+            $clean = preg_replace('/^\d{4}\/\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2}\s+\w+\s*:\s*/', '', $line);
+
+            $row = [
+                'bytes_processed' => self::toBytes($m[1], $m[2]),
+                'bytes_total' => self::toBytes($m[3], $m[4]),
+                'status_message' => mb_substr(trim($clean), 0, 255),
+                'last_progress_at' => date('Y-m-d H:i:s'),
+            ];
+            // rclone appends "(xfr#29/923)" while transfers are in flight:
+            // files started over files queued. Matched on its own rather than
+            // folded into the pattern above — it is absent from the closing
+            // line, and an optional tail makes the whole expression fragile.
+            if (preg_match('~\(xfr#(\d+)/(\d+)\)~', $line, $x)) {
+                $row['files_processed'] = (int) $x[1];
+                $row['files_total'] = (int) $x[2];
+            }
+
+            try {
+                $this->db->update('backup_jobs', $row, 'id = ?', [$jobId]);
+            } catch (\Throwable $e) {
+                // Progress is a courtesy: a failed write must never abort a
+                // transfer that is otherwise going fine.
+            }
+        };
+    }
+
+    /** rclone's human sizes back to bytes. Binary units, as rclone prints them. */
+    private static function toBytes(string $n, string $unit): int
+    {
+        $mult = ['B' => 1, 'KiB' => 1024, 'MiB' => 1024 ** 2, 'GiB' => 1024 ** 3,
+                 'TiB' => 1024 ** 4, 'PiB' => 1024 ** 5,
+                 'KB' => 1000, 'MB' => 1000 ** 2, 'GB' => 1000 ** 3,
+                 'TB' => 1000 ** 4, 'PB' => 1000 ** 5];
+        return (int) round(((float) $n) * ($mult[$unit] ?? 1));
     }
 
     /** The final rclone stats line, without its timestamp prefix. */
@@ -434,7 +569,7 @@ class S3SyncService
      * Copy a repository to its destination.
      * Returns ['success' => bool, 'output' => string].
      */
-    public function syncRepository(array $repo, array $agent, array $destOrCreds, ?string $runAsUser = null): array
+    public function syncRepository(array $repo, array $agent, array $destOrCreds, ?string $runAsUser = null, ?int $jobId = null): array
     {
         $dest = $this->asDestination($destOrCreds);
         if ($dest['error']) {
@@ -452,10 +587,17 @@ class S3SyncService
             return ['success' => false, 'output' => 'The destination is inside the repository itself'];
         }
 
+        // The helper already runs rclone with -v --stats-one-line --stats 5s;
+        // the direct path did not, so it had nothing to report. Both now do.
+        $onLine = $jobId !== null ? $this->progressReporter($jobId) : null;
         if ($runAsUser) {
-            $r = $this->runViaHelper($dest, $runAsUser, 'push', $localPath, $remote);
+            $r = $this->runViaHelper($dest, $runAsUser, 'push', $localPath, $remote, $onLine);
         } else {
-            $r = $this->runDirect($dest, array_merge(['sync', $localPath, $remote, '--transfers', '4', '--checkers', '8'], $this->rcloneFlags($dest)));
+            $r = $this->runDirect($dest, array_merge(
+                ['sync', $localPath, $remote, '--transfers', '4', '--checkers', '8'],
+                self::STATS_FLAGS,
+                $this->rcloneFlags($dest)
+            ), null, $onLine);
         }
         $fullOutput = trim($r['stdout'] . "\n" . $r['stderr']);
         $ok = $r['exitCode'] === 0;
@@ -471,7 +613,7 @@ class S3SyncService
      * to pull, into $repo's path.
      * Returns ['success' => bool, 'output' => string].
      */
-    public function restoreRepository(array $repo, array $agent, array $destOrCreds, ?string $runAsUser = null, ?array $sourceRepo = null): array
+    public function restoreRepository(array $repo, array $agent, array $destOrCreds, ?string $runAsUser = null, ?array $sourceRepo = null, ?int $jobId = null): array
     {
         $dest = $this->asDestination($destOrCreds);
         if ($dest['error']) {
@@ -492,10 +634,15 @@ class S3SyncService
             }
         }
 
+        $onLine = $jobId !== null ? $this->progressReporter($jobId) : null;
         if ($runAsUser) {
-            $r = $this->runViaHelper($dest, $runAsUser, 'pull', $localPath, $remote);
+            $r = $this->runViaHelper($dest, $runAsUser, 'pull', $localPath, $remote, $onLine);
         } else {
-            $r = $this->runDirect($dest, array_merge(['sync', $remote, $localPath, '--transfers', '4', '--checkers', '8'], $this->rcloneFlags($dest)));
+            $r = $this->runDirect($dest, array_merge(
+                ['sync', $remote, $localPath, '--transfers', '4', '--checkers', '8'],
+                self::STATS_FLAGS,
+                $this->rcloneFlags($dest)
+            ), null, $onLine);
         }
         $fullOutput = trim($r['stdout'] . "\n" . $r['stderr']);
         $ok = $r['exitCode'] === 0;
