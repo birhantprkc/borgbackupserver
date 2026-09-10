@@ -302,12 +302,12 @@ class DashboardController extends Controller
                 '1min' => $cpu['1min'] ?? 0,
                 'cores' => $cpu['cores'] ?? 1,
             ],
-            'memory' => [
-                'percent' => $mem['percent'] ?? 0,
-                'used_label' => ServerStats::formatBytes($mem['used'] ?? 0),
-                'total_label' => ServerStats::formatBytes($mem['total'] ?? 0),
-                'pair_label' => ServerStats::formatBytesPair((int) ($mem['used'] ?? 0), (int) ($mem['total'] ?? 0)),
-            ],
+            'memory' => $mem ? [
+                'percent' => $mem['percent'],
+                'used_label' => ServerStats::formatBytes($mem['used']),
+                'total_label' => ServerStats::formatBytes($mem['total']),
+                'pair_label' => ServerStats::formatBytesPair((int) $mem['used'], (int) $mem['total']),
+            ] : null,
             'net' => $net ? [
                 'rx_bps' => $net['rx_bps'],
                 'tx_bps' => $net['tx_bps'],
