@@ -894,7 +894,10 @@ case "$ACTION" in
         shift 6 2>/dev/null || true
         EXTRA_ARGS=("$@")
 
-        cleanup_envfile() { [ -n "$ENVFILE" ] && rm -f "$ENVFILE"; }
+        # Always ends 0: bash 5 reports a failing last command in an EXIT
+        # trap as the script's exit status, which turned every successful
+        # transfer into a failed job.
+        cleanup_envfile() { if [ -n "$ENVFILE" ]; then rm -f "$ENVFILE"; fi; return 0; }
         trap cleanup_envfile EXIT
 
         if [ -z "$USERNAME" ] || [ -z "$LOCAL_PATH" ] || [ -z "$REMOTE" ] || [ -z "$ENVFILE" ]; then
@@ -920,8 +923,12 @@ case "$ACTION" in
 
         # Destination settings: only rclone's DEST backend variables are
         # accepted, so the file cannot redirect rclone anywhere else.
+        # Split on the first "=" only: base64 ends in "=" padding that an
+        # IFS split would strip.
         DEST_ENV=()
-        while IFS='=' read -r K V; do
+        while IFS= read -r LINE; do
+            K="${LINE%%=*}"
+            V="${LINE#*=}"
             [[ "$K" =~ ^RCLONE_CONFIG_DEST_[A-Z0-9_]+$ ]] || continue
             DEST_ENV+=("$K=$(printf '%s' "$V" | base64 -d 2>/dev/null)")
         done < "$ENVFILE"
