@@ -3108,20 +3108,7 @@ sudo /var/www/bbs/bin/bbs-token revoke "ansible"</code></pre>
 ?>
 <?php
 // Agent version check
-$bundledAgentVersion = null;
-$agentPyFile = dirname(__DIR__, 3) . '/agent/bbs-agent.py';
-if (file_exists($agentPyFile)) {
-    $fh = fopen($agentPyFile, 'r');
-    if ($fh) {
-        for ($i = 0; $i < 50 && ($ln = fgets($fh)) !== false; $i++) {
-            if (preg_match('/^AGENT_VERSION\s*=\s*["\']([^"\']+)["\']/m', $ln, $mv)) {
-                $bundledAgentVersion = $mv[1];
-                break;
-            }
-        }
-        fclose($fh);
-    }
-}
+$bundledAgentVersion = $updateSvc->getBundledAgentVersion();
 $allAgents = $bundledAgentVersion ? $this->db->fetchAll("SELECT id, name, agent_version FROM agents WHERE agent_version IS NOT NULL") : [];
 $outdatedAgents = $bundledAgentVersion ? array_filter($allAgents, fn($a) => $a['agent_version'] !== $bundledAgentVersion) : [];
 $totalAgents = count($allAgents);

@@ -82,20 +82,7 @@ class ClientController extends Controller
         ", $params)['cnt'];
 
         // Out of date agents — compare against server's bundled agent version
-        $latestVersion = null;
-        $agentFile = dirname(__DIR__, 2) . '/agent/bbs-agent.py';
-        if (file_exists($agentFile)) {
-            $handle = fopen($agentFile, 'r');
-            if ($handle) {
-                for ($i = 0; $i < 50 && ($line = fgets($handle)) !== false; $i++) {
-                    if (preg_match('/^AGENT_VERSION\s*=\s*["\']([^"\']+)["\']/m', $line, $m)) {
-                        $latestVersion = $m[1];
-                        break;
-                    }
-                }
-                fclose($handle);
-            }
-        }
+        $latestVersion = (new \BBS\Services\UpdateService())->getBundledAgentVersion();
         if (!$latestVersion) {
             // Fallback to max version from agents
             $latestVersion = $this->db->fetchOne("

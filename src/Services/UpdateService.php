@@ -49,10 +49,18 @@ class UpdateService
         if (!$fh) {
             return null;
         }
+        // The constant sits below the imports, which grow. A 50-line cap
+        // stopped finding it once it reached line 51 (2.94.1), which hid the
+        // agents card on the Updates page and, worse, stopped the scheduler
+        // from queueing agent updates after a server update. Read the whole
+        // header; stop at the first def/class, where the constants end.
         $version = null;
-        for ($i = 0; $i < 50 && ($line = fgets($fh)) !== false; $i++) {
+        for ($i = 0; $i < 500 && ($line = fgets($fh)) !== false; $i++) {
             if (preg_match('/^AGENT_VERSION\s*=\s*["\']([^"\']+)["\']/m', $line, $m)) {
                 $version = $m[1];
+                break;
+            }
+            if (preg_match('/^(def|class) /', $line)) {
                 break;
             }
         }
