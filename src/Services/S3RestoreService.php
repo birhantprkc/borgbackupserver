@@ -45,12 +45,12 @@ class S3RestoreService
                 [$repoId]
             );
             if (count($links) > 1) {
-                return $this->fail(400, 'This repository syncs to multiple S3 destinations — pick which one to restore from.');
+                return $this->fail(400, 'This repository has several offsite copies — pick which one to restore from.');
             }
             $s3Config = $links[0] ?? null;
         }
         if (!$s3Config) {
-            return $this->fail(400, 'This repository does not have S3 sync configured.');
+            return $this->fail(400, 'This repository has no offsite copy configured.');
         }
 
         $targetRepoId = $repoId;
@@ -119,14 +119,14 @@ class S3RestoreService
                 $this->db->insert('server_log', [
                     'agent_id' => $agentId,
                     'level' => 'warning',
-                    'message' => "create-repo-dir helper failed for S3 copy restore: " . implode(' ', $helperOutput),
+                    'message' => "create-repo-dir helper failed for the copy restore: " . implode(' ', $helperOutput),
                 ]);
             }
 
             $this->db->insert('server_log', [
                 'agent_id' => $agentId,
                 'level' => 'info',
-                'message' => "Created repository \"{$copyName}\" as copy target for S3 restore",
+                'message' => "Created repository \"{$copyName}\" as the target for a restore from the offsite copy",
             ]);
         } else {
             $activeJob = $this->db->fetchOne(
@@ -134,7 +134,7 @@ class S3RestoreService
                 [$repoId]
             );
             if ($activeJob) {
-                return $this->fail(409, "Cannot restore from S3 — repository has an active {$activeJob['task_type']} job (#{$activeJob['id']}).");
+                return $this->fail(409, "Cannot restore — repository has an active {$activeJob['task_type']} job (#{$activeJob['id']}).");
             }
         }
 
@@ -156,7 +156,7 @@ class S3RestoreService
             'agent_id' => $agentId,
             'backup_job_id' => $jobId,
             'level' => 'info',
-            'message' => "S3 restore ({$mode}) job #{$jobId} queued for repository \"{$targetRepoName}\"",
+            'message' => "Restore ({$mode}) from the offsite copy, job #{$jobId}, queued for repository \"{$targetRepoName}\"",
         ]);
 
         return [
