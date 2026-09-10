@@ -248,7 +248,8 @@ chmod 1777 /var/bbs/tmp 2>/dev/null || true
 # ships; installed here too so release-upgraded systems get it.
 APACHE_DROPIN="/etc/systemd/system/apache2.service.d/bbs.conf"
 if systemctl show apache2 -p InaccessiblePaths 2>/dev/null | grep -q sudoers || \
-   systemctl show apache2 -p ProtectSystem 2>/dev/null | grep -qE '=(full|strict)$'; then
+   systemctl show apache2 -p ProtectSystem 2>/dev/null | grep -qE '=(full|strict)$' || \
+   systemctl show apache2 -p ProcSubset 2>/dev/null | grep -q '=pid$'; then
     mkdir -p /etc/systemd/system/apache2.service.d
     cat > "$APACHE_DROPIN.new" <<'APACHE_EOF'
 [Service]
@@ -261,6 +262,13 @@ ProtectSystem=true
 # The helper chmods setgid dirs (catalog logs); RestrictSUIDSGID=yes blocks
 # creating sgid files entirely
 RestrictSUIDSGID=no
+# ProcSubset=pid mounts /proc with subset=pid for the service, hiding every
+# file that is not a PID directory. ServerStats then cannot read
+# /proc/meminfo (Server Health shows 0 B / 0 B) or /proc/net/dev (throughput
+# stays null), while CPU keeps working through sys_getloadavg(), so the card
+# looks like an idle machine rather than a broken read (#485).
+# ProtectProc=invisible stays: it only hides other users' processes.
+ProcSubset=all
 InaccessiblePaths=
 InaccessiblePaths=/boot
 InaccessiblePaths=/root
