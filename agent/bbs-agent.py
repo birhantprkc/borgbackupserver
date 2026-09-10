@@ -49,7 +49,7 @@ if not hasattr(subprocess, "run"):
     subprocess.run = _subprocess_run
     subprocess.CompletedProcess = _CompletedProcess
 
-AGENT_VERSION = "2.95.0"
+AGENT_VERSION = "2.95.2"
 BORG_PATH = None  # Resolved in get_system_info()
 IS_WINDOWS = sys.platform == "win32"
 IS_MACOS = sys.platform == "darwin"
@@ -394,6 +394,15 @@ def server_ssl_context(config):
     return ctx
 
 
+def server_urlopen(config, req, timeout):
+    """urlopen towards the BBS server with the config's TLS context. Goes
+    through an opener because urlopen(context=...) only exists from Python
+    3.4.3, and agents on 3.4.2 (Debian 8) died at registration with
+    "urlopen() got an unexpected keyword argument 'context'" (2.94.1)."""
+    opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=server_ssl_context(config)))
+    return opener.open(req, timeout=timeout)
+
+
 def api_request(config, endpoint, method="GET", data=None, timeout=60):
     """Make an authenticated request to the BBS server."""
     url = "{}{}".format(config['server_url'], endpoint)
@@ -414,7 +423,7 @@ def api_request(config, endpoint, method="GET", data=None, timeout=60):
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
 
     try:
-        with urllib.request.urlopen(req, timeout=timeout, context=server_ssl_context(config)) as resp:
+        with server_urlopen(config, req, timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         error_body = e.read().decode("utf-8", errors="replace")
@@ -1485,7 +1494,7 @@ def execute_update_agent(config, task):
         }
         req = urllib.request.Request(url, headers=headers, method="GET")
 
-        with urllib.request.urlopen(req, timeout=60, context=server_ssl_context(config)) as resp:
+        with server_urlopen(config, req, 60) as resp:
             new_script = resp.read().decode("utf-8")
 
         # Validate the downloaded script
@@ -1532,7 +1541,8 @@ def execute_update_agent(config, task):
 
             # Extract new version from downloaded script
             new_version = "unknown"
-            for line in new_script.split("\n")[:50]:
+            # The constant sits below the imports; scan the whole header.
+            for line in new_script.split("\n")[:500]:
                 m = __import__("re").match(r'^AGENT_VERSION\s*=\s*["\']([^"\']+)["\']', line)
                 if m:
                     new_version = m.group(1)
@@ -1549,7 +1559,7 @@ def execute_update_agent(config, task):
                 try:
                     wrapper_url = "{}/api/agent/download?file=bbs-agent-start.sh".format(config['server_url'])
                     wrapper_req = urllib.request.Request(wrapper_url, headers=headers, method="GET")
-                    with urllib.request.urlopen(wrapper_req, timeout=30, context=server_ssl_context(config)) as wresp:
+                    with server_urlopen(config, wrapper_req, 30) as wresp:
                         wrapper_script = wresp.read()
                     wrapper_dir = os.path.dirname(script_path)
                     wrapper_path = os.path.join(wrapper_dir, "bbs-agent-start.sh")
