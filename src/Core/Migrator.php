@@ -198,6 +198,24 @@ class Migrator
                 $pdo->exec($statement);
             } catch (\PDOException $e) {
                 $code = isset($e->errorInfo[1]) ? (int) $e->errorInfo[1] : 0;
+                // A seed INSERT whose rows are already there (schema.sql on a
+                // fresh install inserts the same default settings). Retry it
+                // as INSERT IGNORE: rows that exist are kept, rows that don't
+                // are still added, so the migration can be recorded. Only for
+                // INSERT: a duplicate while adding a UNIQUE index is a real
+                // failure and still throws.
+                if ($code === 1062 && preg_match('/^\s*INSERT\s+INTO\b/i', $statement)) {
+                    $pdo->exec(preg_replace('/^\s*INSERT\s+INTO\b/i', 'INSERT IGNORE INTO', $statement, 1));
+                    $this->skipped[] = sprintf('%s statement %d: rows already present', $filename, $index + 1);
+                    continue;
+                }
+                // A column rename that already happened: the old name is gone
+                // and the new one is there (schema.sql on a fresh install is
+                // already past the rename). Any other unknown column is real.
+                if ($code === 1054 && $this->renameAlreadyApplied($statement)) {
+                    $this->skipped[] = sprintf('%s statement %d: column already renamed', $filename, $index + 1);
+                    continue;
+                }
                 if (in_array($code, self::ALREADY_APPLIED, true)) {
                     $this->skipped[] = sprintf(
                         '%s statement %d: %s',
@@ -216,6 +234,20 @@ class Migrator
                 ), 0, $e);
             }
         }
+    }
+
+    /**
+     * True when $statement is ALTER TABLE ... CHANGE [COLUMN] old new and the
+     * table has `new` but not `old`.
+     */
+    private function renameAlreadyApplied(string $statement): bool
+    {
+        if (!preg_match('/^\s*ALTER\s+TABLE\s+`?(\w+)`?\s.*?\bCHANGE\s+(?:COLUMN\s+)?`?(\w+)`?\s+`?(\w+)`?/is', $statement, $m)) {
+            return false;
+        }
+        [, $table, $old, $new] = $m;
+        $cols = array_column($this->db->fetchAll("SHOW COLUMNS FROM `{$table}`"), 'Field');
+        return in_array($new, $cols, true) && !in_array($old, $cols, true);
     }
 
     private function firstLine(string $text): string

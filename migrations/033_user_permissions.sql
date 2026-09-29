@@ -32,12 +32,11 @@ CREATE TABLE user_permissions (
 ) ENGINE=InnoDB;
 
 -- 4. Migrate existing user_id assignments to user_agents
-INSERT INTO user_agents (user_id, agent_id)
-SELECT user_id, id FROM agents WHERE user_id IS NOT NULL
-ON DUPLICATE KEY UPDATE created_at = created_at;
+INSERT IGNORE INTO user_agents (user_id, agent_id)
+SELECT user_id, id FROM agents WHERE user_id IS NOT NULL;
 
 -- 5. Grant all permissions to migrated users for their current clients (global permissions)
-INSERT INTO user_permissions (user_id, permission, agent_id)
+INSERT IGNORE INTO user_permissions (user_id, permission, agent_id)
 SELECT DISTINCT a.user_id, p.permission, NULL
 FROM agents a
 CROSS JOIN (
@@ -47,5 +46,4 @@ CROSS JOIN (
     SELECT 'restore' UNION ALL
     SELECT 'repo_maintenance'
 ) p
-WHERE a.user_id IS NOT NULL
-ON DUPLICATE KEY UPDATE created_at = created_at;
+WHERE a.user_id IS NOT NULL;
