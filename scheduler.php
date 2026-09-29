@@ -85,7 +85,9 @@ if ($stale->rowCount() > 0) {
 // to offline at the 90s threshold above (so dashboards and queues react
 // quickly), but the user-visible notification + push/email dispatch waits
 // for the longer threshold. Only fires once per outage by checking for
-// an unresolved agent_offline notification for the agent.
+// an unresolved agent_offline notification for the agent. Clients with
+// offline_alerts turned off (laptops, desktops that are off by design) are
+// skipped (#512); with no offline alert, no "back online" follows either.
 $notifyMinutes = max(1, (int) ($db->fetchOne("SELECT `value` FROM settings WHERE `key` = 'agent_offline_notify_minutes'")['value'] ?? 5));
 $notifyThresholdSec = $notifyMinutes * 60;
 $notifyCutoff = date('Y-m-d H:i:s', time() - $notifyThresholdSec);
@@ -98,6 +100,7 @@ $candidates = $db->fetchAll(
         AND n.agent_id = a.id
         AND n.resolved_at IS NULL
       WHERE a.status = 'offline'
+        AND a.offline_alerts = 1
         AND a.last_heartbeat IS NOT NULL
         AND a.last_heartbeat < ?
         AND n.id IS NULL",

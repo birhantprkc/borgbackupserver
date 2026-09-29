@@ -48,6 +48,12 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                     </button>
                 </div>
                 <div class="text-muted d-flex flex-wrap gap-3 align-items-center" style="font-size:.8rem;">
+                    <?php if (!empty($agent['location'])): ?>
+                        <span><i class="bi bi-geo-alt me-1"></i><?= htmlspecialchars($agent['location']) ?></span>
+                    <?php endif; ?>
+                    <?php if (isset($agent['offline_alerts']) && empty($agent['offline_alerts'])): ?>
+                        <span title="No alert is sent when this client goes offline"><i class="bi bi-bell-slash me-1"></i>Offline alerts off</span>
+                    <?php endif; ?>
                     <?php if ($agent['hostname']): ?>
                         <span><i class="bi bi-signpost me-1"></i><?= htmlspecialchars($agent['hostname']) ?></span>
                         <?php if ($agent['ip_address'] ?? null): ?>
@@ -184,6 +190,10 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                             <label class="form-label fw-semibold small">Client Name</label>
                             <input type="text" class="form-control form-control-sm" name="name" value="<?= htmlspecialchars($agent['name']) ?>" required>
                         </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold small">Location</label>
+                            <input type="text" class="form-control form-control-sm" name="location" maxlength="100" value="<?= htmlspecialchars($agent['location'] ?? '') ?>" placeholder="e.g. Frankfurt DC, rack 4">
+                        </div>
                         <?php if ($this->isAdmin() && !empty($clientProfiles)): ?>
                         <div class="mb-3">
                             <label class="form-label fw-semibold small">Client Profile</label>
@@ -213,6 +223,12 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                         </div>
                         <?php endif; ?>
                         <?php if ($this->isAdmin()): ?>
+                        <div class="form-check mt-3">
+                            <input type="hidden" name="offline_alerts" value="0">
+                            <input class="form-check-input" type="checkbox" name="offline_alerts" id="offlineAlerts" value="1" <?= !isset($agent['offline_alerts']) || !empty($agent['offline_alerts']) ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-semibold small" for="offlineAlerts">Alert when offline</label>
+                            <div class="form-text">Turn off for laptops and desktops that are switched off by design. Backups and missed-backup alerts are not affected.</div>
+                        </div>
                         <hr class="my-3">
                         <p class="text-muted small mb-2">For agents connecting from outside your network. Leave empty to use global settings.</p>
                         <div class="mb-3">
@@ -3711,7 +3727,36 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
     <?php else: ?>
 
     <!-- Shared Control Bar -->
+    <?php
+    // Repositories holding archives, newest archive first. With more than one,
+    // the archive lists below are filtered to the chosen repository (#465).
+    $restoreRepos = [];
+    foreach ($archives as $ar) {
+        $rid = (int) $ar['repository_id'];
+        if (!isset($restoreRepos[$rid])) {
+            $restoreRepos[$rid] = ['name' => $ar['repo_name'], 'count' => 0, 'latest' => $ar['created_at']];
+        }
+        $restoreRepos[$rid]['count']++;
+        if ($ar['created_at'] > $restoreRepos[$rid]['latest']) $restoreRepos[$rid]['latest'] = $ar['created_at'];
+    }
+    uasort($restoreRepos, fn($a, $b) => strcmp($b['latest'], $a['latest']));
+    ?>
     <div class="restore-control-bar">
+        <?php if (count($restoreRepos) > 1): ?>
+        <div class="row gx-2 mb-2">
+            <div class="col-md-5">
+                <label class="form-label fw-semibold mb-1 small">Repository</label>
+                <div class="input-group input-group-sm">
+                <span class="input-group-text"><i class="bi bi-hdd-stack"></i></span>
+                <select class="form-select form-select-sm" id="restore-repo-select">
+                    <?php foreach ($restoreRepos as $rid => $rr): ?>
+                    <option value="<?= $rid ?>"><?= htmlspecialchars($rr['name']) ?> (<?= $rr['count'] ?> <?= $rr['count'] === 1 ? 'archive' : 'archives' ?>)</option>
+                    <?php endforeach; ?>
+                </select>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
         <div class="row gx-2 align-items-end">
             <?php if ($dbPluginEnabled): ?>
             <div class="col-md-3">
@@ -3791,7 +3836,7 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
                         endif;
                         $dbLabel = " ({$n} " . ($n === 1 ? 'database' : 'databases') . ')';
                     ?>
-                        <option value="<?= $ar['id'] ?>">
+                        <option value="<?= $ar['id'] ?>" data-repo="<?= (int) $ar['repository_id'] ?>">
                             <?= \BBS\Core\TimeHelper::format($ar['created_at'], 'l, M j, Y \a\t g:i A') ?><?= !empty($ar['plan_name']) ? ' — ' . htmlspecialchars($ar['plan_name']) : '' ?><?= $dbLabel ?>
                         </option>
                     <?php endforeach; ?>
@@ -3816,7 +3861,7 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
                             echo '<optgroup label="' . htmlspecialchars($currentRepo) . '">';
                         endif;
                     ?>
-                        <option value="<?= $ar['id'] ?>">
+                        <option value="<?= $ar['id'] ?>" data-repo="<?= (int) $ar['repository_id'] ?>">
                             <?= \BBS\Core\TimeHelper::format($ar['created_at'], 'l, M j, Y \a\t g:i A') ?><?= !empty($ar['plan_name']) ? ' — ' . htmlspecialchars($ar['plan_name']) : '' ?>
                         </option>
                     <?php endforeach; ?>
@@ -4038,6 +4083,36 @@ GRANT ALL PRIVILEGES ON DATABASE mydb TO <span id="pgUser2g">bbs_backup</span>;<
             array_map(function($mongoc) { $c = json_decode($mongoc['config'] ?? '{}', true); return $c['user'] ?? ''; }, $mongoConfigs)
         )
     )) ?>;</script>
+    <script>
+    // Repository picker (#465): show only the chosen repository's archives in
+    // both archive lists. Runs before restore.js, so a deep link to an archive
+    // (?archive=N) first switches to the repository that holds it.
+    (function () {
+        const pick = document.getElementById('restore-repo-select');
+        if (!pick) return;
+        const lists = ['archive-select', 'db-archive-select']
+            .map(id => document.getElementById(id))
+            .filter(Boolean)
+            .map(sel => ({
+                sel,
+                placeholder: sel.querySelector('option:not([data-repo])'),
+                opts: [...sel.querySelectorAll('option[data-repo]')],
+            }));
+        function show(repo, reset) {
+            lists.forEach(({ sel, placeholder, opts }) => {
+                const had = sel.value !== '';
+                sel.replaceChildren(...(placeholder ? [placeholder] : []), ...opts.filter(o => o.dataset.repo === repo));
+                sel.value = '';
+                if (reset && had) sel.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+        }
+        const wanted = new URLSearchParams(location.search).get('archive');
+        const holder = wanted && lists.flatMap(l => l.opts).find(o => o.value === wanted);
+        if (holder) pick.value = holder.dataset.repo;
+        show(pick.value, false);
+        pick.addEventListener('change', () => show(pick.value, true));
+    })();
+    </script>
     <?php
     if (!isset($scripts)) $scripts = [];
     $scripts[] = '/js/restore.js?v=' . filemtime(__DIR__ . '/../../../public/js/restore.js');

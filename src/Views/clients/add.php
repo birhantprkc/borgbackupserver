@@ -14,6 +14,11 @@
                     </div>
 
                     <div class="mb-3">
+                        <label class="form-label fw-semibold">Location <span class="text-muted fw-normal">(optional)</span></label>
+                        <input type="text" class="form-control" name="location" maxlength="100" placeholder="e.g. Frankfurt DC, rack 4">
+                    </div>
+
+                    <div class="mb-3">
                         <label class="form-label fw-semibold">Client Profile</label>
                         <select class="form-select" name="client_profile_id">
                             <?php foreach ($clientProfiles as $cp): ?>

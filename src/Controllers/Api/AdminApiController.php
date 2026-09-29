@@ -37,7 +37,7 @@ class AdminApiController extends Controller
                    a.borg_version, a.agent_version, a.status, a.last_heartbeat,
                    a.created_at, u.username as owner,
                    a.client_profile_id, cp.name AS client_profile_name,
-                   a.snapshot_capable,
+                   a.snapshot_capable, a.location, a.offline_alerts,
                    (SELECT GROUP_CONCAT(DISTINCT COALESCE(sl.label, rsc.name, 'Local') SEPARATOR '\n')
                       FROM repositories r
                       LEFT JOIN storage_locations sl ON sl.id = r.storage_location_id
@@ -51,6 +51,8 @@ class AdminApiController extends Controller
         ", $agentParams);
         foreach ($agents as &$a) {
             $a['snapshot_capable'] = $a['snapshot_capable'] === null ? null : (bool) $a['snapshot_capable'];
+            $a['location'] = (string) ($a['location'] ?? '');
+            $a['offline_alerts'] = (bool) $a['offline_alerts'];
             // Names of the storage locations and SSH hosts holding this client's repositories (#474).
             $a['storage_names'] = $a['storage_names'] !== null && $a['storage_names'] !== '' ? explode("\n", $a['storage_names']) : [];
         }
@@ -385,7 +387,8 @@ class AdminApiController extends Controller
                    a.client_profile_id, cp.name AS client_profile_name,
                    a.user_id, a.server_host_override, a.ssh_port_override,
                    a.wol_enabled, a.wol_mac, a.mac_address, a.wol_broadcast, a.wol_timeout_minutes,
-                   a.notes, a.snapshot_capable, a.snapshot_support
+                   a.notes, a.snapshot_capable, a.snapshot_support,
+                   a.location, a.offline_alerts
             FROM agents a
             LEFT JOIN users u ON u.id = a.user_id
             LEFT JOIN client_profiles cp ON cp.id = a.client_profile_id
@@ -459,6 +462,8 @@ class AdminApiController extends Controller
         $agent['wol_broadcast_default'] = \BBS\Services\WakeOnLanService::defaultBroadcast($agent['ip_address'] ?? null);
         $agent['wol_timeout_minutes'] = (int) ($agent['wol_timeout_minutes'] ?? 5);
         $agent['notes'] = (string) ($agent['notes'] ?? '');
+        $agent['location'] = (string) ($agent['location'] ?? '');
+        $agent['offline_alerts'] = (bool) $agent['offline_alerts'];
 
         $agent['repositories'] = $repos;
         $agent['plans'] = $plans;
@@ -476,10 +481,16 @@ class AdminApiController extends Controller
             $this->json(['error' => 'Client name is required'], 400);
         }
 
+        $location = trim((string) ($input['location'] ?? ''));
+        if (mb_strlen($location) > 100) {
+            $this->json(['error' => 'location must be 100 characters or fewer'], 422);
+        }
+
         $apiKey = bin2hex(random_bytes(32));
 
         $id = $this->db->insert('agents', [
             'name' => $name,
+            'location' => $location !== '' ? $location : null,
             'api_key_hash' => hash('sha256', $apiKey),
             'api_key_encrypted' => \BBS\Services\Encryption::encrypt($apiKey),
             'status' => 'setup',
@@ -530,6 +541,7 @@ class AdminApiController extends Controller
         $this->json([
             'id' => (int) $id,
             'name' => $name,
+            'location' => $location,
             'api_key' => $apiKey,
             'status' => 'setup',
             'install_command' => $host ? "curl -s https://{$host}/get-agent | sudo bash -s -- --server https://{$host} --key {$apiKey}" : null,
@@ -2082,18 +2094,31 @@ class AdminApiController extends Controller
             $this->json(['error' => 'Client not found'], 404);
         }
 
-        // An assigned user may rename a client they can see, matching the web.
-        // Everything beyond the display name — profile, ownership — changes
-        // how the fleet is organised and stays with the admin role.
+        // An assigned user may rename a client they can see and set its
+        // location, matching the web. Everything else — profile, ownership,
+        // alerts — changes how the fleet is run and stays with the admin role.
         if (($ctx['role'] ?? '') !== 'admin') {
-            $extra = array_diff(array_keys($input), ['name']);
+            $extra = array_diff(array_keys($input), ['name', 'location']);
             if (!empty($extra)) {
-                $this->json(['error' => "Only a client's name can be changed without the admin role."], 403);
+                $this->json(['error' => "Only a client's name and location can be changed without the admin role."], 403);
             }
         }
 
         $data = [];
         if (isset($input['name'])) $data['name'] = trim($input['name']);
+        if (array_key_exists('location', $input)) {
+            $loc = trim((string) ($input['location'] ?? ''));
+            if (mb_strlen($loc) > 100) {
+                $this->json(['error' => 'location must be 100 characters or fewer'], 422);
+            }
+            $data['location'] = $loc !== '' ? $loc : null;
+        }
+        if (array_key_exists('offline_alerts', $input)) {
+            if (!is_bool($input['offline_alerts']) && !in_array($input['offline_alerts'], [0, 1, '0', '1'], true)) {
+                $this->json(['error' => 'offline_alerts must be true or false'], 422);
+            }
+            $data['offline_alerts'] = $input['offline_alerts'] ? 1 : 0;
+        }
 
         // Moving a client between profiles changes how patient BBS is with it
         // and what its next new plan starts from. It deliberately does not

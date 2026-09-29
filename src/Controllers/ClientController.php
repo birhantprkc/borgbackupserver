@@ -263,8 +263,11 @@ class ClientController extends Controller
             $profileId = $profileService->defaultProfileId();
         }
 
+        $location = mb_substr(trim($_POST['location'] ?? ''), 0, 100);
+
         $id = $this->db->insert('agents', [
             'name' => $name,
+            'location' => $location !== '' ? $location : null,
             'api_key_hash' => hash('sha256', $apiKey),
             'api_key_encrypted' => \BBS\Services\Encryption::encrypt($apiKey),
             'status' => 'setup',
@@ -1511,6 +1514,13 @@ class ClientController extends Controller
         $data = [];
         if (isset($_POST['name']) && trim($_POST['name']) !== '') {
             $data['name'] = trim($_POST['name']);
+        }
+        if (array_key_exists('location', $_POST)) {
+            $loc = mb_substr(trim($_POST['location']), 0, 100);
+            $data['location'] = $loc !== '' ? $loc : null;
+        }
+        if ($this->isAdmin() && array_key_exists('offline_alerts', $_POST)) {
+            $data['offline_alerts'] = !empty($_POST['offline_alerts']) ? 1 : 0;
         }
         if ($this->isAdmin() && array_key_exists('user_id', $_POST)) {
             $data['user_id'] = $_POST['user_id'] !== '' ? (int) $_POST['user_id'] : null;

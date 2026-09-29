@@ -139,6 +139,9 @@
                             <?php if ($agent['hostname']): ?>
                                 <br><small class="text-muted ms-4"><?= htmlspecialchars($agent['hostname']) ?></small>
                             <?php endif; ?>
+                            <?php if (!empty($agent['location'])): ?>
+                                <br><small class="text-muted ms-4"><i class="bi bi-geo-alt me-1"></i><?= htmlspecialchars($agent['location']) ?></small>
+                            <?php endif; ?>
                         </td>
                         <td>
                             <?= !empty($agent['agent_version']) ? 'v' . htmlspecialchars($agent['agent_version']) : '--' ?>
@@ -232,6 +235,9 @@
                             </div>
                             <?php if ($agent['hostname']): ?>
                             <small class="text-muted"><?= htmlspecialchars($agent['hostname']) ?></small>
+                            <?php endif; ?>
+                            <?php if (!empty($agent['location'])): ?>
+                            <small class="text-muted d-block"><i class="bi bi-geo-alt me-1"></i><?= htmlspecialchars($agent['location']) ?></small>
                             <?php endif; ?>
                         </div>
                         <span class="badge bg-<?= $statusClass ?>"><?= ucfirst($agent['status']) ?></span>
