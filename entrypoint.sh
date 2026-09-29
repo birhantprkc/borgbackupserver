@@ -73,10 +73,13 @@ DESIRED_CH_GID="${CH_PGID:-$PREV_CH_GID}"
 
 # --- Preflight guards ---
 abort_config() {
-    echo ""
-    echo "!!! FATAL: invalid UID/GID configuration !!!"
-    echo "  $1"
-    echo "  Fix the offending env var (e.g. in docker-compose.yml / .env) and restart."
+    # stderr: also called from inside $(...), where stdout would be captured
+    {
+        echo ""
+        echo "!!! FATAL: invalid UID/GID configuration !!!"
+        echo "  $1"
+        echo "  Fix the offending env var (e.g. in docker-compose.yml / .env) and restart."
+    } >&2
     exit 1
 }
 
@@ -113,15 +116,84 @@ for uidfile in /var/bbs/home/*/.uid; do
     done
 done
 
+# --- Container identity helper ---
+# Args: service new_uid new_gid
+# Sets the in-container user/group to the desired IDs. /etc/passwd and
+# /etc/group live in the container filesystem, not the volume, so a
+# recreate (every image upgrade) puts them back to the image defaults.
+# This therefore runs on every start, independent of the volume state
+# (#520). Prints the UID/GID the user had before, so the caller can
+# repair files written under the wrong IDs.
+apply_service_identity() {
+    local service="$1" new_uid="$2" new_gid="$3"
+    local cur_uid cur_gid
+    cur_uid=$(id -u "$service" 2>/dev/null) || return 0
+    cur_gid=$(getent group "$service" 2>/dev/null | cut -d: -f3)
+    if [ "$cur_uid" = "$new_uid" ] && [ "$cur_gid" = "$new_gid" ]; then
+        return 0
+    fi
+
+    if [ "$cur_gid" != "$new_gid" ]; then
+        local clash
+        clash=$(getent group "$new_gid" 2>/dev/null | cut -d: -f1)
+        if [ -n "$clash" ] && [ "$clash" != "$service" ]; then
+            local tmp=$((new_gid + 10000))
+            log_mig "  note: GID $new_gid is taken by group '$clash' — moving it to GID $tmp to free the slot" >&2
+            groupmod -g "$tmp" "$clash" || abort_config "Failed to move group '$clash' out of GID $new_gid"
+        fi
+        log_mig "  setting group '$service' GID $cur_gid -> $new_gid" >&2
+        groupmod -g "$new_gid" "$service" || abort_config "Failed to set group '$service' to GID $new_gid"
+    fi
+
+    if [ "$cur_uid" != "$new_uid" ]; then
+        local clash
+        clash=$(getent passwd "$new_uid" 2>/dev/null | cut -d: -f1)
+        if [ -n "$clash" ] && [ "$clash" != "$service" ]; then
+            local tmp=$((new_uid + 10000))
+            log_mig "  note: UID $new_uid is taken by user '$clash' — moving it to UID $tmp to free the slot" >&2
+            usermod -u "$tmp" "$clash" || abort_config "Failed to move user '$clash' out of UID $new_uid"
+        fi
+        log_mig "  setting user '$service' UID $cur_uid -> $new_uid" >&2
+        usermod -u "$new_uid" "$service" || abort_config "Failed to set user '$service' to UID $new_uid"
+    fi
+    echo "$cur_uid $cur_gid"
+}
+
+# --- Stray-file repair ---
+# Args: old_uid old_gid new_uid new_gid find_args... -- path...
+# Re-owns entries still carrying the IDs the service ran under by mistake.
+repair_stray_ownership() {
+    local old_uid="$1" old_gid="$2" new_uid="$3" new_gid="$4"
+    shift 4
+    local opts=()
+    while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do opts+=("$1"); shift; done
+    shift
+    local path n
+    for path in "$@"; do
+        [ -e "$path" ] || continue
+        if [ "$old_uid" != "$new_uid" ]; then
+            n=$(find "$path" "${opts[@]}" -uid "$old_uid" 2>/dev/null | wc -l | tr -d ' ')
+            if [ "$n" != "0" ]; then
+                log_mig "  [$path] re-owning $n entries left at UID $old_uid"
+                find "$path" "${opts[@]}" -uid "$old_uid" -exec chown -h "$new_uid" {} + 2>/dev/null || true
+            fi
+        fi
+        if [ "$old_gid" != "$new_gid" ]; then
+            find "$path" "${opts[@]}" -gid "$old_gid" -exec chgrp -h "$new_gid" {} + 2>/dev/null || true
+        fi
+    done
+}
+
 # --- Migration helper ---
-# Args: service_name display_name old_uid old_gid new_uid new_gid path1 path2 ...
-# Remaps the in-container user/group to the new IDs, then chowns files on the
-# given volume paths that still reference the old IDs. Only runs if IDs changed.
+# Args: display_name old_uid old_gid new_uid new_gid path1 path2 ...
+# Chowns files on the given volume paths that still reference the IDs the
+# volume was last migrated to. Only runs if the recorded IDs changed. The
+# in-container user is already set by apply_service_identity above.
 migrate_service_uid() {
-    local service="$1" label="$2"
-    local old_uid="$3" old_gid="$4"
-    local new_uid="$5" new_gid="$6"
-    shift 6
+    local label="$1"
+    local old_uid="$2" old_gid="$3"
+    local new_uid="$4" new_gid="$5"
+    shift 5
     local paths=("$@")
 
     if [ "$old_uid" = "$new_uid" ] && [ "$old_gid" = "$new_gid" ]; then
@@ -132,32 +204,6 @@ migrate_service_uid() {
     log_mig "--- $label migration ---"
     log_mig "  from: UID=$old_uid GID=$old_gid"
     log_mig "  to:   UID=$new_uid GID=$new_gid"
-
-    # Remap in-container group (if GID changed)
-    if [ "$old_gid" != "$new_gid" ]; then
-        local clash
-        clash=$(getent group "$new_gid" 2>/dev/null | cut -d: -f1)
-        if [ -n "$clash" ] && [ "$clash" != "$service" ]; then
-            local tmp=$((new_gid + 10000))
-            log_mig "  note: GID $new_gid is taken by group '$clash' — moving it to GID $tmp to free the slot"
-            groupmod -g "$tmp" "$clash" || abort_config "Failed to move group '$clash' out of GID $new_gid"
-        fi
-        log_mig "  remapping group '$service' from GID $old_gid to $new_gid"
-        groupmod -g "$new_gid" "$service" || abort_config "Failed to set group '$service' to GID $new_gid"
-    fi
-
-    # Remap in-container user (if UID changed)
-    if [ "$old_uid" != "$new_uid" ]; then
-        local clash
-        clash=$(getent passwd "$new_uid" 2>/dev/null | cut -d: -f1)
-        if [ -n "$clash" ] && [ "$clash" != "$service" ]; then
-            local tmp=$((new_uid + 10000))
-            log_mig "  note: UID $new_uid is taken by user '$clash' — moving it to UID $tmp to free the slot"
-            usermod -u "$tmp" "$clash" || abort_config "Failed to move user '$clash' out of UID $new_uid"
-        fi
-        log_mig "  remapping user '$service' from UID $old_uid to $new_uid"
-        usermod -u "$new_uid" "$service" || abort_config "Failed to set user '$service' to UID $new_uid"
-    fi
 
     # Chown files that still reference the old IDs
     for path in "${paths[@]}"; do
@@ -181,6 +227,39 @@ migrate_service_uid() {
     done
 }
 
+# --- Container identity (every start) ---
+APP_WAS=$(apply_service_identity www-data "$DESIRED_APP_UID" "$DESIRED_APP_GID")
+MYSQL_WAS=$(apply_service_identity mysql "$DESIRED_MYSQL_UID" "$DESIRED_MYSQL_GID")
+CH_WAS=$(apply_service_identity clickhouse "$DESIRED_CH_UID" "$DESIRED_CH_GID")
+
+# The volume was already migrated to these IDs, but the container came up
+# with the image defaults: a recreate before #520 was fixed let the
+# services run under the wrong IDs and write files the right user can't
+# touch. Re-own those. The app only writes state near the top of its
+# directories, so repositories are not walked.
+if [ -f "$OWNERSHIP_FILE" ]; then
+    if [ -n "$APP_WAS" ] && [ "$PREV_APP_UID:$PREV_APP_GID" = "$DESIRED_APP_UID:$DESIRED_APP_GID" ]; then
+        log_mig "Container user www-data was reset to ${APP_WAS/ /:}; restored ${DESIRED_APP_UID}:${DESIRED_APP_GID}"
+        # shellcheck disable=SC2086
+        repair_stray_ownership $APP_WAS "$DESIRED_APP_UID" "$DESIRED_APP_GID" -- \
+            /var/bbs/cache /var/bbs/config /var/bbs/tmp /var/bbs/backups
+        # shellcheck disable=SC2086
+        repair_stray_ownership $APP_WAS "$DESIRED_APP_UID" "$DESIRED_APP_GID" -maxdepth 3 -- /var/bbs/home
+        # shellcheck disable=SC2086
+        repair_stray_ownership $APP_WAS "$DESIRED_APP_UID" "$DESIRED_APP_GID" -maxdepth 0 -- /var/bbs
+    fi
+    if [ -n "$MYSQL_WAS" ] && [ "$PREV_MYSQL_UID:$PREV_MYSQL_GID" = "$DESIRED_MYSQL_UID:$DESIRED_MYSQL_GID" ]; then
+        log_mig "Container user mysql was reset to ${MYSQL_WAS/ /:}; restored ${DESIRED_MYSQL_UID}:${DESIRED_MYSQL_GID}"
+        # shellcheck disable=SC2086
+        repair_stray_ownership $MYSQL_WAS "$DESIRED_MYSQL_UID" "$DESIRED_MYSQL_GID" -- /var/bbs/mysql
+    fi
+    if [ -n "$CH_WAS" ] && [ "$PREV_CH_UID:$PREV_CH_GID" = "$DESIRED_CH_UID:$DESIRED_CH_GID" ]; then
+        log_mig "Container user clickhouse was reset to ${CH_WAS/ /:}; restored ${DESIRED_CH_UID}:${DESIRED_CH_GID}"
+        # shellcheck disable=SC2086
+        repair_stray_ownership $CH_WAS "$DESIRED_CH_UID" "$DESIRED_CH_GID" -- /var/bbs/clickhouse
+    fi
+fi
+
 # --- Run migrations (if any) ---
 MIGRATION_NEEDED=0
 if [ "$PREV_APP_UID" != "$DESIRED_APP_UID" ] || [ "$PREV_APP_GID" != "$DESIRED_APP_GID" ] \
@@ -195,15 +274,15 @@ if [ "$MIGRATION_NEEDED" = "1" ]; then
     log_mig "Volume was configured as: app=${PREV_APP_UID}:${PREV_APP_GID}  mysql=${PREV_MYSQL_UID}:${PREV_MYSQL_GID}  clickhouse=${PREV_CH_UID}:${PREV_CH_GID}"
     log_mig "Reconfiguring to:         app=${DESIRED_APP_UID}:${DESIRED_APP_GID}  mysql=${DESIRED_MYSQL_UID}:${DESIRED_MYSQL_GID}  clickhouse=${DESIRED_CH_UID}:${DESIRED_CH_GID}"
 
-    migrate_service_uid "www-data" "app (www-data)" \
+    migrate_service_uid "app (www-data)" \
         "$PREV_APP_UID" "$PREV_APP_GID" "$DESIRED_APP_UID" "$DESIRED_APP_GID" \
         /var/bbs/home /var/bbs/cache /var/bbs/backups /var/bbs/tmp /var/bbs/config
 
-    migrate_service_uid "mysql" "MariaDB" \
+    migrate_service_uid "MariaDB" \
         "$PREV_MYSQL_UID" "$PREV_MYSQL_GID" "$DESIRED_MYSQL_UID" "$DESIRED_MYSQL_GID" \
         /var/bbs/mysql
 
-    migrate_service_uid "clickhouse" "ClickHouse" \
+    migrate_service_uid "ClickHouse" \
         "$PREV_CH_UID" "$PREV_CH_GID" "$DESIRED_CH_UID" "$DESIRED_CH_GID" \
         /var/bbs/clickhouse
 
