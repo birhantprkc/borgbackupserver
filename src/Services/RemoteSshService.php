@@ -230,7 +230,7 @@ class RemoteSshService
             $keyFile = $this->writeTempKey($sshKey);
 
             $port = (int) ($config['remote_port'] ?? 22);
-            $env['BORG_RSH'] = "ssh -i {$keyFile} -p {$port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o LogLevel=ERROR";
+            $env['BORG_RSH'] = "ssh -i {$keyFile} -p {$port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=30 -o LogLevel=ERROR";
 
             $proc = proc_open($cmd, [
                 0 => ['pipe', 'r'],
@@ -726,7 +726,7 @@ class RemoteSshService
         }
 
         $port = (int) ($config['remote_port'] ?? 22);
-        $env['BORG_RSH'] = "ssh -i {$keyFile} -p {$port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o LogLevel=ERROR";
+        $env['BORG_RSH'] = "ssh -i {$keyFile} -p {$port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=30 -o LogLevel=ERROR";
 
         $proc = proc_open($cmd, [
             0 => ['pipe', 'r'],

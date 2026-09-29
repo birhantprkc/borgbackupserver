@@ -144,7 +144,7 @@ class ArchiveDownloadService
                 chmod($remoteSshKeyFile, 0600);
 
                 $port = (int) ($archive['remote_port'] ?? 22);
-                $env['BORG_RSH'] = "ssh -i {$remoteSshKeyFile} -p {$port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o LogLevel=ERROR";
+                $env['BORG_RSH'] = "ssh -i {$remoteSshKeyFile} -p {$port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=30 -o LogLevel=ERROR";
 
                 $cmd = ['borg', 'extract'];
                 if (!empty($archive['borg_remote_path'])) {

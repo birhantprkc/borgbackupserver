@@ -190,11 +190,28 @@ def _ssh_common_opts(connect_timeout=None):
         "-o", "StrictHostKeyChecking=no",
         "-o", "UserKnownHostsFile={}".format(null),
         "-o", "BatchMode=yes",
+        "-o", "ServerAliveInterval=10",
+        "-o", "ServerAliveCountMax=30",
         "-o", "LogLevel=ERROR",
     ]
     if connect_timeout:
         opts.extend(["-o", "ConnectTimeout={}".format(int(connect_timeout))])
     return opts
+
+
+# ssh notices that arrive on every connection and mean nothing to the user.
+# borg forwards ssh's stderr as "Remote: ..." warnings; with the INFO log
+# level set below these would otherwise land in every job log (#225, #521).
+SSH_ROUTINE_NOTICES = (
+    "Permanently added",                    # known_hosts is /dev/null
+    "post-quantum key exchange",            # OpenSSH 10.1+ weak-kex warning
+    "This session may be vulnerable",
+    "The server may need to be upgraded",
+)
+
+
+def _is_ssh_routine_notice(message):
+    return any(n in message for n in SSH_ROUTINE_NOTICES)
 
 
 def _rewrite_borg_rsh_for_dropbear(rsh):
@@ -4610,6 +4627,12 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
     # skips hostkey verification.
     if IS_DROPBEAR and "BORG_RSH" in env:
         env["BORG_RSH"] = _rewrite_borg_rsh_for_dropbear(env["BORG_RSH"])
+    elif "BORG_RSH" in env:
+        # The server sends LogLevel=ERROR, which hides ssh's own reason for
+        # dropping a connection ("Timeout, server ... not responding" is
+        # INFO). Raise it here, where the routine notices it also lets
+        # through are filtered out below; older agents keep ERROR (#521).
+        env["BORG_RSH"] = env["BORG_RSH"].replace("LogLevel=ERROR", "LogLevel=INFO")
 
     # Always allow relocated repos - common after S3 restore or copying repositories
     # This prevents "repository was previously located at X" interactive prompts
@@ -4920,8 +4943,11 @@ def _execute_task_inner(config, task, job_id, task_type, command, env_vars,
                     log_level = entry.get("levelname", "INFO")
                     message = entry.get("message", "")
                     if log_level in ("WARNING", "ERROR", "CRITICAL"):
-                        error_output += message + "\n"
-                        logger.warning("borg: {}".format(message))
+                        if _is_ssh_routine_notice(message):
+                            logger.debug("borg: {}".format(message))
+                        else:
+                            error_output += message + "\n"
+                            logger.warning("borg: {}".format(message))
                     elif (entry.get("name") == "borg.output.list"
                           and task_type != "backup"):
                         # borg extract --list writes one INFO log_message
@@ -5488,4 +5514,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-# bbs-signature: v1 g+kwmK6MDP7aQWM6tmyBMeWDSLXZeOlOoZudi+MuEWr956azriz66tbOc0OmXGFUxvPszB1mTA+JuCjyjm+sDw==
+# bbs-signature: v1 jxPYtI75b3YBzCvjVu/RKT1DdRlUb8/6OUmDTg25qXNZzWkDQlGXPZA03iPvz6vXepI0/Oud4fugRGWkdfO3Ag==
