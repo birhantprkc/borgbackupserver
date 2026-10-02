@@ -3,9 +3,13 @@
 namespace BBS\Services;
 
 use BBS\Core\Database;
+use BBS\Core\JobType;
 
 class QueueManager
 {
+    /** Task types that write to a repository; refused on read-only copies (#523). */
+    public const WRITE_TASKS = ['backup', 'prune', 'compact', 'repo_repair', 'archive_delete', 'archive_lock', 's3_sync'];
+
     private Database $db;
     private int $maxQueue;
     private ?int $sshPort = null;
@@ -123,7 +127,7 @@ class QueueManager
                    bp.prune_minutes, bp.prune_hours, bp.prune_days,
                    bp.prune_weeks, bp.prune_months, bp.prune_years,
                    r.path as repo_path, r.encryption, r.passphrase_encrypted, r.name as repo_name,
-                   r.agent_id as repo_agent_id, r.storage_type, r.remote_ssh_config_id,
+                   r.agent_id as repo_agent_id, r.storage_type, r.remote_ssh_config_id, r.read_only as repo_read_only,
                    rsc.remote_host, rsc.remote_port, rsc.remote_user, rsc.remote_base_path,
                    rsc.ssh_private_key_encrypted as remote_ssh_key_encrypted,
                    rsc.borg_remote_path,
@@ -182,6 +186,19 @@ class QueueManager
         $busyAgentIds = array_column($busyAgents, 'agent_id');
 
         foreach ($queuedJobs as $job) {
+            // A read-only copy (#523) shares its key with the original it was
+            // cloned from, so nothing may write to it. The UI and API don't
+            // offer these; this catches anything queued another way.
+            if (!empty($job['repo_read_only']) && in_array($job['task_type'], self::WRITE_TASKS, true)) {
+                $this->db->update('backup_jobs', [
+                    'status' => 'failed',
+                    'completed_at' => date('Y-m-d H:i:s'),
+                    'error_log' => "Repository \"{$job['repo_name']}\" is a read-only copy restored from an offsite sync; "
+                        . JobType::label($job['task_type']) . ' jobs cannot run on it.',
+                ], 'id = ? AND status = ?', [$job['id'], 'queued']);
+                continue;
+            }
+
             $isManagement = in_array($job['task_type'], $managementTypes);
 
             // `continue`, not `break`: a queue full of syncs must not stop a

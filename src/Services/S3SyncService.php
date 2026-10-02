@@ -175,12 +175,15 @@ class S3SyncService
      */
     public function queueSync(int $agentId, int $repoId, int $pluginConfigId): array
     {
-        $repo = $this->db->fetchOne("SELECT id, name, storage_type FROM repositories WHERE id = ? AND agent_id = ?", [$repoId, $agentId]);
+        $repo = $this->db->fetchOne("SELECT id, name, storage_type, read_only FROM repositories WHERE id = ? AND agent_id = ?", [$repoId, $agentId]);
         if (!$repo) {
             return ['ok' => false, 'code' => 404, 'error' => 'Repository not found', 'job_id' => null, 'note' => null];
         }
         if (($repo['storage_type'] ?? 'local') !== 'local') {
             return ['ok' => false, 'code' => 400, 'error' => 'Only local repositories are copied offsite', 'job_id' => null, 'note' => null];
+        }
+        if (!empty($repo['read_only'])) {
+            return ['ok' => false, 'code' => 409, 'error' => 'This repository is a read-only copy restored from an offsite sync. Backup plans and offsite sync cannot use it.', 'job_id' => null, 'note' => null];
         }
         $dest = $this->db->fetchOne(
             "SELECT pc.name FROM repository_s3_configs rsc JOIN plugin_configs pc ON pc.id = rsc.plugin_config_id

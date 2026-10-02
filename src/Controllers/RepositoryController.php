@@ -1047,6 +1047,13 @@ class RepositoryController extends Controller
         // Require repo_maintenance permission
         $this->requirePermission(PermissionService::REPO_MAINTENANCE, $repo['agent_id']);
 
+        // Compact and repair write to the repository; a read-only copy (#523)
+        // must not be written to. Check, catalog work and break lock are fine.
+        if (!empty($repo['read_only']) && in_array($action, ['compact', 'repair'], true)) {
+            $this->flash('danger', 'This repository is a read-only copy restored from an offsite sync. Compact and repair are not available on it.');
+            $this->redirect("/clients/{$repo['agent_id']}/repo/{$id}");
+        }
+
         // Map action to task_type
         // "Rebuild Full" dispatches as catalog_sync which wipes archives,
         // re-reads them from borg (with sizes), then auto-queues catalog_rebuild
@@ -1427,6 +1434,11 @@ class RepositoryController extends Controller
         }
 
         $this->requirePermission(PermissionService::MANAGE_REPOS, $agentId);
+
+        if (!empty($repo['read_only'])) {
+            $this->flash('danger', 'This repository is a read-only copy restored from an offsite sync. Backup plans and offsite sync cannot use it.');
+            $this->redirect("/clients/{$agentId}/repo/{$id}");
+        }
 
         $pluginConfigId = (int) ($_POST['plugin_config_id'] ?? 0);
         if ($pluginConfigId === 0) {

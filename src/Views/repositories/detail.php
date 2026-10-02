@@ -23,9 +23,15 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
                     <span class="badge text-bg-info ms-2" style="font-size: 0.6em; vertical-align: middle;"><i class="bi bi-hdd-network me-1"></i>Remote SSH</span>
                     <?php else: ?>
                     <span class="badge text-bg-secondary ms-2" style="font-size: 0.6em; vertical-align: middle;"><i class="bi bi-hdd me-1"></i>Local</span>
+                    <?php if (!empty($repo['read_only'])): ?>
+                    <span class="badge text-bg-warning ms-1" style="font-size: 0.6em; vertical-align: middle;"><i class="bi bi-lock me-1"></i>Read-only copy</span>
+                    <?php endif; ?>
                     <button type="button" class="btn btn-sm btn-link text-muted p-0 ms-2" id="renameToggle" title="Rename repository"><i class="bi bi-pencil"></i></button>
                     <?php endif; ?>
                 </h4>
+                <?php if (!empty($repo['read_only'])): ?>
+                <div class="text-muted small mt-1">Restored from an offsite sync. You can browse, restore and download from it; backups, pruning and offsite sync are off.</div>
+                <?php endif; ?>
                 <?php if (($repo['storage_type'] ?? 'local') !== 'remote_ssh'): ?>
                 <form method="POST" action="/repositories/<?= $repo['id'] ?>/rename" class="mt-2 d-none" id="renameForm">
                     <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
@@ -100,7 +106,7 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
 <div class="row g-4">
     <!-- Repository Info & Recent Jobs (Left) -->
     <div class="col-lg-6">
-        <?php if (($repo['storage_type'] ?? 'local') !== 'remote_ssh' && (!empty($s3SyncConfigs) || !empty($s3PluginConfigs))): ?>
+        <?php if (empty($repo['read_only']) && ($repo['storage_type'] ?? 'local') !== 'remote_ssh' && (!empty($s3SyncConfigs) || !empty($s3PluginConfigs))): ?>
         <div class="card border-0 shadow-sm mb-4">
             <div class="card-header fw-semibold">
                 <i class="bi bi-cloud <?= !empty($s3SyncConfigs) ? 'text-info' : 'text-muted' ?> me-1"></i> Offsite Copies
@@ -201,7 +207,7 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
                                     <i class="bi bi-arrow-repeat me-1"></i>Restore (replace)
                                 </button>
                             </form>
-                            <form method="POST" action="/clients/<?= $agentId ?>/repo/<?= $repo['id'] ?>/s3-restore" class="d-inline" data-confirm="Restore (copy) from the offsite copy?&#10;&#10;This will create a NEW repository and copy the data into it.">
+                            <form method="POST" action="/clients/<?= $agentId ?>/repo/<?= $repo['id'] ?>/s3-restore" class="d-inline" data-confirm="Restore (copy) from the offsite copy?&#10;&#10;This will create a NEW, READ-ONLY repository and copy the data into it. You can browse, restore and download from it, but not back up to it.">
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
                                 <input type="hidden" name="mode" value="copy">
                                 <input type="hidden" name="plugin_config_id" class="s3-restore-source" value="<?= $s3SyncConfigs[0]['plugin_config_id'] ?>">
@@ -212,6 +218,7 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
                                     </button>
                                 </div>
                             </form>
+                            <div class="text-muted small mt-2"><i class="bi bi-lock me-1"></i>A copy is read-only: browse, restore and download from it, but no backups, pruning or offsite sync.</div>
                         </div>
                     </div>
                 </div>
@@ -434,6 +441,7 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
                         </div>
                     </div>
 
+                    <?php if (empty($repo['read_only'])): ?>
                     <!-- Compact -->
                     <div class="d-flex align-items-start gap-3 p-3 bg-body-secondary rounded">
                         <div class="text-success" style="font-size: 1.5rem;">
@@ -451,6 +459,7 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
                             </form>
                         </div>
                     </div>
+                    <?php endif; ?>
 
                     <!-- Rebuild Catalog -->
                     <div class="d-flex align-items-start gap-3 p-3 bg-body-secondary rounded">
@@ -479,6 +488,7 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
 
                     <hr class="my-1">
 
+                    <?php if (empty($repo['read_only'])): ?>
                     <!-- Repair -->
                     <div class="d-flex align-items-start gap-3 p-3 bg-body-secondary rounded">
                         <div class="text-warning" style="font-size: 1.5rem;">
@@ -496,6 +506,7 @@ $sizeLabel = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $tota
                             </form>
                         </div>
                     </div>
+                    <?php endif; ?>
 
                     <!-- Break Lock -->
                     <div class="d-flex align-items-start gap-3 p-3 bg-body-secondary rounded">
@@ -598,7 +609,9 @@ foreach (array_reverse(array_slice($archives, 0, 365)) as $ar) {
                         <td><?= $origLabel ?></td>
                         <td><?= $dedupLabel ?></td>
                         <td class="text-end text-nowrap" onclick="event.stopPropagation()">
-                            <?php if (!empty($ar['locked'])): ?>
+                            <?php if (!empty($repo['read_only'])): ?>
+                            <span class="text-muted small" title="Read-only copy">&mdash;</span>
+                            <?php elseif (!empty($ar['locked'])): ?>
                             <form method="POST" action="/clients/<?= $agentId ?>/repo/<?= $repo['id'] ?>/archive/<?= $ar['id'] ?>/lock" class="d-inline"
                                   data-confirm="Unlock this archive?&#10;&#10;Normal retention rules will apply again — it can be pruned on the next cycle.">
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">

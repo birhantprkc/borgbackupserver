@@ -222,6 +222,9 @@ CREATE TABLE repositories (
     notes TEXT DEFAULT NULL,
     notes_updated_by INT DEFAULT NULL,
     notes_updated_at DATETIME DEFAULT NULL,
+    -- Copies restored from an offsite sync are read-only (#523)
+    read_only TINYINT(1) NOT NULL DEFAULT 0,
+    copy_detached_at DATETIME DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
     FOREIGN KEY (storage_location_id) REFERENCES storage_locations(id)

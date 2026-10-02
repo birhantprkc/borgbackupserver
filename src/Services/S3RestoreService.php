@@ -106,6 +106,9 @@ class S3RestoreService
                 'path' => $copyPath,
                 'encryption' => $repo['encryption'],
                 'passphrase_encrypted' => $repo['passphrase_encrypted'],
+                // A copy is a clone of the original: same borg ID, same key.
+                // It is read-only so the shared key never writes twice (#523).
+                'read_only' => 1,
             ]);
             $targetRepoName = $copyName;
 
@@ -166,6 +169,70 @@ class S3RestoreService
             'repository_name' => $targetRepoName,
             'mode' => $mode,
         ];
+    }
+
+    /**
+     * Give a read-only copy its own borg ID, so borg stops treating it as a
+     * replay of the original it was cloned from (#523), then make what BBS
+     * shows for it match its contents: the folder index for its archives
+     * and its real size on disk. Safe to run again.
+     *
+     * @return array ['ok' => bool, 'message' => string]
+     */
+    public function detachCopy(int $repoId): array
+    {
+        $repo = $this->db->fetchOne("SELECT * FROM repositories WHERE id = ?", [$repoId]);
+        if (!$repo || empty($repo['read_only'])) {
+            return ['ok' => false, 'message' => 'not a read-only copy'];
+        }
+
+        $localPath = BorgCommandBuilder::getLocalRepoPath($repo);
+        $cmd = ['sudo', '/usr/local/bin/bbs-ssh-helper', 'set-repo-id', $localPath];
+        exec(implode(' ', array_map('escapeshellarg', $cmd)) . ' 2>&1', $out, $ret);
+        if ($ret !== 0) {
+            $msg = trim(implode(' ', $out));
+            // Nothing there to fix (directory gone or not a repository):
+            // record it as done so it isn't retried forever.
+            if (str_contains($msg, 'is not a borg repository')) {
+                $this->db->update('repositories', ['copy_detached_at' => date('Y-m-d H:i:s')], 'id = ?', [$repoId]);
+            }
+            $this->db->insert('server_log', [
+                'agent_id' => $repo['agent_id'],
+                'level' => 'warning',
+                'message' => "Could not give the copy \"{$repo['name']}\" its own borg ID: {$msg}",
+            ]);
+            return ['ok' => false, 'message' => $msg];
+        }
+        $this->db->update('repositories', ['copy_detached_at' => date('Y-m-d H:i:s')], 'id = ?', [$repoId]);
+
+        $this->refreshCatalogView($repoId);
+
+        $this->db->insert('server_log', [
+            'agent_id' => $repo['agent_id'],
+            'level' => 'info',
+            'message' => "Copy \"{$repo['name']}\" given its own borg ID; it is read-only",
+        ]);
+        return ['ok' => true, 'message' => 'detached'];
+    }
+
+    /**
+     * Rebuild the folder index for every archive of a repository and refresh
+     * its size. Used after a restore, whose imported catalog has file rows
+     * but no folder rows, and whose size is a sum of per-archive figures.
+     */
+    public function refreshCatalogView(int $repoId): void
+    {
+        $repo = $this->db->fetchOne("SELECT agent_id FROM repositories WHERE id = ?", [$repoId]);
+        if (!$repo) return;
+        try {
+            $ch = \BBS\Core\ClickHouse::getInstance();
+            foreach ($this->db->fetchAll("SELECT id FROM archives WHERE repository_id = ?", [$repoId]) as $ar) {
+                $ch->rebuildDirIndex((int) $repo['agent_id'], (int) $ar['id']);
+            }
+        } catch (\Throwable $e) {
+            error_log("refreshCatalogView({$repoId}): " . $e->getMessage());
+        }
+        RepositorySizeService::refresh($repoId);
     }
 
     private function fail(int $code, string $error): array

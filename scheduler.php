@@ -888,6 +888,15 @@ foreach ($serverJobs as $sj) {
             }
         }
 
+        // A copy is a clone of the original and shares its borg ID; give it
+        // its own before anything opens it with borg, or borg rejects it as
+        // a replay of the original (#523). Copies are read-only.
+        $s3RestoreService = new \BBS\Services\S3RestoreService();
+        if ($s3Result === 'completed' && $sourceRepo && $s3Repo && !empty($s3Repo['read_only'])) {
+            $detach = $s3RestoreService->detachCopy((int) $s3Repo['id']);
+            echo date('Y-m-d H:i:s') . "   Copy given its own borg ID: " . ($detach['ok'] ? 'yes' : 'no — ' . $detach['message']) . "\n";
+        }
+
         // After successful S3 restore, try to import manifest first (fast path)
         // Falls back to catalog_sync if no manifest exists (slow path via borg commands)
         if ($s3Result === 'completed' && $sj['repository_id'] && $s3Repo && $s3Agent) {
@@ -900,6 +909,9 @@ foreach ($serverJobs as $sj) {
 
                 if ($importResult['success']) {
                     echo date('Y-m-d H:i:s') . "   Manifest imported ({$importResult['archives']} archives, {$importResult['files']} files)\n";
+                    // The manifest carries file rows but no folder rows, and
+                    // per-archive sizes rather than the size on disk.
+                    $s3RestoreService->refreshCatalogView((int) $sj['repository_id']);
                     $db->insert('server_log', [
                         'agent_id' => $sj['agent_id'],
                         'level' => 'info',
@@ -2569,6 +2581,25 @@ foreach ($zeroRepos as $zr) {
     \BBS\Services\RepositorySizeService::refresh((int) $zr['id']);
 }
 
+// Step 5a: Copies restored from an offsite sync before #523 still share the
+// original's borg ID, so borg refuses to open them (downloads, deletes and
+// catalog builds fail). Give each its own ID once, when nothing is running
+// on it.
+$undetached = ((int) date('i')) % 15 !== 0 ? [] : $db->fetchAll("
+    SELECT r.id FROM repositories r
+    WHERE r.read_only = 1 AND r.copy_detached_at IS NULL
+      AND NOT EXISTS (SELECT 1 FROM backup_jobs bj
+                      WHERE bj.repository_id = r.id AND bj.status IN ('queued', 'sent', 'running'))
+    LIMIT 5
+");
+if ($undetached) {
+    $s3RestoreService = $s3RestoreService ?? new \BBS\Services\S3RestoreService();
+    foreach ($undetached as $u) {
+        $r = $s3RestoreService->detachCopy((int) $u['id']);
+        echo date('Y-m-d H:i:s') . " Read-only copy #{$u['id']}: " . ($r['ok'] ? 'given its own borg ID' : 'not detached — ' . $r['message']) . "\n";
+    }
+}
+
 // Step 5b: Poll remote SSH host disk usage (every 15 minutes)
 if ((int) date('i') % 15 === 0) {
     $remoteSshService = $remoteSshService ?? new RemoteSshService();
@@ -3007,7 +3038,8 @@ if ($dayOfWeek === $compactDay && $hourOfDay >= $compactHour) {
     // Only run once per week (check if last run was more than 6 days ago)
     if (!$lastAutoCompactTime || strtotime($lastAutoCompactTime) < time() - (6 * 86400)) {
         // Get all repositories
-        $repos = $db->fetchAll("SELECT r.id, r.name, r.agent_id FROM repositories r");
+        // Read-only copies (#523) are never written to, so never compacted
+        $repos = $db->fetchAll("SELECT r.id, r.name, r.agent_id FROM repositories r WHERE r.read_only = 0");
         $queued = 0;
 
         foreach ($repos as $repo) {

@@ -54,6 +54,10 @@ class BackupPlanController extends Controller
             $this->flash('danger', 'Repository not found for this client.');
             $this->redirect("/clients/{$agentId}?tab=schedules");
         }
+        if (!empty($repo['read_only'])) {
+            $this->flash('danger', 'This repository is a read-only copy restored from an offsite sync. Backup plans and offsite sync cannot use it.');
+            $this->redirect("/clients/{$agentId}?tab=schedules");
+        }
 
         // Create backup plan
         $planId = $this->db->insert('backup_plans', [
@@ -148,11 +152,15 @@ class BackupPlanController extends Controller
         if (isset($_POST['repository_id'])) {
             $repositoryId = (int) $_POST['repository_id'];
             $repo = $this->db->fetchOne(
-                "SELECT id FROM repositories WHERE id = ? AND agent_id = ?",
+                "SELECT id, read_only FROM repositories WHERE id = ? AND agent_id = ?",
                 [$repositoryId, (int) $plan['agent_id']]
             );
             if (!$repo) {
                 $this->flash('danger', 'Repository not found for this client.');
+                $this->redirect("/clients/{$plan['agent_id']}?tab=schedules");
+            }
+            if (!empty($repo['read_only'])) {
+                $this->flash('danger', 'This repository is a read-only copy restored from an offsite sync. Backup plans and offsite sync cannot use it.');
                 $this->redirect("/clients/{$plan['agent_id']}?tab=schedules");
             }
             $data['repository_id'] = $repositoryId;

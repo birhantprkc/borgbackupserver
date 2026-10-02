@@ -1200,6 +1200,42 @@ case "$ACTION" in
         echo "OK"
         ;;
 
+    set-repo-id)
+        # Give a repository a new random borg ID.
+        # Usage: bbs-ssh-helper set-repo-id <repo_dir>
+        # A copy restored from an offsite sync is a byte-for-byte clone that
+        # shares the original's ID, so borg's per-ID security state rejects
+        # it as a replay ("multiple repos with same ID", #523). Copies are
+        # read-only in BBS, so the key they share with the original is never
+        # used to write and cannot reuse nonces. Prints the new ID.
+        REPO_DIR="${2:-}"
+        if [ -z "$REPO_DIR" ]; then
+            echo "Usage: bbs-ssh-helper set-repo-id <repo_dir>"
+            exit 1
+        fi
+        if ! is_allowed_path "$REPO_DIR"; then
+            echo "Error: repo dir must be under /var/bbs/ or a registered storage location"
+            exit 1
+        fi
+        CONFIG="$REPO_DIR/config"
+        if [ -L "$CONFIG" ] || [ ! -f "$CONFIG" ] || ! grep -q '^\[repository\]' "$CONFIG"; then
+            echo "Error: $REPO_DIR is not a borg repository"
+            exit 1
+        fi
+        NEW_ID=$(od -An -tx1 -N32 /dev/urandom | tr -d ' \n')
+        TMP_CONFIG="$CONFIG.bbs-new-id"
+        sed "s/^id = .*/id = $NEW_ID/" "$CONFIG" > "$TMP_CONFIG"
+        if ! grep -qx "id = $NEW_ID" "$TMP_CONFIG"; then
+            rm -f "$TMP_CONFIG"
+            echo "Error: could not set a new id in $CONFIG"
+            exit 1
+        fi
+        chown --reference="$CONFIG" "$TMP_CONFIG"
+        chmod --reference="$CONFIG" "$TMP_CONFIG"
+        mv -f "$TMP_CONFIG" "$CONFIG"
+        echo "$NEW_ID"
+        ;;
+
     clear-borg-cache)
         # Clear borg cache for a specific user
         # Usage: bbs-ssh-helper clear-borg-cache <username>

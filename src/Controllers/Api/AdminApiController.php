@@ -420,9 +420,13 @@ class AdminApiController extends Controller
 
         // Include repos and plans
         $repos = $this->db->fetchAll(
-            "SELECT id, name, path, encryption, storage_type, size_bytes, archive_count, created_at
+            "SELECT id, name, path, encryption, storage_type, size_bytes, archive_count, created_at, read_only
              FROM repositories WHERE agent_id = ? ORDER BY name", [$id]
         );
+        foreach ($repos as &$rr) {
+            $rr['read_only'] = (bool) $rr['read_only'];
+        }
+        unset($rr);
         $plans = $this->db->fetchAll(
             "SELECT bp.id, bp.name, bp.directories, bp.excludes, bp.advanced_options, bp.enabled,
                     bp.snapshot, bp.priority, bp.repository_id,
@@ -626,6 +630,7 @@ class AdminApiController extends Controller
         // name when several are linked.
         $repos = $this->db->fetchAll(
             "SELECT r.id, r.name, r.path, r.encryption, r.storage_type, r.size_bytes, r.archive_count, r.created_at,
+                    r.read_only,
                     COALESCE(rsc.enabled, 0) AS s3_sync_enabled,
                     rsc.last_sync_at AS s3_last_sync_at,
                     COALESCE(r.borg_version_last, a.borg_version) AS borg_version_last,
@@ -655,6 +660,7 @@ class AdminApiController extends Controller
              WHERE r.agent_id = ? ORDER BY r.name", [$id]
         );
         foreach ($repos as &$r) {
+            $r['read_only'] = (bool) $r['read_only'];
             $r['s3_sync_enabled'] = (bool) $r['s3_sync_enabled'];
             $r['s3_config_id'] = $r['s3_config_id'] !== null ? (int) $r['s3_config_id'] : null;
         }
@@ -1003,11 +1009,14 @@ class AdminApiController extends Controller
 
         // Verify repository belongs to this agent
         $repo = $this->db->fetchOne(
-            "SELECT id FROM repositories WHERE id = ? AND agent_id = ?",
+            "SELECT id, read_only FROM repositories WHERE id = ? AND agent_id = ?",
             [$repositoryId, $id]
         );
         if (!$repo) {
             $this->json(['error' => 'Repository not found or does not belong to this client'], 404);
+        }
+        if (!empty($repo['read_only'])) {
+            $this->json(['error' => 'This repository is a read-only copy restored from an offsite sync. Backup plans and offsite sync cannot use it.'], 409);
         }
 
         if (!in_array($frequency, self::VALID_FREQUENCIES, true)) {
@@ -1779,9 +1788,12 @@ class AdminApiController extends Controller
             }
         }
         if (isset($input['repository_id'])) {
-            $repo = $this->db->fetchOne("SELECT id FROM repositories WHERE id = ? AND agent_id = ?", [(int) $input['repository_id'], $id]);
+            $repo = $this->db->fetchOne("SELECT id, read_only FROM repositories WHERE id = ? AND agent_id = ?", [(int) $input['repository_id'], $id]);
             if (!$repo) {
                 $this->json(['error' => 'Repository not found or does not belong to this client'], 404);
+            }
+            if (!empty($repo['read_only'])) {
+                $this->json(['error' => 'This repository is a read-only copy restored from an offsite sync. Backup plans and offsite sync cannot use it.'], 409);
             }
             $planData['repository_id'] = (int) $input['repository_id'];
         }
@@ -3373,6 +3385,9 @@ class AdminApiController extends Controller
         if (($repo['storage_type'] ?? 'local') !== 'local') {
             $this->json(['error' => 'Only local repositories can be copied offsite'], 400);
         }
+        if (!empty($repo['read_only'])) {
+            $this->json(['error' => 'This repository is a read-only copy restored from an offsite sync. Backup plans and offsite sync cannot use it.'], 409);
+        }
 
         $pluginConfig = $this->db->fetchOne(
             "SELECT pc.id, pc.name FROM plugin_configs pc
@@ -3505,6 +3520,8 @@ class AdminApiController extends Controller
             'mode' => $result['mode'],
             'repository_id' => $result['repository_id'],
             'repository_name' => $result['repository_name'],
+            // A copy is created read-only (#523)
+            'read_only' => $result['mode'] === 'copy',
         ], 202);
     }
 
@@ -3528,7 +3545,7 @@ class AdminApiController extends Controller
         $rows = $this->db->fetchAll(
             "SELECT r.id, r.agent_id, a.name AS agent_name,
                     r.name, r.path, r.encryption, r.storage_type,
-                    r.size_bytes, r.archive_count, r.created_at,
+                    r.size_bytes, r.archive_count, r.created_at, r.read_only,
                     r.passphrase_encrypted,
                     COALESCE(rsc.enabled, 0) AS s3_sync_enabled,
                     rsc.last_sync_at AS s3_last_sync_at,
@@ -3569,6 +3586,7 @@ class AdminApiController extends Controller
                 'size_bytes'      => (int) $r['size_bytes'],
                 'archive_count'   => (int) $r['archive_count'],
                 'created_at'      => $r['created_at'],
+                'read_only'       => (bool) $r['read_only'],
                 's3_sync_enabled' => (bool) $r['s3_sync_enabled'],
                 's3_last_sync_at' => $r['s3_last_sync_at'],
                 's3_config_id'    => $r['s3_config_id'] !== null ? (int) $r['s3_config_id'] : null,

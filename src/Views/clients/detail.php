@@ -1161,6 +1161,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                                 <button type="submit" class="dropdown-item"><i class="bi bi-shield-check me-2 text-primary"></i>Check</button>
                             </form>
                         </li>
+                        <?php if (empty($repo['read_only'])): ?>
                         <li>
                             <form method="POST" action="/repositories/<?= $repo['id'] ?>/maintenance">
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
@@ -1175,6 +1176,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                                 <button type="submit" class="dropdown-item"><i class="bi bi-bandaid me-2 text-warning"></i>Repair</button>
                             </form>
                         </li>
+                        <?php endif; ?>
                         <li>
                             <form method="POST" action="/repositories/<?= $repo['id'] ?>/maintenance" data-confirm="BREAK LOCK on repository &quot;<?= htmlspecialchars($repo['name']) ?>&quot;?&#10;&#10;This forcibly removes stale locks. Only use if you're CERTAIN no backup operations are running." data-confirm-danger>
                                 <input type="hidden" name="csrf_token" value="<?= $this->csrfToken() ?>">
@@ -1200,7 +1202,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                             <span class="schedule-id"><?= $isRemoteRepo ? 'Remote' : 'Local' ?></span>
                         </div>
                         <div class="flex-grow-1 min-width-0">
-                            <h6 class="mb-1 fw-bold"><?= htmlspecialchars($repo['name']) ?><?php if (!empty($repo['notes'])): ?> <i class="bi bi-journal-text text-warning small" title="<?= htmlspecialchars(mb_substr($repo['notes'], 0, 200)) ?>"></i><?php endif; ?></h6>
+                            <h6 class="mb-1 fw-bold"><?= htmlspecialchars($repo['name']) ?><?php if (!empty($repo['read_only'])): ?> <span class="badge text-bg-warning ms-1" style="font-size:.65em;vertical-align:middle" title="Restored from an offsite sync: browse, restore and download only"><i class="bi bi-lock me-1"></i>Read-only copy</span><?php endif; ?><?php if (!empty($repo['notes'])): ?> <i class="bi bi-journal-text text-warning small" title="<?= htmlspecialchars(mb_substr($repo['notes'], 0, 200)) ?>"></i><?php endif; ?></h6>
                             <div class="small text-muted">
                                 <i class="bi bi-hdd me-1"></i><?= $sizeLabel ?>
                             </div>
@@ -2173,7 +2175,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                         <label class="col-md-3 col-form-label fw-semibold">Repository</label>
                         <div class="col-md-6">
                             <select class="form-select" name="repository_id">
-                                <?php foreach ($repositories as $repo): ?>
+                                <?php foreach ($repositories as $repo): if (!empty($repo['read_only'])) continue; ?>
                                 <option value="<?= $repo['id'] ?>" <?= $repo['id'] == $plan['repository_id'] ? 'selected' : '' ?>><?= htmlspecialchars($repo['name']) ?> (#<?= $repo['id'] ?>)</option>
                                 <?php endforeach; ?>
                             </select>
@@ -2506,7 +2508,7 @@ $sizeDisplay = $totalSize > 0 ? \BBS\Services\ServerStats::formatBytes((int) $to
                     <label class="col-md-3 col-form-label fw-semibold">Repository</label>
                     <div class="col-md-6">
                         <select class="form-select" name="repository_id" required>
-                            <?php foreach ($repositories as $repo): ?>
+                            <?php foreach ($repositories as $repo): if (!empty($repo['read_only'])) continue; ?>
                             <option value="<?= $repo['id'] ?>"><?= htmlspecialchars($repo['name']) ?> (#<?= $repo['id'] ?>)</option>
                             <?php endforeach; ?>
                         </select>
