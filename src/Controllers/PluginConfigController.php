@@ -214,7 +214,7 @@ class PluginConfigController extends Controller
         ", [$configId]);
 
         if ($inUse) {
-            $this->flash('danger', "Cannot delete — this S3 config is in use by repository \"{$inUse['name']}\". Disable S3 sync on the repository first.");
+            $this->flash('danger', "Cannot delete — this offsite sync destination is used by repository \"{$inUse['name']}\". Turn off offsite sync for that repository first.");
             $this->redirect("/clients/{$id}?tab=plugins");
         }
 

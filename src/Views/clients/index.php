@@ -409,7 +409,7 @@
                         borderRadius: 3,
                     },
                     {
-                        label: 'S3 Sync',
+                        label: 'Offsite Sync',
                         data: activityData.map(d => d.s3_sync),
                         backgroundColor: 'rgba(75, 192, 192, 0.75)',
                         borderRadius: 3,

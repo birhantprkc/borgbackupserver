@@ -1350,7 +1350,7 @@ class RepositoryController extends Controller
             [$pluginConfigId, $id]
         );
         if (!$pluginConfig) {
-            $this->flash('danger', 'S3 configuration not found.');
+            $this->flash('danger', 'Offsite sync destination not found.');
             $this->redirect("/clients/{$id}?tab=repos");
         }
 
@@ -1408,7 +1408,7 @@ class RepositoryController extends Controller
             'message' => "Restoring orphan repository \"{$repoName}\" from S3 — job #{$jobId} queued",
         ]);
 
-        $this->flash('success', "Repository \"{$repoName}\" created and S3 restore queued.");
+        $this->flash('success', "Repository \"{$repoName}\" created and offsite restore queued.");
         $this->redirect("/clients/{$id}?tab=repos");
     }
 
@@ -1442,7 +1442,7 @@ class RepositoryController extends Controller
             [$pluginConfigId, $agentId]
         );
         if (!$pluginConfig) {
-            $this->flash('danger', 'Invalid S3 configuration.');
+            $this->flash('danger', 'Invalid offsite sync destination.');
             $this->redirect("/clients/{$agentId}/repo/{$id}");
         }
 
@@ -1468,7 +1468,7 @@ class RepositoryController extends Controller
         $this->db->insert('server_log', [
             'agent_id' => $agentId,
             'level' => 'info',
-            'message' => "S3 sync enabled for repository \"{$repo['name']}\" to destination \"{$pluginConfig['name']}\"",
+            'message' => "Offsite sync enabled for repository \"{$repo['name']}\" to destination \"{$pluginConfig['name']}\"",
         ]);
 
         $this->flash('success', "Saved: repository \"{$repo['name']}\" now copies to \"{$pluginConfig['name']}\" after each backup. Use Sync now to run the first copy right away.");
@@ -1531,7 +1531,7 @@ class RepositoryController extends Controller
         $this->db->insert('server_log', [
             'agent_id' => $agentId,
             'level' => 'info',
-            'message' => "S3 sync{$destLabel} disabled for repository \"{$repo['name']}\" (data remains in S3)",
+            'message' => "Offsite sync{$destLabel} disabled for repository \"{$repo['name']}\" (the copy at the destination is kept)",
         ]);
 
         $this->flash('success', "Offsite sync{$destLabel} disabled for repository \"{$repo['name']}\". The copy is left in place.");

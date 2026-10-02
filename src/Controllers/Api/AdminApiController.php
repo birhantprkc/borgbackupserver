@@ -3400,7 +3400,7 @@ class AdminApiController extends Controller
         $this->db->insert('server_log', [
             'agent_id' => $agentId,
             'level' => 'info',
-            'message' => "S3 sync enabled for repository \"{$repo['name']}\" to destination \"{$pluginConfig['name']}\"",
+            'message' => "Offsite sync enabled for repository \"{$repo['name']}\" to destination \"{$pluginConfig['name']}\"",
         ]);
 
         $this->json([
@@ -3463,7 +3463,7 @@ class AdminApiController extends Controller
         $this->db->insert('server_log', [
             'agent_id' => $agentId,
             'level' => 'info',
-            'message' => "S3 sync{$destLabel} disabled for repository \"{$repo['name']}\" (data remains in S3)",
+            'message' => "Offsite sync{$destLabel} disabled for repository \"{$repo['name']}\" (the copy at the destination is kept)",
         ]);
 
         $remaining = $this->db->fetchOne("SELECT MAX(enabled) AS enabled FROM repository_s3_configs WHERE repository_id = ?", [$repoId]);

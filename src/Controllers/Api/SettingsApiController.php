@@ -395,8 +395,8 @@ class SettingsApiController extends Controller
         'repo_compact_done' => 'Compact Done',
         'storage_low' => 'Storage Low',
         'certificate_expiring' => 'SSL Certificate Expiring',
-        's3_sync_failed' => 'S3 Sync Failed',
-        's3_sync_done' => 'S3 Sync Done',
+        's3_sync_failed' => 'Offsite Sync Failed',
+        's3_sync_done' => 'Offsite Sync Done',
         'missed_schedule' => 'Missed Schedule',
     ];
 

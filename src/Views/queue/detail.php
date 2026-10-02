@@ -372,8 +372,9 @@ $taskLabel = \BBS\Core\JobType::label($job['task_type']);
                                 'compact' => 'arrows-collapse',
                                 'update_borg' => 'arrow-up-circle',
                                 's3_sync' => 'cloud-upload',
+                                's3_restore' => 'cloud-download',
                                 default => 'gear',
-                            } ?> me-1"></i><?= ucfirst(str_replace('_', ' ', $job['task_type'])) ?></td>
+                            } ?> me-1"></i><?= htmlspecialchars($taskLabel) ?></td>
                         </tr>
                         <tr>
                             <td class="text-muted fw-semibold ps-3">Repository</td>
@@ -676,7 +677,7 @@ if ($job['task_type'] === 'backup_dry_run' && !empty($job['task_result'])) {
             if (isServerSide) {
                 container.innerHTML = '<div class="card border-0 shadow-sm mb-4 bg-success-subtle"><div class="card-body py-3">' +
                     '<div class="fw-semibold text-success mb-1"><i class="bi bi-hdd me-1"></i> ' + esc(window.bbsTaskLabel(job.task_type)) + ' Completed</div>' +
-                    '<div class="progress mb-1" style="height:22px"><div class="progress-bar bg-success" style="width:100%">Server-side ' + esc(job.task_type) + ' finished</div></div>' +
+                    '<div class="progress mb-1" style="height:22px"><div class="progress-bar bg-success" style="width:100%">Server-side ' + esc(((window.BBS_TASK_LABELS || {})[job.task_type] || job.task_type).toLowerCase()) + ' finished</div></div>' +
                     '<div class="text-muted small">Duration: ' + window.BBS.formatDuration(job.duration_seconds) + ' &middot; See activity log below for details</div></div></div>';
             } else {
                 container.innerHTML = '<div class="card border-0 shadow-sm mb-4 bg-success-subtle"><div class="card-body py-3">' +
